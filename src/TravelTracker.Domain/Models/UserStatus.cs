@@ -4,9 +4,10 @@ using System.Text;
 
 namespace TravelTracker.Domain.Models
 {
-    public sealed class UserStatus
+    public enum UserStatus
     {
-        public Guid StatusId { get; set; }
-        public string StatusName { get; set; } = string.Empty;
+        Active = 0,
+        Deactivated = 1,
+        Banned = 2
     }
 }

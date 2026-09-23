@@ -4,9 +4,9 @@ using System.Text;
 
 namespace TravelTracker.Domain.Models
 {
-    public sealed class UserRole
+    public enum UserRole
     {
-        public Guid RoleId { get; set; }
-        public string RoleName { get; set; } = string.Empty;
+        User = 0,
+        Administrator = 1
     }
 }
