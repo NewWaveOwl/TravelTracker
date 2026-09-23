@@ -22,6 +22,8 @@ public readonly struct Id64 : IEquatable<Id64>
 
     public static Id64 FromLong(long value) => new(unchecked((ulong)value));
 
+    public static explicit operator ulong(Id64 id) => id.value;
+
     public bool Equals(Id64 other) => value == other.value;
     public override bool Equals(object? obj) => obj is Id64 other && Equals(other);
     public override int GetHashCode() => value.GetHashCode();
