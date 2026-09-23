@@ -1,3 +1,7 @@
 <Solution>
-  <Project Path="TravelTracker.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/TravelTracker.Api/TravelTracker.Api.csproj" />
+    <Project Path="src/TravelTracker.Data/TravelTracker.Data.csproj" />
+    <Project Path="src/TravelTracker.Domain/TravelTracker.Domain.csproj" />
+  </Folder>
 </Solution>
