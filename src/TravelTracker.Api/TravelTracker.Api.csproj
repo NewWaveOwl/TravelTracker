@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TravelTracker.Data\TravelTracker.Data.csproj" />
+    <ProjectReference Include="..\TravelTracker.Domain\TravelTracker.Domain.csproj" />
+  </ItemGroup>
+</Project>
