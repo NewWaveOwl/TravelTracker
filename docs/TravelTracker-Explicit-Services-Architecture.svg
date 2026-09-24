@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="1400" viewBox="0 0 2200 1400" role="img" aria-labelledby="svg-title svg-desc">
+  <title id="svg-title">TravelTracker explicit services architecture</title>
+  <desc id="svg-desc">A layered architecture diagram showing the browser, six independent HTTP services, application service interfaces, repositories, service-owned databases, OpenStreetMap, shared domain contracts, and HTTP validation calls made by the Trips service.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#EA580C"/>
+    </marker>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #0F172A; }
+      .title { font-size: 32px; font-weight: 700; }
+      .subtitle { font-size: 15px; fill: #475569; }
+      .lane-title { font-size: 16px; font-weight: 700; text-anchor: middle; }
+      .lane-subtitle { font-size: 12px; fill: #64748B; text-anchor: middle; }
+      .box-title { font-size: 15px; font-weight: 700; text-anchor: middle; }
+      .box-line { font-size: 13px; text-anchor: middle; }
+      .box-note { font-size: 12px; text-anchor: middle; fill: #64748B; }
+      .left-title { font-size: 15px; font-weight: 700; }
+      .left-line { font-size: 13px; }
+      .small { font-size: 12px; fill: #475569; }
+      .on-dark { fill: #FFFFFF; }
+      .lane { fill: #F8FAFC; stroke: #CBD5E1; stroke-width: 2; rx: 14; }
+      .lane-trip { fill: #EFF6FF; stroke: #60A5FA; stroke-width: 3; rx: 14; }
+      .api { fill: #DBEAFE; stroke: #2563EB; stroke-width: 2; rx: 10; }
+      .api-trip { fill: #BFDBFE; stroke: #1D4ED8; stroke-width: 3; rx: 10; }
+      .app { fill: #FEF3C7; stroke: #D97706; stroke-width: 2; rx: 10; }
+      .app-trip { fill: #FDE68A; stroke: #B45309; stroke-width: 3; rx: 10; }
+      .repo { fill: #FFFBEB; stroke: #D97706; stroke-width: 2; rx: 10; }
+      .repo-trip { fill: #FFFBEB; stroke: #B45309; stroke-width: 3; rx: 10; }
+      .db { fill: #DCFCE7; stroke: #16A34A; stroke-width: 2; }
+      .db-trip { fill: #BBF7D0; stroke: #15803D; stroke-width: 3; }
+      .owner { fill: #FFFFFF; stroke: #CBD5E1; stroke-width: 1.5; rx: 8; }
+      .flow { fill: none; stroke: #475569; stroke-width: 2; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #2563EB; stroke-width: 2.5; marker-end: url(#arrowBlue); }
+      .flow-orange { fill: none; stroke: #EA580C; stroke-width: 2.5; stroke-dasharray: 10 8; marker-end: url(#arrowOrange); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="2200" height="1400" fill="#FFFFFF"/>
+  <text class="title" x="45" y="50">TravelTracker - Explicit Services Architecture</text>
+  <text class="subtitle" x="47" y="80">Target broad design from TravelTracker.pdf, reconciled with the current .NET solution. Primary editable source: the companion .drawio file.</text>
+
+  <rect x="45" y="115" width="190" height="95" rx="12" fill="#F1F5F9" stroke="#64748B" stroke-width="2"/>
+  <text class="box-title" x="140" y="145">People</text>
+  <text class="box-line" x="140" y="170">Traveler</text>
+  <text class="box-line" x="140" y="192">Administrator</text>
+
+  <rect x="300" y="110" width="970" height="105" rx="12" fill="#E0F2FE" stroke="#0284C7" stroke-width="2"/>
+  <text class="box-title" x="785" y="140">Browser Web Application</text>
+  <text class="box-line" x="785" y="166">Sign in | Map | New Trip | History | User/Settings | Admin</text>
+  <text class="box-note" x="785" y="192">Consumes JSON APIs and renders ordered trip points</text>
+
+  <rect x="1330" y="110" width="360" height="105" rx="12" fill="#ECFDF5" stroke="#059669" stroke-width="2"/>
+  <text class="box-title" x="1510" y="140">OpenStreetMap-based tiles</text>
+  <text class="box-line" x="1510" y="166">Visual display + attribution</text>
+  <text class="box-note" x="1510" y="192">Not a routing engine</text>
+
+  <rect x="1735" y="110" width="335" height="105" rx="12" fill="#F8FAFC" stroke="#94A3B8" stroke-width="2" stroke-dasharray="8 7"/>
+  <text class="box-title" x="1902" y="140">Future external providers</text>
+  <text class="box-line" x="1902" y="166">Routing/geocoding | Ticket OCR</text>
+  <text class="box-note" x="1902" y="192">Optional later scope</text>
+
+  <path class="flow" d="M235 162 H292"/>
+  <path d="M1270 162 H1322" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrow)"/>
+  <text class="small" x="1287" y="150">tiles</text>
+
+  <rect x="300" y="255" width="1390" height="50" rx="12" fill="#1E293B" stroke="#0F172A" stroke-width="2"/>
+  <text class="on-dark" x="995" y="287" text-anchor="middle" font-size="15" font-weight="700">HTTPS + JSON | /api/v1 | authentication/authorization | ISO 8601 UTC | GET /health on every API</text>
+  <path class="flow-blue" d="M785 215 V247"/>
+
+  <!-- Service lane backgrounds -->
+  <rect class="lane" x="45" y="345" width="310" height="790"/>
+  <rect class="lane" x="380" y="345" width="310" height="790"/>
+  <rect class="lane" x="715" y="345" width="310" height="790"/>
+  <rect class="lane" x="1050" y="345" width="310" height="790"/>
+  <rect class="lane-trip" x="1385" y="345" width="310" height="790"/>
+  <rect class="lane" x="1720" y="345" width="310" height="790"/>
+
+  <!-- Lane titles -->
+  <text class="lane-title" x="200" y="378">USERS SERVICE</text><text class="lane-subtitle" x="200" y="398">independent process</text>
+  <text class="lane-title" x="535" y="378">ACCOMMODATIONS SERVICE</text><text class="lane-subtitle" x="535" y="398">independent process</text>
+  <text class="lane-title" x="870" y="378">TRANSPORT SERVICE</text><text class="lane-subtitle" x="870" y="398">independent process</text>
+  <text class="lane-title" x="1205" y="378">ATTRACTIONS SERVICE</text><text class="lane-subtitle" x="1205" y="398">independent process</text>
+  <text class="lane-title" x="1540" y="378">TRIPS SERVICE</text><text x="1540" y="398" font-size="12" text-anchor="middle" fill="#1D4ED8">main write path / orchestrator</text>
+  <text class="lane-title" x="1875" y="378">SETTINGS SERVICE</text><text class="lane-subtitle" x="1875" y="398">independent process</text>
+
+  <!-- HTTP APIs -->
+  <rect class="api" x="70" y="425" width="260" height="100"/><text class="box-title" x="200" y="452">HTTP API</text><text class="box-line" x="200" y="477">/auth/login</text><text class="box-line" x="200" y="500">/users/{id} | /status</text>
+  <rect class="api" x="405" y="425" width="260" height="100"/><text class="box-title" x="535" y="452">HTTP API</text><text class="box-line" x="535" y="477">/accommodations</text><text class="box-line" x="535" y="500">GET | POST | PATCH</text>
+  <rect class="api" x="740" y="425" width="260" height="100"/><text class="box-title" x="870" y="452">HTTP API</text><text class="box-line" x="870" y="477">/transport-modes</text><text class="box-line" x="870" y="500">GET collection / by ID</text>
+  <rect class="api" x="1075" y="425" width="260" height="100"/><text class="box-title" x="1205" y="452">HTTP API</text><text class="box-line" x="1205" y="477">/attractions</text><text class="box-line" x="1205" y="500">GET | POST | PATCH</text>
+  <rect class="api-trip" x="1410" y="425" width="260" height="100"/><text class="box-title" x="1540" y="452">HTTP API</text><text class="box-line" x="1540" y="477">/trips | /legs | /map-points</text><text class="box-line" x="1540" y="500">History is a Trips query</text>
+  <rect class="api" x="1745" y="425" width="260" height="100"/><text class="box-title" x="1875" y="452">HTTP API</text><text class="box-line" x="1875" y="477">/settings/{userId}</text><text class="box-line" x="1875" y="500">GET | PUT</text>
+
+  <!-- Application services -->
+  <rect class="app" x="70" y="565" width="260" height="110"/><text class="box-title" x="200" y="594">Application service</text><text class="box-line" x="200" y="620">Planned IUserService</text><text class="box-line" x="200" y="645">login, profile, role/status</text>
+  <rect class="app" x="405" y="565" width="260" height="110"/><text class="box-title" x="535" y="594">Application service</text><text class="box-line" x="535" y="620">Planned IAccommodationService</text><text class="box-line" x="535" y="645">catalogue + place validation</text>
+  <rect class="app" x="740" y="565" width="260" height="110"/><text class="box-title" x="870" y="594">Application service</text><text class="box-line" x="870" y="620">ITransportModeService</text><text class="box-line" x="870" y="645">catalogue + code lookup</text>
+  <rect class="app" x="1075" y="565" width="260" height="110"/><text class="box-title" x="1205" y="594">Application service</text><text class="box-line" x="1205" y="620">IAttractionService</text><text class="box-line" x="1205" y="645">catalogue + place validation</text>
+  <rect class="app-trip" x="1410" y="565" width="260" height="110"/><text class="box-title" x="1540" y="594">Application services</text><text class="box-line" x="1540" y="620">ITripService + ITripMapService</text><text class="box-line" x="1540" y="645">direction, sequence, time rules</text>
+  <rect class="app" x="1745" y="565" width="260" height="110"/><text class="box-title" x="1875" y="594">Application service</text><text class="box-line" x="1875" y="620">ISettingsService</text><text class="box-line" x="1875" y="645">get-or-create + update defaults</text>
+
+  <!-- Repositories -->
+  <rect class="repo" x="70" y="715" width="260" height="110"/><text class="box-title" x="200" y="744">Data access</text><text class="box-line" x="200" y="770">IUserRepository</text><text x="200" y="795" text-anchor="middle" font-size="12" fill="#B45309">current interface is internal</text>
+  <rect class="repo" x="405" y="715" width="260" height="110"/><text class="box-title" x="535" y="744">Data access</text><text class="box-line" x="535" y="770">IAccomadationRepository</text><text x="535" y="795" text-anchor="middle" font-size="12" fill="#B45309">current spelling; internal</text>
+  <rect class="repo" x="740" y="715" width="260" height="110"/><text class="box-title" x="870" y="744">Data access</text><text class="box-line" x="870" y="770">ITransportModeRepository</text><text class="box-note" x="870" y="795">get all / by ID / by code</text>
+  <rect class="repo" x="1075" y="715" width="260" height="110"/><text class="box-title" x="1205" y="744">Data access</text><text class="box-line" x="1205" y="770">IAttractionRepository</text><text class="box-note" x="1205" y="795">CRUD contract</text>
+  <rect class="repo-trip" x="1410" y="715" width="260" height="110"/><text class="box-title" x="1540" y="744">Data access</text><text class="box-line" x="1540" y="770">ITripRepository</text><text class="box-note" x="1540" y="795">history + CRUD + ReplaceLegs</text>
+  <rect class="repo" x="1745" y="715" width="260" height="110"/><text class="box-title" x="1875" y="744">Data access</text><text class="box-line" x="1875" y="770">ISettingsRepository</text><text class="box-note" x="1875" y="795">get by user + upsert</text>
+
+  <!-- Database cylinders -->
+  <g><path class="db" d="M70 875 C70 856 330 856 330 875 V965 C330 984 70 984 70 965 Z"/><ellipse class="db" cx="200" cy="875" rx="130" ry="16"/><text class="box-title" x="200" y="906">Users store</text><text class="box-line" x="200" y="932">Users</text><text class="box-note" x="200" y="956">profile, credentials, role, status</text></g>
+  <g><path class="db" d="M405 875 C405 856 665 856 665 875 V965 C665 984 405 984 405 965 Z"/><ellipse class="db" cx="535" cy="875" rx="130" ry="16"/><text class="box-title" x="535" y="906">Accommodations store</text><text class="box-line" x="535" y="932">Accommodations</text><text class="box-note" x="535" y="956">address, coordinates, notes</text></g>
+  <g><path class="db" d="M740 875 C740 856 1000 856 1000 875 V965 C1000 984 740 984 740 965 Z"/><ellipse class="db" cx="870" cy="875" rx="130" ry="16"/><text class="box-title" x="870" y="906">Transport store</text><text class="box-line" x="870" y="932">TransportModes</text><text class="box-note" x="870" y="956">car, bus, train, pedestrian, plane</text></g>
+  <g><path class="db" d="M1075 875 C1075 856 1335 856 1335 875 V965 C1335 984 1075 984 1075 965 Z"/><ellipse class="db" cx="1205" cy="875" rx="130" ry="16"/><text class="box-title" x="1205" y="906">Attractions store</text><text class="box-line" x="1205" y="932">Attractions</text><text class="box-note" x="1205" y="956">coordinates + visit duration</text></g>
+  <g><path class="db-trip" d="M1410 875 C1410 856 1670 856 1670 875 V965 C1670 984 1410 984 1410 965 Z"/><ellipse class="db-trip" cx="1540" cy="875" rx="130" ry="16"/><text class="box-title" x="1540" y="906">Trips store</text><text class="box-line" x="1540" y="932">Trips, Legs, Stays, Visits</text><text class="box-note" x="1540" y="956">external IDs are refs, not cross-DB FKs</text></g>
+  <g><path class="db" d="M1745 875 C1745 856 2005 856 2005 875 V965 C2005 984 1745 984 1745 965 Z"/><ellipse class="db" cx="1875" cy="875" rx="130" ry="16"/><text class="box-title" x="1875" y="906">Settings store</text><text class="box-line" x="1875" y="932">UserSettings</text><text class="box-note" x="1875" y="956">transport + map defaults</text></g>
+
+  <!-- Ownership/domain notes -->
+  <rect class="owner" x="70" y="1015" width="260" height="80"/><text class="box-line" x="200" y="1045">Owner: Christel</text><text class="box-note" x="200" y="1072">User, UserRole, UserStatus</text>
+  <rect class="owner" x="405" y="1015" width="260" height="80"/><text class="box-line" x="535" y="1045">Owner: Christel</text><text class="box-note" x="535" y="1072">Accomodation (current spelling)</text>
+  <rect class="owner" x="740" y="1015" width="260" height="80"/><text class="box-line" x="870" y="1045">Owner: Artiom</text><text class="box-note" x="870" y="1072">TransportMode</text>
+  <rect class="owner" x="1075" y="1015" width="260" height="80"/><text class="box-line" x="1205" y="1045">Owner: Artiom</text><text class="box-note" x="1205" y="1072">Attraction</text>
+  <rect class="owner" x="1410" y="1015" width="260" height="80"/><text class="box-line" x="1540" y="1045">Owner: James</text><text class="box-note" x="1540" y="1072">Trip, Leg, Stay, Visit, MapPoint</text>
+  <rect class="owner" x="1745" y="1015" width="260" height="80"/><text class="box-line" x="1875" y="1045">Owner: James</text><text class="box-note" x="1875" y="1072">UserSettings</text>
+
+  <!-- Browser/API and vertical layer flows -->
+  <path class="flow-blue" d="M995 305 V325 H55 V410 H200 V417"/><path class="flow-blue" d="M995 325 H390 V410 H535 V417"/><path class="flow-blue" d="M995 325 H725 V410 H870 V417"/><path class="flow-blue" d="M995 325 H1060 V410 H1205 V417"/><path class="flow-blue" d="M995 325 H1395 V410 H1540 V417"/><path class="flow-blue" d="M995 325 H1730 V410 H1875 V417"/>
+  <path class="flow" d="M200 525 V557"/><path class="flow" d="M200 675 V707"/><path class="flow" d="M200 825 V855"/>
+  <path class="flow" d="M535 525 V557"/><path class="flow" d="M535 675 V707"/><path class="flow" d="M535 825 V855"/>
+  <path class="flow" d="M870 525 V557"/><path class="flow" d="M870 675 V707"/><path class="flow" d="M870 825 V855"/>
+  <path class="flow" d="M1205 525 V557"/><path class="flow" d="M1205 675 V707"/><path class="flow" d="M1205 825 V855"/>
+  <path class="flow-blue" d="M1540 525 V557"/><path class="flow-blue" d="M1540 675 V707"/><path class="flow-blue" d="M1540 825 V855"/>
+  <path class="flow" d="M1875 525 V557"/><path class="flow" d="M1875 675 V707"/><path class="flow" d="M1875 825 V855"/>
+
+  <!-- Bottom architecture notes -->
+  <rect x="45" y="1185" width="610" height="130" rx="12" fill="#F5F3FF" stroke="#7C3AED" stroke-width="2"/>
+  <text class="left-title" x="65" y="1215">Shared code contracts: TravelTracker.Domain</text>
+  <text class="left-line" x="65" y="1242">Entities and ID types used by service/repository interfaces.</text>
+  <text x="65" y="1270" font-size="13" fill="#B45309">Current mismatch: Guid for older models; Id64 for Trips/Settings.</text>
+  <text class="small" x="65" y="1295">Shared code does not mean shared database ownership.</text>
+
+  <rect x="700" y="1185" width="1000" height="130" rx="12" fill="#FFF7ED" stroke="#EA580C" stroke-width="2"/>
+  <text class="left-title" x="720" y="1215">Service-to-service HTTP validation on Trip writes</text>
+  <text class="left-line" x="720" y="1242">Trips checks externally owned IDs through public GET endpoints. No cross-service table reads.</text>
+  <rect x="720" y="1260" width="165" height="35" rx="17" fill="#FFFFFF" stroke="#EA580C"/><text x="802" y="1283" text-anchor="middle" font-size="12">Users API</text>
+  <rect x="900" y="1260" width="205" height="35" rx="17" fill="#FFFFFF" stroke="#EA580C"/><text x="1002" y="1283" text-anchor="middle" font-size="12">Accommodations API</text>
+  <rect x="1120" y="1260" width="180" height="35" rx="17" fill="#FFFFFF" stroke="#EA580C"/><text x="1210" y="1283" text-anchor="middle" font-size="12">Transport API</text>
+  <rect x="1315" y="1260" width="190" height="35" rx="17" fill="#FFFFFF" stroke="#EA580C"/><text x="1410" y="1283" text-anchor="middle" font-size="12">Attractions API</text>
+  <text x="1525" y="1274" font-size="12" fill="#7C2D12">404 unknown ID</text><text x="1525" y="1292" font-size="12" fill="#7C2D12">503 unavailable</text>
+
+  <rect x="1745" y="1185" width="285" height="130" rx="12" fill="#FFFFFF" stroke="#94A3B8" stroke-width="2"/>
+  <text class="left-title" x="1765" y="1215">Layer colors</text>
+  <text x="1765" y="1242" font-size="13" fill="#1D4ED8">Blue - HTTP boundary</text>
+  <text x="1765" y="1265" font-size="13" fill="#B45309">Amber - app/data contracts</text>
+  <text x="1765" y="1288" font-size="13" fill="#15803D">Green - owned persistence</text>
+
+  <path class="flow-orange" d="M1670 620 H1705 V1165 H1200 V1177"/>
+  <text x="1710" y="700" font-size="12" fill="#C2410C" transform="rotate(90 1710 700)">HTTP ID checks</text>
+
+  <text x="45" y="1362" font-size="13" fill="#64748B">Target rule: every API is independently runnable and owns its repository/store. The current single API project and shared draft schema are implementation scaffolding, documented on page 2 of the .drawio source.</text>
+</svg>

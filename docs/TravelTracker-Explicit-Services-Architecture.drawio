@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-09-24T00:00:00.000Z" agent="Codex" version="24.7.17" type="device" compressed="false">
+  <diagram id="target-services" name="1 - Target service architecture">
+    <mxGraphModel dx="2200" dy="1450" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1450" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="TravelTracker - Explicit Services Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="45" y="20" width="2050" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="Target broad design from TravelTracker.pdf, reconciled with the current .NET solution | Solid = application/data flow | Dashed = service-to-service HTTP or future integration" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=14;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry x="47" y="64" width="2050" height="28" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="actors" value="&lt;b&gt;People&lt;/b&gt;&lt;br&gt;Traveler&lt;br&gt;Administrator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F1F5F9;strokeColor=#64748B;strokeWidth=2;fontSize=15;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="45" y="115" width="190" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="browser" value="&lt;b&gt;Browser Web Application&lt;/b&gt;&lt;br&gt;Sign in | Map | New Trip | History | User/Settings | Admin&lt;br&gt;&lt;font color=&quot;#475569&quot;&gt;Consumes JSON APIs and renders ordered trip points&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#0284C7;strokeWidth=2;fontSize=16;fontColor=#0C4A6E;" vertex="1" parent="1">
+          <mxGeometry x="300" y="110" width="970" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="osm" value="&lt;b&gt;OpenStreetMap-based tiles&lt;/b&gt;&lt;br&gt;Visual display + required attribution&lt;br&gt;&lt;font color=&quot;#475569&quot;&gt;Not a routing engine&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;strokeWidth=2;fontSize=14;fontColor=#064E3B;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="110" width="360" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="future" value="&lt;b&gt;Future external providers&lt;/b&gt;&lt;br&gt;Routing/geocoding | Ticket text extraction&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;Optional, later scope&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;strokeWidth=2;dashed=1;fontSize=14;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="1735" y="110" width="335" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-actor-browser" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="actors" target="browser">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-browser-osm" value="HTTPS map tiles" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#059669;strokeWidth=2;fontSize=12;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="browser" target="osm">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="http-bus" value="HTTPS + JSON | /api/v1 | authentication/authorization | ISO 8601 UTC | GET /health on every API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1E293B;strokeColor=#0F172A;strokeWidth=2;fontSize=15;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="300" y="255" width="1390" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-browser-bus" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#0284C7;strokeWidth=3;" edge="1" parent="1" source="browser" target="http-bus">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="lane-users" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="45" y="345" width="310" height="815" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-accom" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="380" y="345" width="310" height="815" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-transport" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="715" y="345" width="310" height="815" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-attractions" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="345" width="310" height="815" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-trips" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#60A5FA;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="1385" y="345" width="310" height="815" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-settings" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1720" y="345" width="310" height="815" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="users-label" value="&lt;b&gt;USERS SERVICE&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;independent process&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=16;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="60" y="355" width="280" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="users-api" value="&lt;b&gt;HTTP API&lt;/b&gt;&lt;br&gt;/auth/login&lt;br&gt;/users/{id} | /status" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=14;fontColor=#1E3A8A;" vertex="1" parent="1">
+          <mxGeometry x="70" y="420" width="260" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="users-service" value="&lt;b&gt;Application service&lt;/b&gt;&lt;br&gt;Planned IUserService&lt;br&gt;login, profile, role/status policy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="70" y="565" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="users-repo" value="&lt;b&gt;Data access&lt;/b&gt;&lt;br&gt;IUserRepository&lt;br&gt;&lt;font color=&quot;#B45309&quot;&gt;current interface is internal&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="70" y="720" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="users-db" value="&lt;b&gt;Users store&lt;/b&gt;&lt;br&gt;Users&lt;br&gt;credentials, profile, role, status" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=18;fillColor=#DCFCE7;strokeColor=#16A34A;strokeWidth=2;fontSize=14;fontColor=#14532D;" vertex="1" parent="1">
+          <mxGeometry x="70" y="875" width="260" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="users-owner" value="Owner: Christel&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;Domain: User, UserRole, UserStatus&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="70" y="1035" width="260" height="85" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="accom-label" value="&lt;b&gt;ACCOMMODATIONS SERVICE&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;independent process&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=16;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="395" y="355" width="280" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="accom-api" value="&lt;b&gt;HTTP API&lt;/b&gt;&lt;br&gt;/accommodations&lt;br&gt;GET | POST | PATCH" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=14;fontColor=#1E3A8A;" vertex="1" parent="1">
+          <mxGeometry x="405" y="420" width="260" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="accom-service" value="&lt;b&gt;Application service&lt;/b&gt;&lt;br&gt;Planned IAccommodationService&lt;br&gt;catalogue + place validation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="405" y="565" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="accom-repo" value="&lt;b&gt;Data access&lt;/b&gt;&lt;br&gt;IAccomadationRepository&lt;br&gt;&lt;font color=&quot;#B45309&quot;&gt;current name/spelling; internal&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="405" y="720" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="accom-db" value="&lt;b&gt;Accommodations store&lt;/b&gt;&lt;br&gt;Accommodations&lt;br&gt;name, address, coordinates, notes" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=18;fillColor=#DCFCE7;strokeColor=#16A34A;strokeWidth=2;fontSize=14;fontColor=#14532D;" vertex="1" parent="1">
+          <mxGeometry x="405" y="875" width="260" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="accom-owner" value="Owner: Christel&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;Domain: Accomodation (current spelling)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="405" y="1035" width="260" height="85" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="transport-label" value="&lt;b&gt;TRANSPORT SERVICE&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;independent process&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=16;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="730" y="355" width="280" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="transport-api" value="&lt;b&gt;HTTP API&lt;/b&gt;&lt;br&gt;/transport-modes&lt;br&gt;GET collection / by ID" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=14;fontColor=#1E3A8A;" vertex="1" parent="1">
+          <mxGeometry x="740" y="420" width="260" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="transport-service" value="&lt;b&gt;Application service&lt;/b&gt;&lt;br&gt;ITransportModeService&lt;br&gt;catalogue + code lookup" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="740" y="565" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="transport-repo" value="&lt;b&gt;Data access&lt;/b&gt;&lt;br&gt;ITransportModeRepository&lt;br&gt;get all / by ID / by code" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="740" y="720" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="transport-db" value="&lt;b&gt;Transport store&lt;/b&gt;&lt;br&gt;TransportModes&lt;br&gt;car, bus, train, pedestrian, plane" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=18;fillColor=#DCFCE7;strokeColor=#16A34A;strokeWidth=2;fontSize=14;fontColor=#14532D;" vertex="1" parent="1">
+          <mxGeometry x="740" y="875" width="260" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="transport-owner" value="Owner: Artiom&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;Domain: TransportMode&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="740" y="1035" width="260" height="85" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="attractions-label" value="&lt;b&gt;ATTRACTIONS SERVICE&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;independent process&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=16;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="1065" y="355" width="280" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="attractions-api" value="&lt;b&gt;HTTP API&lt;/b&gt;&lt;br&gt;/attractions&lt;br&gt;GET | POST | PATCH" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=14;fontColor=#1E3A8A;" vertex="1" parent="1">
+          <mxGeometry x="1075" y="420" width="260" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="attractions-service" value="&lt;b&gt;Application service&lt;/b&gt;&lt;br&gt;IAttractionService&lt;br&gt;catalogue + place validation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="1075" y="565" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="attractions-repo" value="&lt;b&gt;Data access&lt;/b&gt;&lt;br&gt;IAttractionRepository&lt;br&gt;CRUD contract" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="1075" y="720" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="attractions-db" value="&lt;b&gt;Attractions store&lt;/b&gt;&lt;br&gt;Attractions&lt;br&gt;address, coordinates, visit duration" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=18;fillColor=#DCFCE7;strokeColor=#16A34A;strokeWidth=2;fontSize=14;fontColor=#14532D;" vertex="1" parent="1">
+          <mxGeometry x="1075" y="875" width="260" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="attractions-owner" value="Owner: Artiom&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;Domain: Attraction&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="1075" y="1035" width="260" height="85" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="trips-label" value="&lt;b&gt;TRIPS SERVICE&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#1D4ED8&quot;&gt;main write path / orchestrator&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=16;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="1400" y="355" width="280" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="trips-api" value="&lt;b&gt;HTTP API&lt;/b&gt;&lt;br&gt;/trips | /legs | /map-points&lt;br&gt;History is a Trips query" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BFDBFE;strokeColor=#1D4ED8;strokeWidth=3;fontSize=14;fontColor=#1E3A8A;" vertex="1" parent="1">
+          <mxGeometry x="1410" y="420" width="260" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="trips-service" value="&lt;b&gt;Application services&lt;/b&gt;&lt;br&gt;ITripService + ITripMapService&lt;br&gt;direction, sequence, time validation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDE68A;strokeColor=#B45309;strokeWidth=3;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="1410" y="565" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="trips-repo" value="&lt;b&gt;Data access&lt;/b&gt;&lt;br&gt;ITripRepository&lt;br&gt;history + trip CRUD + ReplaceLegs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#B45309;strokeWidth=3;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="1410" y="720" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="trips-db" value="&lt;b&gt;Trips store&lt;/b&gt;&lt;br&gt;Trips, TripLegs, Stays, Visits&lt;br&gt;external IDs are refs, not cross-DB FKs" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=18;fillColor=#BBF7D0;strokeColor=#15803D;strokeWidth=3;fontSize=14;fontColor=#14532D;" vertex="1" parent="1">
+          <mxGeometry x="1410" y="875" width="260" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="trips-owner" value="Owner: James&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;Trip, TripLeg, Stay, Visit, TripMapPoint&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#93C5FD;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="1410" y="1035" width="260" height="85" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="settings-label" value="&lt;b&gt;SETTINGS SERVICE&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;independent process&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=16;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="1735" y="355" width="280" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="settings-api" value="&lt;b&gt;HTTP API&lt;/b&gt;&lt;br&gt;/settings/{userId}&lt;br&gt;GET | PUT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=14;fontColor=#1E3A8A;" vertex="1" parent="1">
+          <mxGeometry x="1745" y="420" width="260" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="settings-service" value="&lt;b&gt;Application service&lt;/b&gt;&lt;br&gt;ISettingsService&lt;br&gt;get-or-create + update defaults" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="1745" y="565" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="settings-repo" value="&lt;b&gt;Data access&lt;/b&gt;&lt;br&gt;ISettingsRepository&lt;br&gt;get by user + upsert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+          <mxGeometry x="1745" y="720" width="260" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="settings-db" value="&lt;b&gt;Settings store&lt;/b&gt;&lt;br&gt;UserSettings&lt;br&gt;transport preference + map defaults" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=18;fillColor=#DCFCE7;strokeColor=#16A34A;strokeWidth=2;fontSize=14;fontColor=#14532D;" vertex="1" parent="1">
+          <mxGeometry x="1745" y="875" width="260" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="settings-owner" value="Owner: James&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;Domain: UserSettings&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="1745" y="1035" width="260" height="85" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="edge-bus-users" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#2563EB;strokeWidth=2;" edge="1" parent="1" source="http-bus" target="users-api"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="55" y="325"/><mxPoint x="55" y="410"/><mxPoint x="200" y="410"/></Array></mxGeometry></mxCell>
+        <mxCell id="edge-bus-accom" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#2563EB;strokeWidth=2;" edge="1" parent="1" source="http-bus" target="accom-api"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="390" y="325"/><mxPoint x="390" y="410"/><mxPoint x="535" y="410"/></Array></mxGeometry></mxCell>
+        <mxCell id="edge-bus-transport" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#2563EB;strokeWidth=2;" edge="1" parent="1" source="http-bus" target="transport-api"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="725" y="325"/><mxPoint x="725" y="410"/><mxPoint x="870" y="410"/></Array></mxGeometry></mxCell>
+        <mxCell id="edge-bus-attractions" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#2563EB;strokeWidth=2;" edge="1" parent="1" source="http-bus" target="attractions-api"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1060" y="325"/><mxPoint x="1060" y="410"/><mxPoint x="1205" y="410"/></Array></mxGeometry></mxCell>
+        <mxCell id="edge-bus-trips" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#1D4ED8;strokeWidth=3;" edge="1" parent="1" source="http-bus" target="trips-api"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1395" y="325"/><mxPoint x="1395" y="410"/><mxPoint x="1540" y="410"/></Array></mxGeometry></mxCell>
+        <mxCell id="edge-bus-settings" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#2563EB;strokeWidth=2;" edge="1" parent="1" source="http-bus" target="settings-api"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1730" y="325"/><mxPoint x="1730" y="410"/><mxPoint x="1875" y="410"/></Array></mxGeometry></mxCell>
+
+        <mxCell id="edge-users-api-service" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="users-api" target="users-service"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-users-service-repo" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="users-service" target="users-repo"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-users-repo-db" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#16A34A;strokeWidth=2;" edge="1" parent="1" source="users-repo" target="users-db"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-accom-api-service" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="accom-api" target="accom-service"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-accom-service-repo" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="accom-service" target="accom-repo"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-accom-repo-db" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#16A34A;strokeWidth=2;" edge="1" parent="1" source="accom-repo" target="accom-db"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-transport-api-service" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="transport-api" target="transport-service"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-transport-service-repo" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="transport-service" target="transport-repo"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-transport-repo-db" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#16A34A;strokeWidth=2;" edge="1" parent="1" source="transport-repo" target="transport-db"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-attractions-api-service" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="attractions-api" target="attractions-service"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-attractions-service-repo" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="attractions-service" target="attractions-repo"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-attractions-repo-db" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#16A34A;strokeWidth=2;" edge="1" parent="1" source="attractions-repo" target="attractions-db"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-trips-api-service" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#1D4ED8;strokeWidth=3;" edge="1" parent="1" source="trips-api" target="trips-service"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-trips-service-repo" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#1D4ED8;strokeWidth=3;" edge="1" parent="1" source="trips-service" target="trips-repo"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-trips-repo-db" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#15803D;strokeWidth=3;" edge="1" parent="1" source="trips-repo" target="trips-db"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-settings-api-service" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="settings-api" target="settings-service"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-settings-service-repo" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;" edge="1" parent="1" source="settings-service" target="settings-repo"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-settings-repo-db" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#16A34A;strokeWidth=2;" edge="1" parent="1" source="settings-repo" target="settings-db"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="domain-contracts" value="&lt;b&gt;Shared code contracts: TravelTracker.Domain&lt;/b&gt;&lt;br&gt;Entities and ID value types used by API service and repository interfaces.&lt;br&gt;&lt;font color=&quot;#B45309&quot;&gt;Current mix: Guid for User/Accomodation/Attraction/TransportMode; Id64 for Trips/Settings contracts.&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F3FF;strokeColor=#7C3AED;strokeWidth=2;fontSize=14;fontColor=#4C1D95;align=left;spacingLeft=15;" vertex="1" parent="1">
+          <mxGeometry x="45" y="1210" width="610" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="validation-hub" value="&lt;b&gt;Service-to-service HTTP validation on Trip writes&lt;/b&gt;&lt;br&gt;Trips calls Users, Accommodations, Attractions, and Transport by ID. Unknown ID -&gt; 404; unavailable dependency -&gt; 503 while Trips remains running.&lt;br&gt;&lt;font color=&quot;#475569&quot;&gt;No service reads another service's tables. Settings may validate user/transport references through the same public APIs.&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#EA580C;strokeWidth=2;fontSize=14;fontColor=#7C2D12;align=left;spacingLeft=15;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1210" width="1000" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend" value="&lt;b&gt;Layer colors&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#1D4ED8&quot;&gt;Blue&lt;/font&gt; - HTTP boundary&lt;br&gt;&lt;font color=&quot;#B45309&quot;&gt;Amber&lt;/font&gt; - application/data contracts&lt;br&gt;&lt;font color=&quot;#15803D&quot;&gt;Green&lt;/font&gt; - service-owned persistence&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;Gray dashed&lt;/font&gt; - HTTP/future" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=2;fontSize=13;fontColor=#334155;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1745" y="1200" width="285" height="125" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="edge-trips-validation" value="validates refs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#EA580C;strokeWidth=2;dashed=1;fontSize=12;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="trips-service" target="validation-hub"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1705" y="620"/><mxPoint x="1705" y="1180"/><mxPoint x="1200" y="1180"/></Array></mxGeometry></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="current-skeleton" name="2 - Current code and gaps">
+    <mxGraphModel dx="1900" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="c0"/>
+        <mxCell id="c1" parent="c0"/>
+        <mxCell id="c-title" value="TravelTracker - Current Skeleton Compared with the Target" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#0F172A;" vertex="1" parent="c1"><mxGeometry x="45" y="25" width="1780" height="45" as="geometry"/></mxCell>
+        <mxCell id="c-subtitle" value="Evidence from the repository as of 2026-09-24. Green = present contract/model; amber = partial; red = not implemented." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=14;fontColor=#475569;" vertex="1" parent="c1"><mxGeometry x="47" y="70" width="1780" height="30" as="geometry"/></mxCell>
+
+        <mxCell id="c-api" value="&lt;b&gt;TravelTracker.Api (.NET 10)&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#166534&quot;&gt;Present interfaces&lt;/font&gt;&lt;br&gt;- IAttractionService&lt;br&gt;- ITransportModeService&lt;br&gt;- ITripService&lt;br&gt;- ITripMapService&lt;br&gt;- ISettingsService&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#B91C1C&quot;&gt;Missing&lt;/font&gt;&lt;br&gt;- IUserService / IAccommodationService&lt;br&gt;- controllers or mapped endpoints&lt;br&gt;- service implementations + DI registration&lt;br&gt;- authentication/authorization + GET /health&lt;br&gt;&lt;br&gt;&lt;b&gt;Program.cs currently builds and runs an empty app.&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2563EB;strokeWidth=3;fontSize=15;fontColor=#172554;align=left;verticalAlign=top;spacing=14;" vertex="1" parent="c1"><mxGeometry x="45" y="135" width="405" height="505" as="geometry"/></mxCell>
+        <mxCell id="c-data" value="&lt;b&gt;TravelTracker.Data (.NET 10)&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#166534&quot;&gt;Repository contracts&lt;/font&gt;&lt;br&gt;- IUserRepository (internal)&lt;br&gt;- IAccomadationRepository (internal)&lt;br&gt;- IAttractionRepository&lt;br&gt;- ITransportModeRepository&lt;br&gt;- ITripRepository&lt;br&gt;- ISettingsRepository&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#B91C1C&quot;&gt;Missing&lt;/font&gt;&lt;br&gt;- repository implementations&lt;br&gt;- DbContext / connection configuration&lt;br&gt;- migrations and seed implementation&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#B45309&quot;&gt;Contracts span all six conceptual services, but they are still in one class library.&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#EA580C;strokeWidth=3;fontSize=15;fontColor=#7C2D12;align=left;verticalAlign=top;spacing=14;" vertex="1" parent="c1"><mxGeometry x="500" y="135" width="405" height="505" as="geometry"/></mxCell>
+        <mxCell id="c-domain" value="&lt;b&gt;TravelTracker.Domain (.NET 10)&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#166534&quot;&gt;Present models&lt;/font&gt;&lt;br&gt;- User, UserRole, UserStatus&lt;br&gt;- Accomodation&lt;br&gt;- Attraction&lt;br&gt;- TransportMode&lt;br&gt;- Id64 value type&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#B91C1C&quot;&gt;Referenced but missing models&lt;/font&gt;&lt;br&gt;- Trip, TripLeg, TripMapPoint&lt;br&gt;- UserSettings&lt;br&gt;- Stay, Visit, TicketImport&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#B45309&quot;&gt;ID mismatch: older entities use Guid; Trip/Settings contracts use Id64; SQL has bigint identity plus UUID.&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F3FF;strokeColor=#7C3AED;strokeWidth=3;fontSize=15;fontColor=#4C1D95;align=left;verticalAlign=top;spacing=14;" vertex="1" parent="c1"><mxGeometry x="955" y="135" width="405" height="505" as="geometry"/></mxCell>
+        <mxCell id="c-sql" value="&lt;b&gt;src/Database/schema.sql&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#166534&quot;&gt;Present draft tables&lt;/font&gt;&lt;br&gt;- Users&lt;br&gt;- Accommodations&lt;br&gt;- Attractions&lt;br&gt;- Trips&lt;br&gt;- TransportMode + TripType enums&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#B91C1C&quot;&gt;Missing target tables&lt;/font&gt;&lt;br&gt;- TransportModes catalogue table&lt;br&gt;- TripLegs, Stays, Visits&lt;br&gt;- UserSettings, TicketImports&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#B45309&quot;&gt;Current draft is one shared relational schema with physical cross-domain FKs. The PDF target requires each API to own its repository and store, with cross-service refs checked over HTTP.&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;strokeWidth=3;fontSize=15;fontColor=#064E3B;align=left;verticalAlign=top;spacing=14;" vertex="1" parent="c1"><mxGeometry x="1410" y="135" width="405" height="505" as="geometry"/></mxCell>
+
+        <mxCell id="c-ref-api-data" value="project reference" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;fontSize=12;labelBackgroundColor=#FFFFFF;" edge="1" parent="c1" source="c-api" target="c-data"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c-ref-data-domain" value="project reference" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#475569;strokeWidth=2;fontSize=12;labelBackgroundColor=#FFFFFF;" edge="1" parent="c1" source="c-data" target="c-domain"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c-ref-api-domain" value="project reference" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#7C3AED;strokeWidth=2;fontSize=12;labelBackgroundColor=#FFFFFF;" edge="1" parent="c1" source="c-api" target="c-domain"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="475" y="115"/><mxPoint x="1160" y="115"/></Array></mxGeometry></mxCell>
+        <mxCell id="c-ref-data-sql" value="intended persistence (not wired)" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#EA580C;strokeWidth=2;dashed=1;fontSize=12;labelBackgroundColor=#FFFFFF;" edge="1" parent="c1" source="c-data" target="c-sql"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="930" y="665"/><mxPoint x="1600" y="665"/></Array></mxGeometry></mxCell>
+
+        <mxCell id="c-reality" value="&lt;b&gt;Current runtime reality&lt;/b&gt;&lt;br&gt;The solution builds a single empty ASP.NET Core process. There are no HTTP routes, concrete services, concrete repositories, or database integration yet. The interfaces are useful design contracts, not running microservices." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF2F2;strokeColor=#DC2626;strokeWidth=3;fontSize=16;fontColor=#7F1D1D;align=left;spacingLeft=16;" vertex="1" parent="c1"><mxGeometry x="45" y="700" width="1770" height="100" as="geometry"/></mxCell>
+
+        <mxCell id="c-step1" value="&lt;b&gt;1. Establish six API hosts&lt;/b&gt;&lt;br&gt;Users, Accommodations, Transport, Attractions, Trips, Settings; each starts and answers /health independently." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2563EB;strokeWidth=2;fontSize=14;fontColor=#1E3A8A;align=left;spacingLeft=12;" vertex="1" parent="c1"><mxGeometry x="45" y="855" width="400" height="125" as="geometry"/></mxCell>
+        <mxCell id="c-step2" value="&lt;b&gt;2. Complete API/application layer&lt;/b&gt;&lt;br&gt;Add missing service contracts, implementations, controllers/endpoints, validation, auth, and dependency error handling." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;align=left;spacingLeft=12;" vertex="1" parent="c1"><mxGeometry x="500" y="855" width="400" height="125" as="geometry"/></mxCell>
+        <mxCell id="c-step3" value="&lt;b&gt;3. Complete domain and persistence&lt;/b&gt;&lt;br&gt;Add missing models/tables and concrete repositories; settle one public ID representation and wire database configuration." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F3FF;strokeColor=#7C3AED;strokeWidth=2;fontSize=14;fontColor=#4C1D95;align=left;spacingLeft=12;" vertex="1" parent="c1"><mxGeometry x="955" y="855" width="400" height="125" as="geometry"/></mxCell>
+        <mxCell id="c-step4" value="&lt;b&gt;4. Enforce service ownership&lt;/b&gt;&lt;br&gt;Give each service its own repository/store. Trips stores foreign IDs as references and validates them only through public HTTP APIs." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;strokeWidth=2;fontSize=14;fontColor=#064E3B;align=left;spacingLeft=12;" vertex="1" parent="c1"><mxGeometry x="1410" y="855" width="405" height="125" as="geometry"/></mxCell>
+        <mxCell id="c-step-edge1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=2;" edge="1" parent="c1" source="c-step1" target="c-step2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c-step-edge2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=2;" edge="1" parent="c1" source="c-step2" target="c-step3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c-step-edge3" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=2;" edge="1" parent="c1" source="c-step3" target="c-step4"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="c-note" value="&lt;b&gt;Architectural decision represented on page 1:&lt;/b&gt; the PDF's six-service target is the intended design; this page prevents readers from mistaking that target for the current implementation state." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#64748B;strokeWidth=2;fontSize=14;fontColor=#334155;align=left;spacingLeft=14;" vertex="1" parent="c1"><mxGeometry x="45" y="1035" width="1770" height="80" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
