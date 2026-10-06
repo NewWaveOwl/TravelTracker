@@ -1,27 +1,25 @@
 # Milestone 2 specification and planning handoff
 
-[Planning task #9](https://github.com/NewWaveOwl/TravelTracker/issues/9) now has a reviewed attraction-name-search specification in [feature issue #15](https://github.com/NewWaveOwl/TravelTracker/issues/15), duplicate/code triage and a reviewed implementation plan. GitHub Copilot generated the initial issue and interview in one session and the plan in a distinct fresh session; original outputs and review corrections are preserved below.
+[Planning task #9](https://github.com/NewWaveOwl/TravelTracker/issues/9) has its completed interview and reviewed **attraction management and name search** specification in [feature #15](https://github.com/NewWaveOwl/TravelTracker/issues/15), duplicate/code triage and a fresh-session implementation plan. The human confirmed VS Code with GitHub Copilot, C#/ASP.NET Core .NET 10, and standalone port 5104 with seeded in-memory data, including POST and PATCH. The earlier search-only defaults are superseded.
 
 | Deliverable | Repository document |
 | --- | --- |
 | Replicable official GitHub MCP setup and live verification | [GitHub MCP setup](github-mcp-setup.md) and [workspace configuration](../../../.vscode/mcp.json) |
-| Feature specification and acceptance cases | [Feature specification](feature-spec.md), published as #15 |
-| Duplicate issues, overlapping code, conflicts and baseline risks | [Triage notes](triage-notes.md) |
-| Agent priming questions and explicit proposed decisions | [Priming interview](priming-interview.md) |
-| Fresh-session plan adjusted for repository conventions and validation | [Implementation plan](implementation-plan.md) |
-| Review of Copilot's issue and plan | [Copilot review](copilot-review.md) |
+| Confirmed specification and acceptance matrix | [Feature specification](feature-spec.md), published as #15 |
+| Duplicate issues, code overlap, scope conflicts and baseline risks | [Triage notes](triage-notes.md) |
+| Human answers and completed agent interview | [Priming interview](priming-interview.md) and [supplied answers](evidence/human-interview-answers.md) |
+| Reviewed fresh-session implementation plan | [Implementation plan](implementation-plan.md) |
+| Copilot outputs and review corrections | [Copilot review](copilot-review.md) |
 
-## Session evidence
+## Confirmed scope session evidence
 
-- Issue/interview session: `bcf1c82a-fe8f-495c-bbbb-c3783bb9e15f`.
-- Fresh plan session: `df53555f-cd5b-4f36-b2dd-83ab434ad806`.
-- Official Copilot CLI: `1.0.92`; CLI-selected model: `gpt-6-luna`.
-- Both sessions allowed file reads and reported zero modified files. Repository edits and issue publication were performed after Codex review.
-- [Original issue draft](evidence/copilot-issue-draft.md), [interview questions](evidence/copilot-prime-questions.md), and [initial plan](evidence/copilot-initial-plan.md).
-- Reproducible [draft prompt](evidence/draft-prompt.md), [priming prompt](evidence/prime-prompt.md), and [fresh plan prompt](evidence/plan-prompt.md).
+- Revised issue-draft session: `e7f8b346-b11a-4909-9c48-eb4366616e6d` — [draft](evidence/copilot-management-draft.md) and [prompt](evidence/confirmed-draft-prompt.md).
+- Distinct fresh management-plan session: `92e3a511-b590-4152-bb4b-afef271f5f07` — [initial plan](evidence/copilot-management-initial-plan.md) and [prompt](evidence/confirmed-plan-prompt.md).
+- Official Copilot CLI 1.0.92 selected `gpt-6-luna`; sessions allowed file-reading tools and reported no modified files. Codex reviewed/revised the outputs before repository and issue publication. The team's chosen implementation environment is VS Code with GitHub Copilot.
+- Original pre-answer [search draft](evidence/copilot-issue-draft.md), [interview questions](evidence/copilot-prime-questions.md), and [search plan](evidence/copilot-initial-plan.md) remain historical evidence, with their original [draft](evidence/draft-prompt.md), [priming](evidence/prime-prompt.md), and [plan](evidence/plan-prompt.md) prompts. They do not define the current feature.
 
-## Remaining human and team decisions
+## Planning completion and implementation handoff
 
-The human preference questions had not been answered at publication. The feature, client and minimal standalone baseline choices are therefore explicit planning defaults, not recorded human approvals. Review them before starting #10. Each teammate must also complete their own IDE trust/GitHub authorization; live remote MCP verification does not authenticate another person's editor.
+The human-preferences step is fulfilled. The specification now covers nullable description/manual rating, creation, atomic partial updates, current-catalogue name search and endpoint verification. It identifies additional binding choices explicitly rather than inventing further human answers. Planning and agent setup are reviewed in [PR #16](https://github.com/NewWaveOwl/TravelTracker/pull/16) on `Artiom`.
 
-Application code and tests are future #10/#11 work. The existing solution build failure and missing test projects are recorded in triage. This package does not claim a completed search feature or a passing application suite. Keep #9 open until the interview decisions are accepted or revised; then its planning deliverables are ready for handoff.
+Each teammate still completes their own editor trust/GitHub authorization. Implementation and executed test evidence are future #10/#11 work, with existing solution failures recorded in triage. Completion of #9 means its planning deliverables are ready; it does not imply the feature is implemented, its tests pass, or the planning PR has merged.

@@ -1,22 +1,34 @@
-# Attraction search priming interview
+# Attraction management priming interview
 
-Copilot CLI session `bcf1c82a-fe8f-495c-bbbb-c3783bb9e15f` drafted the feature issue, then performed the priming interview before planning on 2026-10-06. Its questions and recommendations are preserved in [Copilot interview questions](evidence/copilot-prime-questions.md).
+**Human interview answers received on 2026-10-06.** The user confirmed VS Code with GitHub Copilot, C# and ASP.NET Core on .NET 10, and a standalone Attractions API on port 5104 with seeded in-memory data. The feature was revised from search alone to **attraction management and name search**. These replace the earlier provisional defaults.
 
-Three preference questions were sent to the human in the working chat: feature choice, Copilot environment, and minimal runnable API versus waiting for a baseline. No answer had arrived when these planning documents were drafted. The decisions below are explicit planning defaults selected under the request to choose a small extension; they are **not attributed to the human**. Confirm or revise them before #10 implements the feature.
+The [human answer record](evidence/human-interview-answers.md) preserves the supplied requirements.
 
-| Interview question | Planning decision and reason |
+## Confirmed human decisions
+
+| Topic | Human answer |
 | --- | --- |
-| Which small extension? | Attraction-name search: Artiom owns Attractions, the product plans place search, and no matching feature issue or runtime behavior exists. |
-| Which client? | Shared VS Code MCP configuration and setup, with .NET CLI validation. Actual draft/interview/plan generation uses official Copilot CLI 1.0.92. Other team members may use their IDE with equivalent repository context. |
-| Runnable API or baseline dependency? | Include only a minimal standalone Attractions prerequisite in a separate commit; reuse a compliant baseline if a teammate supplies it first. Do not rebuild all six services. |
-| Who owns what? | Artiom retains Attractions ownership; phase #10 owns implementation, #11 owns validation and implementation PR, #9 owns this specification/plan. No teammate assignment was changed. |
-| Which identifier and representation? | M1 GUID ID and `attractionId/name/address/lat/lon/estimatedVisitMinutes` JSON fields. Avoid a repository-wide Id64 migration. |
-| What counts as a match? | Trimmed ordinal case-insensitive literal name substring; empty means all; no match means `200 []`; deterministic name/GUID order; proposed 100 UTF-16-unit bound. Duplicate query values are rejected so binding is unambiguous. |
-| Which data can be searched? | Only fixed public M1 seed records. Introducing private records requires a later ownership/auth design. |
-| What proves completion? | Executed unit and HTTP tests against the independent service, stable contract/health smoke checks, reviewed diff, and honest full-solution build evidence. Existing build failures cannot be hidden by service-only success. |
+| Feature | Attraction management and name search |
+| Environment | VS Code with GitHub Copilot; C# and ASP.NET Core on .NET 10 |
+| Starting point | Standalone Attractions API, port 5104, seeded in-memory data |
+| Fields | Generated GUID, required name, optional description, optional manually entered rating 0-5, address, lat/lon and estimatedVisitMinutes |
+| Read routes | Health, list, name search and details by ID |
+| Write routes | POST creates; PATCH updates selected fields by ID |
+| Create response | 201 Created, saved attraction and details URL |
+| Update response | 200 OK with updated attraction |
+| Validation | Names cannot be empty/whitespace; rating inclusive 0-5 or null; invalid input 400; unknown ID 404 |
+| Data lifetime | In-memory changes last until restart |
+| Search | Trimmed case-insensitive literal name substring; empty returns all; no match 200 []; order by name then GUID |
+| Verification | Test health, list, details, search, creation and updates, including invalid inputs and unknown IDs |
 
-## Feedback supplied to the planning session
+## Contract details completed during planning
 
-The adjusted specification distinguishes the missing baseline from the new name filter, removes the draft's claim that a detail route already exists, gives an exact JSON representation and test matrix, and keeps full-solution blockers visible. The plan must follow those decisions, identify future files rather than pretend they exist, and keep one use case/responsibility per file with the repository's `/** @param @return */` commenting convention.
+The [specification](feature-spec.md) distinguishes the user's answers from the additional binding decisions: PATCH omission preserves fields, explicit null clears optional description/rating, server IDs are immutable, invalid updates have no side effects, coordinate/duration validation is explicit, and duplicate search parameters are rejected. No additional human answer is attributed for those implementation choices. The old proposed search-length bound is removed to match the revised search rules.
 
-The implementation plan is generated in a new Copilot session with this interview record, the reviewed specification and triage attached as repository context. It does not resume the draft/interview conversation.
+The standalone service decision is now an explicit human requirement rather than an unresolved exception to generic shared-scaffold guidance. The service owns its model/store; the rest of the repository remains outside the feature. Product ownership and #10/#11 phase assignments are unchanged.
+
+## Agent interview and planning record
+
+Copilot CLI session `bcf1c82a-fe8f-495c-bbbb-c3783bb9e15f` generated the original search draft and [priming questions](evidence/copilot-prime-questions.md) before the user answered. The initial fresh-session search plan remains historical evidence. After the human expanded the scope, a revised Copilot draft and a new fresh-session management plan were generated and reviewed against these confirmed answers. See [Copilot review](copilot-review.md) for session evidence and corrections.
+
+The human-preferences checklist in #9 can now be checked. Specification and planning completion do not imply that the future API implementation or its tests have been completed.

@@ -1,72 +1,87 @@
-# Attraction name search implementation plan
+# Attraction management and name search implementation plan
 
-This is the reviewed handoff from [#9](https://github.com/NewWaveOwl/TravelTracker/issues/9) to implementation [#10](https://github.com/NewWaveOwl/TravelTracker/issues/10) and validation [#11](https://github.com/NewWaveOwl/TravelTracker/issues/11). GitHub Copilot generated the [initial plan](evidence/copilot-initial-plan.md) in fresh session `df53555f-cd5b-4f36-b2dd-83ab434ad806`, distinct from its issue/interview session. Codex then adjusted the file boundaries, validation sequence and build gating. The [specification](feature-spec.md) governs behavior; the [interview](priming-interview.md) distinguishes planning defaults from human answers.
+Reviewed handoff for [feature #15](https://github.com/NewWaveOwl/TravelTracker/issues/15) from planning [#9](https://github.com/NewWaveOwl/TravelTracker/issues/9) to implementation [#10](https://github.com/NewWaveOwl/TravelTracker/issues/10) and validation [#11](https://github.com/NewWaveOwl/TravelTracker/issues/11). The human confirmed the [specification](feature-spec.md) through the [completed interview](priming-interview.md). A revised plan was generated in fresh Copilot session `92e3a511-b590-4152-bb4b-afef271f5f07`, distinct from revised issue-draft session `e7f8b346-b11a-4909-9c48-eb4366616e6d`. Original responses and adjustments are in [Copilot review](copilot-review.md).
 
-## 1 Recheck the baseline and team work
+## 1 Establish the implementation baseline
 
-Read `AGENTS.md`, `.github/copilot-instructions.md`, both repository skills, this specification and [triage](triage-notes.md). Repeat the duplicate/open-PR search and inspect current code before creating scaffolding. Start the #10 implementation session fresh with these files; do not rely on the planning conversation.
+Start a fresh, scoped #10 Copilot session in VS Code using C#, ASP.NET Core and .NET 10. Attach the specification, this plan, triage and completed interview; read `AGENTS.md`, repository instructions and both skills. Refresh `origin/master`, inspect local changes and the team's issue/PR state. Follow `CONTRIBUTING.md` for implementation branch work; the existing `Artiom` branch holds planning and skills.
 
-Refresh `origin/master`, inspect local changes and use the team's implementation branch workflow in `CONTRIBUTING.md`. `Artiom` is the user's requested planning/skills branch. Do not merge or overwrite it as part of implementation. Record baseline restore/build results and the existing absence of tests. Recheck the known Id64 error and missing types rather than assuming the old result covers every compiler failure.
+Recheck baseline restore/build errors and test discovery. The current shared API has no routes, service/repository implementations, description/rating fields or test projects. Existing Id64/missing-type failures belong to separate shared-solution work. Reuse any compatible standalone Attractions baseline supplied by the team; otherwise add the scoped service below. The human's explicit standalone-service requirement overrides the generic shared-scaffold default for this feature only.
 
-Resolve the limited architecture decision recorded here before changing source: M1 requires an independently runnable Attractions service. Reuse a compliant teammate baseline if available. Otherwise add only the standalone Attractions prerequisite below. Leave all five other service responsibilities and the existing shared contracts intact. This assignment requirement explains the limited exception to the skill's generic instruction to preserve the shared scaffold.
+## 2 Create the independent service and read foundation
 
-## 2 Establish the Attractions prerequisite
+Create `src/TravelTracker.Attractions.Api/TravelTracker.Attractions.Api.csproj`, targeting net10.0 with nullable enabled and no references to shared API/Data/Domain projects. Use port 5104. These are **proposed future files**, not existing implementations:
 
-Create a .NET 10 web project at `src/TravelTracker.Attractions.Api`, with nullable enabled and no references to the shared API/Data/Domain projects. Bind its development launch profile to port 5104. It owns its model and public seeded catalogue and starts with every other service stopped.
-
-The following files are **proposed additions**, not existing implementations. Keep one use case or primary responsibility per file.
-
-| Proposed file under `src/TravelTracker.Attractions.Api/` | Responsibility |
+| File under the API project | Responsibility |
 | --- | --- |
-| `TravelTracker.Attractions.Api.csproj` | Standalone net10.0 web project |
-| `Program.cs` | Startup, DI and calls to route mapping methods |
+| `Program.cs` | Configuration, DI, middleware and route-map calls |
 | `Properties/launchSettings.json` | Development port 5104 |
-| `Models/AttractionRecord.cs` | Service-owned GUID attraction model |
-| `Contracts/AttractionResponse.cs` | Exact M1 wire representation |
-| `Contracts/AttractionResponseMapper.cs` | Explicit coordinate/field mapping |
-| `Data/AttractionSeedData.cs` | Fixed public records and GUIDs |
-| `Data/IAttractionRepository.cs` | Read operations needed by this service |
-| `Data/InMemoryAttractionRepository.cs` | Seed-backed read implementation |
-| `Services/GetAttractions.cs` | Full catalogue use case |
-| `Services/GetAttractionById.cs` | Detail use case |
-| `Endpoints/ListAttractionsEndpoint.cs` | Thin list HTTP boundary |
-| `Endpoints/GetAttractionEndpoint.cs` | Thin GUID detail HTTP boundary |
-| `Endpoints/HealthEndpoint.cs` | Independent health route |
+| `Models/AttractionRecord.cs` | Immutable service-owned record with all specified wire fields represented |
+| `Contracts/AttractionResponse.cs` | GUID/camelCase response, nullable description/rating and lat/lon |
+| `Contracts/AttractionResponseMapper.cs` | Explicit representation mapping |
+| `Contracts/CreateAttractionRequest.cs` | Writable create fields only; detect missing required values |
+| `Contracts/PatchAttractionRequest.cs` | Presence-aware writable update fields |
+| `Contracts/PatchAttractionRequestConverter.cs` | Detect omitted/null/present values and reject unknown keys |
+| `Data/AttractionSeedData.cs` | Fixed example records and GUIDs |
+| `Data/InMemoryAttractionStore.cs` | Thread-safe process-lifetime state and atomic operations |
+| `Data/IAttractionRepository.cs` | Feature-needed reads/create/atomic-update contract |
+| `Data/InMemoryAttractionRepository.cs` | Store-backed operations and filtering/order |
+| `Validation/AttractionValidator.cs` | Complete record field rules owned by the service |
+| `Services/IAttractionIdGenerator.cs` and `Services/AttractionIdGenerator.cs` | Testable server GUID generation, separate files |
 
-Use immutable seed records, or return independent read-only snapshots, so a read caller cannot mutate the process-wide seed. Use scoped repository/use-case registrations; if a shared seed object is singleton, it must be immutable and must not capture scoped services. No DbContext or broker is necessary.
+Use a singleton thread-safe store seeded once per process; scoped repositories and use cases share it across requests. A singleton must not capture scoped services. Store immutable records and return snapshots. Protect compound read/validate/replace operations, not merely individual dictionary calls. The store and its contents reset only when a new service process starts.
 
-Expose `/api/v1/attractions`, `/api/v1/attractions/{id}` and `/health`. Explicitly parse detail IDs so malformed GUIDs give `400` problem responses and unknown valid GUIDs give `404`. A `{id:guid}` route constraint by itself would give `404` for malformed IDs and violate the chosen contract. Map coordinates to JSON `lat`/`lon`; keep all other specified fields and GUID strings.
+Create one endpoint/use-case implementation per file:
 
-Add the project to `TravelTracker.slnx` and update `README.md`/`docs/api.md` to distinguish implemented Attractions routes from planned services. Build this project and smoke-check list/detail/health before the next phase. This is a minimum read baseline, not completion of M1 CRUD.
+| Endpoint file | Use case file | HTTP test file |
+| --- | --- | --- |
+| `Endpoints/HealthEndpoint.cs` | Health response requires no repository/dependency | `HealthHttpTests.cs` |
+| `Endpoints/ListAttractionsEndpoint.cs` | `Services/GetAttractions.cs`; add `Services/SearchAttractions.cs` for name query | `ListAttractionsHttpTests.cs` and `SearchAttractionsHttpTests.cs` |
+| `Endpoints/GetAttractionEndpoint.cs` | `Services/GetAttractionById.cs` | `GetAttractionHttpTests.cs` |
+| `Endpoints/CreateAttractionEndpoint.cs` | `Services/CreateAttraction.cs` | `CreateAttractionHttpTests.cs` |
+| `Endpoints/PatchAttractionEndpoint.cs` | `Services/PatchAttraction.cs` | `PatchAttractionHttpTests.cs` |
 
-**Reviewed commit 1:** independently runnable public Attractions read baseline. Reuse and skip these additions if the team has already delivered equivalent behavior.
+List and name search share **one** GET route; do not register competing handlers for the same path. Keep endpoints thin and Program as composition. Explicitly parse detail/update IDs so malformed GUIDs are `400`; a valid but unknown ID is `404`. A `{id:guid}` constraint alone would change malformed-ID behavior to `404`.
 
-## 3 Define failing search checks
+Add the project to `TravelTracker.slnx`. Establish health/list/details first with all other services stopped. Map the complete response fields including `description` and `rating`; do not mutate shared domain types for this independent contract.
 
-Coordinate test ownership with #11. Add net10.0 xUnit projects only if equivalent projects do not already exist:
+## 3 Establish focused tests and review the read foundation
 
-- `tests/TravelTracker.Attractions.UnitTests`, referencing only the independent Attractions project.
-- `tests/TravelTracker.Attractions.Api.IntegrationTests`, referencing that project plus a compatible `Microsoft.AspNetCore.Mvc.Testing` package.
+Coordinate source/test work and evidence with #11. Reuse existing test projects if suitable, or add `tests/TravelTracker.Attractions.UnitTests` and `tests/TravelTracker.Attractions.Api.IntegrationTests`, targeting net10.0 and referencing only the independent API. Verify current xUnit/test SDK and `Microsoft.AspNetCore.Mvc.Testing` compatibility before selecting versions. Add projects to the solution and remove example tests.
 
-Inspect current supported package versions/runner compatibility before restoring. Add both projects to the solution and remove template sample tests. If needed, expose the API's top-level `Program` using a separate `src/TravelTracker.Attractions.Api/Program.TestHost.cs` with `public partial class Program`; it belongs in the API assembly.
+Use a separate API `Program.TestHost.cs` exposing `public partial class Program` if required by `WebApplicationFactory<Program>`. Isolate the singleton store per test host: it must be shared by requests within that host, never by unrelated tests. Fix seed values and replace the GUID generator with deterministic test values for create assertions.
 
-Create `SearchAttractionsTests.cs` for service/validation cases and `SearchAttractionsHttpTests.cs` for query/status/JSON behavior. Give fixtures and fakes their own files. Baseline detail and health tests belong in `GetAttractionHttpTests.cs` and `HealthHttpTests.cs` rather than a file combining all endpoints. Verify that a filtered search assertion fails against the unfiltered prerequisite for the expected reason, then implement it. Do not commit a broken test suite as a completed checkpoint.
+Prove independent health, ordered seed list and detail status/representation with HTTP tests. Add meaningful service/repository tests, not tests mirroring implementation statements. Validate focused projects before **reviewed commit 1: standalone read foundation and passing tests**. If reused baseline already covers these cases, omit redundant scaffolding.
 
-## 4 Implement and validate the name filter
+## 4 Implement creation with reviewed tests
 
-Add a focused `Services/SearchAttractions.cs` use case and, if useful, a separate `Validation/AttractionNameQueryValidator.cs`. The service owns normalization and length rules so non-HTTP callers cannot bypass them. The list endpoint binds query values, rejects repeated `name` keys, calls the use case, and maps invalid input to `ValidationProblem` with the `name` key.
+Write a failing create behavior check, then implement it in the focused endpoint/service/repository files. Create DTOs exclude server-owned ID; reject unknown properties/client ID. Detect missing name/coordinates/duration rather than defaulting missing numeric input to zero. Trim and validate name, nullable manual rating 0-5, coordinates and nonnegative integer duration. Omitted description/rating become null; omitted address becomes an empty string per specification.
 
-Extend the independent repository only with the read query needed by the search. It performs literal `OrdinalIgnoreCase` substring matching and orders by `Name` with `StringComparer.OrdinalIgnoreCase`, then `AttractionId` using consistent GUID comparison. Materialize after filtering/ordering and project through the response mapper. Empty input uses the same ordering. Do not expose a mutable seed list, search addresses, double-decode input, interpret regex/wildcards, or add database/external-service access.
+Generate a GUID in the create use case, validate before saving, and atomically add the saved record to the shared process store. Return `201`, saved representation and a detail Location. Test the exact returned Location with a subsequent GET, plus list visibility across requests. Test rating boundaries 0/5, null/omitted optionals, invalid names/rating/coordinates/duration/types/JSON and client IDs. Failed create must not change record count or contents.
 
-Keep `Program.cs` for composition. Document new or substantially changed members with `/** ... */`, exact `@param` names and meaningful `@return` descriptions. Explain non-obvious matching/length decisions; do not add XML comments or blanket-comment simple statements.
+Use `CreateAttractionTests.cs` for unit behavior and `CreateAttractionHttpTests.cs` for HTTP behavior; keep fixtures/fakes in their own files. Run focused checks before **reviewed commit 2: creation and passing tests**.
 
-Run unit and HTTP checks for the complete specification matrix. Include test-only fixed records with equal/case-equal names and distinct GUIDs to prove tie ordering. Include a record containing a literal metacharacter so wildcard tests prove literal matching positively as well as showing no expansion. Include a supplementary Unicode character in length-boundary tests to distinguish UTF-16 code units from Unicode characters. Prove that a search leaves the subsequent list unchanged and that invalid input does not reach persistence.
+## 5 Implement partial updates without data loss
 
-**Reviewed commit 2:** complete name-search behavior and passing focused tests, including binding, validation, matching and ordering. Combine these parts into one working change; do not commit an endpoint that accepts `name` while silently ignoring it as a completed search checkpoint.
+Use a presence-aware PATCH DTO/converter. A nullable property alone cannot distinguish missing from explicit null; numeric zero must not mean omitted. Reject empty objects, unknown fields and attempts to update the ID. Omitting any field preserves it; null clears only optional description/rating. The human's PATCH route uses a partial JSON object rather than JSON Patch operations.
 
-## 5 Save focused validation evidence
+Have `PatchAttraction` provide the business validation/update operation to an atomic repository/store boundary. Under one synchronized operation, read the current immutable record, apply specified fields, validate the complete candidate and replace only on success. Keep validation rules in service/validator code, not hard-coded persistence decisions. Do not read a stale snapshot and later overwrite a concurrently changed omitted field. If using version compare-and-swap instead, handle conflicts deliberately without returning a fabricated success; the wire representation need not expose internal versions.
 
-Once the proposed projects exist, run from the repository root:
+Test `200` saved result, unchanged GUID/omitted fields, explicit null clearing, zero rating/zero coordinates, unknown valid GUID `404`, malformed GUID `400`, blank names/out-of-range ratings and a mixed valid-plus-invalid patch that leaves the entire record unchanged. Add a deterministic concurrency test with controlled coordination, without sleeps, for patches to different fields retaining both changes. Use `PatchAttractionTests.cs` and `PatchAttractionHttpTests.cs` separately from create/search tests.
+
+Run focused checks before **reviewed commit 3: atomic partial update and passing tests**.
+
+## 6 Implement name search over the current catalogue
+
+The existing list endpoint binds at most one `name` value and calls the search use case when present. Reject duplicates, let the framework decode once, trim the query and use ordinal case-insensitive literal name substring matching. Empty input returns all, no match returns `200 []`. Filter before materializing, and order with `StringComparer.OrdinalIgnoreCase` then consistent GUID comparison. No old 100-character query bound is included.
+
+Write unit and HTTP checks covering mixed case/spaces, empty/missing/no-match queries, equal/case-equal names with fixed GUIDs, once-decoded input and literal `%/_/*` or regex-looking names. Include positive literal-symbol fixtures. Prove search sees newly created records and renamed records, and that searching itself leaves state unchanged. Keep search implementation/test files separate from create/update.
+
+Run focused checks before **reviewed commit 4: name search and passing tests**. Update `README.md` and `docs/api.md` to state the actually implemented routes, fields and process-only lifetime; do not claim planned other services are implemented.
+
+## 7 Save validation evidence and complete the implementation review
+
+Once these proposed projects exist, run from the repository root, checking each result before the next dependent command:
 
 ```powershell
 dotnet restore src/TravelTracker.Attractions.Api/TravelTracker.Attractions.Api.csproj
@@ -77,29 +92,16 @@ dotnet restore tests/TravelTracker.Attractions.Api.IntegrationTests/TravelTracke
 dotnet test tests/TravelTracker.Attractions.Api.IntegrationTests/TravelTracker.Attractions.Api.IntegrationTests.csproj --configuration Release --no-restore --logger "trx;LogFileName=attractions-http.trx"
 ```
 
-Inspect each exit code and discovered/passed/failed/skipped test count. Stop and fix failed focused checks; do not describe later commands as proof if an earlier prerequisite failed. #11 saves a readable summary with commit, SDK/package versions, commands, counts and relevant failure output; generated TRX files are already ignored and may be attached to the PR as evidence.
+Save commit, SDK/resolved package versions, commands, exit codes and discovered/pass/fail/skip counts in #11's evidence. Stop and fix targeted failures; an exit zero with no executed tests is not a passing suite. Generated TRX files remain ignored and can be attached as evidence.
 
-Start the service in one terminal:
+Start the service independently:
 
 ```powershell
 dotnet run --project src/TravelTracker.Attractions.Api/TravelTracker.Attractions.Api.csproj --no-launch-profile -- --urls http://localhost:5104
 ```
 
-From a second terminal, with all other TravelTracker services stopped, verify:
+In a second terminal verify health, seed list, POST, GET at returned Location, PATCH and search. Stop/restart the actual process and verify original seeds are restored and created/updated data is discarded. Use a separate test host reset to prove the same lifecycle automatically; record process restart smoke evidence as well.
 
-```powershell
-Invoke-RestMethod http://localhost:5104/health
-Invoke-RestMethod 'http://localhost:5104/api/v1/attractions?name=mUsEuM'
-```
+Then run solution restore and Release build. Run `dotnet test TravelTracker.slnx --configuration Release --no-build --no-restore` only if that solution build succeeds. Record unrelated Id64/missing-type errors separately; coordinate a separate fix or explicit justified deferral during #11 review. Service-only success is not a successful full-solution build.
 
-Health must return the specified body; the filtered list must contain only Montreal Museum. HTTP integration tests cover invalid input, response shapes and the rest of the matrix.
-
-## 6 Check the solution and complete the review handoff
-
-Run `dotnet restore TravelTracker.slnx`, and continue only if restore succeeds. Run `dotnet build TravelTracker.slnx --configuration Release --no-restore`. Run `dotnet test TravelTracker.slnx --configuration Release --no-build --no-restore` only after that build succeeds; a failed build makes `--no-build` evidence potentially stale.
-
-If unrelated shared projects still fail, save that output separately. Coordinate a separate repair or an explicit justified deferral in #11's review record. A focused Attractions pass cannot become a claim that the full solution passed. No discovered tests cannot become a passing suite.
-
-Review the diff against every acceptance criterion, `git diff --check`, the one-feature/responsibility-per-file rule, comment style and service ownership. Update scoped API/run documentation to the final implementation. #11 opens the implementation PR, records fixed/deferred findings and links #10, the feature specification, this plan and test evidence. #12 receives the short reflection on useful Copilot output and the corrections that required judgment.
-
-**Reviewed commit 3, if needed:** final documentation and fixes arising from validation/review. Source code, tests and evidence described here are future #10/#11 work; this planning task does not claim they already exist or pass.
+Review every specification acceptance case, `git diff --check`, DTO/presence semantics, concurrency/lifetimes, one responsibility per file and `/** ... @param ... @return ... */` comments. #11 records fixed/deferred findings and opens the implementation PR; #12 receives the reflection. No DELETE, database, external ratings, private/auth redesign, events, other services or unrelated source repair is added. #9's completed planning does not claim any future tests or API code have already been implemented.
