@@ -23,7 +23,16 @@ Names, supported modes/types, rating and coordinates are validated. Created reco
 
 ## Run all tests
 
-One xUnit project references the existing API, with all tests/helpers in [TravelTrackerTests.cs](tests/TravelTracker.Api.Tests/TravelTrackerTests.cs):
+One xUnit project references the existing API. Tests are grouped by the resource or purpose they verify:
+
+| File | Aim | Cases |
+| --- | --- | --- |
+| [HealthTests.cs](tests/TravelTracker.Api.Tests/HealthTests.cs) | Shared API health and service identity | 1 |
+| [AttractionTests.cs](tests/TravelTracker.Api.Tests/AttractionTests.cs) | Attraction lookup, creation and validation | 6 |
+| [TransportModeTests.cs](tests/TravelTracker.Api.Tests/TransportModeTests.cs) | Transport entry lookup, creation and validation | 5 |
+| [RoutePointTests.cs](tests/TravelTracker.Api.Tests/RoutePointTests.cs) | Route-point lookup, creation and validation | 7 |
+
+[ApiFactory.cs](tests/TravelTracker.Api.Tests/Support/ApiFactory.cs) creates isolated HTTP hosts; [HttpTestSupport.cs](tests/TravelTracker.Api.Tests/Support/HttpTestSupport.cs) shares creation/validation assertions. These helpers contain no test cases. Run all four files together:
 
 ```powershell
 dotnet test TravelTracker.Tests.slnx --configuration Release
@@ -31,7 +40,7 @@ dotnet test TravelTracker.Tests.slnx --configuration Release
 
 The [test solution](TravelTracker.Tests.slnx) includes Api, Data, Domain and the test project. Isolated test hosts start automatically; a manually running API is unnecessary. Use the explicit solution filename because both solution files exist.
 
-Current verification: **the full solution builds with zero warnings/errors; 19 xUnit cases and eight live Swagger/API checks pass**. All test bodies were preserved during integration. [Validation](docs/milestone-2/implementation/validation.md), [test selection](docs/milestone-2/implementation/test-review.md).
+Current verification: **the full solution builds with zero warnings/errors; 19 xUnit cases and eight live Swagger/API checks pass**. All test bodies and inputs were preserved when splitting the files; no cases were added. [Validation](docs/milestone-2/implementation/validation.md), [test selection](docs/milestone-2/implementation/test-review.md).
 
 ## Existing collaborator code
 
@@ -49,4 +58,4 @@ The [trip-point, transport and route design](docs/trip-points-and-routes.md) exp
 
 [Historical issue #9 package](docs/milestone-2/issue-9/README.md): MCP setup, [original issue #15](https://github.com/NewWaveOwl/TravelTracker/issues/15), triage and priming. Issue #15 requests search/PATCH as well, so this scoped change does not fully complete it.
 
-[Coding skill](.github/skills/traveltracker-code/SKILL.md) and [testing skill](.github/skills/traveltracker-testing/SKILL.md) retain separate resource/layer files, one existing API host, one test project/file, and /** @param @return */ documentation.
+[Coding skill](.github/skills/traveltracker-code/SKILL.md) and [testing skill](.github/skills/traveltracker-testing/SKILL.md) retain separate resource/layer files, one existing API host, one test project with files grouped by purpose, and /** @param @return */ documentation.

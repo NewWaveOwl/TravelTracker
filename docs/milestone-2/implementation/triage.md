@@ -10,7 +10,7 @@ The [original issue/code triage](../issue-9/triage-notes.md) and Copilot records
 | Interface compatibility | Preserve all 11 original service/repository files and signatures. Implement catalogue contracts in their existing layers; keep only GET-by-ID/POST in controllers. |
 | Compile gaps | Fix Id64 constructor conversion; supply empty partial declarations for four unfinished interface types. These declarations contain no feature fields/behavior. |
 | Explorer folders | Removed old source projects had left ignored build artifacts and empty directories. Verify paths/content before cleaning the obsolete folders. |
-| LAB_07/tests | One web host, separate class-library layers, one xUnit project/file. All 19 test bodies are retained. |
+| LAB_07/tests | One web host, separate class-library layers and one xUnit project. The latest human request groups tests into four resource/purpose files plus shared helpers, replacing the earlier one-file preference. All 19 test bodies are retained. |
 | Ownership | User/accommodation source and SQL unchanged. Trips/Settings implementation remains future owner work. SourceId remains unverified metadata. |
 
 The full solution now builds. Api uses scoped services and singleton in-memory Data repositories; current schema/routes/validation remain stable. Scheduled routes, Trips endpoints, search and PATCH remain future work. [Specification](specification.md), [validation](validation.md).

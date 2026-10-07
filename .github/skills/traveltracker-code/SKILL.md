@@ -13,7 +13,7 @@ description: Write or refactor TravelTracker C# and ASP.NET Core code using one 
 
 ## One file, one feature
 
-- Apply this layout to production code. Test organization follows `traveltracker-testing` and the human-approved one-project/one-file LAB_07 layout.
+- Apply this layout to production code. Test organization follows `traveltracker-testing`: one xUnit project with test files grouped by resource/purpose and separate shared helpers, as requested by the human on 2026-10-07.
 - The current demonstration uses the original TravelTracker.Api host with TravelTracker.Data repositories and TravelTracker.Domain models for all three resources and one Development Swagger page on port 5104, like LAB_07. Do not split resource controllers into separate hosts unless requested.
 - For the current LAB_07-style demonstration, one resource is one cohesive feature. Keep GET-by-ID and POST together in its controller, service and repository; do not create per-action partial files. Attractions, Transport entries and Route Points have separate resource classes.
 - Implement only the requested operations. Collection listing/search, PATCH, scheduled journeys and stop-time calculations are future work unless the human requests them.

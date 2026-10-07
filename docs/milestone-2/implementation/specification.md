@@ -24,6 +24,6 @@ Each resource groups its two operations in one controller, one service and one r
 
 ## Acceptance and limits
 
-Verify health, seeded lookup, POST -> Location GET, missing IDs and representative validation. Keep one xUnit project, all tests/helpers in TravelTrackerTests.cs, and at most 30 discovered cases including theory rows. Current selection is 19 cases after removing the duplicate health check. Verify the shared real process, Swagger document/models and all three resource workflows on the same port, and recheck the full build.
+Verify health, seeded lookup, POST -> Location GET, missing IDs and representative validation. Keep one xUnit project and at most 30 discovered cases including theory rows. On 2026-10-07 the human replaced the earlier one-file preference with files grouped by test aim: HealthTests.cs, AttractionTests.cs, TransportModeTests.cs and RoutePointTests.cs, plus shared helpers in Support. Current selection remains 19 cases after the earlier duplicate health check was removed; this split adds no cases. Verify the shared real process, Swagger document/models and all three resource workflows on the same port, and recheck the full build.
 
 Collection GET, name search, PATCH, scheduled routes, departure/arrival/boarding/dwell calculations, authentication and Trips integration are future work. Stops are represented as route-point locations only. The Id64 constructor fix and empty partial declarations for unfinished interface types allow a successful full-solution build; they add no Trips/Settings behavior.

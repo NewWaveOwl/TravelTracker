@@ -7,7 +7,7 @@ The current implementation follows the human's final LAB_07 choice: **one API ho
 | Accepted scope | [Specification](specification.md) |
 | Original Copilot plan and current reviewed adjustments | [Historical response](copilot-plan.md), [current plan](implementation-plan.md) |
 | Research and scope corrections | [Triage](triage.md) |
-| Source and tests | [Api](../../../src/TravelTracker.Api), [Data](../../../src/TravelTracker.Data), [Domain](../../../src/TravelTracker.Domain), [single-file tests](../../../tests/TravelTracker.Api.Tests/TravelTrackerTests.cs) |
+| Source and tests | [Api](../../../src/TravelTracker.Api), [Data](../../../src/TravelTracker.Data), [Domain](../../../src/TravelTracker.Domain), [test project](../../../tests/TravelTracker.Api.Tests), [test files and aims](test-review.md) |
 | Preserved collaborator source and planned integration | [Main-code inventory and trip-point/transport/route design](../../trip-points-and-routes.md), [models](../../domain.md), [interfaces](../../api.md), [repositories/SQL](../../data.md) |
 | Executed checks | [Validation](validation.md), [test selection](test-review.md), [structured evidence](verification.json) |
 | Findings and dispositions | [Review record](review-record.md), [historical Copilot review](copilot-review.md) |
@@ -15,4 +15,4 @@ The current implementation follows the human's final LAB_07 choice: **one API ho
 
 The [issue #9 package](../issue-9/README.md) and [issue #15](https://github.com/NewWaveOwl/TravelTracker/issues/15) retain the earlier planning evidence. Search/PATCH and scheduled journeys are deferred; this reduced implementation does not close #15 as complete. Related workflow tasks remain #10, #11 and #12.
 
-Prior work used actual fresh Copilot CLI plan/foundation/review sessions plus Codex implementation. The simpler scope and subsequent single-host migration were implemented and checked by Codex after direct human instructions. No new Copilot session or VS Code GUI Agent-mode recording is claimed. Earlier source/test results remain historical; current integration results are under integratedLayers in verification.json.
+Prior work used actual fresh Copilot CLI plan/foundation/review sessions plus Codex implementation. The simpler scope, single-host migration and subsequent test-file split were implemented and checked by Codex after direct human instructions. No new Copilot session or VS Code GUI Agent-mode recording is claimed. Earlier source/test results remain historical; integratedLayers records the integration and testOrganization records the latest test split and documentation review in verification.json.

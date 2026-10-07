@@ -796,5 +796,230 @@
       "failures": []
     },
     "completedOn": "2026-10-07"
+  },
+  "testOrganization": {
+    "checkedAtUtc": "2026-10-07T04:13:39.618584+00:00",
+    "humanAdjustment": "Split tests by resource/purpose while retaining one xUnit project and at most 30 cases.",
+    "baselineCommit": "8ead33a048da72d17a203f94cc188e9090a0f77e",
+    "testFiles": {
+      "tests/TravelTracker.Api.Tests/HealthTests.cs": {
+        "cases": 1
+      },
+      "tests/TravelTracker.Api.Tests/AttractionTests.cs": {
+        "cases": 6
+      },
+      "tests/TravelTracker.Api.Tests/TransportModeTests.cs": {
+        "cases": 5
+      },
+      "tests/TravelTracker.Api.Tests/RoutePointTests.cs": {
+        "cases": 7
+      }
+    },
+    "supportFiles": [
+      "tests/TravelTracker.Api.Tests/Support/ApiFactory.cs",
+      "tests/TravelTracker.Api.Tests/Support/HttpTestSupport.cs"
+    ],
+    "testFileSha256": {
+      "tests/TravelTracker.Api.Tests/AttractionTests.cs": "b8106ceac2441fc181eb496125e4fc6d649bcffb4b5d4e119f798356c6fd0f49",
+      "tests/TravelTracker.Api.Tests/HealthTests.cs": "b20e0367dd4dadbcbd899097649160d3bcec389cd7001c26ac24b11987fadc79",
+      "tests/TravelTracker.Api.Tests/RoutePointTests.cs": "1f48e450194d87ff052ff35609e1732cfbdd272ba3f20dbd6b090a21be5e631a",
+      "tests/TravelTracker.Api.Tests/Support/ApiFactory.cs": "86eb0d7742bc5f9ae5449d5c866a0affc8cea07834123e4736954174bd14e5d1",
+      "tests/TravelTracker.Api.Tests/Support/HttpTestSupport.cs": "3a045ace0a95bdccfee837fddacd240e9f2a320fb88e702953176cf8ca1a8938",
+      "tests/TravelTracker.Api.Tests/TransportModeTests.cs": "79151fc8a223ab4282be200abceefafd4567b6b89c99201fc4b433412b4f4b98"
+    },
+    "testPreservation": {
+      "methodBlocksPreserved": 16,
+      "allAssertionsAttributesAndTheoryInputsPreserved": true,
+      "helperBodiesPreserved": true,
+      "discoveredScenariosPreserved": true,
+      "casesAdded": 0,
+      "casesRemoved": 0
+    },
+    "duplicateReview": {
+      "uniqueMethods": 16,
+      "uniqueNormalizedMethodBodies": 16,
+      "duplicateTheoryRows": 0,
+      "distinctDiscoveredCases": 19
+    },
+    "baselineTests": {
+      "trx": "tests/TravelTracker.Api.Tests/TestResults/before-test-split.trx",
+      "counters": {
+        "total": 19,
+        "executed": 19,
+        "passed": 19,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      }
+    },
+    "fullSolutionBuild": {
+      "command": "dotnet build TravelTracker.slnx --configuration Release --no-restore",
+      "exitCode": 0,
+      "warnings": 0,
+      "errors": 0,
+      "projects": [
+        "src/TravelTracker.Api/TravelTracker.Api.csproj",
+        "src/TravelTracker.Data/TravelTracker.Data.csproj",
+        "src/TravelTracker.Domain/TravelTracker.Domain.csproj",
+        "tests/TravelTracker.Api.Tests/TravelTracker.Api.Tests.csproj"
+      ]
+    },
+    "tests": {
+      "command": "dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --logger \"trx;LogFileName=test-split.trx\"",
+      "trx": "tests/TravelTracker.Api.Tests/TestResults/test-split.trx",
+      "counters": {
+        "total": 19,
+        "executed": 19,
+        "passed": 19,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "discoveredCaseNames": [
+        "TravelTracker.Api.Tests.TransportModeTests.GetModeById_KnownEntryReturnsSeed",
+        "TravelTracker.Api.Tests.RoutePointTests.CreatePoint_SupportedTypeReturns201AndSavedLocation(type: \"attraction\")",
+        "TravelTracker.Api.Tests.AttractionTests.Create_InvalidRatingReturns400(rating: 5.0999999999999996)",
+        "TravelTracker.Api.Tests.RoutePointTests.CreatePoint_InvalidLatitudeReturns400",
+        "TravelTracker.Api.Tests.RoutePointTests.CreatePoint_SupportedTypeReturns201AndSavedLocation(type: \"transport_stop\")",
+        "TravelTracker.Api.Tests.RoutePointTests.CreatePoint_SupportedTypeReturns201AndSavedLocation(type: \"accommodation\")",
+        "TravelTracker.Api.Tests.RoutePointTests.CreatePoint_UnsupportedTypeReturns400",
+        "TravelTracker.Api.Tests.AttractionTests.GetById_UnknownAttractionReturns404",
+        "TravelTracker.Api.Tests.AttractionTests.Create_BlankNameReturns400",
+        "TravelTracker.Api.Tests.AttractionTests.Create_ValidAttractionReturns201AndSavedLocation",
+        "TravelTracker.Api.Tests.RoutePointTests.GetPointById_KnownPointReturnsSeed",
+        "TravelTracker.Api.Tests.TransportModeTests.GetModeById_UnknownEntryReturns404",
+        "TravelTracker.Api.Tests.HealthTests.Health_ReturnsServiceIdentity",
+        "TravelTracker.Api.Tests.TransportModeTests.CreateMode_BlankNameReturns400",
+        "TravelTracker.Api.Tests.RoutePointTests.GetPointById_UnknownPointReturns404",
+        "TravelTracker.Api.Tests.TransportModeTests.CreateMode_UnsupportedCodeReturns400",
+        "TravelTracker.Api.Tests.AttractionTests.Create_InvalidRatingReturns400(rating: -0.10000000000000001)",
+        "TravelTracker.Api.Tests.AttractionTests.GetById_KnownAttractionReturnsSeed",
+        "TravelTracker.Api.Tests.TransportModeTests.CreateMode_ValidEntryReturns201AndSavedLocation"
+      ]
+    },
+    "codeDocumentationReview": {
+      "documents": [
+        "README.md",
+        ".github/copilot-instructions.md",
+        ".github/skills/traveltracker-code/SKILL.md",
+        ".github/skills/traveltracker-testing/SKILL.md",
+        "docs/api.md",
+        "docs/domain.md",
+        "docs/data.md",
+        "docs/design.md",
+        "docs/trip-points-and-routes.md",
+        "docs/milestone-2/implementation/specification.md"
+      ],
+      "implementedContractViolationsFound": 0,
+      "checkedBoundaries": [
+        "one existing Api/Data/Domain composition",
+        "seven HTTP operations and request/response fields",
+        "GUID generation and aliases",
+        "POST 201 and Location, GET 200/404, binding/validation 400",
+        "required fields and coordinate/rating/mode/type limits",
+        "singleton seeded memory and scoped services",
+        "unverified sourceId metadata",
+        "future scheduling/Trips/Settings marked planned"
+      ],
+      "documentationCorrections": [
+        "replace obsolete one-file test guidance with resource/purpose files and shared helpers",
+        "clarify GUID catalogue/User/Accomodation versus Id64 Trips/Settings identifiers"
+      ],
+      "limits": [
+        "representative HTTP tests rather than every edge",
+        "internal collection/update/delete not covered",
+        "no scheduling, authentication or SQL persistence implementation"
+      ]
+    },
+    "productionPreservation": {
+      "changedSourceFilesRelativeToBaseline": [],
+      "originalMasterFilesPresent": 26,
+      "originalInterfaceFilesUnchanged": 11,
+      "mainCloneClean": true,
+      "onlyWebProject": "src/TravelTracker.Api/TravelTracker.Api.csproj"
+    },
+    "liveVerification": {
+      "baseUrl": "http://localhost:5104",
+      "hostProject": "TravelTracker.Api",
+      "checks": [
+        "Swagger UI returns 200",
+        "One OpenAPI document has exactly seven operations and the six agreed request/response schemas",
+        "Integrated health returns 200",
+        "/api/v1/attractions POST 201 -> Location GET 200",
+        "/api/v1/transport-modes POST 201 -> Location GET 200",
+        "/api/v1/route-points POST 201 -> Location GET 200",
+        "Unknown attraction returns 404",
+        "Invalid decimal rating returns 400"
+      ],
+      "total": 8,
+      "passed": 8,
+      "paths": {
+        "/health": [
+          "get"
+        ],
+        "/api/v1/attractions/{id}": [
+          "get"
+        ],
+        "/api/v1/attractions": [
+          "post"
+        ],
+        "/api/v1/transport-modes/{id}": [
+          "get"
+        ],
+        "/api/v1/transport-modes": [
+          "post"
+        ],
+        "/api/v1/route-points/{id}": [
+          "get"
+        ],
+        "/api/v1/route-points": [
+          "post"
+        ]
+      },
+      "schemas": [
+        "AttractionRecord",
+        "CreateAttractionRequest",
+        "CreateRoutePointRequest",
+        "CreateTransportModeRequest",
+        "ProblemDetails",
+        "RoutePointRecord",
+        "TransportModeRecord"
+      ],
+      "hostLeftRunningForUser": true,
+      "hostSessionId": 65456,
+      "checkedAtUtc": "2026-10-07T04:13:39.460567+00:00"
+    },
+    "skillValidation": {
+      "traveltracker-code": "valid",
+      "traveltracker-testing": "valid"
+    },
+    "deliveryChecks": {
+      "localLinksChecked": 139,
+      "documentsChecked": 21,
+      "solutionProjects": 4,
+      "onlyExpectedOriginalSourceChanges": true,
+      "failures": []
+    },
+    "workflowProvenance": "Codex test reorganization and review; no new Copilot session claimed."
   }
 }

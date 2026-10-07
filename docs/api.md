@@ -22,7 +22,7 @@ No `IUserService` or `IAccommodationService` exists yet. Their models and intern
 
 ## Shared scaffold's planned REST contract
 
-`/api/v1`, JSON camelCase, ISO 8601 UTC. Brief specifies UUID IDs, but the domain has since moved to `Id64`; format on the wire is still unsettled.
+`/api/v1`, JSON camelCase, ISO 8601 UTC. Current User, Accomodation, Attraction, TransportMode and RoutePoint identifiers are GUIDs; existing Trips/Settings interfaces use `Id64`. Identifier mapping and the future Trips/Settings wire format still need agreement. This does not change the implemented catalogue's GUID contract.
 
 | Service | Routes |
 |---|---|
