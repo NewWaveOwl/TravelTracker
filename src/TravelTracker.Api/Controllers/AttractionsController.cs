@@ -4,6 +4,8 @@ using TravelTracker.Api.Services;
 using TravelTracker.Domain.Models;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace TravelTracker.Api.Controllers;
 
@@ -38,6 +40,30 @@ public sealed class AttractionsController(IAttractionService service) : Controll
     {
         var records = await service.GetAllAsync(name);
         return Ok(records.Select(ToResponse).ToList());
+    }
+
+    /**
+     * Applies a partial update described by a JSON object.
+     * The request body is bound to a JsonElement so the service can detect field presence
+     * and explicit nulls using TryGetProperty.
+     */
+    [HttpPatch("{id}")]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AttractionRecord>> Patch(Guid id, [FromBody] JsonElement patch)
+    {
+        var result = await service.UpdatePartialAsync(id, patch);
+        if (result.NotFound) return NotFound();
+        if (result.Errors is not null && result.Errors.Any())
+        {
+            var ms = new ModelStateDictionary();
+            foreach (var kv in result.Errors)
+            {
+                foreach (var e in kv.Value)
+                    ms.AddModelError(kv.Key, e);
+            }
+            return ValidationProblem(ms);
+        }
+        return Ok(ToResponse(result.Updated!));
     }
 
     /**

@@ -48,6 +48,17 @@ public interface IAttractionService
         Attraction attraction);
 
     /**
+     * Applies a partial JSON patch represented as a JsonElement to an existing attraction.
+     * The JsonElement must be an object containing writable fields only. Unknown fields
+     * or attempts to change the server-owned attractionId will be treated as validation errors.
+     *
+     * @param attractionId The identifier of the attraction to update.
+     * @param patch JsonElement containing the partial update object.
+     * @return A task containing an UpdateResult describing the outcome and any validation errors.
+     */
+    Task<UpdateResult> UpdatePartialAsync(Guid attractionId, System.Text.Json.JsonElement patch);
+
+    /**
      * Deletes an attraction.
      *
      * @param attractionId The unique identifier of the attraction to delete.
