@@ -6,6 +6,8 @@ TravelTracker puts a traveller's journeys, accommodation stays and attraction vi
 
 This document says what the product does and how it is organized. It leaves technology choices to implementation.
 
+The release labels below describe the product roadmap. The course's Milestone 2 submission uses the AI SDLC flow for a scoped change, not implementation of every roadmap capability. The [implemented service package](milestone-2/implementation/README.md) records the runnable local demonstration and its limits.
+
 **Goals**
 
 - Plan a complete trip by hand, with no outside service required.
@@ -33,7 +35,7 @@ The backend is six services. Each owns its own data and talks to the others only
 | --- | --- | --- |
 | Users | Christel | Sign-in, profiles, roles, account status, admin audit |
 | Accommodations | Christel | Lodging places |
-| Transport | Artiom | Transport modes: car, bus, train, pedestrian, plane |
+| Transport | Artiom | Transport entries: car, bus, train, pedestrian, bike, plane; typed route points and individual scheduled routes |
 | Attractions | Artiom | Attraction places; later opening hours |
 | Trips | James | Itineraries, history, map data, time calculations; later ticket import |
 | Settings | James | User preferences |
@@ -67,6 +69,9 @@ Every account is a traveller or an administrator, and is active, banned or deact
 | Accommodation | A place to stay: name, location, shared or private |
 | Attraction | A place to visit: like an accommodation, plus a typical visit length and category |
 | Transport mode | How a journey is made |
+| Transport entry | A named catalogue entry with a supported mode code and optional description |
+| Route point | A reusable accommodation, attraction or transport-stop location snapshot |
+| Scheduled transport route | One transport entry travelling between route points at supplied departure/arrival times, with preparation and optional intermediate stop timings |
 | Trip | A named, dated journey, one way or round trip, shown in a chosen time zone |
 | Leg | One journey between two places by one transport mode, with departure and arrival times |
 | Stay | A booking at an accommodation, with check-in and check-out |
@@ -78,6 +83,8 @@ Every account is a traveller or an administrator, and is active, banned or deact
 - **Saved copies.** A trip keeps its own copy of each place's name and location. Editing the catalogue never moves an old trip's markers.
 - **Trip status** (upcoming, current, past) is worked out from the trip's dates when viewed. It reflects the plan, not proof the traveller went.
 - **Concurrent edits.** If two people or two tabs change the same record, the later save is refused and the user can reload or review their changes rather than overwriting.
+
+**Local service demonstration.** The human-approved standalone Attractions and Transport APIs use seeded process-lifetime memory and GUID contracts. They demonstrate catalogue management and scheduled transport routes without production private-data access control. Transport owns its point snapshots and individual schedules; Trips continues to own the entire itinerary, connections, visits, dates and atomic trip saves. Transport point source IDs are optional unverified metadata. Potential stop windows require an explicit can-leave indication and exclude preparation; they do not promise that sightseeing fits. See the [implementation specification](milestone-2/implementation/specification.md).
 
 ## 5. Trip rules
 

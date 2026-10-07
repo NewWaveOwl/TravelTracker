@@ -1,0 +1,102 @@
+{
+  "recordedAtUtc": "2026-10-07T01:22:41.419303+00:00",
+  "sourceCommits": {
+    "attractions": "274672424d0ea0502a8249a3e4e71f1ddc22e0dc",
+    "transport": "65afc228751b848287d34cf33ceaf0327c73e0fe"
+  },
+  "sdk": "10.0.401",
+  "packages": {
+    "microsoft.aspnetcore.mvc.testing": "10.0.12",
+    "microsoft.net.test.sdk": "18.10.1",
+    "xunit": "2.9.3",
+    "xunit.runner.visualstudio": "4.0.0"
+  },
+  "tests": {
+    "Attractions": {
+      "total": 53,
+      "executed": 53,
+      "passed": 53,
+      "failed": 0,
+      "notExecuted": 0
+    },
+    "Transport": {
+      "total": 61,
+      "executed": 61,
+      "passed": 61,
+      "failed": 0,
+      "notExecuted": 0
+    }
+  },
+  "live": {
+    "passed": 18,
+    "checks": [
+      "Attractions independent health on 5104",
+      "Attractions seeded ordered list",
+      "Attractions POST 201 with Location",
+      "Attractions GET at creation Location",
+      "Attractions trimmed case-insensitive search",
+      "Attractions PATCH preserves and clears fields",
+      "Attractions invalid PATCH leaves record intact",
+      "Attractions independent health on 5104",
+      "Attractions actual process restart restores seeds",
+      "Transport independent health on 5103",
+      "Transport independent seeded catalogues",
+      "Transport POST is independent of a scheduled route",
+      "Route point POST and GET without Attractions running",
+      "Scheduled route POST 201 and GET at Location",
+      "Scheduled route preparation, downtime and potential free-window calculations",
+      "Invalid schedule rejected without inserting a route",
+      "Transport independent health on 5103",
+      "Transport actual process restart resets all three resource stores"
+    ],
+    "ports": {
+      "Attractions": 5104,
+      "Transport": 5103
+    },
+    "processesStopped": true,
+    "sourceReferenceSemantics": "sourceId is metadata, not a live verified catalogue reference"
+  },
+  "solutionRestore": "passed",
+  "solutionBuild": {
+    "passed": false,
+    "baselineError": "CS1503, src/TravelTracker.Domain/Types/Id64.cs:14"
+  },
+  "solutionTests": "not run because the full solution build failed",
+  "copilot": {
+    "plan": {
+      "exitCode": 0,
+      "model": "gpt-6-luna",
+      "sessionId": "157a60a9-d6ca-4dc5-8839-85680c8fa91d",
+      "filesModified": []
+    },
+    "initialFoundationAttempt": {
+      "exitCode": 0,
+      "model": "gpt-6-luna",
+      "sessionId": "cec3ea1b-0f08-428d-b152-0a8fae0c3398",
+      "filesModified": []
+    },
+    "foundation": {
+      "exitCode": 0,
+      "model": "gpt-6-luna",
+      "sessionId": "f3474a68-f6ab-41c8-b8c0-8abe528bc19f",
+      "filesModified": [
+        "src/TravelTracker.Attractions.Api/TravelTracker.Attractions.Api.csproj",
+        "src/TravelTracker.Attractions.Api/Program.cs",
+        "src/TravelTracker.Attractions.Api/Program.TestHost.cs",
+        "src/TravelTracker.Attractions.Api/Properties/launchSettings.json",
+        "src/TravelTracker.Attractions.Api/Controllers/HealthController.cs",
+        "src/TravelTracker.Transport.Api/TravelTracker.Transport.Api.csproj",
+        "src/TravelTracker.Transport.Api/Program.cs",
+        "src/TravelTracker.Transport.Api/Program.TestHost.cs",
+        "src/TravelTracker.Transport.Api/Properties/launchSettings.json",
+        "src/TravelTracker.Transport.Api/Controllers/HealthController.cs"
+      ]
+    },
+    "review": {
+      "exitCode": 0,
+      "model": "mai-code-1.1-flash",
+      "sessionId": "470e99f3-adad-4030-b5db-f689b1998333",
+      "filesModified": []
+    }
+  }
+}

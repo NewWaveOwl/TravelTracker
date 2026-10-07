@@ -1,0 +1,11 @@
+# Reflection on the AI SDLC flow
+
+The issue/specification and priming answers made the Attractions behavior concrete before implementation: field names, POST Location, partial update semantics and literal name search could be checked directly. The durable coding/testing skills gave consistent boundaries and comment/file conventions. A fresh Copilot plan also identified the need to isolate these services from the unfinished shared scaffold. The lab reference supplied a familiar controller -> service -> repository flow.
+
+Human judgment changed the transport model. The human distinguished a normal named transport entry from its dated route, then chose reusable typed accommodation/attraction/transport-stop points. Keeping that decision explicit prevented departure times from becoming global mode data or an unrequested route-template/journey hierarchy from being invented. The plan/specification had to be revised when scope changed.
+
+AI output still required correction. The first Copilot foundation invocation exposed no editing tools because the tool allowlist was wrong; a fresh retry using supported editing tools created the ten intended files. Code compilation caught an incorrect MVC validation overload. Tests caught a mistaken schema-count assertion. A review note about missing source-ID coverage overlooked an existing HTTP test and the actual offline process check, so its disposition was supported with evidence rather than another redundant test.
+
+Validation mattered at different boundaries: HTTP tests proved binding/status/Location; store checks proved failed updates preserve snapshots; real process restarts proved memory lifetime. Passing those checks could not erase the shared Id64 build failure, so it remains a disclosed limit. Avoiding unrelated aggregate repairs kept the demonstrated services independently runnable and the other owners' work untouched.
+
+This execution used Codex for business code/tests and actual fresh Copilot CLI sessions for planning, API foundations and source review. VS Code is the human's selected editor, but no VS Code GUI Agent-mode session was captured here. The evidence therefore supports this mixed tool flow, not a claim that every feature was implemented entirely by Copilot inside VS Code. The final PR still needs human review before merge.
