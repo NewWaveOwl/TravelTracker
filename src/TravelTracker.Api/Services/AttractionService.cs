@@ -13,7 +13,17 @@ public sealed class AttractionService(IAttractionRepository repository) : IAttra
      * Reads all entries through the existing contract.
      * @return A task containing the stored entries.
      */
-    public Task<List<Attraction>> GetAllAsync() => repository.GetAllAsync();
+    public async Task<List<Attraction>> GetAllAsync(string? nameFilter = null)
+    {
+        var records = await repository.GetAllAsync();
+        IEnumerable<Attraction> filtered = records;
+        if (!string.IsNullOrWhiteSpace(nameFilter))
+        {
+            var q = nameFilter.Trim();
+            filtered = filtered.Where(r => r.Name != null && r.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+        return filtered.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     /**
      * Reads one saved entry.

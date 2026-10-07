@@ -12,7 +12,13 @@ public interface IAttractionService
      *
      * @return A task containing all attractions.
      */
-    Task<List<Attraction>> GetAllAsync();
+    /**
+     * Retrieves every available attraction, optionally filtered by name.
+     *
+     * @param nameFilter Optional substring to match against attraction names (case-insensitive).
+     * @return A task containing the matching attractions, deterministically ordered.
+     */
+    Task<List<Attraction>> GetAllAsync(string? nameFilter = null);
 
     /**
      * Retrieves an attraction by its unique identifier.

@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using TravelTracker.Api.Contracts;
 using TravelTracker.Api.Services;
 using TravelTracker.Domain.Models;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace TravelTracker.Api.Controllers;
 
@@ -24,6 +26,18 @@ public sealed class AttractionsController(IAttractionService service) : Controll
     {
         var record = await service.GetByIdAsync(id);
         return record is null ? NotFound() : Ok(ToResponse(record));
+    }
+
+    /**
+     * Lists attractions, optionally filtered by a name substring (case-insensitive).
+     * @param name Optional substring to filter attraction names.
+     * @return 200 with the ordered list of attractions.
+     */
+    [HttpGet]
+    public async Task<ActionResult<List<AttractionRecord>>> GetAll([FromQuery] string? name)
+    {
+        var records = await service.GetAllAsync(name);
+        return Ok(records.Select(ToResponse).ToList());
     }
 
     /**

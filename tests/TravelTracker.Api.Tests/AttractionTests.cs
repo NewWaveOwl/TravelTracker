@@ -88,4 +88,30 @@ public sealed class AttractionTests
             new { name = "Museum", rating, lat = 45m, lon = -73m, estimatedVisitMinutes = 60 });
         await HttpTestSupport.AssertValidationAsync(response);
     }
+
+    /**
+     * Lists all attractions deterministically ordered by name (OrdinalIgnoreCase).
+     */
+    [Fact]
+    public async Task GetAll_ReturnsOrderedList()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var list = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions");
+        var names = list.Select(e => e.GetProperty("name").GetString()).ToArray();
+        Assert.Equal(new[] { "Montreal Museum", "Old Port", "Science Centre" }, names);
+    }
+
+    /**
+     * Searches by name substring (case-insensitive) using OrdinalIgnoreCase semantics.
+     */
+    [Fact]
+    public async Task GetAll_SearchByName_ReturnsMatches()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var results = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions?name=port");
+        Assert.Single(results);
+        Assert.Equal("Old Port", results[0].GetProperty("name").GetString());
+    }
 }
