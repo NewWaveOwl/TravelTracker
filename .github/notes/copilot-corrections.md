@@ -50,13 +50,6 @@ Tool: GitHub Copilot Agent mode in [VS Code / Visual Studio 2026]
 
 21 (baseline) -> 31 (PATCH and list tests) -> 34 (service and concurrency tests) -> 36 (POST hardening) -> 38 (final)
 
-## Commits
-
-- [hash] feat(attractions): add list and name search (#9)
-- [hash] feat(attractions): add PATCH with presence-aware validation (#9)
-- [hash] fix(attractions): serialize PATCH read-modify-write (#9)
-- [hash] feat(attractions): reject unknown properties on create (#9)
-- [hash] docs(attractions): document list, search and PATCH (#9)
 
 ## Known trade-offs
 
