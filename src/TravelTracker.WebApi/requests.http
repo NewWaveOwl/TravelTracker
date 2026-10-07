@@ -1,0 +1,50 @@
+@base = http://localhost:5104
+
+### Health
+GET {{base}}/health
+
+### Known seeded attraction
+GET {{base}}/api/v1/attractions/11111111-1111-1111-1111-111111111111
+
+### Create an attraction; GET the returned Location to retrieve it
+POST {{base}}/api/v1/attractions
+Content-Type: application/json
+
+{
+  "name": "New Museum",
+  "description": "A manually entered attraction",
+  "rating": 4,
+  "address": "Montreal",
+  "lat": 45.5,
+  "lon": -73.57,
+  "estimatedVisitMinutes": 60
+}
+
+### Known seeded transport entry
+GET {{base}}/api/v1/transport-modes/00000000-0000-0000-0000-000000000101
+
+### Create a transport entry; GET the returned Location
+POST {{base}}/api/v1/transport-modes
+Content-Type: application/json
+
+{
+  "code": "train",
+  "name": "Example Train",
+  "description": "Manually entered transport"
+}
+
+### Known seeded route point
+GET {{base}}/api/v1/route-points/00000000-0000-0000-0000-000000000201
+
+### Create a reusable point; GET the returned Location
+POST {{base}}/api/v1/route-points
+Content-Type: application/json
+
+{
+  "type": "transport_stop",
+  "name": "Example Station",
+  "address": "Montreal",
+  "lat": 45.5,
+  "lon": -73.57,
+  "sourceId": null
+}

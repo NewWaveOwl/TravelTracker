@@ -4,7 +4,7 @@
 
 On 2026-10-06 the human requested a simple POST and GET implementation. In the follow-up scope question they answered "route points ,TRanport ansd atractioins". The current scope therefore retains those three resources and removes scheduled journeys and their stop/time machinery. The earlier broader [Attractions issue #15](../issue-9/feature-spec.md) remains historical; collection search and PATCH are deferred.
 
-Use C#/ASP.NET Core .NET 10, LAB_07's controller -> service -> repository flow, seeded process-lifetime memory, the repository skills and /** @param @return */ documentation. Attractions listens on 5104; Transport on 5103. Both expose GET /health and can run independently.
+Use C#/ASP.NET Core .NET 10, LAB_07's controller -> service -> repository flow, seeded process-lifetime memory, the repository skills and /** @param @return */ documentation. The human subsequently requested one application like LAB_07. TravelTracker.WebApi hosts all three resources on 5104, with a shared GET /health and Development Swagger page at /swagger. The service field in health is TravelTracker. The original two-host requirement is superseded for this demonstration.
 
 ## Resource contract
 
@@ -24,6 +24,6 @@ Each resource groups its two operations in one controller, one service and one r
 
 ## Acceptance and limits
 
-Verify health, seeded lookup, POST -> Location GET, missing IDs and representative validation. Keep one xUnit file per API and at most 30 discovered cases including theory rows. Current selection is 20 cases. Also run the real processes independently on their declared ports and recheck the full build.
+Verify health, seeded lookup, POST -> Location GET, missing IDs and representative validation. Keep one xUnit project, all tests/helpers in TravelTrackerTests.cs, and at most 30 discovered cases including theory rows. Current selection is 19 cases after removing the duplicate health check. Verify the shared real process, Swagger document/models and all three resource workflows on the same port, and recheck the full build.
 
 Collection GET, name search, PATCH, scheduled routes, departure/arrival/boarding/dwell calculations, authentication and Trips integration are future work. Stops are represented as route-point locations only. The pre-existing shared Id64.cs:14 CS1503 still prevents a successful full-solution build; standalone checks are reported separately.

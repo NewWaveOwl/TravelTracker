@@ -1,6 +1,6 @@
 Review outcome: no actionable defects found in the standalone Attractions and Transport implementations relative to the approved M1 scope and the source/docs checked.
 
-**Historical record:** This evidence concerns the earlier search/PATCH/scheduled-route implementation. The human subsequently reduced scope to three resources with POST and GET by ID. The current correction used Codex; no new Copilot session is claimed. See [current plan](implementation-plan.md) and [validation](validation.md).
+**Historical record:** This evidence concerns the earlier search/PATCH/scheduled-route implementation. The human subsequently reduced scope to three resources with POST and GET by ID, then selected one shared host and Swagger page like LAB_07. The current correction used Codex; no new Copilot session is claimed. See [current plan](implementation-plan.md) and [validation](validation.md).
 
 I did not run the suite here; the parent-reported counts (53 Attractions, 61 Transport, zero failures/skips) were not locally verified. Based on the source review, the implementation is internally consistent with the documented behavior.
 

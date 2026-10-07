@@ -1,14 +1,12 @@
 # Reviewed implementation plan
 
-This current plan reflects the human's final three-resource GET/POST scope. The [original fresh Copilot plan](copilot-plan.md) addressed the earlier search/PATCH/scheduled-route scope and remains historical. Codex adjusted the plan after the human's correction; this revision was not produced by a new Copilot session.
+The human requested one API and one Swagger page like LAB_07 after reviewing the earlier two-host arrangement. Codex revised this plan for that migration. The [original fresh Copilot plan](copilot-plan.md) remains historical; no new Copilot session is claimed.
 
-1. Read repository skills, existing docs/source, LAB_07 and the current branch/PR. Establish the current test baseline and preserve the original shared scaffold.
-2. Keep the two standalone .NET 10 APIs, health endpoints and ports (Attractions 5104, Transport 5103).
-3. Retain only Attraction, TransportMode and RoutePoint models and create requests. Use standard DataAnnotations for the agreed required fields, allowed codes/types and numeric ranges.
-4. Consolidate each resource's GET-by-ID and Create into one controller and one service. Keep one repository/interface per resource; each singleton in-memory repository owns its seeded ConcurrentDictionary. Keep services scoped and operations synchronous because no external I/O occurs.
-5. Remove per-action partial files, response mappers, custom validation/converters, list/search/PATCH and scheduled-route/stop machinery. Review the three-resource contract and creation Location behavior.
-6. Replace tests for removed capabilities with 7 Attractions and 13 Transport/Route Point cases in the existing two single-file xUnit projects. Build and execute both targeted suites and eight independent-process smoke checks.
-7. Recheck the full solution. Report the unchanged shared Id64 failure separately; do not run full-solution tests against stale output. Review the diff, comment style, links, skills and source hashes.
-8. Update current docs/examples/evidence, retaining historical Copilot records. Commit and push Artiom, then update the existing PR's title/body to this scope. Remove the earlier closing reference to #15 because search/PATCH are deferred. Leave merging to human review.
+1. Read LAB_07, repository skills/source/docs and the current user-added Swagger package. Run the existing 20-case baseline and preserve the unfinished shared scaffold.
+2. Move the three current resource controllers, contracts, models, services, repositories and seeds into TravelTracker.WebApi. Keep their routes, fields, validation and memory behavior. Replace two entry points/health controllers with one Program and one /health.
+3. Carry forward Swashbuckle.AspNetCore 10.2.3, register Swagger and expose the UI/document in Development. Use the shared http launch profile on port 5104. Document creation's 201 and missing-ID 404 responses in Swagger.
+4. Merge both xUnit projects into TravelTracker.WebApi.Tests, with all tests/helpers in TravelTrackerTests.cs and one factory for the shared Program. Remove only the duplicate service health case: 20 becomes 19. Update both solution files and HTTP examples.
+5. Restore/build/test the combined solution. Run eight live checks for Swagger, its seven operations/six resource-request schemas, health, three POST -> GET workflows, missing ID and invalid rating. Recheck the full-solution baseline failure.
+6. Update current instructions, skills, documentation, review and evidence. Preserve the historical issue/Copilot records. Commit/push Artiom and update PR #16 to describe one host. Leave merging to human review.
 
-Implementation decisions are explicit defaults derived from the accepted scope, not invented interview answers. No new layers, EF provider, mediator, scheduler or Trips aggregate is needed for these basic in-memory operations.
+Only the currently implemented three resources move into the shared host. Other owners' planned services and the unfinished API/Data/Domain/SQL files are preserved. Listing/search, PATCH and scheduling remain outside this change.

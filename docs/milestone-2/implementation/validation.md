@@ -1,37 +1,26 @@
 # Current executed validation
 
-The reduced implementation was checked on 2026-10-06 after the human retained Attractions, Transport entries and Route Points with POST/GET-by-ID only. Current results are under simpleImplementation in [verification.json](verification.json). Earlier 114-/30-case runs and older live checks are historical and do not prove the current source.
+The three resources now run in one .NET 10 API, TravelTracker.WebApi, with Swagger at http://localhost:5104/swagger. The human-requested LAB_07 deployment supersedes the prior two-host layout. Current structured results are under combinedHost in [verification.json](verification.json); older results remain historical.
 
-| Check | Current result |
+| Check | Result |
 | --- | --- |
-| Attractions Release build/tests | 7 executed, 7 passed, 0 failed, 0 skipped |
-| Transport Release build/tests | 13 executed, 13 passed, 0 failed, 0 skipped |
-| Independent real API processes on 5104/5103 | Eight checks passed; both health endpoints, three POST -> Location GET workflows and three missing-ID 404s |
-| Full-solution Release build | Failed at the pre-existing shared Id64.cs:14 CS1503; zero warnings |
-| Full-solution tests | Not run after failed build |
+| Combined API/test restore | Passed with Swashbuckle.AspNetCore 10.2.3 and the existing xUnit packages |
+| Release test solution | 19 executed, 19 passed, 0 failed, 0 skipped |
+| Real shared host on 5104 | Eight live checks passed |
+| Full-solution Release build | Existing Id64.cs:14 CS1503 remains; zero warnings |
+| Full-solution tests | Not run after the failed build |
 
-Executed targeted commands from the repository root:
-
-```powershell
-dotnet test tests/TravelTracker.Attractions.Api.Tests/TravelTracker.Attractions.Api.Tests.csproj --configuration Release --no-restore --logger "trx;LogFileName=attractions-simple.trx" --results-directory tests/TravelTracker.Attractions.Api.Tests/TestResults
-dotnet test tests/TravelTracker.Transport.Api.Tests/TravelTracker.Transport.Api.Tests.csproj --configuration Release --no-restore --logger "trx;LogFileName=transport-simple.trx" --results-directory tests/TravelTracker.Transport.Api.Tests/TestResults
-dotnet build TravelTracker.slnx --configuration Release --no-restore
-```
-
-The test commands built both APIs and test projects before execution. They reused previously restored packages and unchanged project/package references. Current TRX counters were parsed into the committed JSON; generated files remain ignored. The earlier sandbox-specific NuGet config workaround is historical and not a teammate setup requirement.
-
-The live check launched one compiled API at a time, with the other stopped, on its normal port. POST returned 201 with a usable Location; following it returned 200 and identical saved JSON. Unknown resource GUIDs returned 404. All owned processes were stopped afterward. No real restart test or scheduled journey check was run against the reduced source.
-
-Delivery verification checks local links, solution paths, valid MCP/evidence JSON, block comment style, skill format, whitespace and preservation of the original shared API/Data/Domain/SQL source. [Coverage selection and limits](test-review.md), [review record](review-record.md).
-
-The owned APIs/tests pass. The full solution does not build; no full-solution success, production authorization, database behavior, live transit accuracy or new Copilot GUI session is claimed.
-
-## Run all tests together
-
-The separate [TravelTracker.Tests.slnx](../../../TravelTracker.Tests.slnx) groups the two existing xUnit projects. From the repository root:
+From the repository root, run the API and all tests with:
 
 ```powershell
+dotnet run --project src/TravelTracker.WebApi --launch-profile http
 dotnet test TravelTracker.Tests.slnx --configuration Release
 ```
 
-This builds the two referenced APIs and starts isolated test hosts automatically. Both projects retain their single-file test layout. The combined solution command was verified with `--no-restore` using the already restored packages: 7 Attractions and 13 Transport/Route Point cases passed, with no failures or skips. No tests or package references were added. This solution excludes the unfinished shared scaffold; its existing full-build failure remains separate.
+The exact executed test command was `dotnet test TravelTracker.Tests.slnx --configuration Release --no-restore --logger "trx;LogFileName=combined-api.trx"`. It built the API and test project in Release and wrote the ignored tests/TravelTracker.WebApi.Tests/TestResults/combined-api.trx. One project/file holds all 19 cases. No manually running API is needed for xUnit tests.
+
+The live check verified /swagger/index.html, /swagger/v1/swagger.json and /health, then POST -> Location GET for Attractions, Transport entries and Route Points on the same port. The document contains all seven operations, the six resource/request schemas and creation's 201 responses. Missing attraction ID returned 404; rating 5.1 returned 400. The Development host was left running for the human to inspect Swagger.
+
+The user's existing Swashbuckle 10.2.3 additions were carried into the combined project. Both old host projects and test projects were replaced. The original shared API/Data/Domain/SQL source remains unchanged, so the full build limitation is preserved and disclosed. No production auth, database behavior, search/PATCH, schedules or new Copilot GUI session is claimed.
+
+Delivery checks verify current links/project paths, comments, skills, source hashes, duplicate cases and whitespace. Historical issue/Copilot records remain available. [Test selection](test-review.md), [review record](review-record.md).

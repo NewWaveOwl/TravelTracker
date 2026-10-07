@@ -84,7 +84,7 @@ Every account is a traveller or an administrator, and is active, banned or deact
 - **Trip status** (upcoming, current, past) is worked out from the trip's dates when viewed. It reflects the plan, not proof the traveller went.
 - **Concurrent edits.** If two people or two tabs change the same record, the later save is refused and the user can reload or review their changes rather than overwriting.
 
-**Local service demonstration.** The current standalone APIs implement POST and GET by ID for Attractions, Transport entries and Route Points, with seeded process-lifetime memory and GUIDs. Route-point source IDs are optional unverified metadata. The scheduled-route concept above and the trip rules below describe future product design; schedules, boarding/dwell calculations and attraction suggestions are not implemented in the reduced demonstration. See the [current specification](milestone-2/implementation/specification.md).
+**Local service demonstration.** The current TravelTracker.WebApi hosts POST and GET by ID for Attractions, Transport entries and Route Points together on port 5104, with one Swagger page, seeded process-lifetime memory and GUIDs. This follows the human-requested LAB_07 deployment; the independent-service roadmap remains future work. Route-point source IDs are optional unverified metadata. The scheduled-route concept above and the trip rules below describe future product design; schedules, boarding/dwell calculations and attraction suggestions are not implemented in the reduced demonstration. See the [current specification](milestone-2/implementation/specification.md).
 
 ## 5. Trip rules
 

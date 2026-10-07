@@ -1,10 +1,10 @@
 # API Layer
 
-HTTP contracts for the shared scaffold and the implemented independent services.
+HTTP contracts for the shared scaffold and the implemented combined API.
 
 ## Current state
 
-The original `TravelTracker.Api/Program.cs` remains a bare bootstrap. The standalone Attractions and Transport APIs below are implemented and runnable independently.
+The original `TravelTracker.Api/Program.cs` remains a bare scaffold bootstrap. The active `TravelTracker.WebApi` hosts all three implemented resources on port 5104, with one Swagger page at /swagger.
 
 ## Shared scaffold service interfaces
 
@@ -42,9 +42,9 @@ Trips validates referenced user/place/transport IDs via HTTP calls to the owning
 Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: James.
 
 
-## Implemented standalone APIs
+## Implemented combined API
 
-The human reduced the current demonstration to Attractions (5104), Transport entries and Route Points (5103). Both APIs also expose GET /health with status ok and their service name.
+The human selected one host like LAB_07. Attractions, Transport entries and Route Points share http://localhost:5104 and one Swagger document. GET /health returns status ok and service TravelTracker. Swagger is enabled in Development.
 
 | Method and route | Service | Result |
 | --- | --- | --- |
@@ -69,6 +69,6 @@ Response: transportModeId, code, name, description. POST requires a nonblank nam
 
 Response: routePointId, type, name, address, lat, lon, sourceId. POST requires an exact lowercase type (accommodation, attraction or transport_stop), nonblank name and valid coordinates. Address defaults to empty and cannot be explicitly null. Optional sourceId is unverified GUID metadata; the API does not contact another service. A point is a reusable location, not a scheduled journey.
 
-Each API owns seeded process-lifetime memory. Its singleton repositories share records between requests; restarting restores seeds and discards created data. Scoped services contain creation/lookup logic. Each resource has one controller, one service and one repository, with related GET/POST methods together.
+The shared host owns seeded process-lifetime memory. Its singleton repositories share records between requests; restarting restores all three catalogues and discards created data. Scoped services contain creation/lookup logic. Each resource has one controller, one service and one repository, with related GET/POST methods together.
 
-Collection GET/search, PATCH and scheduled transport routes/stops/timing calculations are deferred. The earlier [issue #15 contract](milestone-2/issue-9/feature-spec.md) remains historical and is not fully implemented by this reduced scope. [Current specification](milestone-2/implementation/specification.md), [Attractions examples](../src/TravelTracker.Attractions.Api/requests.http), [Transport examples](../src/TravelTracker.Transport.Api/requests.http).
+Collection GET/search, PATCH and scheduled transport routes/stops/timing calculations are deferred. The earlier [issue #15 contract](milestone-2/issue-9/feature-spec.md) remains historical and is not fully implemented by this reduced scope. [Current specification](milestone-2/implementation/specification.md), [combined HTTP examples](../src/TravelTracker.WebApi/requests.http).

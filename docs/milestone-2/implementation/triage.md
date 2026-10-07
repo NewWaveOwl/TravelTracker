@@ -14,3 +14,6 @@ The human explicitly reduced the work to POST/GET and retained route points, tra
 | Test overlap | Earlier identical-body audit found no literal duplicates, but scope and boundary coverage were much broader than requested. Current tests cover only the remaining API behavior. |
 
 Memory repositories are thread-safe singletons so POST writes survive later requests. Services remain scoped. No SQL database, EF context or remote service is required for the reduced demo. [Current specification](specification.md).
+
+
+The final host-layout review confirmed LAB_07 has one web application with multiple controllers and one xUnit project. The human explicitly selected that deployment. Current resource types moved into TravelTracker.WebApi on 5104; separate host projects were removed, routes/data rules preserved, and the existing Swagger 10.2.3 package carried forward. The prior two-project 20-case baseline passed before migration. Current validation uses one 19-case project plus the shared live Swagger/API checks.

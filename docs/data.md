@@ -35,8 +35,8 @@ Note: `Trips` stores one leg directly on the row (one transport, one departure, 
 Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: James.
 
 
-## Implemented standalone repositories
+## Implemented combined API repositories
 
-The independent APIs do not reference TravelTracker.Data or the SQL schema above. Attraction, TransportMode and RoutePoint each have a repository interface and a singleton in-memory implementation owning a ConcurrentDictionary of immutable records. Services are scoped; no separate store adapter or database context is required. Synchronous lookup/insertion performs no external I/O.
+The combined TravelTracker.WebApi does not reference TravelTracker.Data or the SQL schema above. Attraction, TransportMode and RoutePoint each have a repository interface and a singleton in-memory implementation owning a ConcurrentDictionary of immutable records. Services are scoped; no separate store adapter or database context is required. Synchronous lookup/insertion performs no external I/O.
 
 Fixed seeds load once per host. Created records survive subsequent requests and disappear on restart. The Transport catalogue supports all six codes, including bike; the legacy SQL enum is unchanged. Route-point sourceId is optional metadata, not a verified foreign key. There are no updates, scheduled-route writes or stop-time calculations in the reduced demonstration. [Current evidence](milestone-2/implementation/validation.md).

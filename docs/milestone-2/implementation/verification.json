@@ -158,7 +158,7 @@
     "liveVerification": "Not rerun; the original live evidence is retained with its original timestamp.",
     "skillValidation": "Both changed skills passed skill-creator quick_validate.py."
   },
-  "historicalRecordNote": "Root implementation checks, testLayoutRefactor and testReduction describe earlier broader source. Current reduced GET-by-ID/POST scope, source hashes, tests and live checks are under simpleImplementation.",
+  "historicalRecordNote": "All earlier implementation/testLayoutRefactor/testReduction/simpleImplementation/testSolution sections describe earlier source or two-host layouts. Current single-host LAB_07 deployment, test results, Swagger/live checks and source hashes are under combinedHost.",
   "testReduction": {
     "recordedAtUtc": "2026-10-07T02:10:07.673129+00:00",
     "baselineCommit": "628a4da972070760855407826c9aacca50c312fe",
@@ -420,5 +420,139 @@
     "apiAndTestProjectsBuiltInRelease": true,
     "apiProcessesStartedAutomaticallyByTests": true,
     "fullSolutionBuildFailureUnchanged": true
+  },
+  "combinedHost": {
+    "verifiedAtUtc": "2026-10-07T03:07:43.152921+00:00",
+    "baselineCommit": "b62e3d91c51fbe76db3d0a9018092a5d918a5acb",
+    "humanRequest": "One host showing all current models/endpoints together like LAB_07",
+    "apiProject": "src/TravelTracker.WebApi/TravelTracker.WebApi.csproj",
+    "testProject": "tests/TravelTracker.WebApi.Tests/TravelTracker.WebApi.Tests.csproj",
+    "baseUrl": "http://localhost:5104",
+    "swaggerUi": "http://localhost:5104/swagger",
+    "swaggerPackage": {
+      "name": "Swashbuckle.AspNetCore",
+      "version": "10.2.3",
+      "preservedUserAddition": true
+    },
+    "productionCSharpFiles": 26,
+    "sourceSha256": {
+      "src/TravelTracker.WebApi/Program.cs": "beeab7e6ceed4bcc8b80a7c8ab0892853da89bd01477dfee179c49e7d482ebe6",
+      "src/TravelTracker.WebApi/Program.TestHost.cs": "7af4ffc160d11669fb8d3b674fd05b7d0ff3a13eeeb84393f993af8267e010ed",
+      "src/TravelTracker.WebApi/Contracts/CreateAttractionRequest.cs": "e9405fd2b7a6b7163f84963533a93741761031fa29ecedb25e877665f1fa4b2b",
+      "src/TravelTracker.WebApi/Contracts/CreateRoutePointRequest.cs": "6e70fa91a920cf04f9a4cb4a045c4ba24d5f473f1906875aa06409f1bcce8f8d",
+      "src/TravelTracker.WebApi/Contracts/CreateTransportModeRequest.cs": "90c65adcdf6b0ab8ca39de24a3ed88bfd06d1cb55bebc0b5360fa1f4102dc0c1",
+      "src/TravelTracker.WebApi/Controllers/AttractionsController.cs": "ae54435dbdac069f76a304ba43d81e43f322128936f28fd02f9d6731566666e9",
+      "src/TravelTracker.WebApi/Controllers/HealthController.cs": "773baef555cdabc085f9331431410cb19c8a41d1edd154975570f77399eb838f",
+      "src/TravelTracker.WebApi/Controllers/RoutePointsController.cs": "3e18f8250e589f7ef58706aaa9bfb0e493f7fb00bb82b97d6d777416f306dd7d",
+      "src/TravelTracker.WebApi/Controllers/TransportModesController.cs": "5c2ace49553718286f91d521fc3be945f7a5dd3ccdb293ea1d3923b623b03f9b",
+      "src/TravelTracker.WebApi/Data/AttractionSeedData.cs": "e44022f3f92fee61fef7b9d32be285fb06233be949e1b0537b89a3fd3987f2a6",
+      "src/TravelTracker.WebApi/Data/IAttractionRepository.cs": "c005c509b38e5c7790b8317904e3a42fdeaa0c9e9bac823ae808b08d66bc3295",
+      "src/TravelTracker.WebApi/Data/InMemoryAttractionRepository.cs": "ab41ea69e0f8ad8f361b382d8f8307881c6b27c2eac9e8d3c28ad00a31fd7359",
+      "src/TravelTracker.WebApi/Data/InMemoryRoutePointRepository.cs": "dff95bf94a2172d7894fed4944c75cc7ef158bee6cb486cba11a117dd7c9ab64",
+      "src/TravelTracker.WebApi/Data/InMemoryTransportModeRepository.cs": "ac246685c9d211b643b8e1d4fcabbde1ba5bded54009b2d87bcbd7176379fbd2",
+      "src/TravelTracker.WebApi/Data/IRoutePointRepository.cs": "42494c8801ebef8a6d85cd82ae5a553ad87bf0e75beb85926d035cef4b614b1d",
+      "src/TravelTracker.WebApi/Data/ITransportModeRepository.cs": "1d04cc9e04a60711e9a75564ef95e8f8308ad126143533d81119803f294f9c36",
+      "src/TravelTracker.WebApi/Data/TransportSeedData.cs": "5f4da10c145653905a88350542abdb2fd01455f239f86ea5e5a5a7768c82ed13",
+      "src/TravelTracker.WebApi/Models/AttractionRecord.cs": "e0a17079776b67aa85e1c4e24418695dc66bce3d85773f1e497b3afeed23d1f4",
+      "src/TravelTracker.WebApi/Models/RoutePointRecord.cs": "092250325173e5f4c56d78f2711a9528928adc6089ba7f4b9dae98146e13e6a9",
+      "src/TravelTracker.WebApi/Models/TransportModeRecord.cs": "f00c9d730cf2c2529925d654aba45cb68077f598a7cc3fe2d57541d1f1326a8d",
+      "src/TravelTracker.WebApi/Services/AttractionService.cs": "0bf53fa6de72300b1340459279a4022f021cd510587811fe26dc140b43119c59",
+      "src/TravelTracker.WebApi/Services/IAttractionService.cs": "aea91e77b0682ae33aeba1cd054ec8e16362a581960950d77b1afa58855b2072",
+      "src/TravelTracker.WebApi/Services/IRoutePointService.cs": "13be07e03fce4116077541648e501cfe31049ba51d7d50dcfe37a7eef29ce5a0",
+      "src/TravelTracker.WebApi/Services/ITransportModeService.cs": "442e164787053d604ddecf4823d2e56ad22f5c46662d0eed6cf5cbb17051aa26",
+      "src/TravelTracker.WebApi/Services/RoutePointService.cs": "61f3d9fb54a9b3638eab6b3af5a5f48661d98cb07dc509bcfe14eeaddddc1741",
+      "src/TravelTracker.WebApi/Services/TransportModeService.cs": "310b610890ce4e2dc3585cebc0d3641ad46561aaff19da8379a0a6ce585b5c91"
+    },
+    "tests": {
+      "file": "tests/TravelTracker.WebApi.Tests/TravelTrackerTests.cs",
+      "sourceSha256": "e53692d8886a87f0b71e07a36a0368834d3110913a31531412714003a2e26865",
+      "command": "dotnet test TravelTracker.Tests.slnx --configuration Release --no-restore --logger \"trx;LogFileName=combined-api.trx\"",
+      "results": {
+        "total": 19,
+        "executed": 19,
+        "passed": 19,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      "facts": 14,
+      "theories": 2,
+      "theoryRows": 5,
+      "baselineCases": 20,
+      "removedCases": "One duplicate health test after both resources share one host",
+      "allOtherTestBodiesPreserved": true,
+      "identicalNormalizedBodies": 0,
+      "duplicateTheoryRows": 0,
+      "duplicateDiscoveredNames": 0
+    },
+    "liveVerification": {
+      "baseUrl": "http://localhost:5104",
+      "checks": [
+        "Swagger UI returns 200",
+        "One OpenAPI document includes all seven operations, six resource/request models and POST 201 responses",
+        "Shared health returns 200",
+        "/api/v1/attractions POST 201 -> Location GET 200 on shared host",
+        "/api/v1/transport-modes POST 201 -> Location GET 200 on shared host",
+        "/api/v1/route-points POST 201 -> Location GET 200 on shared host",
+        "Unknown attraction returns 404",
+        "Invalid decimal rating returns 400"
+      ],
+      "total": 8,
+      "passed": 8,
+      "swaggerTitle": "TravelTracker API",
+      "paths": {
+        "/api/v1/attractions/{id}": [
+          "get"
+        ],
+        "/api/v1/attractions": [
+          "post"
+        ],
+        "/health": [
+          "get"
+        ],
+        "/api/v1/route-points/{id}": [
+          "get"
+        ],
+        "/api/v1/route-points": [
+          "post"
+        ],
+        "/api/v1/transport-modes/{id}": [
+          "get"
+        ],
+        "/api/v1/transport-modes": [
+          "post"
+        ]
+      },
+      "schemas": [
+        "AttractionRecord",
+        "CreateAttractionRequest",
+        "CreateRoutePointRequest",
+        "CreateTransportModeRequest",
+        "ProblemDetails",
+        "RoutePointRecord",
+        "TransportModeRecord"
+      ],
+      "hostSessionId": 76781,
+      "hostLeftRunningForUser": true
+    },
+    "fullSolutionBuild": {
+      "command": "dotnet build TravelTracker.slnx --configuration Release --no-restore",
+      "exitCode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "error": "Existing CS1503 at src/TravelTracker.Domain/Types/Id64.cs:14"
+    },
+    "fullSolutionTests": "Not run after failed build",
+    "skillValidation": {
+      "traveltracker-code": "Skill is valid!",
+      "traveltracker-testing": "Skill is valid!"
+    },
+    "deliveryChecks": {
+      "localLinksChecked": 52,
+      "documentsChecked": 16,
+      "solutionProjects": 5,
+      "sharedSourceUnchanged": true,
+      "failures": []
+    },
+    "tool": "Codex; no new Copilot session claimed"
   }
 }

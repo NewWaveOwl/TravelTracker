@@ -20,7 +20,7 @@ Business entities for TravelTracker (`TravelTracker.Domain`).
 
 ## Not implemented yet
 
-The following gaps refer to the original shared Domain scaffold, not the independent service-owned records below.
+The following gaps refer to the original shared Domain scaffold, not the combined API records below.
 
 Referenced by repository/service interfaces, no model file yet: `Trip`, `TripLeg`, `UserSettings`, `TripMapPoint` (read-model), `Stay`, `Visit`, `TicketImport` (future).
 
@@ -32,14 +32,14 @@ Referenced by repository/service interfaces, no model file yet: `Trip`, `TripLeg
 - Banned user: can sign in and read own data, can't write. Deactivated/deleted: can't sign in.
 
 
-## Implemented standalone records
+## Implemented combined API records
 
-These immutable records belong to the independent APIs and use the human-approved GUID contracts. They have no references to the unfinished shared Domain project.
+These immutable records belong to TravelTracker.WebApi and use the human-approved GUID contracts. They have no references to the unfinished shared Domain project.
 
 | Record | Owning project | Fields |
 | --- | --- | --- |
-| AttractionRecord | TravelTracker.Attractions.Api | AttractionId, Name, Description, Rating, Address, Lat, Lon, EstimatedVisitMinutes |
-| TransportModeRecord | TravelTracker.Transport.Api | TransportModeId, Code, Name, Description |
-| RoutePointRecord | TravelTracker.Transport.Api | RoutePointId, Type, Name, Address, Lat, Lon, SourceId |
+| AttractionRecord | TravelTracker.WebApi | AttractionId, Name, Description, Rating, Address, Lat, Lon, EstimatedVisitMinutes |
+| TransportModeRecord | TravelTracker.WebApi | TransportModeId, Code, Name, Description |
+| RoutePointRecord | TravelTracker.WebApi | RoutePointId, Type, Name, Address, Lat, Lon, SourceId |
 
 Route points can represent accommodation, attraction or transport_stop locations. Entries and points have no departure/arrival dates. Scheduled journeys, intermediate-stop timings, boarding time and future attraction suggestions remain future work after the human reduced the implementation to POST and GET by ID. [Current contract](milestone-2/implementation/specification.md).
