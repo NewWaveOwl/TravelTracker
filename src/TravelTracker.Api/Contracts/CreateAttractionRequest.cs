@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace TravelTracker.Api.Contracts;
 
 /**
  * Accepts writable attraction fields with standard ASP.NET Core validation.
  */
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class CreateAttractionRequest
 {
     [Required]

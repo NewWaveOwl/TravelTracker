@@ -25,6 +25,24 @@ public sealed class AttractionTests
             saved.EnumerateObject().Select(field => field.Name));
     }
 
+    [Fact]
+    public async Task Create_UnknownPropertyReturns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsync("/api/v1/attractions", JsonContent.Create(new { name = "Museum", lat = 45m, lon = -73m, estimatedVisitMinutes = 60, unknown = "x" }));
+        await HttpTestSupport.AssertValidationAsync(response);
+    }
+
+    [Fact]
+    public async Task Create_ExplicitNullAddressReturns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsync("/api/v1/attractions", JsonContent.Create(new { name = "Museum", lat = 45m, lon = -73m, estimatedVisitMinutes = 60, address = (object?)null }));
+        await HttpTestSupport.AssertValidationAsync(response);
+    }
+
     /**
      * Returns 404 for an absent attraction.
      * @return Completion after checking the lookup response.
@@ -224,5 +242,50 @@ public sealed class AttractionTests
         Assert.Equal(46m, updated.GetProperty("lat").GetDecimal());
         Assert.Equal(-74m, updated.GetProperty("lon").GetDecimal());
         Assert.Equal(42, updated.GetProperty("estimatedVisitMinutes").GetInt32());
+    }
+
+    // Service tests moved from ServiceTests.cs
+    [Fact]
+    public async Task Service_GetAll_SearchTrimCaseInsensitive()
+    {
+        var repo = new TravelTracker.Data.Repositories.InMemoryAttractionRepository();
+        var service = new TravelTracker.Api.Services.AttractionService(repo);
+        var results = await service.GetAllAsync(" museum ");
+        Assert.All(results, r => Assert.Contains("museum", r.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Service_UpdatePartialAsync_Concurrent_AllChangesApplied()
+    {
+        var repo = new TravelTracker.Data.Repositories.InMemoryAttractionRepository();
+        var service = new TravelTracker.Api.Services.AttractionService(repo);
+        var id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        await repo.AddAsync(new TravelTracker.Domain.Models.Attraction { AttractionId = id, Name = "Seed", Address = "A", Latitude = 0m, Longitude = 0m, EstimatedVisitMinutes = 10, Description = "d", Rating = 1m });
+
+        var patches = new[]
+        {
+            JsonDocument.Parse("{ \"name\": \"N1\" }").RootElement,
+            JsonDocument.Parse("{ \"description\": \"D1\" }").RootElement,
+            JsonDocument.Parse("{ \"rating\": 4 }").RootElement,
+            JsonDocument.Parse("{ \"address\": \"Addr\" }").RootElement,
+            JsonDocument.Parse("{ \"lat\": 12.34 }").RootElement,
+            JsonDocument.Parse("{ \"lon\": -56.78 }").RootElement,
+            JsonDocument.Parse("{ \"estimatedVisitMinutes\": 99 }").RootElement
+        };
+
+        var tasks = patches.Select(p => service.UpdatePartialAsync(id, p)).ToArray();
+        var results = await Task.WhenAll(tasks);
+        Assert.All(results, r => Assert.False(r.NotFound));
+        Assert.All(results, r => Assert.Null(r.Errors));
+
+        var final = await repo.GetByIdAsync(id);
+        Assert.NotNull(final);
+        Assert.Equal("N1", final!.Name);
+        Assert.Equal("D1", final.Description);
+        Assert.Equal(4m, final.Rating);
+        Assert.Equal("Addr", final.Address);
+        Assert.Equal(12.34m, final.Latitude);
+        Assert.Equal(-56.78m, final.Longitude);
+        Assert.Equal(99, final.EstimatedVisitMinutes);
     }
 }
