@@ -24,7 +24,9 @@ public sealed class AttractionService(IAttractionRepository repository) : IAttra
             var q = nameFilter.Trim();
             filtered = filtered.Where(r => r.Name != null && r.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
         }
-        return filtered.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        return filtered.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.AttractionId)
+            .ToList();
     }
 
     /**
