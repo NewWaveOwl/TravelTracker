@@ -1,17 +1,16 @@
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using System.Text.Json;
 using TravelTracker.Data;
 using TravelTracker.Data.Repositories;
 using TravelTracker.Domain.Models;
-using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace TravelTracker.Api.Services;
 
 /**
  * Implements the existing shared service with its shared repository and entity.
  * @param repository Process-lifetime catalogue storage.
- * @param ids Issues new entity identities.
  */
-public sealed class AttractionService(IAttractionRepository repository) : IAttractionService
+public sealed class AttractionService(IAttractionRepository repository, EntityIdGenerator ids) : IAttractionService
 {
     // Semaphore to serialize read-modify-write partial updates and avoid lost updates.
     private static readonly System.Threading.SemaphoreSlim updateLock = new(1, 1);
@@ -61,9 +60,8 @@ public sealed class AttractionService(IAttractionRepository repository) : IAttra
      */
     public async Task<Attraction?> UpdateAsync(Guid attractionId, Attraction attraction)
     {
-        var existing = await repository.GetByIdAsync(attractionId);
-        if (existing is null) return null;
-        attraction.AttractionId = existing.AttractionId;
+        if (await repository.GetByIdAsync(attractionId) is null) return null;
+        attraction.AttractionId = await ids.NextAsync<Attraction>();
         attraction.Name = attraction.Name.Trim();
         await repository.UpdateAsync(attraction);
         return attraction;

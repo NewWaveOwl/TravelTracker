@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using TravelTracker.Data;
 
 namespace TravelTracker.Api.Tests;
 
@@ -271,7 +272,7 @@ public sealed class AttractionTests
     public async Task Service_GetAll_SearchTrimCaseInsensitive()
     {
         var repo = new TravelTracker.Data.Repositories.InMemoryAttractionRepository();
-        var service = new TravelTracker.Api.Services.AttractionService(repo);
+        var service = new TravelTracker.Api.Services.AttractionService(repo, EntityIdGenerator.ForSeedData());
         var results = await service.GetAllAsync(" museum ");
         Assert.All(results, r => Assert.Contains("museum", r.Name, StringComparison.OrdinalIgnoreCase));
     }
@@ -280,9 +281,18 @@ public sealed class AttractionTests
     public async Task Service_UpdatePartialAsync_Concurrent_AllChangesApplied()
     {
         var repo = new TravelTracker.Data.Repositories.InMemoryAttractionRepository();
-        var service = new TravelTracker.Api.Services.AttractionService(repo);
-        var id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-        await repo.AddAsync(new TravelTracker.Domain.Models.Attraction { AttractionId = id, Name = "Seed", Address = "A", Latitude = 0m, Longitude = 0m, EstimatedVisitMinutes = 10, Description = "d", Rating = 1m });
+        var service = new TravelTracker.Api.Services.AttractionService(repo, EntityIdGenerator.ForSeedData());
+        var seeded = await service.CreateAsync(new TravelTracker.Domain.Models.Attraction
+        {
+            Name = "Seed",
+            Address = "A",
+            Latitude = 0m,
+            Longitude = 0m,
+            EstimatedVisitMinutes = 10,
+            Description = "d",
+            Rating = 1m
+        });
+        var id = seeded.AttractionId.PublicId;
 
         var patches = new[]
         {
