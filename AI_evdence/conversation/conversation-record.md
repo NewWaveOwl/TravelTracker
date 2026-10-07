@@ -172,7 +172,7 @@ The assistant checked main at `68fe7ea` and found PR #16 merged. The named resou
 
 The assistant asked whether reusable `.github` skills/instructions, AGENTS.md and MCP configuration should also leave main. The recommended default is to move evidence documents and retain that active setup. No additional human answer was available when this reconstructed record was authored, so this choice is recorded as an agent default, not an accepted interview answer.
 
-The cleanup is prepared on remove_Aivence_from_docs and will target master through a separate PR. The resource branch is published before any deletion is proposed. The [manifest](../archive-manifest.md) and [archive validation](../../devlopmet_flow/archive-validation.md) record preservation and link/source checks.
+The cleanup is published on remove_Aivence_from_docs and targets master through [PR #19](https://github.com/NewWaveOwl/TravelTracker/pull/19). The resource branch was published before the deletion was proposed. Main advanced to `825ab43` during preparation by adding “Never force push” to AGENTS.md; the cleanup was rebased and revalidated, retaining that change. The [manifest](../archive-manifest.md), [archive validation](../../devlopmet_flow/archive-validation.md) and [cleanup validation](../../devlopmet_flow/cleanup-pr-validation.md) record preservation and link/source checks.
 
 ## Interpretation limits
 

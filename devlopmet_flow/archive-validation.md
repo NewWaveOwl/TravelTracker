@@ -8,7 +8,7 @@ Checked on 2026-10-07 against main `68fe7ea6bd11b7d02a0af3e2fe913d55857880fe`.
 | Setup snapshots | **6 exact copies**; original and archived SHA-256 values match |
 | Historical verification | Restored JSON byte-for-byte from commit `2921aef`; older test counts/architectures explicitly labelled historical |
 | Existing resource branch | Original README text retained; no pre-existing file deleted |
-| Navigation | 52 Markdown documents checked, 183 local links checked, zero unresolved targets after writing this report |
+| Navigation | 54 Markdown documents checked, 193 local links checked, zero unresolved targets after writing this report |
 | JSON and credential check | JSON parses; no recognised GitHub/OpenAI credential values copied |
 | Conversation | Direct request excerpts distinguished from summaries; incomplete-export limits and the unconfirmed AI-setup default are explicit |
 
