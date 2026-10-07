@@ -1,5 +1,4 @@
 using TravelTracker.Domain.Models;
-using TravelTracker.Domain.Types;
 
 namespace TravelTracker.Api.Services;
 
@@ -14,8 +13,8 @@ public interface ITripMapService
      * ID and type, sequence and scheduled time, and the transport-mode ID
      * for the segment leading to it.
      *
-     * @param tripId The unique identifier of the trip to map.
+     * @param tripId The public identifier of the trip to map.
      * @return A task containing the trip's map points in order.
      */
-    Task<List<TripMapPoint>> GetMapPointsAsync(Id64 tripId);
+    Task<List<TripMapPoint>> GetMapPointsAsync(Guid tripId);
 }

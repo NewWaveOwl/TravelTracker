@@ -10,7 +10,7 @@ namespace TravelTracker.Data.Repositories;
 public sealed class InMemoryTransportModeRepository : ITransportModeRepository
 {
     private readonly ConcurrentDictionary<Guid, TransportMode> records =
-        new(TransportSeedData.Transports().ToDictionary(record => record.TransportModeId));
+        new(TransportSeedData.Transports().ToDictionary(record => record.TransportModeId.PublicId));
 
     /**
      * Reads the catalogue through the existing repository contract.
@@ -33,7 +33,7 @@ public sealed class InMemoryTransportModeRepository : ITransportModeRepository
      */
     public Task AddAsync(TransportMode transportMode)
     {
-        records[transportMode.TransportModeId] = Copy(transportMode);
+        records[transportMode.TransportModeId.PublicId] = Copy(transportMode);
         return Task.CompletedTask;
     }
 
@@ -44,8 +44,8 @@ public sealed class InMemoryTransportModeRepository : ITransportModeRepository
      */
     public Task UpdateAsync(TransportMode transportMode)
     {
-        if (records.TryGetValue(transportMode.TransportModeId, out var previous))
-            records.TryUpdate(transportMode.TransportModeId, Copy(transportMode), previous);
+        if (records.TryGetValue(transportMode.TransportModeId.PublicId, out var previous))
+            records.TryUpdate(transportMode.TransportModeId.PublicId, Copy(transportMode), previous);
         return Task.CompletedTask;
     }
 
@@ -55,7 +55,7 @@ public sealed class InMemoryTransportModeRepository : ITransportModeRepository
      * @return A task containing a copy, or null when absent.
      */
     public Task<TransportMode?> GetByCodeAsync(string code) => Task.FromResult(
-        records.Values.Where(record => record.Code == code).OrderBy(record => record.TransportModeId)
+        records.Values.Where(record => record.Code == code).OrderBy(record => record.TransportModeId.PublicId)
             .Select(Copy).FirstOrDefault());
 
     /**

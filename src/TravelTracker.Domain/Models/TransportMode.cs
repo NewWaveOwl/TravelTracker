@@ -1,3 +1,5 @@
+using TravelTracker.Domain.Types;
+
 namespace TravelTracker.Domain.Models;
 
 /**
@@ -8,7 +10,7 @@ public sealed class TransportMode
     /**
      * Gets or sets the unique identifier of the transportation method.
      */
-    public Guid TransportModeId { get; set; }
+    public EntityId<TransportMode> TransportModeId { get; set; }
 
     /**
      * Gets or sets the stable machine-readable code, such as car or train.

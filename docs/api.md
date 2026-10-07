@@ -16,13 +16,13 @@ The existing [TravelTracker.Api](../src/TravelTracker.Api) is the only web host.
 | [ITripService](../src/TravelTracker.Api/Services/ITripService.cs) | `Trip`, `TripLeg` (empty type declarations) | `GetHistoryAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
 | [ITripMapService](../src/TravelTracker.Api/Services/ITripMapService.cs) | `TripMapPoint` (empty type declaration) | `GetMapPointsAsync` |
 
-The Attraction and TransportMode interfaces now have concrete implementations wired into Api controllers. Trips/Settings/map retain their existing contracts but have no runtime implementation or endpoint. Empty Domain declarations supply their referenced types for compilation. Attraction/transport IDs are GUIDs; settings/trip IDs use `Id64`. `ITripService.ReplaceLegsAsync` returns the saved legs, while its repository counterpart returns only task completion.
+The Attraction and TransportMode interfaces now have concrete implementations wired into Api controllers. Trips/Settings/map retain their existing contracts but have no runtime implementation or endpoint. Empty Domain declarations supply their referenced types for compilation. Every entity identity is an `EntityId<T>`: an internal `Id64` key plus a public uuidv7. The key is `internal` to Domain and Data, so the Api cannot name or expose it; edge-facing signatures take the public `Guid`. `ITripService.ReplaceLegsAsync` returns the saved legs, while its repository counterpart returns only task completion.
 
 No `IUserService` or `IAccommodationService` exists yet. Their models and internal repositories are retained (see [Data](data.md)), but there are no user/accommodation endpoints to display in Swagger.
 
 ## Shared scaffold's planned REST contract
 
-`/api/v1`, JSON camelCase, ISO 8601 UTC. Current User, Accomodation, Attraction, TransportMode and RoutePoint identifiers are GUIDs; existing Trips/Settings interfaces use `Id64`. Identifier mapping and the future Trips/Settings wire format still need agreement. This does not change the implemented catalogue's GUID contract.
+`/api/v1`, JSON camelCase, ISO 8601 UTC. Current User, Accomodation, Attraction, TransportMode and RoutePoint identifiers are GUIDs; the wire format is always the public uuidv7. The future Trips/Settings wire format still needs agreement.
 
 | Service | Routes |
 |---|---|
