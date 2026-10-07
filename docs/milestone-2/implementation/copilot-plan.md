@@ -1,5 +1,7 @@
 I’ll inspect the requested contracts and the lab reference, then return a scoped plan only; I will not modify files or run commands.
 
+**Historical record:** This evidence concerns the earlier search/PATCH/scheduled-route implementation. The human subsequently reduced scope to three resources with POST and GET by ID. The current correction used Codex; no new Copilot session is claimed. See [current plan](implementation-plan.md) and [validation](validation.md).
+
 The feature contract confirms standalone in-memory services and explicit API behavior; I’m locating the exact lab reference and repository guidance so the file plan reflects the existing structure, not just the spec.
 
 The existing API is only a bootstrap plus shared contracts, with no controllers or implementations to reuse. The requested LAB_07 reference is outside the accessible repository view, so I’m checking the existing model contracts and documenting that review constraint rather than guessing at its contents.

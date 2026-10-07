@@ -1,44 +1,26 @@
+using System.Collections.Concurrent;
 using TravelTracker.Transport.Api.Models;
+
 namespace TravelTracker.Transport.Api.Data;
+
 /**
- * Persists RoutePoint records in the service-owned store.
- * @param store Process-lifetime thread-safe state.
+ * Keeps seeded and created records for the lifetime of this API host.
  */
-public sealed class InMemoryRoutePointRepository(InMemoryTransportStore store) : IRoutePointRepository
+public sealed class InMemoryRoutePointRepository : IRoutePointRepository
 {
+    private readonly ConcurrentDictionary<Guid, RoutePointRecord> records =
+        new(TransportSeedData.Points().ToDictionary(record => record.RoutePointId));
+
     /**
-     * Lists records in deterministic order.
-     * @param cancellationToken Cancels the request.
-     * @return Stable name/GUID ordered records.
+     * Finds a saved record.
+     * @param id Server-generated record identifier.
+     * @return The record, or null when absent.
      */
-    public Task<IReadOnlyList<RoutePointRecord>> GetAllAsync(CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        IReadOnlyList<RoutePointRecord> values = store.GetPoints().OrderBy(value => value.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(value => value.RoutePointId).ToArray();
-        return Task.FromResult(values);
-    }
+    public RoutePointRecord? GetById(Guid id) => records.GetValueOrDefault(id);
+
     /**
-     * Looks up a record by identifier.
-     * @param id Resource identifier.
-     * @param cancellationToken Cancels the request.
-     * @return Record, or null.
+     * Stores a record safely across simultaneous requests.
+     * @param record Record with a server-generated identifier.
      */
-    public Task<RoutePointRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(store.GetPoint(id));
-    }
-    /**
-     * Stores an already validated record.
-     * @param value Validated record.
-     * @param cancellationToken Cancels the request.
-     * @return Completed insertion.
-     */
-    public Task AddAsync(RoutePointRecord value, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        store.AddPoint(value);
-        return Task.CompletedTask;
-    }
+    public void Add(RoutePointRecord record) => records[record.RoutePointId] = record;
 }

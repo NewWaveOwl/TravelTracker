@@ -1,31 +1,21 @@
-### Independent health
-GET http://localhost:5104/health
+@base = http://localhost:5104
 
-### List and literal name search
-GET http://localhost:5104/api/v1/attractions?name=mUsEuM
+### Health
+GET {{base}}/health
 
-### Seed detail
-GET http://localhost:5104/api/v1/attractions/11111111-1111-1111-1111-111111111111
+### Known seeded attraction
+GET {{base}}/api/v1/attractions/11111111-1111-1111-1111-111111111111
 
-### Create; use the returned Location to retrieve this record
-POST http://localhost:5104/api/v1/attractions
+### Create an attraction; GET the returned Location to retrieve it
+POST {{base}}/api/v1/attractions
 Content-Type: application/json
 
 {
   "name": "New Museum",
   "description": "A manually entered attraction",
-  "rating": 4.5,
+  "rating": 4,
   "address": "Montreal",
   "lat": 45.5,
   "lon": -73.57,
   "estimatedVisitMinutes": 60
-}
-
-### Partial update of the seed; omitted values remain unchanged
-PATCH http://localhost:5104/api/v1/attractions/11111111-1111-1111-1111-111111111111
-Content-Type: application/json
-
-{
-  "description": "Updated description",
-  "rating": null
 }

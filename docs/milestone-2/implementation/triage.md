@@ -1,9 +1,16 @@
-# Refreshed implementation triage
+# Current implementation triage
 
-The repository began at 7f8a437 on Artiom with a clean tree. Remote verification found master as the default branch and open, unmerged PR #16 from the same Artiom head. Fetching origin and checking ancestry confirmed Artiom contained current master. The authenticated issue inventory included Attractions #15 and workflow #10/#11/#12; Transport's revised model came from the human conversation, not an additional pre-existing feature issue. The [earlier full issue/code triage](../issue-9/triage-notes.md) remains the historical planning record; no zero keyword-search result is used as proof of no duplicates.
+The initial [issue/code triage](../issue-9/triage-notes.md) and historical Copilot records remain the earlier research evidence. No new remote issue search or Copilot interview is claimed for this simplification.
 
-The original API only contained bootstrap/interfaces, with no implemented routes, services, repositories or tests. Its TransportMode was a code/display-name catalogue item; departure/arrival belonged to a future TripLeg. Adding schedule fields to a shared mode would mix reusable catalogue data and a particular journey. The human resolved that design question with typed reusable route points, named transport entries and individual scheduled routes.
+The human explicitly reduced the work to POST/GET and retained route points, transport and attractions. The earlier implementation expanded into collection search, updates and scheduled routes. Those capabilities and their related tests are removed from the current API surface.
 
-The independent route contract extends Transport's responsibility to its own point snapshots and schedules. Trips retains whole-itinerary connections, visits, dates, ownership and atomic saves. Existing shared interfaces/schema remain unchanged; their GUID/Id64 mismatch and missing model definitions are not silently repaired. The shared Id64 constructor still blocks the full build at CS1503.
+| Area reviewed | Result |
+| --- | --- |
+| LAB_07 | Groups related actions in resource controllers/services with repository injection. The simplified code follows that layout. |
+| Existing standalone resources | Reuse AttractionRecord, TransportModeRecord and RoutePointRecord, fixed seeds, health and launch profiles. |
+| Shared scaffold | API/Data/Domain interfaces and SQL remain untouched. The pre-existing Id64.cs:14 CS1503 still fails the full build. |
+| Ownership | Attractions owns attractions. Transport owns entries and route-point locations. Source IDs are metadata. Whole itineraries remain future Trips work. |
+| Complexity | Production C# files reduced from 88 to 29. Removed schedules/stops, per-action partials, custom converters/validators and response-mapper layers. |
+| Test overlap | Earlier identical-body audit found no literal duplicates, but scope and boundary coverage were much broader than requested. Current tests cover only the remaining API behavior. |
 
-LAB_07 uses controllers, request DTOs, scoped services/repositories and EF Core SQL Server. The approved service lifetime is seeded in-memory, so the implementation follows those HTTP/application/persistence boundaries while keeping the selected memory store. Scoped components share a thread-safe singleton, rather than losing writes on the next request. Partial controller/service files adapt the lab's grouped operations to the repository's one-feature-per-file rule. Production authorization and real-world transit constraints remain future integration work, not demonstrated behavior.
+Memory repositories are thread-safe singletons so POST writes survive later requests. Services remain scoped. No SQL database, EF context or remote service is required for the reduced demo. [Current specification](specification.md).

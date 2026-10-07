@@ -34,10 +34,9 @@ Note: `Trips` stores one leg directly on the row (one transport, one departure, 
 
 Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: James.
 
-## Implemented standalone stores
 
-TravelTracker.Attractions.Api and TravelTracker.Transport.Api own independent thread-safe singleton stores, with scoped repository/service adapters. These do not use the SQL schema above or reference TravelTracker.Data. The legacy SQL enum still omits bike; the implemented Transport catalogue supports all six approved mode codes.
+## Implemented standalone repositories
 
-Records and saved route snapshots are immutable. Reads take collection snapshots. Attractions' compound PATCH applies and validates a candidate under one lock, so invalid updates leave the original intact and concurrent changes to different fields retain both values. Transport validates a complete route and resolves all references before a single insertion. The current Transport API has no catalogue update/delete operations that could invalidate those references mid-write.
+The independent APIs do not reference TravelTracker.Data or the SQL schema above. Attraction, TransportMode and RoutePoint each have a repository interface and a singleton in-memory implementation owning a ConcurrentDictionary of immutable records. Services are scoped; no separate store adapter or database context is required. Synchronous lookup/insertion performs no external I/O.
 
-Seeds are fixed and loaded once per host/process. Created/updated state survives requests and is discarded on restart. Source IDs on route points are metadata, not foreign keys into another owner's database; future Trips integration validates relevant external catalogue references over HTTP. [Verification evidence](milestone-2/implementation/validation.md).
+Fixed seeds load once per host. Created records survive subsequent requests and disappear on restart. The Transport catalogue supports all six codes, including bike; the legacy SQL enum is unchanged. Route-point sourceId is optional metadata, not a verified foreign key. There are no updates, scheduled-route writes or stop-time calculations in the reduced demonstration. [Current evidence](milestone-2/implementation/validation.md).

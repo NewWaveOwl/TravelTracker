@@ -1,8 +1,31 @@
+using TravelTracker.Attractions.Api.Contracts;
 using TravelTracker.Attractions.Api.Data;
+using TravelTracker.Attractions.Api.Models;
+
 namespace TravelTracker.Attractions.Api.Services;
 
 /**
- * Coordinates catalogue operations, implemented in separate feature files.
- * @param repository Scoped persistence abstraction.
+ * Creates and reads records through its repository.
+ * @param repository Shared in-memory repository.
  */
-public sealed partial class AttractionService(IAttractionRepository repository) : IAttractionService;
+public sealed class AttractionService(IAttractionRepository repository) : IAttractionService
+{
+    /**
+     * Finds a saved record.
+     * @param id Server-generated record identifier.
+     * @return The record, or null when absent.
+     */
+    public AttractionRecord? GetById(Guid id) => repository.GetById(id);
+
+    /**
+     * Creates a record from HTTP-validated input.
+     * @param request Writable fields accepted by the API.
+     * @return The saved record with a new GUID.
+     */
+    public AttractionRecord Create(CreateAttractionRequest request)
+    {
+        AttractionRecord record = new(Guid.NewGuid(), request.Name!.Trim(), request.Description, request.Rating, request.Address ?? string.Empty, request.Lat!.Value, request.Lon!.Value, request.EstimatedVisitMinutes!.Value);
+        repository.Add(record);
+        return record;
+    }
+}

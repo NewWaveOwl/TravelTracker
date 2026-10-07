@@ -1,12 +1,14 @@
 namespace TravelTracker.Transport.Api.Models;
+
 /**
- * Represents an immutable typed location snapshot.
- * @param RoutePointId The route point id value.
- * @param Type The type value.
- * @param Name The name value.
- * @param Address The address value.
- * @param Latitude The latitude value.
- * @param Longitude The longitude value.
- * @param SourceId The source id value.
+ * Stores a reusable location with its role.
+ * @param RoutePointId Generated identifier.
+ * @param Type Accommodation, attraction or transport_stop.
+ * @param Name Location name.
+ * @param Address Location address.
+ * @param Lat Latitude.
+ * @param Lon Longitude.
+ * @param SourceId Optional metadata referring to another catalogue entry.
  */
-public sealed record RoutePointRecord(Guid RoutePointId, string Type, string Name, string Address, decimal Latitude, decimal Longitude, Guid? SourceId);
+public sealed record RoutePointRecord(Guid RoutePointId, string Type, string Name,
+    string Address, decimal Lat, decimal Lon, Guid? SourceId);

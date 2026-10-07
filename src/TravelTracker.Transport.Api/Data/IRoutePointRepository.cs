@@ -1,28 +1,22 @@
 using TravelTracker.Transport.Api.Models;
+
 namespace TravelTracker.Transport.Api.Data;
+
 /**
- * Defines snapshot reads and insertion for RoutePoint records.
+ * Defines the two storage operations needed by this resource.
  */
 public interface IRoutePointRepository
 {
     /**
-     * Lists records in deterministic order.
-     * @param cancellationToken Cancels the request.
-     * @return Ordered records.
+     * Finds a saved record.
+     * @param id Server-generated record identifier.
+     * @return The record, or null when absent.
      */
-    Task<IReadOnlyList<RoutePointRecord>> GetAllAsync(CancellationToken cancellationToken);
+    RoutePointRecord? GetById(Guid id);
+
     /**
-     * Looks up a record by identifier.
-     * @param id Resource identifier.
-     * @param cancellationToken Cancels the request.
-     * @return Record, or null.
+     * Stores a newly created record.
+     * @param record Record created by the service.
      */
-    Task<RoutePointRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
-    /**
-     * Stores an already validated record.
-     * @param value Validated record.
-     * @param cancellationToken Cancels the request.
-     * @return Completed insertion.
-     */
-    Task AddAsync(RoutePointRecord value, CancellationToken cancellationToken);
+    void Add(RoutePointRecord record);
 }

@@ -41,35 +41,34 @@ Trips validates referenced user/place/transport IDs via HTTP calls to the owning
 
 Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: James.
 
-## Implemented Attractions API (5104)
 
-| Method and route | Behavior |
-| --- | --- |
-| GET /health | 200 with status ok and service Attractions |
-| GET /api/v1/attractions | Ordered current catalogue |
-| GET /api/v1/attractions?name=museum | Trimmed ordinal-ignore-case literal name substring; empty returns all; no match returns [] |
-| GET /api/v1/attractions/{id} | Details |
-| POST /api/v1/attractions | Create; 201, saved details and Location |
-| PATCH /api/v1/attractions/{id} | Partial update; 200 with saved details |
+## Implemented standalone APIs
 
-Responses use attractionId, name, description, rating, address, lat, lon and estimatedVisitMinutes. Create requires name/lat/lon/estimatedVisitMinutes; omitted address becomes empty and omitted description/rating become null. Names are trimmed/nonblank, rating is null or 0-5, coordinates obey geographic ranges and minutes are nonnegative. PATCH omission preserves fields, null clears only description/rating, and the complete candidate is validated before atomic replacement. Repeated name queries, unknown/client-ID fields and empty PATCH are invalid. [Full contract](milestone-2/issue-9/feature-spec.md), [HTTP examples](../src/TravelTracker.Attractions.Api/requests.http).
+The human reduced the current demonstration to Attractions (5104), Transport entries and Route Points (5103). Both APIs also expose GET /health with status ok and their service name.
 
-## Implemented Transport API (5103)
+| Method and route | Service | Result |
+| --- | --- | --- |
+| GET /api/v1/attractions/{id} | Attractions | Saved attraction, or 404 |
+| POST /api/v1/attractions | Attractions | 201, saved attraction and details Location |
+| GET /api/v1/transport-modes/{id} | Transport | Saved transport entry, or 404 |
+| POST /api/v1/transport-modes | Transport | 201, saved entry and details Location |
+| GET /api/v1/route-points/{id} | Transport | Saved route point, or 404 |
+| POST /api/v1/route-points | Transport | 201, saved point and details Location |
 
-| Method and route | Behavior |
-| --- | --- |
-| GET /health | 200 with status ok and service Transport |
-| GET/POST /api/v1/transport-modes | List/create named transport entries, independent of schedules |
-| GET /api/v1/transport-modes/{id} | Transport entry details |
-| GET/POST /api/v1/route-points | List/create typed location snapshots |
-| GET /api/v1/route-points/{id} | Point details |
-| GET/POST /api/v1/transport-routes | List/create individual scheduled routes |
-| GET /api/v1/transport-routes/{id} | Schedule, saved transport/point snapshots and timing calculations |
+All IDs are generated GUIDs; JSON fields use camelCase. Standard ASP.NET Core model binding and DataAnnotations produce 400 validation problem details for invalid input or malformed IDs. Unknown JSON fields follow the framework default and are ignored; request models do not expose server-owned IDs. GET never creates a missing record.
 
-Transport creation takes code, name and optional description. Supported codes are car, bus, train, pedestrian, bike and plane; multiple entries can share a code. Point creation takes type (accommodation/attraction/transport_stop), name, lat/lon, optional address and optional sourceId. The source GUID is metadata rather than an independently verified reference.
+### Attraction fields
 
-Route creation takes name, transportModeId, startPointId, destinationPointId, departureAt, arrivalAt, boardingMinutes and optional stops. Each stop has pointId, arrivalAt, departureAt, boardingMinutes and canLeaveVehicle. All references must exist in Transport's own store. Instants require explicit offsets and are returned in UTC. Stops must remain chronological within the journey and preparation must fit stop dwell.
+Response: attractionId, name, description, rating, address, lat, lon, estimatedVisitMinutes. POST requires a nonblank name, latitude (-90 to 90), longitude (-180 to 180), and nonnegative integer estimatedVisitMinutes. Names are trimmed. Description and rating are optional; null rating means no score, otherwise 0-5 inclusive. Omitted address becomes an empty string; explicit null address is invalid.
 
-Route responses contain transportRouteId, name, transport/start/destination snapshots, departureAt, arrivalAt, boardingMinutes, boardingStartsAt, elapsedMinutes, totalMinutes and stops. Stop responses add boardingStartsAt, downtimeMinutes and potentialFreeMinutes; the last is zero unless leaving the vehicle is allowed. Elapsed includes stop dwell and total also includes origin preparation. These are supplied-plan calculations, not live transit estimates or attraction suggestions.
+### Transport entry fields
 
-All new resources use generated GUIDs. POST returns 201 and Location. Invalid input/malformed IDs return 400 validation problem details; absent resources/references return 404. Lists are ordered by name then GUID. Both services use process-lifetime memory and reset to seeds on restart. The original shared service interfaces remain scaffold contracts; the independently owned interfaces implement this documented surface without importing shared build failures. [Transport specification](milestone-2/implementation/specification.md), [HTTP examples](../src/TravelTracker.Transport.Api/requests.http).
+Response: transportModeId, code, name, description. POST requires a nonblank name and one exact lowercase code: car, bus, train, pedestrian, bike or plane. Description is optional. Names are trimmed; multiple entries may share a code. ITransportModeService manages entries without journey dates.
+
+### Route point fields
+
+Response: routePointId, type, name, address, lat, lon, sourceId. POST requires an exact lowercase type (accommodation, attraction or transport_stop), nonblank name and valid coordinates. Address defaults to empty and cannot be explicitly null. Optional sourceId is unverified GUID metadata; the API does not contact another service. A point is a reusable location, not a scheduled journey.
+
+Each API owns seeded process-lifetime memory. Its singleton repositories share records between requests; restarting restores seeds and discards created data. Scoped services contain creation/lookup logic. Each resource has one controller, one service and one repository, with related GET/POST methods together.
+
+Collection GET/search, PATCH and scheduled transport routes/stops/timing calculations are deferred. The earlier [issue #15 contract](milestone-2/issue-9/feature-spec.md) remains historical and is not fully implemented by this reduced scope. [Current specification](milestone-2/implementation/specification.md), [Attractions examples](../src/TravelTracker.Attractions.Api/requests.http), [Transport examples](../src/TravelTracker.Transport.Api/requests.http).

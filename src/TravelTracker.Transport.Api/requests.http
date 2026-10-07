@@ -1,54 +1,33 @@
-### Independent health
-GET http://localhost:5103/health
+@base = http://localhost:5103
 
-### Transport catalogue
-GET http://localhost:5103/api/v1/transport-modes
+### Health
+GET {{base}}/health
 
-### Normal transport POST does not create a schedule
-POST http://localhost:5103/api/v1/transport-modes
+### Known seeded transport entry
+GET {{base}}/api/v1/transport-modes/00000000-0000-0000-0000-000000000101
+
+### Create a transport entry; GET the returned Location
+POST {{base}}/api/v1/transport-modes
 Content-Type: application/json
 
 {
-  "code": "bike",
-  "name": "Rental Bike",
-  "description": "Preparation includes finding and unlocking the bike"
+  "code": "train",
+  "name": "Example Train",
+  "description": "Manually entered transport"
 }
 
-### Reusable point creation; sourceId is optional catalogue metadata
-POST http://localhost:5103/api/v1/route-points
+### Known seeded route point
+GET {{base}}/api/v1/route-points/00000000-0000-0000-0000-000000000201
+
+### Create a reusable point; GET the returned Location
+POST {{base}}/api/v1/route-points
 Content-Type: application/json
 
 {
-  "type": "attraction",
-  "name": "Museum Entrance",
+  "type": "transport_stop",
+  "name": "Example Station",
   "address": "Montreal",
-  "lat": 45.4987,
-  "lon": -73.5793,
-  "sourceId": "11111111-1111-1111-1111-111111111111"
+  "lat": 45.5,
+  "lon": -73.57,
+  "sourceId": null
 }
-
-### Scheduled route using fixed seeded transport and points
-POST http://localhost:5103/api/v1/transport-routes
-Content-Type: application/json
-
-{
-  "name": "Hotel to Museum by Bus",
-  "transportModeId": "00000000-0000-0000-0000-000000000101",
-  "startPointId": "00000000-0000-0000-0000-000000000201",
-  "destinationPointId": "00000000-0000-0000-0000-000000000202",
-  "departureAt": "2026-10-10T08:00:00-04:00",
-  "arrivalAt": "2026-10-10T12:00:00-04:00",
-  "boardingMinutes": 15,
-  "stops": [
-    {
-      "pointId": "00000000-0000-0000-0000-000000000203",
-      "arrivalAt": "2026-10-10T09:00:00-04:00",
-      "departureAt": "2026-10-10T10:30:00-04:00",
-      "boardingMinutes": 20,
-      "canLeaveVehicle": true
-    }
-  ]
-}
-
-### Seed schedule details; after POST use its returned Location instead
-GET http://localhost:5103/api/v1/transport-routes/00000000-0000-0000-0000-000000000301

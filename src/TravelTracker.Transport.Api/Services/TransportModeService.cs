@@ -1,7 +1,31 @@
+using TravelTracker.Transport.Api.Contracts;
 using TravelTracker.Transport.Api.Data;
+using TravelTracker.Transport.Api.Models;
+
 namespace TravelTracker.Transport.Api.Services;
+
 /**
- * Coordinates TransportMode operations implemented in separate feature files.
- * @param repository Scoped resource persistence.
+ * Creates and reads records through its repository.
+ * @param repository Shared in-memory repository.
  */
-public sealed partial class TransportModeService(ITransportModeRepository repository) : ITransportModeService;
+public sealed class TransportModeService(ITransportModeRepository repository) : ITransportModeService
+{
+    /**
+     * Finds a saved record.
+     * @param id Server-generated record identifier.
+     * @return The record, or null when absent.
+     */
+    public TransportModeRecord? GetById(Guid id) => repository.GetById(id);
+
+    /**
+     * Creates a record from HTTP-validated input.
+     * @param request Writable fields accepted by the API.
+     * @return The saved record with a new GUID.
+     */
+    public TransportModeRecord Create(CreateTransportModeRequest request)
+    {
+        TransportModeRecord record = new(Guid.NewGuid(), request.Code!, request.Name!.Trim(), request.Description);
+        repository.Add(record);
+        return record;
+    }
+}

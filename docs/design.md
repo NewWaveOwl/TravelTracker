@@ -35,7 +35,7 @@ The backend is six services. Each owns its own data and talks to the others only
 | --- | --- | --- |
 | Users | Christel | Sign-in, profiles, roles, account status, admin audit |
 | Accommodations | Christel | Lodging places |
-| Transport | Artiom | Transport entries: car, bus, train, pedestrian, bike, plane; typed route points and individual scheduled routes |
+| Transport | Artiom | Transport entries: car, bus, train, pedestrian, bike, plane; typed route points; scheduled journeys are future work |
 | Attractions | Artiom | Attraction places; later opening hours |
 | Trips | James | Itineraries, history, map data, time calculations; later ticket import |
 | Settings | James | User preferences |
@@ -84,7 +84,7 @@ Every account is a traveller or an administrator, and is active, banned or deact
 - **Trip status** (upcoming, current, past) is worked out from the trip's dates when viewed. It reflects the plan, not proof the traveller went.
 - **Concurrent edits.** If two people or two tabs change the same record, the later save is refused and the user can reload or review their changes rather than overwriting.
 
-**Local service demonstration.** The human-approved standalone Attractions and Transport APIs use seeded process-lifetime memory and GUID contracts. They demonstrate catalogue management and scheduled transport routes without production private-data access control. Transport owns its point snapshots and individual schedules; Trips continues to own the entire itinerary, connections, visits, dates and atomic trip saves. Transport point source IDs are optional unverified metadata. Potential stop windows require an explicit can-leave indication and exclude preparation; they do not promise that sightseeing fits. See the [implementation specification](milestone-2/implementation/specification.md).
+**Local service demonstration.** The current standalone APIs implement POST and GET by ID for Attractions, Transport entries and Route Points, with seeded process-lifetime memory and GUIDs. Route-point source IDs are optional unverified metadata. The scheduled-route concept above and the trip rules below describe future product design; schedules, boarding/dwell calculations and attraction suggestions are not implemented in the reduced demonstration. See the [current specification](milestone-2/implementation/specification.md).
 
 ## 5. Trip rules
 

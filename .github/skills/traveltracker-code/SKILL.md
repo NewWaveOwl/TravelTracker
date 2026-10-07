@@ -14,7 +14,8 @@ description: Write or refactor TravelTracker C# and ASP.NET Core code using one 
 ## One file, one feature
 
 - Apply this layout to production code. Test organization follows `traveltracker-testing` and the human-approved single-file layout for each standalone API's xUnit project.
-- Put each new use case in its own named implementation file, such as `CreateAttraction.cs`, `GetAttraction.cs`, or `UpdateAttraction.cs`. Do not combine unrelated use cases in one implementation file.
+- For the current LAB_07-style demonstration, one resource is one cohesive feature. Keep GET-by-ID and POST together in its controller, service and repository; do not create per-action partial files. Attractions, Transport entries and Route Points have separate resource classes.
+- Implement only the requested operations. Collection listing/search, PATCH, scheduled journeys and stop-time calculations are future work unless the human requests them.
 - Keep one primary responsibility/type per file. Small private helpers may support that same feature. Give reusable models, DTOs, interfaces, repositories, and strategies their own files.
 - A feature may use files in several layers; this rule does not put HTTP handling, business rules, and persistence into one class. Organize feature-specific files under a named feature folder when useful.
 - Keep `Program.cs` as the composition root: configuration, dependency registration, middleware, and calls to feature route-mapping methods. Put feature handlers outside it.
@@ -27,12 +28,12 @@ description: Write or refactor TravelTracker C# and ASP.NET Core code using one 
 - `TravelTracker.Data`: persistence implementations, contexts, migrations, and repositories. Repositories load/store data and expose operations needed by the use case, without deciding business permissions or trip validity.
 - `TravelTracker.Domain`: entities, value types, enums, and domain rules, without HTTP, EF Core, or vendor SDK dependencies.
 - Use constructor injection for service dependencies and handler parameters for endpoint dependencies. Register implementations at the composition root; avoid constructing repositories or locating dependencies with `IServiceProvider` in business code.
-- Use scoped lifetimes for request services, repositories, and `DbContext`; transient for lightweight stateless dependencies; singleton only for thread-safe shared services. A singleton must not capture a scoped dependency. Use typed `HttpClient` registrations for remote calls.
+- Use scoped lifetimes for request services, database repositories and `DbContext`; transient for lightweight stateless dependencies. The current in-memory repositories are thread-safe singletons so records survive subsequent requests; no separate store adapter is needed. A singleton must not capture a scoped dependency. Use typed `HttpClient` registrations for remote calls.
 - Keep nullable reference types enabled. Use asynchronous I/O and pass cancellation tokens through new I/O operations; update an existing contract only when the change is compatible or explicitly part of the feature.
 
 ## Apply course patterns when the feature needs them
 
-- **REST:** use resource routes and consistent HTTP semantics. Return `201` with a location for creation, `404` for absent/inaccessible private resources, validation problem details for invalid input, and the documented forbidden/unavailable responses. Use request/response DTOs so clients cannot set server-owned fields. Follow `docs/api.md`; do not assume a `{id:guid}` constraint works for `Id64`.
+- **REST:** use resource routes and consistent HTTP semantics. Return `201` with a location for creation, `404` for absent/inaccessible private resources, validation problem details for invalid input, and the documented forbidden/unavailable responses. Use request DTOs that omit server-owned fields. Simple public immutable records may be returned directly when their fields are exactly the approved response contract. Follow `docs/api.md`; do not assume a `{id:guid}` constraint works for `Id64`.
 - **LINQ:** filter/project before materialization, order deterministically before paging, use `Any` for existence, and handle missing records explicitly. Keep database queries in persistence and business calculations in services.
 - **EF Core:** use `AsNoTracking` for read-only queries and tracking for updates. Keep each service's data ownership explicit; do not add cross-service table access. Review migrations, constraints, concurrency, and transaction boundaries. Save a trip and its child records atomically within its owning store.
 - **Repository/Unit of Work:** reuse the project's specific repository contracts. Add a generic repository/UoW only when it helps hide persistence or coordinate multiple writes. When using UoW, repositories share one scoped context, stage changes without saving, and the service commits once. `DbContext` already supplies UoW behavior; simple features do not require a wrapper.

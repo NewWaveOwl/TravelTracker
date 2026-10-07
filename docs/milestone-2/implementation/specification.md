@@ -1,50 +1,29 @@
-# Attractions and scheduled transport routes
+# Simple Attractions, Transport and Route Points
 
-## Human-approved scope
+## Accepted scope
 
-On 2026-10-06 the human requested runnable Attractions and Transport services, following LAB_07's controller -> service -> repository flow and the repository's coding/testing skills. The reviewed Attractions contract remains [feature #15](../issue-9/feature-spec.md). The human revised transport to reusable typed route points, transport entries with mode/name/description, and specific routes with departure, arrival and locations. A route is one scheduled journey in this implementation; there is no separate journey/template entity.
+On 2026-10-06 the human requested a simple POST and GET implementation. In the follow-up scope question they answered "route points ,TRanport ansd atractioins". The current scope therefore retains those three resources and removes scheduled journeys and their stop/time machinery. The earlier broader [Attractions issue #15](../issue-9/feature-spec.md) remains historical; collection search and PATCH are deferred.
 
-Both APIs target .NET 10 and own independent seeded in-memory stores. Attractions runs on 5104 and Transport on 5103. Data survives requests and resets on service restart. This is a local M1 demonstration, without authentication, booking, live routing, SQL or attraction suggestions. It does not implement the other owners' services.
+Use C#/ASP.NET Core .NET 10, LAB_07's controller -> service -> repository flow, seeded process-lifetime memory, the repository skills and /** @param @return */ documentation. Attractions listens on 5104; Transport on 5103. Both expose GET /health and can run independently.
 
-## Transport representation and endpoints
+## Resource contract
 
-All resources have server-generated GUIDs. JSON uses camelCase. Creates return 201 with the saved representation and a usable detail Location; reads return 200; unknown valid IDs return 404; malformed IDs, JSON, unknown fields/client IDs and invalid values return 400 validation problem details.
-
-| Resource | Input fields | Routes under /api/v1 |
+| Resource | Fields returned | Operations |
 | --- | --- | --- |
-| Transport entry | code, name, optional description | GET/POST /transport-modes; GET /transport-modes/{id} |
-| Route point | type, name, optional address, lat, lon, optional sourceId | GET/POST /route-points; GET /route-points/{id} |
-| Scheduled route | name, transportModeId, startPointId, destinationPointId, departureAt, arrivalAt, boardingMinutes, optional stops | GET/POST /transport-routes; GET /transport-routes/{id} |
+| Attraction | attractionId, name, description, rating, address, lat, lon, estimatedVisitMinutes | POST /api/v1/attractions; GET /api/v1/attractions/{id} |
+| Transport entry | transportModeId, code, name, description | POST /api/v1/transport-modes; GET /api/v1/transport-modes/{id} |
+| Route point | routePointId, type, name, address, lat, lon, sourceId | POST /api/v1/route-points; GET /api/v1/route-points/{id} |
 
-`ITransportModeService` manages transport catalogue entries. `code` is one of car, bus, train, pedestrian, bike or plane. `name` identifies an entry, such as Express Bus; multiple entries may share a code. Bike is the human's addition to the original catalogue. Walking uses pedestrian. Names are trimmed and required; descriptions are nullable. This extends the shared scaffold's earlier single-mode catalogue, while leaving that unfinished scaffold's contracts untouched.
+POST generates a GUID and returns 201, the saved record and its details Location. GET returns 200 with the record, or 404 for an unknown GUID. ASP.NET Core binding/DataAnnotations return 400 validation problem details for invalid input or malformed IDs. Unknown JSON properties follow standard framework behavior and are ignored. Request DTOs omit server-owned IDs.
 
-Point `type` is accommodation, attraction or transport_stop. Names and valid coordinates are required. Omitted address becomes an empty string; explicit null address is invalid. Optional sourceId identifies a catalogue item as metadata; it is not verified by cross-service database access or a required network call. Points contain location snapshots and do not become Trips' saved itinerary endpoints automatically.
+Names are required, cannot be whitespace-only and are trimmed before saving. Coordinates are required and bounded by latitude -90..90 and longitude -180..180. Attraction visit minutes are a required nonnegative integer; description/rating are optional and rating must be null or 0..5 inclusive. Address defaults to empty; explicit null is invalid.
 
-Scheduled routes reference existing points and transport entries in Transport's store. The service saves immutable copies of the transport and point details so a later catalogue edit cannot move an existing route. Lists have deterministic name/GUID ordering. Mode-specific routing algorithms, speeds and inferred schedules are outside scope. All modes use the same input-time validation; direct journeys have no intermediate stops, while trains/buses can have several.
+Transport code is an exact lowercase car, bus, train, pedestrian, bike or plane; walking uses pedestrian. Entries contain name and optional description, without journey dates. Route-point type is an exact lowercase accommodation, attraction or transport_stop. Optional sourceId is unverified GUID metadata; no cross-service call or database access is performed.
 
-## Stop and timing contract
+Each resource groups its two operations in one controller, one service and one repository. Immutable records and request/interface types have their own files. Scoped services use thread-safe singleton in-memory repositories. Program only composes the API. The original shared API/Data/Domain/SQL scaffold is unchanged.
 
-Each intermediate stop supplies pointId, arrivalAt, departureAt, boardingMinutes and canLeaveVehicle. Its position in the request array defines order. The start and destination are separate from intermediate stops.
+## Acceptance and limits
 
-- Every supplied timestamp must include an explicit UTC offset or Z. Store and return UTC instants. No local time is guessed; the future Trips editor remains responsible for time-zone selection and ambiguous local times.
-- Final arrival is strictly after origin departure. Each intermediate arrival is strictly after the previous departure; stop departure is at or after its arrival and strictly before final arrival. Do not silently reorder stops.
-- Boarding/preparation minutes are required nonnegative integers. They are manually supplied for finding a bike, boarding or security. Origin boardingStartsAt is departureAt minus boardingMinutes and must be representable.
-- Stop boarding time must fit its downtime. Downtime is stop departure minus arrival. Potential free minutes are downtime minus boarding minutes only when canLeaveVehicle is true; otherwise zero. A large dwell alone does not establish sightseeing availability.
-- Route elapsedMinutes includes travel and stop dwell. totalMinutes also includes origin preparation. Neither value claims moving time or real-world operational accuracy.
-- Validate the complete request before inserting anything. Missing references return 404 and leave the route store unchanged.
+Verify health, seeded lookup, POST -> Location GET, missing IDs and representative validation. Keep one xUnit file per API and at most 30 discovered cases including theory rows. Current selection is 20 cases. Also run the real processes independently on their declared ports and recheck the full build.
 
-Future attraction suggestions must fit travel out, visit, onward travel and buffers and remain subject to human review. This implementation only exposes potential windows.
-
-## Ownership update
-
-Transport owns transport entries, reusable point snapshots and individual scheduled routes. Trips continues to own the complete itinerary, accommodation-to-attraction/round-trip rules, inter-route connections, visit conflicts, trip dates and saving the whole trip atomically. Integration must use public HTTP contracts; no service reads another service's database. Recording route metadata does not broaden Trips' initial allowed endpoints to airports or stations.
-
-## Implementation decisions and acceptance
-
-The exact resource names, fields, status behavior, immutable snapshots and validation above are implementation decisions derived from the human's approved model. They are not invented interview answers.
-
-Keep one operation per production implementation file, using partial controllers/services to retain LAB_07's familiar structure. The human later requested one test file per API and at most 30 discovered xUnit cases across both APIs. Use /** ... */ comments with @param/@return. Register scoped services/repositories and thread-safe singleton stores. Program contains startup/composition only.
-
-Verify Attractions' complete existing acceptance table, and Transport's catalogue/point/route POST -> GET behavior, Location headers, mode/type validation, reference errors, multiple stops, offset normalization, overnight travel, preparation boundaries, dwell/free-window calculations, invalid atomic writes and state reset. Use focused xUnit and WebApplicationFactory tests, plus actual independent processes on 5103/5104. Recheck the full solution and report baseline failures separately.
-
-The existing shared solution fails before this work at Id64.cs:14 (CS1503). Missing Trip/UserSettings/read-model definitions are also documented scaffold gaps. These APIs deliberately have no references to that scaffold; isolated passing checks are not a claim that the shared solution builds.
+Collection GET, name search, PATCH, scheduled routes, departure/arrival/boarding/dwell calculations, authentication and Trips integration are future work. Stops are represented as route-point locations only. The pre-existing shared Id64.cs:14 CS1503 still prevents a successful full-solution build; standalone checks are reported separately.

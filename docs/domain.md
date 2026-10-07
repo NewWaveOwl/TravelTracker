@@ -31,16 +31,15 @@ Referenced by repository/service interfaces, no model file yet: `Trip`, `TripLeg
 - Transport modes: car, bus, train, pedestrian, bike, plane. Mixed transport = multiple legs with different modes.
 - Banned user: can sign in and read own data, can't write. Deactivated/deleted: can't sign in.
 
+
 ## Implemented standalone records
 
-The independent APIs own these immutable records and use GUIDs as explicitly approved for this demonstration. They have no references to the unfinished shared Domain project.
+These immutable records belong to the independent APIs and use the human-approved GUID contracts. They have no references to the unfinished shared Domain project.
 
-| Record | Owning project | Meaning |
+| Record | Owning project | Fields |
 | --- | --- | --- |
-| AttractionRecord | TravelTracker.Attractions.Api | Name, optional description/manual rating, address, coordinates, visit minutes |
-| TransportModeRecord | TravelTracker.Transport.Api | A named transport entry: ID, code, name, description; several entries may share a code |
-| RoutePointRecord | TravelTracker.Transport.Api | Typed accommodation/attraction/transport_stop location and optional source GUID |
-| TransportRouteRecord | TravelTracker.Transport.Api | One scheduled route with transport and point snapshots, departure/arrival, preparation and ordered stops |
-| TransportStopRecord | TravelTracker.Transport.Api | Point snapshot, arrival/departure, preparation and permission to leave the vehicle |
+| AttractionRecord | TravelTracker.Attractions.Api | AttractionId, Name, Description, Rating, Address, Lat, Lon, EstimatedVisitMinutes |
+| TransportModeRecord | TravelTracker.Transport.Api | TransportModeId, Code, Name, Description |
+| RoutePointRecord | TravelTracker.Transport.Api | RoutePointId, Type, Name, Address, Lat, Lon, SourceId |
 
-Bike and pedestrian use the same supplied-time validation. No speed, live route, inherited vehicle hierarchy or travel-time estimate is inferred. Actual UTC instants belong to scheduled routes and stop timings; reusable points and transport entries do not store a particular journey's dates. Trips' future aggregate remains separate. [Contract](milestone-2/implementation/specification.md).
+Route points can represent accommodation, attraction or transport_stop locations. Entries and points have no departure/arrival dates. Scheduled journeys, intermediate-stop timings, boarding time and future attraction suggestions remain future work after the human reduced the implementation to POST and GET by ID. [Current contract](milestone-2/implementation/specification.md).

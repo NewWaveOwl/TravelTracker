@@ -158,7 +158,7 @@
     "liveVerification": "Not rerun; the original live evidence is retained with its original timestamp.",
     "skillValidation": "Both changed skills passed skill-creator quick_validate.py."
   },
-  "historicalRecordNote": "Root tests/live/copilot fields describe the initial implementation; testLayoutRefactor describes the subsequent 114-case file consolidation. Current executed test counters are in testReduction.",
+  "historicalRecordNote": "Root implementation checks, testLayoutRefactor and testReduction describe earlier broader source. Current reduced GET-by-ID/POST scope, source hashes, tests and live checks are under simpleImplementation.",
   "testReduction": {
     "recordedAtUtc": "2026-10-07T02:10:07.673129+00:00",
     "baselineCommit": "628a4da972070760855407826c9aacca50c312fe",
@@ -231,5 +231,160 @@
       "error": "Existing CS1503 at src/TravelTracker.Domain/Types/Id64.cs:14"
     },
     "liveVerification": "Not rerun; original live/process evidence remains historical."
+  },
+  "simpleImplementation": {
+    "verifiedAtUtc": "2026-10-07T02:45:42.867979+00:00",
+    "baselineCommit": "fb9b8d5b04489a7c3eb5d886c5fc2e9b6eaa5572",
+    "humanScope": "Route points, Transport entries and Attractions; POST and GET by ID only",
+    "tool": "Codex; no new Copilot session claimed",
+    "productionCSharpFiles": {
+      "before": 88,
+      "after": 29,
+      "perApi": {
+        "Attractions": 11,
+        "Transport": 18
+      }
+    },
+    "sourceSha256": {
+      "src/TravelTracker.Attractions.Api/Program.cs": "47148aecc22cb2902c193512764e20a668581c3c242a4ae616516bdce030560d",
+      "src/TravelTracker.Attractions.Api/Program.TestHost.cs": "924615c478801999bd070abf6f43d6bb6f7852bf8f8e0dfebd25ff1585325cb9",
+      "src/TravelTracker.Attractions.Api/Contracts/CreateAttractionRequest.cs": "43420854a85da625a567eb0a1b94b6d273a39abdcf8215a095d695c2b4c3d932",
+      "src/TravelTracker.Attractions.Api/Controllers/AttractionsController.cs": "58dd513fd1f4be3b3e3962d0a4fe21255713d6044205ced293d92c2a5fffa8c2",
+      "src/TravelTracker.Attractions.Api/Controllers/HealthController.cs": "d9237e0fb135da9e58a858e296b435b5c72667dd73bd355a0271e727eac3b3af",
+      "src/TravelTracker.Attractions.Api/Data/AttractionSeedData.cs": "75eff1a4d794b177207b062c698510626e5072b12bef1086e0f48480076eb601",
+      "src/TravelTracker.Attractions.Api/Data/IAttractionRepository.cs": "cbb926d7dd871eaa35f9e360dc09c6da88af6235dbb2792abaf1c53c03440e65",
+      "src/TravelTracker.Attractions.Api/Data/InMemoryAttractionRepository.cs": "2c1d45029b3c80cdc93cc61c525e64e9768903afc062220b0b485786a3a33a5f",
+      "src/TravelTracker.Attractions.Api/Models/AttractionRecord.cs": "4dbccd467fa960fdb4506e2c4ac42f966265e18466f7ec71da08122593e00c3a",
+      "src/TravelTracker.Attractions.Api/Services/AttractionService.cs": "798e54572056adb6991115723c230b7571c1775b69cc57958a9b1e399128de4c",
+      "src/TravelTracker.Attractions.Api/Services/IAttractionService.cs": "08af679aebc0e30bc0319f700fce57b9d2ed09ac8150e8bd568b7162175b29b6",
+      "src/TravelTracker.Transport.Api/Program.cs": "2c3d7220cf92dad789c6a1cdad964f610f0181dd94dbde0c01e0a9c419acd37e",
+      "src/TravelTracker.Transport.Api/Program.TestHost.cs": "924615c478801999bd070abf6f43d6bb6f7852bf8f8e0dfebd25ff1585325cb9",
+      "src/TravelTracker.Transport.Api/Contracts/CreateRoutePointRequest.cs": "c96f76fd57fafe5df12a1d3a41fed51d18d2089fb0d74a18a5f836477b7af803",
+      "src/TravelTracker.Transport.Api/Contracts/CreateTransportModeRequest.cs": "dd0722e13f63ee2a66321d12035aa9ceeea337d22edb8c18ee9e030d2de2aa89",
+      "src/TravelTracker.Transport.Api/Controllers/HealthController.cs": "da63920ea55b24f993623a2864da8b659129cfa2f597a16ac3e702839a398536",
+      "src/TravelTracker.Transport.Api/Controllers/RoutePointsController.cs": "43c8402213ccaf8bc5b32b8e7cfb6be05d22f37ab832832f01d4dc2687860979",
+      "src/TravelTracker.Transport.Api/Controllers/TransportModesController.cs": "862698376492ee74ab1e6c30e1a5b853981a09897c0e40517d0a27423bb21d62",
+      "src/TravelTracker.Transport.Api/Data/InMemoryRoutePointRepository.cs": "809b8bef5efd5fb52d939daee264e7bcab8f8ff9fad3bd105e8ebfbd96c336a2",
+      "src/TravelTracker.Transport.Api/Data/InMemoryTransportModeRepository.cs": "f48f409bd54a3aa3035636ad5def9f61462921a9a0b1bb71101d9db34676c365",
+      "src/TravelTracker.Transport.Api/Data/IRoutePointRepository.cs": "ce290a8b33e38778d6fa051d982a3cdb8934ac35166e1a93f54549aa3f2a9edb",
+      "src/TravelTracker.Transport.Api/Data/ITransportModeRepository.cs": "4487dc5f6feec0eea2ae1d42010278c0a23801b82e22249abf3c2c7ec65dee79",
+      "src/TravelTracker.Transport.Api/Data/TransportSeedData.cs": "81e78459efa9af43e2dfac484d8243f16fab566ead8bcbec3a798b30f8aca3e2",
+      "src/TravelTracker.Transport.Api/Models/RoutePointRecord.cs": "bc27d31729eeebddd768e7f278de896f2772080f501ba674c97a58f7529fce61",
+      "src/TravelTracker.Transport.Api/Models/TransportModeRecord.cs": "65efbc88c39d3805d3b560b338b18b2e357e9b426a25d4618fc880e1dfd5dfd1",
+      "src/TravelTracker.Transport.Api/Services/IRoutePointService.cs": "d8029e36bede3b7daa05aad0fd423e928a727e66f9842fcee8e2de71f6fc1ae4",
+      "src/TravelTracker.Transport.Api/Services/ITransportModeService.cs": "1b51b00bcb3e3f0d0a223cde2a5cf040e77b28a428069dc4fa06c3a8337fea17",
+      "src/TravelTracker.Transport.Api/Services/RoutePointService.cs": "eb2e1a028892051e52df159461225e50afbc5c6d3841cb9c16a70be3d4338454",
+      "src/TravelTracker.Transport.Api/Services/TransportModeService.cs": "35c932be2b2f5c0a6869a98ea6b84cdf5a66b345b249af68bd99003747b6b320"
+    },
+    "tests": {
+      "Attractions": {
+        "file": "tests/TravelTracker.Attractions.Api.Tests/AttractionsTests.cs",
+        "sourceSha256": "3e29eafba0844309a3bdd75b424f430e3df72a14344fff2ad84cf4db0cd4b2d3",
+        "results": {
+          "total": 7,
+          "executed": 7,
+          "passed": 7,
+          "failed": 0,
+          "notExecuted": 0
+        },
+        "command": "dotnet test tests/TravelTracker.Attractions.Api.Tests/TravelTracker.Attractions.Api.Tests.csproj --configuration Release --no-restore --logger \"trx;LogFileName=attractions-simple.trx\" --results-directory tests/TravelTracker.Attractions.Api.Tests/TestResults",
+        "testMethods": 6
+      },
+      "Transport": {
+        "file": "tests/TravelTracker.Transport.Api.Tests/TransportTests.cs",
+        "sourceSha256": "ef1497447732bc84633a77b87fe7d8864dc5f684bc8fe468f5068df8d44755a9",
+        "results": {
+          "total": 13,
+          "executed": 13,
+          "passed": 13,
+          "failed": 0,
+          "notExecuted": 0
+        },
+        "command": "dotnet test tests/TravelTracker.Transport.Api.Tests/TravelTracker.Transport.Api.Tests.csproj --configuration Release --no-restore --logger \"trx;LogFileName=transport-simple.trx\" --results-directory tests/TravelTracker.Transport.Api.Tests/TestResults",
+        "testMethods": 11
+      }
+    },
+    "currentTotal": 20,
+    "facts": 15,
+    "theories": 2,
+    "theoryRows": 5,
+    "testMethods": 17,
+    "duplicateAudit": {
+      "identicalNormalizedMethodBodies": 0,
+      "repeatedRowsWithinTheory": 0,
+      "duplicateDiscoveredNames": 0
+    },
+    "coverageEquivalentToPreviousSuites": false,
+    "liveVerification": {
+      "checks": [
+        {
+          "service": "Attractions",
+          "behavior": "Independent process health",
+          "passed": true
+        },
+        {
+          "service": "Attractions",
+          "behavior": "/api/v1/attractions POST 201 -> Location GET 200",
+          "passed": true
+        },
+        {
+          "service": "Attractions",
+          "behavior": "/api/v1/attractions unknown ID 404",
+          "passed": true
+        },
+        {
+          "service": "Transport",
+          "behavior": "Independent process health",
+          "passed": true
+        },
+        {
+          "service": "Transport",
+          "behavior": "/api/v1/transport-modes POST 201 -> Location GET 200",
+          "passed": true
+        },
+        {
+          "service": "Transport",
+          "behavior": "/api/v1/transport-modes unknown ID 404",
+          "passed": true
+        },
+        {
+          "service": "Transport",
+          "behavior": "/api/v1/route-points POST 201 -> Location GET 200",
+          "passed": true
+        },
+        {
+          "service": "Transport",
+          "behavior": "/api/v1/route-points unknown ID 404",
+          "passed": true
+        }
+      ],
+      "total": 8,
+      "passed": 8,
+      "ownedProcessesStopped": true
+    },
+    "skillValidation": {
+      "traveltracker-code": "Skill is valid!",
+      "traveltracker-testing": "Skill is valid!"
+    },
+    "fullSolutionBuild": {
+      "command": "dotnet build TravelTracker.slnx --configuration Release --no-restore",
+      "exitCode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "error": "Existing CS1503 at src/TravelTracker.Domain/Types/Id64.cs:14"
+    },
+    "fullSolutionTests": "Not run after failed build",
+    "packageAndProjectReferencesChanged": false,
+    "historicalCopilotEvidencePreserved": true,
+    "reviewCorrections": [
+      "Reproduced integer Range attributes accepting -0.1/5.1 ratings with 201; changed rating/coordinates to decimal-typed ranges and tightened existing tests. Final 20 cases passed."
+    ],
+    "deliveryChecks": {
+      "localLinksChecked": 55,
+      "documentsChecked": 16,
+      "solutionProjects": 7,
+      "sharedSourceUnchanged": true,
+      "failures": []
+    }
   }
 }

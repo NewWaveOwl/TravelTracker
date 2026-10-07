@@ -1,44 +1,26 @@
+using System.Collections.Concurrent;
 using TravelTracker.Transport.Api.Models;
+
 namespace TravelTracker.Transport.Api.Data;
+
 /**
- * Persists TransportMode records in the service-owned store.
- * @param store Process-lifetime thread-safe state.
+ * Keeps seeded and created records for the lifetime of this API host.
  */
-public sealed class InMemoryTransportModeRepository(InMemoryTransportStore store) : ITransportModeRepository
+public sealed class InMemoryTransportModeRepository : ITransportModeRepository
 {
+    private readonly ConcurrentDictionary<Guid, TransportModeRecord> records =
+        new(TransportSeedData.Transports().ToDictionary(record => record.TransportModeId));
+
     /**
-     * Lists records in deterministic order.
-     * @param cancellationToken Cancels the request.
-     * @return Stable name/GUID ordered records.
+     * Finds a saved record.
+     * @param id Server-generated record identifier.
+     * @return The record, or null when absent.
      */
-    public Task<IReadOnlyList<TransportModeRecord>> GetAllAsync(CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        IReadOnlyList<TransportModeRecord> values = store.GetTransports().OrderBy(value => value.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(value => value.TransportModeId).ToArray();
-        return Task.FromResult(values);
-    }
+    public TransportModeRecord? GetById(Guid id) => records.GetValueOrDefault(id);
+
     /**
-     * Looks up a record by identifier.
-     * @param id Resource identifier.
-     * @param cancellationToken Cancels the request.
-     * @return Record, or null.
+     * Stores a record safely across simultaneous requests.
+     * @param record Record with a server-generated identifier.
      */
-    public Task<TransportModeRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(store.GetTransport(id));
-    }
-    /**
-     * Stores an already validated record.
-     * @param value Validated record.
-     * @param cancellationToken Cancels the request.
-     * @return Completed insertion.
-     */
-    public Task AddAsync(TransportModeRecord value, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        store.AddTransport(value);
-        return Task.CompletedTask;
-    }
+    public void Add(TransportModeRecord record) => records[record.TransportModeId] = record;
 }

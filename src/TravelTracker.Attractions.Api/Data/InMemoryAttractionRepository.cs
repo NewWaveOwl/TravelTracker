@@ -1,60 +1,26 @@
+using System.Collections.Concurrent;
 using TravelTracker.Attractions.Api.Models;
+
 namespace TravelTracker.Attractions.Api.Data;
 
 /**
- * Implements catalogue persistence over the process-lifetime store.
- * @param store Shared thread-safe state.
+ * Keeps seeded and created records for the lifetime of this API host.
  */
-public sealed class InMemoryAttractionRepository(InMemoryAttractionStore store) : IAttractionRepository
+public sealed class InMemoryAttractionRepository : IAttractionRepository
 {
+    private readonly ConcurrentDictionary<Guid, AttractionRecord> records =
+        new(AttractionSeedData.Create().ToDictionary(record => record.AttractionId));
+
     /**
-     * Finds records using a literal name filter.
-     * @param name Literal name filter.
-     * @param cancellationToken Cancels the request.
-     * @return Stable name/GUID ordered results.
+     * Finds a saved record.
+     * @param id Server-generated record identifier.
+     * @return The record, or null when absent.
      */
-    public Task<IReadOnlyList<AttractionRecord>> SearchAsync(string name, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        IReadOnlyList<AttractionRecord> values = store.Snapshot()
-            .Where(value => value.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(value => value.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(value => value.AttractionId).ToArray();
-        return Task.FromResult(values);
-    }
+    public AttractionRecord? GetById(Guid id) => records.GetValueOrDefault(id);
+
     /**
-     * Looks up a stored record.
-     * @param id Attraction identifier.
-     * @param cancellationToken Cancels the request.
-     * @return Record, or null.
+     * Stores a record safely across simultaneous requests.
+     * @param record Record with a server-generated identifier.
      */
-    public Task<AttractionRecord?> GetAsync(Guid id, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(store.Get(id));
-    }
-    /**
-     * Stores an already validated record.
-     * @param value Validated record.
-     * @param cancellationToken Cancels the request.
-     * @return Completed insertion.
-     */
-    public Task AddAsync(AttractionRecord value, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        store.Add(value);
-        return Task.CompletedTask;
-    }
-    /**
-     * Replaces a record through an atomic application operation.
-     * @param id Attraction identifier.
-     * @param replace Application candidate operation.
-     * @param cancellationToken Cancels the request.
-     * @return Saved replacement, or null.
-     */
-    public Task<AttractionRecord?> UpdateAsync(Guid id, Func<AttractionRecord, AttractionRecord> replace, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(store.Update(id, replace));
-    }
+    public void Add(AttractionRecord record) => records[record.AttractionId] = record;
 }
