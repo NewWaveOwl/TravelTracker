@@ -44,17 +44,8 @@ public sealed class InMemoryAttractionRepository : IAttractionRepository
      */
     public Task UpdateAsync(Attraction attraction)
     {
-        // Attempt to replace the stored entity atomically. Loop until successful or the key is absent.
-        while (true)
-        {
-            if (!records.TryGetValue(attraction.AttractionId, out var previous))
-                break; // nothing to update
-            // TryUpdate compares the value by reference; if another thread modified the value between
-            // TryGetValue and TryUpdate, TryUpdate will fail and we retry.
-            if (records.TryUpdate(attraction.AttractionId, Copy(attraction), previous))
-                break;
-            // Otherwise retry
-        }
+        if (records.TryGetValue(attraction.AttractionId, out var previous))
+            records.TryUpdate(attraction.AttractionId, Copy(attraction), previous);
         return Task.CompletedTask;
     }
 

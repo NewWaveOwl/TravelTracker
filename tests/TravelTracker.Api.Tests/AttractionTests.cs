@@ -194,4 +194,35 @@ public sealed class AttractionTests
         using var response = await client.PatchAsync("/api/v1/attractions/not-a-guid", JsonContent.Create(new { name = "x" }));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Patch_ConcurrentUpdates_AllChangesApplied()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var id = "11111111-1111-1111-1111-111111111111";
+        var patches = new object[]
+        {
+            new { name = "Concurrent Name" },
+            new { description = "Concurrent desc" },
+            new { rating = 3m },
+            new { address = "Concurrent address" },
+            new { lat = 46m },
+            new { lon = -74m },
+            new { estimatedVisitMinutes = 42 }
+        };
+
+        var tasks = patches.Select(p => client.PatchAsync($"/api/v1/attractions/{id}", JsonContent.Create(p))).ToArray();
+        var responses = await Task.WhenAll(tasks);
+        foreach (var r in responses) Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+
+        var updated = await client.GetFromJsonAsync<JsonElement>($"/api/v1/attractions/{id}");
+        Assert.Equal("Concurrent Name", updated.GetProperty("name").GetString());
+        Assert.Equal("Concurrent desc", updated.GetProperty("description").GetString());
+        Assert.Equal(3m, updated.GetProperty("rating").GetDecimal());
+        Assert.Equal("Concurrent address", updated.GetProperty("address").GetString());
+        Assert.Equal(46m, updated.GetProperty("lat").GetDecimal());
+        Assert.Equal(-74m, updated.GetProperty("lon").GetDecimal());
+        Assert.Equal(42, updated.GetProperty("estimatedVisitMinutes").GetInt32());
+    }
 }
