@@ -114,4 +114,84 @@ public sealed class AttractionTests
         Assert.Single(results);
         Assert.Equal("Old Port", results[0].GetProperty("name").GetString());
     }
+
+    [Fact]
+    public async Task Patch_PartialUpdate_PreservesOmittedFields()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var before = await client.GetFromJsonAsync<JsonElement>("/api/v1/attractions/11111111-1111-1111-1111-111111111111");
+        var beforeDescription = before.GetProperty("description").ValueKind == JsonValueKind.Null ? null : before.GetProperty("description").GetString();
+        var beforeRating = before.GetProperty("rating").ValueKind == JsonValueKind.Null ? (decimal?)null : before.GetProperty("rating").GetDecimal();
+
+        using var patchResponse = await client.PatchAsync("/api/v1/attractions/11111111-1111-1111-1111-111111111111", JsonContent.Create(new { name = "Montreal Museum Renamed" }));
+        Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
+        var updated = await patchResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Montreal Museum Renamed", updated.GetProperty("name").GetString());
+        // omitted fields preserved
+        Assert.Equal(beforeDescription, updated.GetProperty("description").ValueKind == JsonValueKind.Null ? null : updated.GetProperty("description").GetString());
+        Assert.Equal(beforeRating, updated.GetProperty("rating").ValueKind == JsonValueKind.Null ? (decimal?)null : updated.GetProperty("rating").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Patch_ExplicitNull_ClearsDescriptionAndRating()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var patchResponse = await client.PatchAsync("/api/v1/attractions/11111111-1111-1111-1111-111111111111", JsonContent.Create(new { description = (object?)null, rating = (object?)null }));
+        Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
+        var updated = await patchResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, updated.GetProperty("description").ValueKind);
+        Assert.Equal(JsonValueKind.Null, updated.GetProperty("rating").ValueKind);
+    }
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("address")]
+    [InlineData("lat")]
+    [InlineData("lon")]
+    [InlineData("estimatedVisitMinutes")]
+    public async Task Patch_ExplicitNullOnRequiredFields_Returns400(string field)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        object body = field switch
+        {
+            "name" => new { name = (object?)null },
+            "address" => new { address = (object?)null },
+            "lat" => new { lat = (object?)null },
+            "lon" => new { lon = (object?)null },
+            "estimatedVisitMinutes" => new { estimatedVisitMinutes = (object?)null },
+            _ => new { }
+        };
+        using var response = await client.PatchAsync("/api/v1/attractions/11111111-1111-1111-1111-111111111111", JsonContent.Create(body));
+        await HttpTestSupport.AssertValidationAsync(response);
+    }
+
+    [Fact]
+    public async Task Patch_UnknownProperty_Returns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PatchAsync("/api/v1/attractions/11111111-1111-1111-1111-111111111111", JsonContent.Create(new { unknown = "x" }));
+        await HttpTestSupport.AssertValidationAsync(response);
+    }
+
+    [Fact]
+    public async Task Patch_UnknownValidId_Returns404()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PatchAsync("/api/v1/attractions/00000000-0000-0000-0000-000000000999", JsonContent.Create(new { name = "x" }));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Patch_MalformedId_Returns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PatchAsync("/api/v1/attractions/not-a-guid", JsonContent.Create(new { name = "x" }));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }
