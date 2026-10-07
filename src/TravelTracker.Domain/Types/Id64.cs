@@ -11,7 +11,7 @@ namespace TravelTracker.Domain.Types;
 public readonly struct Id64 : IEquatable<Id64> {
     private readonly long value;
 
-    public Id64() : this(New()) { }
+    public Id64() : this((long)New()) { }
 
     public Id64(long value) => this.value = value;
 

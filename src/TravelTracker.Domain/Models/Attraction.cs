@@ -34,4 +34,14 @@ public sealed class Attraction
      * Gets or sets the estimated number of minutes needed to visit the attraction.
      */
     public int EstimatedVisitMinutes { get; set; }
+
+    /**
+     * Gets or sets the optional manually entered description.
+     */
+    public string? Description { get; set; }
+
+    /**
+     * Gets or sets the optional manually entered rating from zero to five.
+     */
+    public decimal? Rating { get; set; }
 }

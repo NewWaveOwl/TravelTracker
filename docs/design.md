@@ -6,6 +6,8 @@ TravelTracker puts a traveller's journeys, accommodation stays and attraction vi
 
 This document says what the product does and how it is organized. It leaves technology choices to implementation.
 
+The release labels below describe the product roadmap. The course's Milestone 2 submission uses the AI SDLC flow for a scoped change, not implementation of every roadmap capability. The [implemented service package](milestone-2/implementation/README.md) records the runnable local demonstration and its limits.
+
 **Goals**
 
 - Plan a complete trip by hand, with no outside service required.
@@ -27,13 +29,13 @@ M2 must work fully without any outside service. M3 extras never block M1 or M2.
 
 ## 2. System overview
 
-The backend is six services. Each owns its own data and talks to the others only through their public interfaces, so any one can start and be demonstrated alone.
+The planned backend has six logical services. Each is intended to own its data and communicate through public interfaces. Currently, the runnable demonstration uses the existing Api/Data/Domain projects to host Attractions, Transport entries and Route Points together. Collaborators' original models and interface contracts are retained. The table records ownership and planned responsibilities; it does not imply all six services run today.
 
 | Service | Owner | Responsibility |
 | --- | --- | --- |
 | Users | Christel | Sign-in, profiles, roles, account status, admin audit |
 | Accommodations | Christel | Lodging places |
-| Transport | Artiom | Transport modes: car, bus, train, pedestrian, plane |
+| Transport | Artiom | Transport entries: car, bus, train, pedestrian, bike, plane; typed route points; scheduled journeys are future work |
 | Attractions | Artiom | Attraction places; later opening hours |
 | Trips | James | Itineraries, history, map data, time calculations; later ticket import |
 | Settings | James | User preferences |
@@ -67,8 +69,12 @@ Every account is a traveller or an administrator, and is active, banned or deact
 | Accommodation | A place to stay: name, location, shared or private |
 | Attraction | A place to visit: like an accommodation, plus a typical visit length and category |
 | Transport mode | How a journey is made |
+| Transport entry | A named catalogue entry with a supported mode code and optional description |
+| Route point | A reusable accommodation, attraction or transport-stop location snapshot |
+| Trip point | One ordered occurrence of a route point in a trip; the same location may be used more than once |
+| Scheduled transport route | One transport entry travelling between route points at supplied departure/arrival times, with preparation and optional intermediate stop timings |
 | Trip | A named, dated journey, one way or round trip, shown in a chosen time zone |
-| Leg | One journey between two places by one transport mode, with departure and arrival times |
+| Leg | One ordered trip journey selecting a scheduled transport route between trip-point occurrences |
 | Stay | A booking at an accommodation, with check-in and check-out |
 | Visit | Time spent at an attraction |
 | Time block (M3) | A period the traveller marks as rest or unavailable |
@@ -78,6 +84,10 @@ Every account is a traveller or an administrator, and is active, banned or deact
 - **Saved copies.** A trip keeps its own copy of each place's name and location. Editing the catalogue never moves an old trip's markers.
 - **Trip status** (upcoming, current, past) is worked out from the trip's dates when viewed. It reflects the plan, not proof the traveller went.
 - **Concurrent edits.** If two people or two tabs change the same record, the later save is refused and the user can reload or review their changes rather than overwriting.
+
+**Local service demonstration.** The current TravelTracker.Api hosts POST and GET by ID for Attractions, Transport entries and Route Points together on port 5104, with one Swagger page, seeded process-lifetime memory and GUIDs. This follows the human-requested LAB_07 deployment; the independent-service roadmap remains future work. Route-point source IDs are optional unverified metadata. The scheduled-route concept above and the trip rules below describe future product design; schedules, boarding/dwell calculations and attraction suggestions are not implemented in the reduced demonstration. See the [current specification](milestone-2/implementation/specification.md).
+
+**Trip-point and route relationship.** A route point stores a reusable location. A trip point represents one use of that location in an itinerary. A transport entry stores the mode, name and description; a future scheduled route adds the start/end points, departure/arrival, preparation and ordered intermediate stops. Trip legs select those routes and retain snapshots. Station/airport points can be route endpoints or intermediate stops while the whole trip still follows the accommodation/attraction rules below. The [relationship diagram and timing design](trip-points-and-routes.md) explain this planned integration and inventory the preserved main code.
 
 ## 5. Trip rules
 
