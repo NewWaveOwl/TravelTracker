@@ -1,3 +1,4 @@
+using TravelTracker.Data;
 using TravelTracker.Data.Repositories;
 using TravelTracker.Domain.Models;
 
@@ -6,8 +7,9 @@ namespace TravelTracker.Api.Services;
 /**
  * Implements the existing shared service with its shared repository and entity.
  * @param repository Process-lifetime catalogue storage.
+ * @param ids Issues new entity identities.
  */
-public sealed class TransportModeService(ITransportModeRepository repository) : ITransportModeService
+public sealed class TransportModeService(ITransportModeRepository repository, EntityIdGenerator ids) : ITransportModeService
 {
     /**
      * Reads all entries through the existing contract.
@@ -29,7 +31,7 @@ public sealed class TransportModeService(ITransportModeRepository repository) : 
      */
     public async Task<TransportMode> CreateAsync(TransportMode transportMode)
     {
-        transportMode.TransportModeId = Guid.NewGuid();
+        transportMode.TransportModeId = await ids.NextAsync<TransportMode>();
         transportMode.DisplayName = transportMode.DisplayName.Trim();
         await repository.AddAsync(transportMode);
         return transportMode;
@@ -43,8 +45,9 @@ public sealed class TransportModeService(ITransportModeRepository repository) : 
      */
     public async Task<TransportMode?> UpdateAsync(Guid transportModeId, TransportMode transportMode)
     {
-        if (await repository.GetByIdAsync(transportModeId) is null) return null;
-        transportMode.TransportModeId = transportModeId;
+        var existing = await repository.GetByIdAsync(transportModeId);
+        if (existing is null) return null;
+        transportMode.TransportModeId = existing.TransportModeId;
         transportMode.DisplayName = transportMode.DisplayName.Trim();
         await repository.UpdateAsync(transportMode);
         return transportMode;

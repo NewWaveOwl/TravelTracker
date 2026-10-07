@@ -8,10 +8,10 @@ Enums: `TransportMode` (`car`, `bus`, `train`, `pedestrian`, `plane`), `TripType
 
 | Table | Columns |
 |---|---|
-| `Users` | `Id` bigint identity PK, `Uuid` unique, `UserName` unique, `Password`, `Address` |
-| `Accommodations` | `Id` bigint identity PK, `Uuid` unique, `Name`, `Address` |
-| `Attractions` | `Id` bigint identity PK, `Uuid` unique, `Name`, `Address` |
-| `Trips` | `Id` bigint identity PK, `Uuid` unique, `UserId` FK -> `Users`, `Transport`, `Type`, `DeparturePlaceId` FK -> `Accommodations`, `DestinationPlaceId` FK -> `Attractions` |
+| `Users` | `Id` bigint PK (app-issued), `Uuid` unique, `UserName` unique, `Password`, `Address` |
+| `Accommodations` | `Id` bigint PK (app-issued), `Uuid` unique, `Name`, `Address` |
+| `Attractions` | `Id` bigint PK (app-issued), `Uuid` unique, `Name`, `Address` |
+| `Trips` | `Id` bigint PK (app-issued), `Uuid` unique, `UserId` FK -> `Users`, `Transport`, `Type`, `DeparturePlaceId` FK -> `Accommodations`, `DestinationPlaceId` FK -> `Attractions` |
 
 No tables yet for `UserSettings`, `TripLegs`, `Stays`, `Visits`, `TicketImports`, route points, scheduled transport routes or intermediate stops.
 
@@ -25,8 +25,8 @@ Note: `Trips` stores one leg directly on the row (one transport, one departure, 
 | [IAccomadationRepository](../src/TravelTracker.Data/Repositories/IAccomadationRepository.cs) | internal / `Guid` | `GetByIdAsync`, `GetAllAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync` |
 | [IAttractionRepository](../src/TravelTracker.Data/Repositories/IAttractionRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync` |
 | [ITransportModeRepository](../src/TravelTracker.Data/Repositories/ITransportModeRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `AddAsync`, `UpdateAsync` |
-| [ISettingsRepository](../src/TravelTracker.Data/Repositories/ISettingsRepository.cs) | public / `Id64` | `GetByUserIdAsync`, `UpsertAsync` |
-| [ITripRepository](../src/TravelTracker.Data/Repositories/ITripRepository.cs) | public / `Id64` | `GetAllByUserIdAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
+| [ISettingsRepository](../src/TravelTracker.Data/Repositories/ISettingsRepository.cs) | public / `Guid` (public id) | `GetByUserIdAsync`, `UpsertAsync` |
+| [ITripRepository](../src/TravelTracker.Data/Repositories/ITripRepository.cs) | public / `Guid` (public id) | `GetAllByUserIdAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
 
 `IUserRepository` and `IAccomadationRepository` are `internal`, no public path out of `TravelTracker.Data` for them yet.
 
