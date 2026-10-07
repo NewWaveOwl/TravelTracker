@@ -2,7 +2,7 @@
 
 - Target .NET 10 with nullable reference types enabled. Read `README.md`, `CONTRIBUTING.md`, the relevant `docs/` contracts, and source before changing behavior.
 - Keep the existing `TravelTracker.Api`, `TravelTracker.Data`, and `TravelTracker.Domain` responsibilities. `src/Database/schema.sql` is an existing schema; it is not evidence that EF Core or all planned features are implemented.
-- Put each new feature/use-case implementation in its own file. Keep shared types and persistence separate; keep `Program.cs` focused on startup and composition.
+- Put each new production feature/use-case implementation in its own file. Keep shared types and persistence separate; keep `Program.cs` focused on startup and composition. Each standalone API's xUnit project keeps its tests and helpers together in one file, following the human-approved LAB_07-style layout.
 - Use `/** ... */` documentation with `@param` and `@return` for new/substantially changed member documentation. Preserve unrelated existing comments.
 - For feature implementation, refactoring, architecture, or comments, read and use [traveltracker-code](skills/traveltracker-code/SKILL.md).
 - For adding/updating/running/investigating tests or validating behavior changes, read and use [traveltracker-testing](skills/traveltracker-testing/SKILL.md).

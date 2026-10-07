@@ -13,6 +13,7 @@ description: Write or refactor TravelTracker C# and ASP.NET Core code using one 
 
 ## One file, one feature
 
+- Apply this layout to production code. Test organization follows `traveltracker-testing` and the human-approved single-file layout for each standalone API's xUnit project.
 - Put each new use case in its own named implementation file, such as `CreateAttraction.cs`, `GetAttraction.cs`, or `UpdateAttraction.cs`. Do not combine unrelated use cases in one implementation file.
 - Keep one primary responsibility/type per file. Small private helpers may support that same feature. Give reusable models, DTOs, interfaces, repositories, and strategies their own files.
 - A feature may use files in several layers; this rule does not put HTTP handling, business rules, and persistence into one class. Organize feature-specific files under a named feature folder when useful.

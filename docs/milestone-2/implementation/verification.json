@@ -98,5 +98,64 @@
       "sessionId": "470e99f3-adad-4030-b5db-f689b1998333",
       "filesModified": []
     }
+  },
+  "testLayoutRefactor": {
+    "recordedAtUtc": "2026-10-07T01:55:28.528616+00:00",
+    "baselineCommit": "84f3673714cb8f8bbca08c5b65d4b4916ea619a7",
+    "style": "LAB_07-style xUnit: one source file per independent API test project",
+    "services": {
+      "Attractions": {
+        "file": "tests/TravelTracker.Attractions.Api.Tests/AttractionsTests.cs",
+        "sourceFileCount": 1,
+        "testMethods": 18,
+        "baseline": {
+          "total": 53,
+          "executed": 53,
+          "passed": 53,
+          "failed": 0,
+          "notExecuted": 0
+        },
+        "after": {
+          "total": 53,
+          "executed": 53,
+          "passed": 53,
+          "failed": 0,
+          "notExecuted": 0
+        },
+        "sameCasesIncludingTheoryInputs": true,
+        "allTestBodiesPreserved": true,
+        "command": "dotnet test tests/TravelTracker.Attractions.Api.Tests/TravelTracker.Attractions.Api.Tests.csproj --configuration Release --no-restore --logger \"trx;LogFileName=attractions.trx\" --results-directory tests/TravelTracker.Attractions.Api.Tests/TestResults"
+      },
+      "Transport": {
+        "file": "tests/TravelTracker.Transport.Api.Tests/TransportTests.cs",
+        "sourceFileCount": 1,
+        "testMethods": 13,
+        "baseline": {
+          "total": 61,
+          "executed": 61,
+          "passed": 61,
+          "failed": 0,
+          "notExecuted": 0
+        },
+        "after": {
+          "total": 61,
+          "executed": 61,
+          "passed": 61,
+          "failed": 0,
+          "notExecuted": 0
+        },
+        "sameCasesIncludingTheoryInputs": true,
+        "allTestBodiesPreserved": true,
+        "command": "dotnet test tests/TravelTracker.Transport.Api.Tests/TravelTracker.Transport.Api.Tests.csproj --configuration Release --no-restore --logger \"trx;LogFileName=transport.trx\" --results-directory tests/TravelTracker.Transport.Api.Tests/TestResults"
+      }
+    },
+    "productionSourceUnchanged": true,
+    "fullSolutionBuild": {
+      "command": "dotnet build TravelTracker.slnx --configuration Release --no-restore",
+      "exitCode": 1,
+      "error": "Existing CS1503 at src/TravelTracker.Domain/Types/Id64.cs:14"
+    },
+    "liveVerification": "Not rerun; the original live evidence is retained with its original timestamp.",
+    "skillValidation": "Both changed skills passed skill-creator quick_validate.py."
   }
 }

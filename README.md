@@ -22,6 +22,11 @@ Read the [API contract](docs/api.md) and copy requests from the [Attractions exa
 
 ## Verify
 
+Each standalone API has an xUnit project with its tests and internal test-host/helpers in one file, following the requested LAB_07-style layout:
+
+- [AttractionsTests.cs](tests/TravelTracker.Attractions.Api.Tests/AttractionsTests.cs)
+- [TransportTests.cs](tests/TravelTracker.Transport.Api.Tests/TransportTests.cs)
+
 ```powershell
 dotnet test tests/TravelTracker.Attractions.Api.Tests --configuration Release --logger "trx;LogFileName=attractions.trx"
 dotnet test tests/TravelTracker.Transport.Api.Tests --configuration Release --logger "trx;LogFileName=transport.trx"
@@ -37,4 +42,4 @@ The original shared `TravelTracker.Api`, `TravelTracker.Data` and `TravelTracker
 
 [Issue #9 planning package](docs/milestone-2/issue-9/README.md): GitHub MCP setup, reviewed [Attractions specification #15](https://github.com/NewWaveOwl/TravelTracker/issues/15), triage and priming interview. The workspace MCP configuration contains no credentials; each teammate signs in separately.
 
-[Coding skill](.github/skills/traveltracker-code/SKILL.md) and [testing skill](.github/skills/traveltracker-testing/SKILL.md) apply the course patterns, one feature per file and `/** @param @return */` documentation. Controllers/services are split into partial feature files to preserve LAB_07's controller -> service -> repository flow.
+[Coding skill](.github/skills/traveltracker-code/SKILL.md) and [testing skill](.github/skills/traveltracker-testing/SKILL.md) apply the course patterns, one feature per production file, one test file per API, and `/** @param @return */` documentation. Controllers/services are split into partial feature files to preserve LAB_07's controller -> service -> repository flow.
