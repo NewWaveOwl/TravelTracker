@@ -17,7 +17,7 @@ The six intentional updates build on that source:
 
 Christel's User/Accomodation models/repositories and James's service/repository contracts remain unchanged. Empty partial Trip, TripLeg, UserSettings and TripMapPoint declarations supply types referenced by those contracts; they have no fields or runtime behavior. The owning features still need implementation. No original file is deleted. The separate WebApi and old Attractions/Transport host folders were removed; Api is the only web project.
 
-[Domain](domain.md), [API](api.md) and [Data](data.md) inventory the source. The full solution now builds successfully. Swagger shows implemented controllers and their DTOs; unfinished collaborator interfaces do not create endpoints. Current audit/results are under integratedLayers in [structured verification](milestone-2/implementation/verification.json). Earlier all-files-unchanged checks under mainCodeDocumentation/combinedHost describe the pre-integration revision.
+[Domain](domain.md), [API](api.md) and [Data](data.md) inventory the source. The full solution now builds successfully. Swagger shows implemented controllers and their DTOs; unfinished collaborator interfaces do not create endpoints. [Validation](milestone-2/implementation/validation.md) summarizes the audit and executed checks. Earlier detailed verification remains in Git history.
 
 ## Meaning of each concept
 

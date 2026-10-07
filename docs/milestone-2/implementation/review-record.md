@@ -30,4 +30,4 @@ The suite covers the requested HTTP workflows and representative validation, rat
 | Route diagram could imply scheduling already exists | Confirm the relationship diagram and timing rules are explicitly planned. Current RoutePoint has location/type/source metadata only; TransportMode has no scheduled route relation or times. Trips/Settings declarations remain compile-only. |
 | Split classes may run concurrently | Each case constructs its own ApiFactory and repositories; shared helpers hold no mutable state. Keep this isolation and verify the full 19-case suite. |
 
-[Test organization](test-review.md) records file aims and coverage limits; [validation](validation.md) and testOrganization in [verification.json](verification.json) record the executed results.
+[Test organization](test-review.md) records file aims and coverage limits; [validation](validation.md) records the executed results. The later documentation cleanup replaces the verbose JSON verification history with this concise summary, retaining session provenance and earlier details in Git history.

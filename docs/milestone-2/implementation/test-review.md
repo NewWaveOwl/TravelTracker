@@ -17,4 +17,4 @@ Duplicate review compares method names, normalized bodies and theory inputs; the
 
 The earlier two-project baseline had 20 cases. The duplicate health case was removed when both APIs became one host; older 114-/30-/20-case records remain historical. This reorganization does not restore removed matrices or scheduling tests. The 19-case suite remains below the requested maximum of 30; eight separate live Swagger/API checks are also recorded.
 
-Coverage is representative. It does not exercise every coordinate/address/binding edge, internal collection/update/delete method, persistence, authentication or future scheduling/Trips rule. [Current validation](validation.md), [review record](review-record.md) and testOrganization in [structured evidence](verification.json) record the current checks and limits.
+Coverage is representative. It does not exercise every coordinate/address/binding edge, internal collection/update/delete method, persistence, authentication or future scheduling/Trips rule. [Current validation](validation.md) and [review record](review-record.md) record the checks and limits.
