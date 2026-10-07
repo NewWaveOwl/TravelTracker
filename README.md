@@ -35,6 +35,12 @@ Current verification: **19 xUnit cases passed**, plus **eight live checks** incl
 
 The original TravelTracker.Api/Data/Domain/SQL files remain an unfinished scaffold and are not referenced by the active WebApi. The full solution still fails at the existing shared Id64.cs:14 CS1503. The combined API and test solution build successfully. The old separate Attractions/Transport API projects have been replaced by WebApi.
 
+## Preserved main code and trip design
+
+All 26 tracked files in the original API/Data/Domain/Database directories match the checked `master` commit `7c55367`. This keeps Christel's User/Accomodation models and repositories, Artiom's original Attraction/TransportMode models and contracts, and James's Trips/Settings/map interfaces. See the linked inventories of [models](docs/domain.md), [service interfaces](docs/api.md) and [repositories/SQL](docs/data.md).
+
+The [trip-point, transport and route design](docs/trip-points-and-routes.md) shows how reusable route points and transport entries can later support scheduled routes and ordered trip legs. Trips/scheduling are planned; their docs do not add endpoints or change the collaborators' source.
+
 ## Milestone 2 records
 
 [Current implementation package](docs/milestone-2/implementation/README.md): accepted scope, reviewed plan, test evidence, review record and reflection.

@@ -16,6 +16,8 @@ Codex reviewed this simplification and single-host migration against the human's
 | Tests and docs still described removed capabilities | Fixed: one single-file test project now executes 19 scoped cases; current contracts/examples/plan/evidence match. Historical records are explicitly labeled. |
 | Old PR scope implied completion of the full search/PATCH issue | Addressed in PR update: title/body describe the three resources; #15 is related rather than closed. |
 | Shared Id64 build error | Deferred outside this request: shared source unchanged, full build failure disclosed separately. |
+| Concern that consolidation removed collaborators' main code | Checked against master 7c55367: all 26 original API/Data/Domain/Database tracked files are unchanged and master is already an ancestor of Artiom. Documentation now links every existing model, service/repository interface and the SQL schema. No source restoration was necessary. |
+| Trip points, transport entries and scheduled routes could be confused | Documented separate reusable locations/entries, ordered trip occurrences and future scheduled journeys/stops. Routes/Trips are labeled planned; no scheduling or extra endpoints were restored. |
 | Copilot workflow provenance | Recorded: prior real CLI sessions retained; this correction used Codex. A fresh Copilot plan/review for the reduced scope has not been run. |
 
 Current tests cover success, saved Location, representative validation and missing IDs. They do not exhaust all possible input edges. Human review and merge remain pending. Prior source/review details are recoverable in Git at fb9b8d5 and the retained Copilot records.

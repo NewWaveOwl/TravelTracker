@@ -554,5 +554,41 @@
       "failures": []
     },
     "tool": "Codex; no new Copilot session claimed"
+  },
+  "mainCodeDocumentation": {
+    "checkedAt": "2026-10-06",
+    "branch": "Artiom",
+    "mainBranch": "master",
+    "mainCommit": "7c553673edb2713e2d24eadca101eba5fe652cb0",
+    "mainIsAncestor": true,
+    "preservedTrackedFiles": 26,
+    "preservedRoots": [
+      "src/TravelTracker.Api",
+      "src/TravelTracker.Data",
+      "src/TravelTracker.Domain",
+      "src/Database"
+    ],
+    "allMainSourceFilesUnchanged": true,
+    "sourceAndTestsChangedThisFollowup": false,
+    "missingFiles": [],
+    "changedMainFiles": [],
+    "newTestExecution": false,
+    "testReason": "Documentation-only follow-up; production/test files unchanged. Prior combinedHost results retained separately.",
+    "deliveryChecks": {
+      "localLinksChecked": 116,
+      "documentsChecked": 17,
+      "solutionProjects": 5,
+      "sharedSourceUnchanged": true,
+      "failures": []
+    },
+    "documentation": [
+      "README.md",
+      "docs/domain.md",
+      "docs/api.md",
+      "docs/data.md",
+      "docs/design.md",
+      "docs/trip-points-and-routes.md"
+    ],
+    "scope": "Keep all collaborators main models/interfaces/schema unchanged; document them and the planned trip-point/transport/route relationships. No additional runtime implementation."
   }
 }

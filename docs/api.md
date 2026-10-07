@@ -4,19 +4,21 @@ HTTP contracts for the shared scaffold and the implemented combined API.
 
 ## Current state
 
-The original `TravelTracker.Api/Program.cs` remains a bare scaffold bootstrap. The active `TravelTracker.WebApi` hosts all three implemented resources on port 5104, with one Swagger page at /swagger.
+The original [TravelTracker.Api/Program.cs](../src/TravelTracker.Api/Program.cs) remains a bare scaffold bootstrap. Its collaborators' service interfaces are preserved unchanged from `master`. The active [TravelTracker.WebApi](../src/TravelTracker.WebApi) hosts all three implemented resources on port 5104, with one Swagger page at /swagger.
 
 ## Shared scaffold service interfaces
 
-| Interface | Wraps | Key methods |
+| Preserved interface | Wraps | Declared methods |
 |---|---|---|
-| `IAttractionService` | `Attraction` | get all, get by ID, create, update, delete |
-| `ITransportModeService` | `TransportMode` | get all, get by ID, get by code, create, update |
-| `ISettingsService` | `UserSettings` (not implemented) | get or create, update |
-| `ITripService` | `Trip`, `TripLeg` (not implemented) | history, get by ID, create, update, delete, replace legs |
-| `ITripMapService` | `TripMapPoint` (read-model) | get map points |
+| [IAttractionService](../src/TravelTracker.Api/Services/IAttractionService.cs) | `Attraction` | `GetAllAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync` |
+| [ITransportModeService](../src/TravelTracker.Api/Services/ITransportModeService.cs) | `TransportMode` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `CreateAsync`, `UpdateAsync` |
+| [ISettingsService](../src/TravelTracker.Api/Services/ISettingsService.cs) | `UserSettings` (model missing) | `GetOrCreateAsync`, `UpdateAsync` |
+| [ITripService](../src/TravelTracker.Api/Services/ITripService.cs) | `Trip`, `TripLeg` (models missing) | `GetHistoryAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
+| [ITripMapService](../src/TravelTracker.Api/Services/ITripMapService.cs) | `TripMapPoint` (model missing) | `GetMapPointsAsync` |
 
-No `IUserService` or `IAccommodationService` yet; their repositories are `internal` (see [[data]]), so nothing reaches them from the API layer.
+These public interfaces declare asynchronous contracts; they have no concrete service implementations or mapped controllers on `master`. Attraction/transport IDs are GUIDs; settings/trip IDs use `Id64`. `ITripService.ReplaceLegsAsync` returns the saved legs, while its repository counterpart returns only task completion.
+
+No `IUserService` or `IAccommodationService` exists yet. Their models and internal repositories are retained (see [Data](data.md)), but there are no user/accommodation endpoints to display in Swagger.
 
 ## Shared scaffold's planned REST contract
 
@@ -35,7 +37,7 @@ No `IUserService` or `IAccommodationService` yet; their repositories are `intern
 
 Response codes: `201` create, `404` not found, `400` invalid trip direction/times, `403` forbidden (e.g. banned user write), `503` dependency unavailable.
 
-Trips validates referenced user/place/transport IDs via HTTP calls to the owning service at write time; each service owns its own store, none read another's tables.
+The planned Trips service will validate referenced user/place/transport IDs via HTTP calls to the owning service at write time; each service will own its own store. This integration is not implemented by the shared scaffold or the current catalogue demo.
 
 ## Ownership
 
@@ -65,6 +67,8 @@ Response: attractionId, name, description, rating, address, lat, lon, estimatedV
 
 Response: transportModeId, code, name, description. POST requires a nonblank name and one exact lowercase code: car, bus, train, pedestrian, bike or plane. Description is optional. Names are trimmed; multiple entries may share a code. ITransportModeService manages entries without journey dates.
 
+The active [WebApi ITransportModeService](../src/TravelTracker.WebApi/Services/ITransportModeService.cs) declares synchronous `GetById` and `Create` for `TransportModeRecord`. It is separate from the preserved asynchronous interface above. The same separation applies to [WebApi IAttractionService](../src/TravelTracker.WebApi/Services/IAttractionService.cs); [IRoutePointService](../src/TravelTracker.WebApi/Services/IRoutePointService.cs) handles the new location catalogue.
+
 ### Route point fields
 
 Response: routePointId, type, name, address, lat, lon, sourceId. POST requires an exact lowercase type (accommodation, attraction or transport_stop), nonblank name and valid coordinates. Address defaults to empty and cannot be explicitly null. Optional sourceId is unverified GUID metadata; the API does not contact another service. A point is a reusable location, not a scheduled journey.
@@ -72,3 +76,5 @@ Response: routePointId, type, name, address, lat, lon, sourceId. POST requires a
 The shared host owns seeded process-lifetime memory. Its singleton repositories share records between requests; restarting restores all three catalogues and discards created data. Scoped services contain creation/lookup logic. Each resource has one controller, one service and one repository, with related GET/POST methods together.
 
 Collection GET/search, PATCH and scheduled transport routes/stops/timing calculations are deferred. The earlier [issue #15 contract](milestone-2/issue-9/feature-spec.md) remains historical and is not fully implemented by this reduced scope. [Current specification](milestone-2/implementation/specification.md), [combined HTTP examples](../src/TravelTracker.WebApi/requests.http).
+
+For future Trips integration, a trip point is an ordered occurrence of a reusable route point. A scheduled route connects route points using a transport entry; a trip leg selects that journey. Dates and boarding/stop timings belong to the scheduled route and occurrences, rather than the transport catalogue POST. See [trip points, transport and routes](trip-points-and-routes.md).

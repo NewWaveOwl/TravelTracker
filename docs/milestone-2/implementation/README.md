@@ -8,6 +8,7 @@ The current implementation follows the human's final LAB_07 choice: **one API ho
 | Original Copilot plan and current reviewed adjustments | [Historical response](copilot-plan.md), [current plan](implementation-plan.md) |
 | Research and scope corrections | [Triage](triage.md) |
 | Source and tests | [WebApi](../../../src/TravelTracker.WebApi), [single-file tests](../../../tests/TravelTracker.WebApi.Tests/TravelTrackerTests.cs) |
+| Preserved collaborator source and planned integration | [Main-code inventory and trip-point/transport/route design](../../trip-points-and-routes.md), [models](../../domain.md), [interfaces](../../api.md), [repositories/SQL](../../data.md) |
 | Executed checks | [Validation](validation.md), [test selection](test-review.md), [structured evidence](verification.json) |
 | Findings and dispositions | [Review record](review-record.md), [historical Copilot review](copilot-review.md) |
 | Reflection and tool provenance | [Reflection](reflection.md), [Copilot evidence](copilot-evidence.md) |
