@@ -1,23 +1,20 @@
 # Current implementation review record
 
-Codex reviewed this simplification and single-host migration against the human's final scope, LAB_07 and both repository skills, and executed the [recorded checks](validation.md). The [historical Copilot review](copilot-review.md) concerns the earlier broader source; no new Copilot review or completed human PR review is claimed.
+Codex reviewed integration into the original Api/Data/Domain projects against the human's request, LAB_07 and both repository skills. [Validation](validation.md) records executed checks. The [historical Copilot review](copilot-review.md) applies to earlier code; no new Copilot or completed human PR review is claimed.
 
 | Finding | Disposition |
 | --- | --- |
-| Two hosts/Swagger pages did not match the final LAB_07 request | Fixed: three resource controllers share TravelTracker.WebApi on 5104, one Program, health endpoint and Swagger page. Seven operations and all six request/response schemas were verified in one document. |
-| Duplicate health tests and separate test projects after consolidation | Fixed: one project/file/factory, 19 passing cases; only the now-identical health case was removed. |
-| Existing user Swagger package changes | Preserved: Swashbuckle.AspNetCore 10.2.3 carried into the unified project; Swagger enabled in Development. |
-| Implementation exceeded the requested simple POST/GET scope | Fixed: retain Attractions, Transport entries and Route Points; remove listing/search/PATCH and scheduled journeys/stops/timings. |
-| Per-action partial files made the lab-style code unnecessarily fragmented | Fixed: group each resource's GetById/Create in its controller and service; keep model/request/interface/repository responsibilities separate. Production C# files first fell from 88 to 29; consolidation now uses 26 in one active API. |
-| Custom validation, duplicate response mapping and separate store adapters added complexity | Fixed: standard ApiController/DataAnnotations, direct approved immutable response records and singleton ConcurrentDictionary repositories. |
-| Integer Range attributes rounded decimal ratings/coordinates | Fixed: use decimal-typed Range attributes. Reproduced invalid -0.1/5.1 ratings returning 201; the tightened existing tests now require 400. Route-point latitude uses 90.1 as the representative invalid input. |
-| In-memory methods used unnecessary asynchronous wrappers | Fixed: synchronous service/repository operations; HTTP test calls remain asynchronous. |
-| Repository lifetime could lose writes between requests | Checked: thread-safe singleton repositories with scoped services; all three POST -> Location GET workflows pass in tests and real processes. |
-| Tests and docs still described removed capabilities | Fixed: one single-file test project now executes 19 scoped cases; current contracts/examples/plan/evidence match. Historical records are explicitly labeled. |
-| Old PR scope implied completion of the full search/PATCH issue | Addressed in PR update: title/body describe the three resources; #15 is related rather than closed. |
-| Shared Id64 build error | Deferred outside this request: shared source unchanged, full build failure disclosed separately. |
-| Concern that consolidation removed collaborators' main code | Checked against master 7c55367: all 26 original API/Data/Domain/Database tracked files are unchanged and master is already an ancestor of Artiom. Documentation now links every existing model, service/repository interface and the SQL schema. No source restoration was necessary. |
-| Trip points, transport entries and scheduled routes could be confused | Documented separate reusable locations/entries, ordered trip occurrences and future scheduled journeys/stops. Routes/Trips are labeled planned; no scheduling or extra endpoints were restored. |
-| Copilot workflow provenance | Recorded: prior real CLI sessions retained; this correction used Codex. A fresh Copilot plan/review for the reduced scope has not been run. |
+| Separate WebApi duplicated existing entities/interfaces | Fixed: Api is the only web host, uses Data/Domain project references, and implements the original Attraction/TransportMode contracts. Added WebApi source is removed. |
+| Concern about loss of collaborator code | Checked: all 26 original files remain; 20 unchanged and six reviewed integration updates. All 11 original interface files and every original model property/type remain. Main clone untouched. |
+| HTTP fields differ from Domain fields | Fixed with response DTOs: DisplayName -> name, Latitude/Longitude -> lat/lon. The same 19 tests pass with unchanged bodies. |
+| Existing constructor error blocked Domain build | Fixed: Id64 delegates using (long)New(), retaining its public constructors and conversions. Full build has zero warnings/errors. |
+| Existing interfaces referenced undefined types | Compile-only resolution: empty partial Trip/TripLeg/UserSettings/TripMapPoint declarations. Their schemas/implementations/endpoints remain unfinished and must be defined by the owning feature. |
+| Mutable Domain entities could expose stored instances | Fixed: Attraction/Transport repositories copy on read/write; RoutePoint is immutable. Singleton ConcurrentDictionary storage persists across requests. |
+| Existing interfaces require more methods than current endpoints | Implement the complete preserved contracts internally; expose only POST and GET by ID. Internal update/collection/delete methods are not new HTTP routes and are not covered by the current endpoint suite. |
+| Obsolete project folders still appeared in Explorer | Fixed: verify repository containment and generated-only contents, then remove old host/test folders. No unrelated source is removed. |
+| Swagger/project/test layout | Checked: one Api host, one Swagger document with seven operations/six request-response schemas, one Api.Tests project/file, 19 passing cases, eight live checks. |
+| Decimal validation | Retained decimal Range attributes and the existing boundary tests; invalid 5.1 returns 400 live. |
+| Docs/skills described the standalone scaffold | Updated to the integrated architecture, current build result and planned trip-point/route relationships. Earlier evidence remains explicitly historical. |
+| Search/PATCH/scheduling and workflow provenance | Deferred scope; issue #15 is related, not closed. This integration used Codex, without a new Copilot session. |
 
-Current tests cover success, saved Location, representative validation and missing IDs. They do not exhaust all possible input edges. Human review and merge remain pending. Prior source/review details are recoverable in Git at fb9b8d5 and the retained Copilot records.
+The suite covers the requested HTTP workflows and representative validation, rather than every internal contract method or possible input edge. Human review and merge remain pending.

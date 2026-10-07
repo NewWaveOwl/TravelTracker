@@ -33,7 +33,7 @@ Use the lowest level that proves the behavior. A direct service call does not pr
 
 ## Write focused and deterministic tests
 
-- Follow the current human-approved LAB_07 layout: one TravelTracker.WebApi.Tests xUnit project referencing the combined WebApi, with all resource tests and internal host/assertion helpers in TravelTrackerTests.cs. Use one factory for the shared Program, isolate a host per test and group related cases in the file. Production resource/layer types keep separate files.
+- Follow the current human-approved LAB_07 layout: one TravelTracker.Api.Tests xUnit project referencing the combined WebApi, with all resource tests and internal host/assertion helpers in TravelTrackerTests.cs. Use one factory for the shared Program, isolate a host per test and group related cases in the file. Production resource/layer types keep separate files.
 - For the current milestone demo, keep at most 30 discovered test cases in the combined API suite, including every `[InlineData]` row. Prefer core workflows and representative boundaries; document the coverage removed to meet this human-requested limit. Do not hide the old input matrix inside loops just to change the reported count.
 - Name tests by behavior and expected outcome, such as `CreateAttraction_InvalidCoordinates_DoesNotPersist`. Arrange minimal data, act on one behavior, then assert its observable result and relevant side effects.
 - Use `[Fact]` for one scenario and `[Theory]` for meaningful input variations. A regression test should fail on the old behavior when it can be demonstrated safely.
@@ -58,7 +58,7 @@ Derive exact expectations from the current contract and requested milestone. Do 
 
 ## Execute and report evidence
 
-Run the current demo with `dotnet test TravelTracker.Tests.slnx --configuration Release`; the separate solution groups the combined API and its one test project. Test hosts start automatically. Recheck the full solution separately and report its existing scaffold failures. The broader checks below apply when those projects are buildable:
+Run the current demo with `dotnet test TravelTracker.Tests.slnx --configuration Release`; the separate solution groups the combined API and its one test project. Test hosts start automatically. Build the full solution as well; it now compiles after minimal integration fixes. Empty trip/settings type declarations add no runtime behavior. The broader checks below apply when those projects are buildable:
 
 ```powershell
 dotnet restore TravelTracker.slnx

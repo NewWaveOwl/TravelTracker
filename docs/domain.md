@@ -1,49 +1,41 @@
 # Domain Model
 
-The original [TravelTracker.Domain](../src/TravelTracker.Domain) models from the shared `master` branch are preserved alongside the current WebApi records. Their names, fields and identifiers have not been rewritten. See [main-code preservation and relationships](trip-points-and-routes.md).
+[TravelTracker.Domain](../src/TravelTracker.Domain) owns the business models used by the API and Data projects. Existing names, property types and identifiers are preserved.
 
-## Id64
+## Existing entities
 
-[Id64](../src/TravelTracker.Domain/Types/Id64.cs): 64 random bits, prints as 16 hex chars, and has `long`/`ulong` conversions. Settings/trip interfaces use it; the existing models below still use `Guid`. Its existing constructor error prevents the full solution from building. This documentation change leaves that source untouched.
-
-## Entities
-
-| Preserved entity | Fields | Owner |
-|---|---|---|
-| [User](../src/TravelTracker.Domain/Models/User.cs) | `UserId` (Guid), `Username`, `Email`, `Address?`, `Role`, `Status`, `CreatedAt`, `UpdatedAt?` | Christel |
-| [Accomodation](../src/TravelTracker.Domain/Models/Accomodation.cs) | `Id` (Guid), `Name`, `Address` | Christel |
-| [Attraction](../src/TravelTracker.Domain/Models/Attraction.cs) | `AttractionId` (Guid), `Name`, `Address`, `Latitude`, `Longitude`, `EstimatedVisitMinutes` | Artiom |
-| [TransportMode](../src/TravelTracker.Domain/Models/TransportMode.cs) | `TransportModeId` (Guid), `Code`, `DisplayName` | Artiom |
-
-[UserRole](../src/TravelTracker.Domain/Models/UserRole.cs): `User = 0`, `Administrator = 1`.
-[UserStatus](../src/TravelTracker.Domain/Models/UserStatus.cs): `Active = 0`, `Deactivated = 1`, `Banned = 2`.
-
-`User` defaults to the User role, Active status and the current UTC creation time. The original `Accomodation` spelling is retained for compatibility with collaborators' code.
-
-## Not implemented yet
-
-The following gaps refer to the original shared Domain scaffold, not the combined API records below.
-
-Referenced by the preserved service/repository interfaces, with no model file yet: `Trip`, `TripLeg`, `UserSettings`, `TripMapPoint` (read-model). `Stay`, `Visit` and `TicketImport` are additional roadmap concepts. James owns Trips/Settings; their existing contracts are documented in [API](api.md) and [Data](data.md).
-
-## Planned business rules
-
-- One-way trip: accommodation -> attraction. Round trip: adds a return leg, attraction -> accommodation.
-- Legs sequence from 1 with no gaps; each leg starts where the last one ended; arrival after departure.
-- Transport modes: car, bus, train, pedestrian, bike, plane. Mixed transport = multiple legs with different modes.
-- Banned user: can sign in and read own data, can't write. Deactivated/deleted: can't sign in.
-
-
-## Implemented combined API records
-
-These immutable records belong to TravelTracker.WebApi and use the human-approved GUID contracts. They have no references to the unfinished shared Domain project.
-
-| Record | Owning project | Fields |
+| Entity | Existing fields | Owner / integration addition |
 | --- | --- | --- |
-| [AttractionRecord](../src/TravelTracker.WebApi/Models/AttractionRecord.cs) | TravelTracker.WebApi | AttractionId, Name, Description, Rating, Address, Lat, Lon, EstimatedVisitMinutes |
-| [TransportModeRecord](../src/TravelTracker.WebApi/Models/TransportModeRecord.cs) | TravelTracker.WebApi | TransportModeId, Code, Name, Description |
-| [RoutePointRecord](../src/TravelTracker.WebApi/Models/RoutePointRecord.cs) | TravelTracker.WebApi | RoutePointId, Type, Name, Address, Lat, Lon, SourceId |
+| [User](../src/TravelTracker.Domain/Models/User.cs) | UserId (Guid), Username, Email, Address?, Role, Status, CreatedAt, UpdatedAt? | Christel; unchanged |
+| [Accomodation](../src/TravelTracker.Domain/Models/Accomodation.cs) | Id (Guid), Name, Address | Christel; unchanged, original spelling retained |
+| [Attraction](../src/TravelTracker.Domain/Models/Attraction.cs) | AttractionId (Guid), Name, Address, Latitude, Longitude, EstimatedVisitMinutes | Artiom; adds optional Description and Rating |
+| [TransportMode](../src/TravelTracker.Domain/Models/TransportMode.cs) | TransportModeId (Guid), Code, DisplayName | Artiom; adds optional Description |
 
-Route points can represent accommodation, attraction or transport_stop locations. Entries and points have no departure/arrival dates. Scheduled journeys, intermediate-stop timings, boarding time and future attraction suggestions remain future work after the human reduced the implementation to POST and GET by ID. [Current contract](milestone-2/implementation/specification.md).
+[UserRole](../src/TravelTracker.Domain/Models/UserRole.cs): User = 0, Administrator = 1.
+[UserStatus](../src/TravelTracker.Domain/Models/UserStatus.cs): Active = 0, Deactivated = 1, Banned = 2.
+User defaults to User role, Active status and the current UTC creation time.
 
-The WebApi records are separate contracts: `Name` does not rename the original transport's `DisplayName`, and `Lat`/`Lon` do not rename the original attraction's `Latitude`/`Longitude`. No adapter connects the two sets yet. A future trip uses ordered occurrences of route points and selects transport routes for its legs; the [relationship design](trip-points-and-routes.md) explains that integration without changing the preserved models.
+## Identifiers
+
+[Id64](../src/TravelTracker.Domain/Types/Id64.cs) stores 64 random bits, prints 16 hex characters and has long/ulong conversions. Settings/trip interfaces use it; current catalogue entities use GUIDs. The constructor now explicitly converts New() to long before delegating, fixing the original CS1503 without changing its public signatures.
+
+## New location model
+
+[RoutePoint](../src/TravelTracker.Domain/Models/RoutePoint.cs) is an immutable shared record: RoutePointId (Guid), Type, Name, Address, Latitude, Longitude, SourceId?. Supported types are accommodation, attraction and transport_stop. SourceId is optional unverified metadata. A point has no schedule times.
+
+## HTTP representations
+
+The Api [response DTOs](../src/TravelTracker.Api/Contracts) preserve the agreed JSON contract. AttractionRecord maps the original Latitude/Longitude to lat/lon; TransportModeRecord maps DisplayName to name; RoutePointRecord similarly maps coordinates. These DTOs describe HTTP responses, while storage/services use the Domain entities. Existing model property names are retained.
+
+## Unfinished feature types
+
+[Trip](../src/TravelTracker.Domain/Models/Trip.cs), [TripLeg](../src/TravelTracker.Domain/Models/TripLeg.cs), [UserSettings](../src/TravelTracker.Domain/Models/UserSettings.cs) and [TripMapPoint](../src/TravelTracker.Domain/Models/TripMapPoint.cs) are empty partial declarations needed by the existing interfaces. They supply no fields, validation, persistence or endpoints. James's Trips/Settings feature contracts still need definition before implementation. Stay, Visit and TicketImport remain roadmap concepts.
+
+## Planned trip rules
+
+- One-way trip: accommodation to attraction; round trip includes a return leg.
+- Legs are ordered, connected, and advance in time without sequence gaps.
+- Supported transport codes are car, bus, train, pedestrian, bike and plane.
+- Trips retain location/transport snapshots and enforce ownership/privacy and account status.
+
+The [trip-point/transport/route design](trip-points-and-routes.md) distinguishes reusable locations/entries from scheduled journeys and ordered trip occurrences. These trip/schedule rules are future work; current endpoints are POST and GET by ID for the three catalogue resources.

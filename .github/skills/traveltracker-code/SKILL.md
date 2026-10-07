@@ -14,13 +14,13 @@ description: Write or refactor TravelTracker C# and ASP.NET Core code using one 
 ## One file, one feature
 
 - Apply this layout to production code. Test organization follows `traveltracker-testing` and the human-approved one-project/one-file LAB_07 layout.
-- The current demonstration runs all three resources in one TravelTracker.WebApi host and one Development Swagger page on port 5104, like LAB_07. Do not split resource controllers into separate hosts unless requested.
+- The current demonstration uses the original TravelTracker.Api host with TravelTracker.Data repositories and TravelTracker.Domain models for all three resources and one Development Swagger page on port 5104, like LAB_07. Do not split resource controllers into separate hosts unless requested.
 - For the current LAB_07-style demonstration, one resource is one cohesive feature. Keep GET-by-ID and POST together in its controller, service and repository; do not create per-action partial files. Attractions, Transport entries and Route Points have separate resource classes.
 - Implement only the requested operations. Collection listing/search, PATCH, scheduled journeys and stop-time calculations are future work unless the human requests them.
 - Keep one primary responsibility/type per file. Small private helpers may support that same feature. Give reusable models, DTOs, interfaces, repositories, and strategies their own files.
 - A feature may use files in several layers; this rule does not put HTTP handling, business rules, and persistence into one class. Organize feature-specific files under a named feature folder when useful.
 - Keep `Program.cs` as the composition root: configuration, dependency registration, middleware, and calls to feature route-mapping methods. Put feature handlers outside it.
-- Preserve the existing API/Data/Domain structure. Do not introduce extra layers, a mediator, CQRS, or independently deployed services just to implement a small feature.
+- Extend the existing API/Data/Domain projects. Api is the only web host; do not create a parallel WebApi or duplicate Attraction/Transport interfaces/entities. Unfinished trip/settings types are empty partial declarations for compilation, and must not be described as implemented features. Do not introduce extra layers, a mediator, CQRS, or independently deployed services just to implement a small feature.
 - Existing shared interfaces can describe one cohesive capability. Do not split every interface method into a new abstraction or reorganize existing files unless needed for the requested work.
 
 ## Layer responsibilities and dependency injection
@@ -29,7 +29,7 @@ description: Write or refactor TravelTracker C# and ASP.NET Core code using one 
 - `TravelTracker.Data`: persistence implementations, contexts, migrations, and repositories. Repositories load/store data and expose operations needed by the use case, without deciding business permissions or trip validity.
 - `TravelTracker.Domain`: entities, value types, enums, and domain rules, without HTTP, EF Core, or vendor SDK dependencies.
 - Use constructor injection for service dependencies and handler parameters for endpoint dependencies. Register implementations at the composition root; avoid constructing repositories or locating dependencies with `IServiceProvider` in business code.
-- Use scoped lifetimes for request services, database repositories and `DbContext`; transient for lightweight stateless dependencies. The current in-memory repositories are thread-safe singletons so records survive subsequent requests; no separate store adapter is needed. A singleton must not capture a scoped dependency. Use typed `HttpClient` registrations for remote calls.
+- Use scoped lifetimes for request services, database repositories and `DbContext`; transient for lightweight stateless dependencies. In-memory repositories in Data are thread-safe singletons; services in Api use the original asynchronous interfaces. Memory methods return completed Tasks to honor those signatures. Attraction/Transport entities come from Domain; response DTOs preserve name/lat/lon aliases. Keep every existing interface signature and original model property. RoutePoint is an immutable Domain record; mutable catalogue entities are copied on storage/read. A singleton must not capture a scoped dependency. Use typed `HttpClient` registrations for remote calls.
 - Keep nullable reference types enabled. Use asynchronous I/O and pass cancellation tokens through new I/O operations; update an existing contract only when the change is compatible or explicitly part of the feature.
 
 ## Apply course patterns when the feature needs them

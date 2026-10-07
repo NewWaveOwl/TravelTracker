@@ -1,19 +1,16 @@
 # Current implementation triage
 
-The initial [issue/code triage](../issue-9/triage-notes.md) and historical Copilot records remain the earlier research evidence. No new remote issue search or Copilot interview is claimed for this simplification.
+The [original issue/code triage](../issue-9/triage-notes.md) and Copilot records remain historical. This correction used local source/Main-clone comparison and Codex; no new issue search or Copilot interview is claimed.
 
-The human explicitly reduced the work to POST/GET and retained route points, transport and attractions. The earlier implementation expanded into collection search, updates and scheduled routes. Those capabilities and their related tests are removed from the current API surface.
-
-| Area reviewed | Result |
+| Area | Finding and resolution |
 | --- | --- |
-| LAB_07 | Groups related actions in resource controllers/services with repository injection. The simplified code follows that layout. |
-| Existing standalone resources | Reuse AttractionRecord, TransportModeRecord and RoutePointRecord, fixed seeds, health and launch profiles. |
-| Shared scaffold | API/Data/Domain interfaces and SQL remain untouched. The pre-existing Id64.cs:14 CS1503 still fails the full build. |
-| Ownership | Attractions owns attractions. Transport owns entries and route-point locations. Source IDs are metadata. Whole itineraries remain future Trips work. |
-| Complexity | Production C# files reduced from 88 to 29. Removed schedules/stops, per-action partials, custom converters/validators and response-mapper layers. |
-| Test overlap | Earlier identical-body audit found no literal duplicates, but scope and boundary coverage were much broader than requested. Current tests cover only the remaining API behavior. |
+| Main clone | Clean master at 7c55367. All 26 original files were already present on Artiom; none had been deleted. The clone remains untouched. |
+| Architecture | The added WebApi duplicated attraction/transport contracts instead of extending the original projects. Move the single host into Api; reuse Data/Domain and original interfaces. |
+| Model compatibility | Keep original properties/types, including DisplayName and Latitude/Longitude. Map them to the agreed response aliases; add optional description/rating fields. |
+| Interface compatibility | Preserve all 11 original service/repository files and signatures. Implement catalogue contracts in their existing layers; keep only GET-by-ID/POST in controllers. |
+| Compile gaps | Fix Id64 constructor conversion; supply empty partial declarations for four unfinished interface types. These declarations contain no feature fields/behavior. |
+| Explorer folders | Removed old source projects had left ignored build artifacts and empty directories. Verify paths/content before cleaning the obsolete folders. |
+| LAB_07/tests | One web host, separate class-library layers, one xUnit project/file. All 19 test bodies are retained. |
+| Ownership | User/accommodation source and SQL unchanged. Trips/Settings implementation remains future owner work. SourceId remains unverified metadata. |
 
-Memory repositories are thread-safe singletons so POST writes survive later requests. Services remain scoped. No SQL database, EF context or remote service is required for the reduced demo. [Current specification](specification.md).
-
-
-The final host-layout review confirmed LAB_07 has one web application with multiple controllers and one xUnit project. The human explicitly selected that deployment. Current resource types moved into TravelTracker.WebApi on 5104; separate host projects were removed, routes/data rules preserved, and the existing Swagger 10.2.3 package carried forward. The prior two-project 20-case baseline passed before migration. Current validation uses one 19-case project plus the shared live Swagger/API checks.
+The full solution now builds. Api uses scoped services and singleton in-memory Data repositories; current schema/routes/validation remain stable. Scheduled routes, Trips endpoints, search and PATCH remain future work. [Specification](specification.md), [validation](validation.md).

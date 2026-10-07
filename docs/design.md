@@ -29,7 +29,7 @@ M2 must work fully without any outside service. M3 extras never block M1 or M2.
 
 ## 2. System overview
 
-The planned backend has six logical services. Each is intended to own its data and communicate through public interfaces. Currently, collaborators' models and interfaces are preserved in the shared API/Data/Domain scaffold, while the runnable demonstration hosts Attractions, Transport entries and Route Points together. The table records ownership and planned responsibilities; it does not imply all six services run today.
+The planned backend has six logical services. Each is intended to own its data and communicate through public interfaces. Currently, the runnable demonstration uses the existing Api/Data/Domain projects to host Attractions, Transport entries and Route Points together. Collaborators' original models and interface contracts are retained. The table records ownership and planned responsibilities; it does not imply all six services run today.
 
 | Service | Owner | Responsibility |
 | --- | --- | --- |
@@ -85,7 +85,7 @@ Every account is a traveller or an administrator, and is active, banned or deact
 - **Trip status** (upcoming, current, past) is worked out from the trip's dates when viewed. It reflects the plan, not proof the traveller went.
 - **Concurrent edits.** If two people or two tabs change the same record, the later save is refused and the user can reload or review their changes rather than overwriting.
 
-**Local service demonstration.** The current TravelTracker.WebApi hosts POST and GET by ID for Attractions, Transport entries and Route Points together on port 5104, with one Swagger page, seeded process-lifetime memory and GUIDs. This follows the human-requested LAB_07 deployment; the independent-service roadmap remains future work. Route-point source IDs are optional unverified metadata. The scheduled-route concept above and the trip rules below describe future product design; schedules, boarding/dwell calculations and attraction suggestions are not implemented in the reduced demonstration. See the [current specification](milestone-2/implementation/specification.md).
+**Local service demonstration.** The current TravelTracker.Api hosts POST and GET by ID for Attractions, Transport entries and Route Points together on port 5104, with one Swagger page, seeded process-lifetime memory and GUIDs. This follows the human-requested LAB_07 deployment; the independent-service roadmap remains future work. Route-point source IDs are optional unverified metadata. The scheduled-route concept above and the trip rules below describe future product design; schedules, boarding/dwell calculations and attraction suggestions are not implemented in the reduced demonstration. See the [current specification](milestone-2/implementation/specification.md).
 
 **Trip-point and route relationship.** A route point stores a reusable location. A trip point represents one use of that location in an itinerary. A transport entry stores the mode, name and description; a future scheduled route adds the start/end points, departure/arrival, preparation and ordered intermediate stops. Trip legs select those routes and retain snapshots. Station/airport points can be route endpoints or intermediate stops while the whole trip still follows the accommodation/attraction rules below. The [relationship diagram and timing design](trip-points-and-routes.md) explain this planned integration and inventory the preserved main code.
 

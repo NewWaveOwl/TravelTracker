@@ -1,6 +1,6 @@
 # Data Layer
 
-The original [SQL schema](../src/Database/schema.sql) and [TravelTracker.Data repository interfaces](../src/TravelTracker.Data/Repositories) from `master` are preserved unchanged. This shared project contains schema/contracts, with no `DbContext` or concrete persistence implementation yet. The active WebApi has its own in-memory repositories, described below.
+The original [SQL schema](../src/Database/schema.sql) and all six existing [repository interfaces](../src/TravelTracker.Data/Repositories) from master are unchanged. TravelTracker.Data now implements the original Attraction/TransportMode interfaces and the new RoutePoint interface using process-lifetime memory. No DbContext or SQL persistence implementation exists yet.
 
 ## Schema
 
@@ -30,18 +30,20 @@ Note: `Trips` stores one leg directly on the row (one transport, one departure, 
 
 `IUserRepository` and `IAccomadationRepository` are `internal`, no public path out of `TravelTracker.Data` for them yet.
 
-The existing `IAccomadationRepository`/`Accomodation` spellings and all signatures are kept. User/accommodation create/update methods return the saved entity; attraction/transport add/update, settings upsert and trip replace-legs methods return task completion. Missing Trips/Settings models remain an integration gap, rather than evidence of working persistence.
+The existing `IAccomadationRepository`/`Accomodation` spellings and all signatures are kept. User/accommodation create/update methods return the saved entity; attraction/transport add/update, settings upsert and trip replace-legs methods return task completion. Trips/Settings referenced types now have empty partial declarations for compilation; their data contracts and persistence remain unfinished.
 
 ## Ownership
 
 Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: James.
 
 
-## Implemented combined API repositories
+## Implemented in-memory repositories
 
-The combined TravelTracker.WebApi does not reference TravelTracker.Data or the SQL schema above. Attraction, TransportMode and RoutePoint each have a repository interface and a singleton in-memory implementation owning a ConcurrentDictionary of immutable records. Services are scoped; no separate store adapter or database context is required. Synchronous lookup/insertion performs no external I/O.
+[InMemoryAttractionRepository](../src/TravelTracker.Data/Repositories/InMemoryAttractionRepository.cs) and [InMemoryTransportModeRepository](../src/TravelTracker.Data/Repositories/InMemoryTransportModeRepository.cs) implement the existing interfaces using the existing Domain entities. [InMemoryRoutePointRepository](../src/TravelTracker.Data/Repositories/InMemoryRoutePointRepository.cs) implements the new location contract. Api registers these thread-safe repositories as singletons and services as scoped.
 
-Fixed seeds load once per host. Created records survive subsequent requests and disappear on restart. The Transport catalogue supports all six codes, including bike; the legacy SQL enum is unchanged. Route-point sourceId is optional metadata, not a verified foreign key. There are no updates, scheduled-route writes or stop-time calculations in the reduced demonstration. [Current evidence](milestone-2/implementation/validation.md).
+Attraction/transport reads and writes copy mutable entities so callers cannot alter stored values without a repository operation. RoutePoint is immutable. Completed Tasks honor the original asynchronous signatures; memory operations perform no external I/O. Internal collection/update/delete methods required by the original contracts are implemented, while controllers expose only the agreed GET-by-ID/POST operations.
+
+[Seeds](../src/TravelTracker.Data/SeedData) load once per repository instance. Created records survive requests and reset on restart. All six transport codes, including bike, are supported in memory; the SQL enum is unchanged. SourceId is unverified metadata rather than a database foreign key. Scheduling/timing calculations remain future work.
 
 ## Planned trip-point and route persistence
 

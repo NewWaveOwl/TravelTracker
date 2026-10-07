@@ -590,5 +590,211 @@
       "docs/trip-points-and-routes.md"
     ],
     "scope": "Keep all collaborators main models/interfaces/schema unchanged; document them and the planned trip-point/transport/route relationships. No additional runtime implementation."
+  },
+  "integratedLayers": {
+    "checkedAt": "2026-10-06",
+    "tool": "Codex; no new Copilot session claimed",
+    "hostProject": "src/TravelTracker.Api/TravelTracker.Api.csproj",
+    "testProject": "tests/TravelTracker.Api.Tests/TravelTracker.Api.Tests.csproj",
+    "productionCSharpFilesAcrossExistingProjects": 45,
+    "sourceSha256": {
+      "src/TravelTracker.Api/Program.cs": "802f624c0de119eaf48273e1ea6b24b05ed40916ce8f931e4b53bc9061eaa5bb",
+      "src/TravelTracker.Api/Program.TestHost.cs": "7af4ffc160d11669fb8d3b674fd05b7d0ff3a13eeeb84393f993af8267e010ed",
+      "src/TravelTracker.Api/Contracts/AttractionRecord.cs": "06fd55744094e1bc5c89be71319d6d7dccff24a6244cd168c7fbae3cc606bb58",
+      "src/TravelTracker.Api/Contracts/CreateAttractionRequest.cs": "32dc4f24b2340aefadf40f7613e623c41d20e9e4c1e5b31185fdbddfc042b746",
+      "src/TravelTracker.Api/Contracts/CreateRoutePointRequest.cs": "36fbc6b9e8f98228a27566fd8b5e27a0eab989d88c3639da7b08810442ce3a98",
+      "src/TravelTracker.Api/Contracts/CreateTransportModeRequest.cs": "b2cb26e1166b47f44abbd763662590e7f93f49ea2b288d6f7d2db6d5a6d8bca1",
+      "src/TravelTracker.Api/Contracts/RoutePointRecord.cs": "41533f0893721fcd1104d882f3e351b4bd7a70f2f93d6611db99847c98c5a8bc",
+      "src/TravelTracker.Api/Contracts/TransportModeRecord.cs": "b3efeacd9dc3e6a1bce70632ea5ad8fcc0f15583bbd4b4a677861ba48b6043f8",
+      "src/TravelTracker.Api/Controllers/AttractionsController.cs": "c7ef5e9c379370c7752dde7f899dc52efc98d637d5dcb00825d5fe3a0b929864",
+      "src/TravelTracker.Api/Controllers/HealthController.cs": "51996fb8897769f5cb190e3570352fa2d8b14bea03a8b90c56b14d85f5f81eef",
+      "src/TravelTracker.Api/Controllers/RoutePointsController.cs": "b34534b8e3827c59f456b32028ff7999301a9c6ef2c329663065baf0a54706fa",
+      "src/TravelTracker.Api/Controllers/TransportModesController.cs": "915c16ce94812fa57b133d49f5ef96e6051eebb7ca9fc60393d0ccd2ac413660",
+      "src/TravelTracker.Api/Services/AttractionService.cs": "51180740dfc9545bb0ce5c3e6753bfc8cd139799261dd9a552eab671375ecad5",
+      "src/TravelTracker.Api/Services/IAttractionService.cs": "5418b3be014c4fe181d45246637c4968987d12d044968bd51224ca1470e2988f",
+      "src/TravelTracker.Api/Services/IRoutePointService.cs": "48a715f274ef1830651fe903ab3490c48e27d4b3993e92d9fde092cdd309052a",
+      "src/TravelTracker.Api/Services/ISettingsService.cs": "4eaea5946cd96c8c62ddd57dc50c846ef1ca8d6b597c4f50712679c0614ea69c",
+      "src/TravelTracker.Api/Services/ITransportModeService.cs": "8d2790b3c5b3a9bcbbb6ce5136eb1c150ac30e250d3f0c86f4ea3a45f0b15d8b",
+      "src/TravelTracker.Api/Services/ITripMapService.cs": "a4ad3354797cda8991cff2da97d5dfb23e903e14286d85c50986a140c91236a0",
+      "src/TravelTracker.Api/Services/ITripService.cs": "debfd403de188ee8faa63b1ff5954026e08fef76057cb7c69147ca51afb883c4",
+      "src/TravelTracker.Api/Services/RoutePointService.cs": "d0ed354173a223bd35d08e21414f7e50c12805074d2cacce36fcb5b1fb8e2eb2",
+      "src/TravelTracker.Api/Services/TransportModeService.cs": "c086df9cf9570bcaa177aecca8077f65547b744e1c6eb0c382b1699327a8c071",
+      "src/TravelTracker.Data/Repositories/IAccomadationRepository.cs": "a276d53a1cf64b70ca1facad6e58f2ddfe85336c7b399b4fbb2f5b277cbb0a9c",
+      "src/TravelTracker.Data/Repositories/IAttractionRepository.cs": "512ddf08c166d2c4503ed759dcc735e53dc02c9ce0e6a35ee18959ebb38ddb47",
+      "src/TravelTracker.Data/Repositories/InMemoryAttractionRepository.cs": "7c60c24f642946c9f9a69e8d554bcd6317eb2d9bd7f8742468c80f46610a83c9",
+      "src/TravelTracker.Data/Repositories/InMemoryRoutePointRepository.cs": "542b2f8d3f9c67273e3cb850c8b259f44e052cb5932d430c14fa457516d029f3",
+      "src/TravelTracker.Data/Repositories/InMemoryTransportModeRepository.cs": "02dac1336e8d6c5ad9d47071d502942248d075df966e41a8cddf1819f4dacee4",
+      "src/TravelTracker.Data/Repositories/IRoutePointRepository.cs": "20a5034f8c4d5edf72826d0a25f16ed95e45163cd966d3adebcd8e34a44c479b",
+      "src/TravelTracker.Data/Repositories/ISettingsRepository.cs": "87c0d3d3f13419009120d5947408017dd31218e43b4167baf44d94ff226b786d",
+      "src/TravelTracker.Data/Repositories/ITransportModeRepository.cs": "19c086258597cd1a9db85e314b4221e20a3c3a06a6e2295f2f635a791aa598e5",
+      "src/TravelTracker.Data/Repositories/ITripRepository.cs": "ce14603720207ffe76b1c6e4949c767a278929b97412fb72b5502ef44621f116",
+      "src/TravelTracker.Data/Repositories/IUserRepository.cs": "bb9de9aea0566b7966c461573c42318d94a789442bb963e384e9bd7ee19a8df9",
+      "src/TravelTracker.Data/SeedData/AttractionSeedData.cs": "f3da53f95e19bb5ae92c90e03c01eaac2fba4b3f6742ee2bc57de3b52afb9cf5",
+      "src/TravelTracker.Data/SeedData/TransportSeedData.cs": "5fe1e72f9291cfb87dc95eadebeed1ff481ed0ca2c87b354789d2a6ce525ebb9",
+      "src/TravelTracker.Domain/Models/Accomodation.cs": "c469941d1a9b05d56f6ea9b427f647033a78c2acd1b61bd689a31ce9aceb0fa9",
+      "src/TravelTracker.Domain/Models/Attraction.cs": "2191446d19f1161b46fb25181d3109cf535aa27ddb4d0c136bed43b4f851229f",
+      "src/TravelTracker.Domain/Models/RoutePoint.cs": "ee647953405828bd0ba1c789681147df1eb4ba5f64b00b38c973982146b2b209",
+      "src/TravelTracker.Domain/Models/TransportMode.cs": "5606730ee2a6ac265a3536ff0e754d2c7d44e57152ad1990e7941609a3902552",
+      "src/TravelTracker.Domain/Models/Trip.cs": "d9c845f8cf9b197ef7ded0875ec8930e545c75856aca5d33bd1de65ef0d193c9",
+      "src/TravelTracker.Domain/Models/TripLeg.cs": "773a5a30b31789fcd2472eb5eb23dd695e0efa5d523be76011a97ec1afc02907",
+      "src/TravelTracker.Domain/Models/TripMapPoint.cs": "c37eff528b376225ba33516a990c6d4e66dcc910e15710832614a74c44b09214",
+      "src/TravelTracker.Domain/Models/User.cs": "90b66cc910a38157da464aea4fd865e3efa23b75c8d3bdab703a09ebce259d43",
+      "src/TravelTracker.Domain/Models/UserRole.cs": "5b66c4db825d898495a8051414ca7dc53126dc2afad77b4b8af9064e0a0baee6",
+      "src/TravelTracker.Domain/Models/UserSettings.cs": "b9d03014c6d47f9718c3d97907f1c896b129df06ba0b1d46b40dd194da975a7b",
+      "src/TravelTracker.Domain/Models/UserStatus.cs": "5aa03d2443820d66423f111a7966eb7a33928467e40729ba128d4ca1c9c981fa",
+      "src/TravelTracker.Domain/Types/Id64.cs": "044c7eb5d17d31312357403904fb2be349c0153a8cce666f318b5766b77ece42"
+    },
+    "testFileSha256": "68fe145176be63a6d46eaee9d99f3a416d5efb5581b01fa9d3b7a4ecfa993c75",
+    "restore": {
+      "command": "dotnet restore TravelTracker.slnx --configfile <task-local nuget.org configuration>",
+      "exitCode": 0,
+      "projects": 4
+    },
+    "fullSolutionBuild": {
+      "command": "dotnet build TravelTracker.slnx --configuration Release --no-restore",
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 0
+    },
+    "tests": {
+      "command": "dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --logger \"trx;LogFileName=integrated-api.trx\"",
+      "results": {
+        "total": 19,
+        "executed": 19,
+        "passed": 19,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      "baseline": {
+        "commit": "b1600e0",
+        "passed": 19,
+        "firstBuildAttempt": "MSB3027/MSB3021: old running WebApi locked its apphost; not a test failure",
+        "executedCommand": "dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --logger \"trx;LogFileName=before-layer-integration.trx\""
+      },
+      "allTestBodiesPreserved": true,
+      "newCasesAdded": 0
+    },
+    "collaboratorPreservation": {
+      "mainCommit": "7c553673edb2713e2d24eadca101eba5fe652cb0",
+      "originalFilesPresent": 26,
+      "originalFilesDeleted": [],
+      "originalFilesUnchanged": 20,
+      "originalFilesIntentionallyUpdated": [
+        "src/TravelTracker.Api/Program.cs",
+        "src/TravelTracker.Api/Properties/launchSettings.json",
+        "src/TravelTracker.Api/TravelTracker.Api.csproj",
+        "src/TravelTracker.Domain/Models/Attraction.cs",
+        "src/TravelTracker.Domain/Models/TransportMode.cs",
+        "src/TravelTracker.Domain/Types/Id64.cs"
+      ],
+      "originalInterfacesUnchanged": 11,
+      "originalModelPropertiesPreserved": {
+        "User": 8,
+        "Accomodation": 3,
+        "Attraction": 6,
+        "TransportMode": 3
+      },
+      "webHostProjects": [
+        "src/TravelTracker.Api/TravelTracker.Api.csproj"
+      ],
+      "allTestBodiesPreserved": true,
+      "tests": {
+        "total": "19",
+        "executed": "19",
+        "passed": "19",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "mainCloneModified": false,
+      "missingTypeDeclarations": [
+        "Trip",
+        "TripLeg",
+        "UserSettings",
+        "TripMapPoint"
+      ],
+      "missingTypeStatus": "Empty partial declarations only: no fields, implementations or endpoints"
+    },
+    "liveVerification": {
+      "baseUrl": "http://localhost:5104",
+      "hostProject": "TravelTracker.Api",
+      "checks": [
+        "Swagger UI returns 200",
+        "One OpenAPI document has exactly seven operations and the six agreed request/response schemas",
+        "Integrated health returns 200",
+        "/api/v1/attractions POST 201 -> Location GET 200",
+        "/api/v1/transport-modes POST 201 -> Location GET 200",
+        "/api/v1/route-points POST 201 -> Location GET 200",
+        "Unknown attraction returns 404",
+        "Invalid decimal rating returns 400"
+      ],
+      "total": 8,
+      "passed": 8,
+      "paths": {
+        "/health": [
+          "get"
+        ],
+        "/api/v1/attractions/{id}": [
+          "get"
+        ],
+        "/api/v1/attractions": [
+          "post"
+        ],
+        "/api/v1/transport-modes/{id}": [
+          "get"
+        ],
+        "/api/v1/transport-modes": [
+          "post"
+        ],
+        "/api/v1/route-points/{id}": [
+          "get"
+        ],
+        "/api/v1/route-points": [
+          "post"
+        ]
+      },
+      "schemas": [
+        "AttractionRecord",
+        "CreateAttractionRequest",
+        "CreateRoutePointRequest",
+        "CreateTransportModeRequest",
+        "ProblemDetails",
+        "RoutePointRecord",
+        "TransportModeRecord"
+      ],
+      "hostLeftRunningForUser": true,
+      "hostSessionId": 13406
+    },
+    "obsoleteProjectsAndGeneratedDirectoriesRemoved": [
+      "TravelTracker.WebApi",
+      "TravelTracker.Attractions.Api",
+      "TravelTracker.Transport.Api",
+      "TravelTracker.WebApi.Tests",
+      "TravelTracker.Attractions.Api.Tests",
+      "TravelTracker.Transport.Api.Tests"
+    ],
+    "skillValidation": {
+      "traveltracker-code": "Skill is valid!",
+      "traveltracker-testing": "Skill is valid!"
+    },
+    "featureLimits": "Trip/TripLeg/UserSettings/TripMapPoint are empty partial declarations; no fields or runtime behavior. Scheduling, search/PATCH, Users/Accommodations/Trips/Settings endpoints, auth and SQL persistence remain future work.",
+    "deliveryChecks": {
+      "localLinksChecked": 124,
+      "documentsChecked": 21,
+      "solutionProjects": 4,
+      "onlyExpectedOriginalSourceChanges": true,
+      "failures": []
+    },
+    "completedOn": "2026-10-07"
   }
 }

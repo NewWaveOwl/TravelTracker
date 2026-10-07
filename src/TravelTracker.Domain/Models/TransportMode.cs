@@ -19,4 +19,9 @@ public sealed class TransportMode
      * Gets or sets the human-readable transportation method name.
      */
     public string DisplayName { get; set; } = string.Empty;
+
+    /**
+     * Gets or sets the optional description of this transport entry.
+     */
+    public string? Description { get; set; }
 }

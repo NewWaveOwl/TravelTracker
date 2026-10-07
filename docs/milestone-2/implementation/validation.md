@@ -1,32 +1,30 @@
 # Current executed validation
 
-The three resources now run in one .NET 10 API, TravelTracker.WebApi, with Swagger at http://localhost:5104/swagger. The human-requested LAB_07 deployment supersedes the prior two-host layout. Current structured results are under combinedHost in [verification.json](verification.json); older results remain historical.
+TravelTracker.Api is now the only runnable web project. Controllers/services use the original Data/Domain layers and existing Attraction/TransportMode interfaces. Current structured evidence is under integratedLayers in [verification.json](verification.json). Earlier combinedHost/mainCodeDocumentation results are historical.
 
-| Check | Result |
+| Check | Executed result |
 | --- | --- |
-| Combined API/test restore | Passed with Swashbuckle.AspNetCore 10.2.3 and the existing xUnit packages |
-| Release test solution | 19 executed, 19 passed, 0 failed, 0 skipped |
-| Real shared host on 5104 | Eight live checks passed |
-| Full-solution Release build | Existing Id64.cs:14 CS1503 remains; zero warnings |
-| Full-solution tests | Not run after the failed build |
+| Pre-integration test baseline | 19 passed using previously built assemblies |
+| Full-solution restore | All four projects restored |
+| Full-solution Release build | Passed; 0 warnings, 0 errors |
+| Test solution | 19 executed, 19 passed, 0 failed/skipped |
+| Live Swagger/API | Eight checks passed on the integrated host at 5104 |
+| Collaborator-source audit | 26 original files present, 20 unchanged, six intentional integration updates; all 11 interface files and all original model properties retained |
+| Project layout | Api is the only web SDK project; Data/Domain are class libraries; one Api.Tests project/file |
 
-From the repository root, run the API and all tests with:
+Executed commands from the repository root:
 
 ```powershell
-dotnet run --project src/TravelTracker.WebApi --launch-profile http
-dotnet test TravelTracker.Tests.slnx --configuration Release
+dotnet restore TravelTracker.slnx --configfile "K:\CLASSES 26 FALL\WEB_3\.task-support\issue9\implementation-nuget.config"
+dotnet build TravelTracker.slnx --configuration Release --no-restore
+dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --logger "trx;LogFileName=integrated-api.trx"
+dotnet run --project src/TravelTracker.Api --configuration Release --no-build --no-restore --launch-profile http
 ```
 
-The exact executed test command was `dotnet test TravelTracker.Tests.slnx --configuration Release --no-restore --logger "trx;LogFileName=combined-api.trx"`. It built the API and test project in Release and wrote the ignored tests/TravelTracker.WebApi.Tests/TestResults/combined-api.trx. One project/file holds all 19 cases. No manually running API is needed for xUnit tests.
+The task-local NuGet config selects nuget.org for this environment; collaborators can use their normal NuGet configuration. TRX is saved in the ignored tests/TravelTracker.Api.Tests/TestResults/integrated-api.trx. All 19 original test bodies are preserved. The first baseline build attempt encountered a file locked by the old running WebApi; that host was stopped, and the baseline ran with --no-build --no-restore before migration. This was a process-lock limitation rather than a failed test.
 
-The live check verified /swagger/index.html, /swagger/v1/swagger.json and /health, then POST -> Location GET for Attractions, Transport entries and Route Points on the same port. The document contains all seven operations, the six resource/request schemas and creation's 201 responses. Missing attraction ID returned 404; rating 5.1 returned 400. The Development host was left running for the human to inspect Swagger.
+Live checks verified /swagger/index.html, /swagger/v1/swagger.json, health, three POST -> Location GET workflows, unknown attraction 404 and invalid decimal rating 400. The document contains exactly seven operations and the six existing request/response schemas. The integrated Development host is left running for inspection.
 
-The user's existing Swashbuckle 10.2.3 additions were carried into the combined project. Both old host projects and test projects were replaced. The original shared API/Data/Domain/SQL source remains unchanged, so the full build limitation is preserved and disclosed. No production auth, database behavior, search/PATCH, schedules or new Copilot GUI session is claimed.
+The Id64 constructor's missing explicit conversion is fixed. Trip, TripLeg, UserSettings and TripMapPoint now have empty partial declarations only, allowing their original interfaces to compile. No fields, runtime implementation or endpoint is provided for these types. Full-solution success does not imply those future features work.
 
-Delivery checks verify current links/project paths, comments, skills, source hashes, duplicate cases and whitespace. Historical issue/Copilot records remain available. [Test selection](test-review.md), [review record](review-record.md).
-
-## Main-code documentation follow-up, 2026-10-06
-
-After the human clarified that collaborators' original models and interfaces must be kept, the latest fetched master commit was checked: `7c553673edb2713e2d24eadca101eba5fe652cb0`. It is already an ancestor of Artiom. All 26 tracked original API/Data/Domain/Database files are present and unchanged relative to that commit. The follow-up changes documentation only; production and test files are unchanged.
-
-The model/service/repository inventories now link the preserved source. The [trip-point/transport/route design](../../trip-points-and-routes.md) labels scheduled routes, trip occurrences and timings as planned, alongside the current catalogue API. Local documentation links, solution paths, JSON and diff whitespace checks passed. Structured results are under `mainCodeDocumentation` in verification.json. No new test execution is claimed for this documentation-only change; the prior 19-case/eight-live-check results above remain the runtime evidence.
+The [relationship design](../../trip-points-and-routes.md) distinguishes reusable points/entries from future scheduled routes and trip occurrences. Listing/search, PATCH, scheduling, auth and SQL persistence remain outside scope. [Test selection](test-review.md), [review record](review-record.md).

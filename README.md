@@ -1,16 +1,16 @@
 # TravelTracker
 
-One .NET 10 API hosts Attractions, Transport entries and Route Points together, following LAB_07's controller -> service -> repository structure. All current endpoints and models appear on one Swagger page.
+One .NET 10 application uses the existing project structure: **TravelTracker.Api** hosts controllers and services, **TravelTracker.Data** owns repositories, and **TravelTracker.Domain** owns models. Attractions, Transport entries and Route Points appear on one Swagger page, following LAB_07.
 
 ## Run and use Swagger
 
 From the repository root:
 
 ```powershell
-dotnet run --project src/TravelTracker.WebApi --launch-profile http
+dotnet run --project src/TravelTracker.Api --launch-profile http
 ```
 
-Open [localhost:5104/swagger](http://localhost:5104/swagger). Expand Attractions, TransportModes or RoutePoints, choose **Try it out**, enter an ID or JSON body, then **Execute**. POST returns 201 with the saved record and a details Location; use the returned GUID in GET by ID. Swagger's Schemas section shows the request and response models. Swagger is enabled in Development, which the http launch profile selects.
+Open [localhost:5104/swagger](http://localhost:5104/swagger). Expand a resource, choose **Try it out**, enter an ID or request body, then **Execute**. POST returns 201 with a saved representation and details Location; use its GUID in GET by ID. The http profile enables Development Swagger.
 
 | Resource | Routes on http://localhost:5104 |
 | --- | --- |
@@ -19,32 +19,34 @@ Open [localhost:5104/swagger](http://localhost:5104/swagger). Expand Attractions
 | Transport entries | POST /api/v1/transport-modes; GET /api/v1/transport-modes/{id} |
 | Route points | POST /api/v1/route-points; GET /api/v1/route-points/{id} |
 
-Transport entries contain a mode code, name and optional description. Route points represent accommodation, attraction or transport_stop locations. See the [API contract](docs/api.md) and [HTTP examples](src/TravelTracker.WebApi/requests.http). Names, allowed types/modes, rating and coordinates are validated. Created records last until the shared API restarts. Listing/search, PATCH and scheduled journeys remain future work.
+Names, supported modes/types, rating and coordinates are validated. Created records last until the API restarts. Transport entries hold mode/name/description; route points represent accommodation, attraction or transport-stop locations. [API contract](docs/api.md), [HTTP examples](src/TravelTracker.Api/requests.http).
 
 ## Run all tests
 
-One xUnit project references the combined API, with all tests/helpers in [TravelTrackerTests.cs](tests/TravelTracker.WebApi.Tests/TravelTrackerTests.cs), like LAB_07:
+One xUnit project references the existing API, with all tests/helpers in [TravelTrackerTests.cs](tests/TravelTracker.Api.Tests/TravelTrackerTests.cs):
 
 ```powershell
 dotnet test TravelTracker.Tests.slnx --configuration Release
 ```
 
-The [test solution](TravelTracker.Tests.slnx) groups the API and test project and starts isolated test hosts automatically. You do not need to launch the API manually for tests. Use the explicit solution filename because both the full and test solutions exist.
+The [test solution](TravelTracker.Tests.slnx) includes Api, Data, Domain and the test project. Isolated test hosts start automatically; a manually running API is unnecessary. Use the explicit solution filename because both solution files exist.
 
-Current verification: **19 xUnit cases passed**, plus **eight live checks** including the Swagger page/document and all three POST -> GET workflows on the same host. The former two-project suite had 20 cases; one duplicate health case was removed. [Validation](docs/milestone-2/implementation/validation.md) and [test selection](docs/milestone-2/implementation/test-review.md).
+Current verification: **the full solution builds with zero warnings/errors; 19 xUnit cases and eight live Swagger/API checks pass**. All test bodies were preserved during integration. [Validation](docs/milestone-2/implementation/validation.md), [test selection](docs/milestone-2/implementation/test-review.md).
 
-The original TravelTracker.Api/Data/Domain/SQL files remain an unfinished scaffold and are not referenced by the active WebApi. The full solution still fails at the existing shared Id64.cs:14 CS1503. The combined API and test solution build successfully. The old separate Attractions/Transport API projects have been replaced by WebApi.
+## Existing collaborator code
 
-## Preserved main code and trip design
+All 26 original files from master 7c55367 remain present. Twenty are unchanged, including all 11 original service/repository interfaces, User/Accomodation models, role/status enums and SQL. Six have reviewed integration changes: API bootstrap/project/launch configuration, optional attraction description/rating, optional transport description, and the Id64 constructor fix. Original model properties and interface signatures are preserved.
 
-All 26 tracked files in the original API/Data/Domain/Database directories match the checked `master` commit `7c55367`. This keeps Christel's User/Accomodation models and repositories, Artiom's original Attraction/TransportMode models and contracts, and James's Trips/Settings/map interfaces. See the linked inventories of [models](docs/domain.md), [service interfaces](docs/api.md) and [repositories/SQL](docs/data.md).
+The API now uses the original Attraction/TransportMode entities and interfaces. HTTP response DTOs preserve name/lat/lon aliases while Domain keeps DisplayName/Latitude/Longitude. RoutePoint is a new Domain model. Empty partial Trip, TripLeg, UserSettings and TripMapPoint declarations allow the existing interfaces to compile; these have no fields, services or endpoints. Their feature contracts remain unfinished.
 
-The [trip-point, transport and route design](docs/trip-points-and-routes.md) shows how reusable route points and transport entries can later support scheduled routes and ordered trip legs. Trips/scheduling are planned; their docs do not add endpoints or change the collaborators' source.
+The added WebApi and old Attractions.Api/Transport.Api projects have been removed. Api is the only web host; Data and Domain are class libraries. Their obsolete generated local folders were also cleaned. [Models](docs/domain.md), [interfaces](docs/api.md), [repositories/SQL](docs/data.md).
+
+The [trip-point, transport and route design](docs/trip-points-and-routes.md) explains future scheduled routes, ordered trip occurrences, stop times and boarding. Scheduling, Trips, collection search and PATCH remain future work.
 
 ## Milestone 2 records
 
-[Current implementation package](docs/milestone-2/implementation/README.md): accepted scope, reviewed plan, test evidence, review record and reflection.
+[Current implementation package](docs/milestone-2/implementation/README.md): scope, plan, tests, review and reflection.
 
-[Historical issue #9 planning package](docs/milestone-2/issue-9/README.md): GitHub MCP setup, [original Attractions issue #15](https://github.com/NewWaveOwl/TravelTracker/issues/15), triage and priming. Issue #15 also requests search/PATCH, so the reduced change does not fully complete it.
+[Historical issue #9 package](docs/milestone-2/issue-9/README.md): MCP setup, [original issue #15](https://github.com/NewWaveOwl/TravelTracker/issues/15), triage and priming. Issue #15 requests search/PATCH as well, so this scoped change does not fully complete it.
 
-[Coding skill](.github/skills/traveltracker-code/SKILL.md) and [testing skill](.github/skills/traveltracker-testing/SKILL.md) preserve separate resource/layer files, one API host, one test project/file, and /** @param @return */ documentation.
+[Coding skill](.github/skills/traveltracker-code/SKILL.md) and [testing skill](.github/skills/traveltracker-testing/SKILL.md) retain separate resource/layer files, one existing API host, one test project/file, and /** @param @return */ documentation.
