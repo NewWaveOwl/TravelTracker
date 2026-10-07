@@ -386,5 +386,39 @@
       "sharedSourceUnchanged": true,
       "failures": []
     }
+  },
+  "testSolution": {
+    "verifiedAtUtc": "2026-10-07T02:50:23.506157+00:00",
+    "file": "TravelTracker.Tests.slnx",
+    "sourceSha256": "e362e95f866402964ead004510fcd823ec9e1c154f7463eb274b4560c123ab2c",
+    "projects": [
+      "src/TravelTracker.Attractions.Api/TravelTracker.Attractions.Api.csproj",
+      "src/TravelTracker.Transport.Api/TravelTracker.Transport.Api.csproj",
+      "tests/TravelTracker.Attractions.Api.Tests/TravelTracker.Attractions.Api.Tests.csproj",
+      "tests/TravelTracker.Transport.Api.Tests/TravelTracker.Transport.Api.Tests.csproj"
+    ],
+    "command": "dotnet test TravelTracker.Tests.slnx --configuration Release --no-restore --logger \"trx;LogFileName=all-tests-solution.trx\"",
+    "exitCode": 0,
+    "results": {
+      "Attractions": {
+        "total": 7,
+        "executed": 7,
+        "passed": 7,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      "Transport": {
+        "total": 13,
+        "executed": 13,
+        "passed": 13,
+        "failed": 0,
+        "notExecuted": 0
+      }
+    },
+    "totalPassed": 20,
+    "newTestCases": 0,
+    "apiAndTestProjectsBuiltInRelease": true,
+    "apiProcessesStartedAutomaticallyByTests": true,
+    "fullSolutionBuildFailureUnchanged": true
   }
 }

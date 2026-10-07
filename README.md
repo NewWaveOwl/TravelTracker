@@ -33,9 +33,10 @@ Each API has its own xUnit project and one test source file, following the reque
 - [TransportTests.cs](tests/TravelTracker.Transport.Api.Tests/TransportTests.cs)
 
 ```powershell
-dotnet test tests/TravelTracker.Attractions.Api.Tests --configuration Release
-dotnet test tests/TravelTracker.Transport.Api.Tests --configuration Release
+dotnet test TravelTracker.Tests.slnx --configuration Release
 ```
+
+The separate [test solution](TravelTracker.Tests.slnx) groups both xUnit projects and runs all tests with this one command. It builds their referenced APIs and starts isolated test hosts automatically; no manually running API is needed. Use the explicit solution filename because the repository contains both the full solution and this test solution.
 
 Current results: **7 Attractions + 13 Transport/Route Point cases = 20, all passing**. Each theory row counts as a case. Eight additional live-process smoke checks passed on 5104/5103. [Validation evidence](docs/milestone-2/implementation/validation.md) and [test selection](docs/milestone-2/implementation/test-review.md) describe the checks and their limits.
 

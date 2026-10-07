@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TravelTracker.Attractions.Api/TravelTracker.Attractions.Api.csproj" />
+    <Project Path="src/TravelTracker.Transport.Api/TravelTracker.Transport.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TravelTracker.Attractions.Api.Tests/TravelTracker.Attractions.Api.Tests.csproj" />
+    <Project Path="tests/TravelTracker.Transport.Api.Tests/TravelTracker.Transport.Api.Tests.csproj" />
+  </Folder>
+</Solution>

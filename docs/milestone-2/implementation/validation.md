@@ -25,3 +25,13 @@ The live check launched one compiled API at a time, with the other stopped, on i
 Delivery verification checks local links, solution paths, valid MCP/evidence JSON, block comment style, skill format, whitespace and preservation of the original shared API/Data/Domain/SQL source. [Coverage selection and limits](test-review.md), [review record](review-record.md).
 
 The owned APIs/tests pass. The full solution does not build; no full-solution success, production authorization, database behavior, live transit accuracy or new Copilot GUI session is claimed.
+
+## Run all tests together
+
+The separate [TravelTracker.Tests.slnx](../../../TravelTracker.Tests.slnx) groups the two existing xUnit projects. From the repository root:
+
+```powershell
+dotnet test TravelTracker.Tests.slnx --configuration Release
+```
+
+This builds the two referenced APIs and starts isolated test hosts automatically. Both projects retain their single-file test layout. The combined solution command was verified with `--no-restore` using the already restored packages: 7 Attractions and 13 Transport/Route Point cases passed, with no failures or skips. No tests or package references were added. This solution excludes the unfinished shared scaffold; its existing full-build failure remains separate.
