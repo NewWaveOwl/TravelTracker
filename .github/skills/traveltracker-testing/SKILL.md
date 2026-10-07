@@ -72,4 +72,4 @@ dotnet test TravelTracker.slnx --configuration Release --no-build --no-restore
 4. When CI work is requested, use the lectures' restore -> build -> test flow, publish results even on failure, and require passing agreed checks before application artifacts/deployment. Match this repository's actual branch/provider; lecture examples do not authorize creating a pipeline or deploying.
 5. Report commands, executed test counts, pass/fail/skip results, baseline failures versus new failures, covered behaviors, and unverified boundaries. If the build fails, say tests are blocked rather than claiming they passed.
 
-Lecture and video provenance: [skills-sources.md](../../../docs/skills-sources.md).
+Lecture and video provenance: [skills-sources.md](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/AI_evdence/skills-sources.md).
