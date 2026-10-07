@@ -11,7 +11,7 @@ namespace TravelTracker.Api.Services;
  * @param repository Process-lifetime catalogue storage.
  * @param ids Issues new entity identities.
  */
-public sealed class AttractionService(IAttractionRepository repository, EntityIdGenerator ids) : IAttractionService
+public sealed class AttractionService(IAttractionRepository repository) : IAttractionService
 {
     // Semaphore to serialize read-modify-write partial updates and avoid lost updates.
     private static readonly System.Threading.SemaphoreSlim updateLock = new(1, 1);
