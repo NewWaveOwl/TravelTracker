@@ -1,0 +1,20 @@
+{
+  "baselineCommit": "8ead33a",
+  "allTestMethodBlocksPreserved": true,
+  "allHelperBodiesPreserved": true,
+  "testMethods": 16,
+  "testCases": 19,
+  "files": {
+    "HealthTests.cs": 1,
+    "AttractionTests.cs": 6,
+    "TransportModeTests.cs": 5,
+    "RoutePointTests.cs": 7
+  },
+  "supportFiles": [
+    "Support/ApiFactory.cs",
+    "Support/HttpTestSupport.cs"
+  ],
+  "baselineSourceSha256": "cfa0e7ef8dfd290a30163362c71c48ecc182137bb92bc6f32ee3bd08c12432e0",
+  "casesAddedOrRemoved": 0,
+  "productionChanges": false
+}

@@ -1,0 +1,304 @@
+{
+  "recordedOn": "2026-10-07",
+  "mainCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+  "resourceBranch": "milestone_2_AI_and_development_resource",
+  "verificationHistorySourceCommit": "2921aef91186389d3e3ff41d7c7d1da2a923f43d",
+  "records": [
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/README.md",
+      "destinationPath": "devlopmet_flow/implementation/README.md",
+      "sourceSha256": "c28d8b940167b3190d961b29a9cd5682cb3a89a1e94f2ee2714c78a347ba2c3f",
+      "archivedSha256": "f7504a79c3ff18466068a4b6e352ee34cee5d88210c17fe545410a6d9a39115d",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/copilot-evidence.md",
+      "destinationPath": "AI_evdence/implementation/copilot-evidence.md",
+      "sourceSha256": "a8819848fce08f2696c2a483186af27cfb316794b36a6932045a582cc4aace57",
+      "archivedSha256": "5ff4f2321720513e2b24a83440f2118cd55258cad2d72919e42de62fe0eff814",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/copilot-plan.md",
+      "destinationPath": "AI_evdence/implementation/copilot-plan.md",
+      "sourceSha256": "d878d1db296c7ce3abc9a0daf9670e971e5c86aefd94c64a053c129b6480de98",
+      "archivedSha256": "1e10059e9e4196a3b5e43cf70e5719757a93aa482b13cebc1984d4e0be1474cf",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/copilot-review.md",
+      "destinationPath": "AI_evdence/implementation/copilot-review.md",
+      "sourceSha256": "d727fe599ba8bfa00795c0660d9b06950254b034aec76dd48779a0b92afcc9a5",
+      "archivedSha256": "677df2bc002a3a38b57ad42a9363d4568871647c5f2f6ba91cb3f9ebdaa0de3c",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/implementation-plan.md",
+      "destinationPath": "devlopmet_flow/implementation/implementation-plan.md",
+      "sourceSha256": "906b187fd1930d5452487326104b06793ae09a32ec6811337329f76814bd3c73",
+      "archivedSha256": "71e63750c3de88bc2fee254a64643e85771c4cf728d10c70da4d3c92f88783c5",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/reflection.md",
+      "destinationPath": "devlopmet_flow/implementation/reflection.md",
+      "sourceSha256": "5d3f96d881c4da035bda85d5282ddcdfbee59f06ddec7bd42afe34dd95f8e7d2",
+      "archivedSha256": "5d3f96d881c4da035bda85d5282ddcdfbee59f06ddec7bd42afe34dd95f8e7d2",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/review-record.md",
+      "destinationPath": "devlopmet_flow/implementation/review-record.md",
+      "sourceSha256": "afe078fe5d23f871a82f6c265fce66baa2d0fb9e7811c02d9c77d1cd5720a7d5",
+      "archivedSha256": "98f18313314387b6bb83645cf125b78da237b2717e8e60d3886dc331e0933e84",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/specification.md",
+      "destinationPath": "devlopmet_flow/implementation/specification.md",
+      "sourceSha256": "597e6bf9363247808caf9187a8cb33364ec87b00fb742b60c16ba6380f3d7394",
+      "archivedSha256": "597e6bf9363247808caf9187a8cb33364ec87b00fb742b60c16ba6380f3d7394",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/test-review.md",
+      "destinationPath": "devlopmet_flow/implementation/test-review.md",
+      "sourceSha256": "362c499616008be3ee8cf56ea5345c382bcf51223a878b61b79827ad8b6316bc",
+      "archivedSha256": "0dbf79ed3c8b7ad64d14b3927080e78ab1bc7a457b032826fa2345ae599700cf",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/triage.md",
+      "destinationPath": "devlopmet_flow/implementation/triage.md",
+      "sourceSha256": "d044f915c1045668afa3a085481cd48f5a4184e913d6a1c94e585fcbeb1f9519",
+      "archivedSha256": "d044f915c1045668afa3a085481cd48f5a4184e913d6a1c94e585fcbeb1f9519",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/implementation/validation.md",
+      "destinationPath": "devlopmet_flow/implementation/validation.md",
+      "sourceSha256": "1fe6f4bca811b3a4190d05aec6d993ff39b47b2916a31f83a9e643def185a7da",
+      "archivedSha256": "e803b3c72d0de8fb60ab888387cd34bceb04c9a1b6802fa823e7ac28f2f0e417",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/README.md",
+      "destinationPath": "devlopmet_flow/issue-9/README.md",
+      "sourceSha256": "1a0316c1b554000a33e56d3fa3eece1108327108829d0119702b0631b85d80e5",
+      "archivedSha256": "faef86c9a0313e09121d2508afecc27caf5e0638f672ecb8f07d6e0fe11fddbe",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/copilot-review.md",
+      "destinationPath": "AI_evdence/issue-9/copilot-review.md",
+      "sourceSha256": "aa67803a023ad0dbe7ef117c8631c46a8dc4429bb799834e3be20016da347102",
+      "archivedSha256": "09724a47362ede46bbac8bb071f6a899e0b918b3d58336b5f5b01e557ba73af0",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/confirmed-draft-prompt.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/confirmed-draft-prompt.md",
+      "sourceSha256": "b860ed481accf3549a17198557424c7d6c7e60b6d2b59fd2912ac9e73b29fa2b",
+      "archivedSha256": "b860ed481accf3549a17198557424c7d6c7e60b6d2b59fd2912ac9e73b29fa2b",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/confirmed-plan-prompt.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/confirmed-plan-prompt.md",
+      "sourceSha256": "89d166efd51f94e9228418256482379fe060d171fadee8fddb02b18dcd40a770",
+      "archivedSha256": "89d166efd51f94e9228418256482379fe060d171fadee8fddb02b18dcd40a770",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/copilot-initial-plan.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/copilot-initial-plan.md",
+      "sourceSha256": "0cb4e67e01a4f6a722ecbdc6fdbbf1f6b852a164ec1f96018b459fafa6ffba67",
+      "archivedSha256": "0cb4e67e01a4f6a722ecbdc6fdbbf1f6b852a164ec1f96018b459fafa6ffba67",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/copilot-issue-draft.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/copilot-issue-draft.md",
+      "sourceSha256": "bdbc1627b3d83f948d9806ba691f46afd92dd3b31407402203043cbb2030480d",
+      "archivedSha256": "bdbc1627b3d83f948d9806ba691f46afd92dd3b31407402203043cbb2030480d",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/copilot-management-draft.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/copilot-management-draft.md",
+      "sourceSha256": "9f8dec05f881ebd708c2c80c1e8a1dde0825be8ceba05598a3e6fc916a17b38b",
+      "archivedSha256": "9f8dec05f881ebd708c2c80c1e8a1dde0825be8ceba05598a3e6fc916a17b38b",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/copilot-management-initial-plan.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/copilot-management-initial-plan.md",
+      "sourceSha256": "9e36352e97a43c26ca9754e2f79466b5c290a2319c262ecda0e0874b0369758b",
+      "archivedSha256": "9e36352e97a43c26ca9754e2f79466b5c290a2319c262ecda0e0874b0369758b",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/copilot-prime-questions.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/copilot-prime-questions.md",
+      "sourceSha256": "05e862c34cf38a6416d418a74b5a55ddadd509f2dfc4ac1cfa44697babb4580d",
+      "archivedSha256": "05e862c34cf38a6416d418a74b5a55ddadd509f2dfc4ac1cfa44697babb4580d",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/draft-prompt.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/draft-prompt.md",
+      "sourceSha256": "9bf1d70575cf0defd98351779fcf934fd77bd6d37a82b5ccb81ba405a9ad34d2",
+      "archivedSha256": "9bf1d70575cf0defd98351779fcf934fd77bd6d37a82b5ccb81ba405a9ad34d2",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/human-interview-answers.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/human-interview-answers.md",
+      "sourceSha256": "a44bfe3d5e0d08ea6060e9b9ec3a12840f5d47689932fbd2f98eba25a23d1b0f",
+      "archivedSha256": "a44bfe3d5e0d08ea6060e9b9ec3a12840f5d47689932fbd2f98eba25a23d1b0f",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/plan-prompt.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/plan-prompt.md",
+      "sourceSha256": "c6ba9d9c78437f56cf86c85e767d6df6550c5b85dd8f059a1b4844e6a82be569",
+      "archivedSha256": "c6ba9d9c78437f56cf86c85e767d6df6550c5b85dd8f059a1b4844e6a82be569",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/evidence/prime-prompt.md",
+      "destinationPath": "AI_evdence/issue-9/evidence/prime-prompt.md",
+      "sourceSha256": "72eb1b427de785ff08359e2c13a9d05f7c4e44a7cada899c13e928cb63637e30",
+      "archivedSha256": "72eb1b427de785ff08359e2c13a9d05f7c4e44a7cada899c13e928cb63637e30",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/feature-spec.md",
+      "destinationPath": "devlopmet_flow/issue-9/feature-spec.md",
+      "sourceSha256": "4d4733eb23fcae6f673ccf6c1685572a38fe56d3aecbd70a9a37af7ecc2eff02",
+      "archivedSha256": "4d4733eb23fcae6f673ccf6c1685572a38fe56d3aecbd70a9a37af7ecc2eff02",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/github-mcp-setup.md",
+      "destinationPath": "devlopmet_flow/issue-9/github-mcp-setup.md",
+      "sourceSha256": "6f57bf96eb508f1cb213c35fc0653f7e920348ca92398fc1caa2177ed68bc974",
+      "archivedSha256": "feecb18e46ce14ccc5f7ad1582ab805b199165a01ff3b99995985c6c89cef298",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/implementation-plan.md",
+      "destinationPath": "devlopmet_flow/issue-9/implementation-plan.md",
+      "sourceSha256": "ce3a5df151b40a0386e89242418aa504b8a198bedd0d65974a41dc0fd7a32a7f",
+      "archivedSha256": "6a2f8d045989b874544215aa1306cca436c60724e283037f5ddbf4d3269f58b3",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/priming-interview.md",
+      "destinationPath": "devlopmet_flow/issue-9/priming-interview.md",
+      "sourceSha256": "f16c462d26e70a11b4cb45e9c9d50eb560cdc62b3692d804af291a3995b449e2",
+      "archivedSha256": "25207820e80a4d36af55526a9509005641ddc5f75a03b9464a9d163a6c2046a3",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/milestone-2/issue-9/triage-notes.md",
+      "destinationPath": "devlopmet_flow/issue-9/triage-notes.md",
+      "sourceSha256": "fe5d9ba49fd1d5ef3351b33a8ef7f1ea89a86d9aa0ff0b3ae2d724b3452c34d7",
+      "archivedSha256": "2b4e4d510bad46814effae36b9b340a5ac22a7e9ab0ffad7df53da3d9b2ebd38",
+      "transformation": "Markdown link targets relocated; all other text unchanged"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "docs/skills-sources.md",
+      "destinationPath": "AI_evdence/skills-sources.md",
+      "sourceSha256": "7ca3436fb23ba201ad3fc5939d5533ea0be04437bd766f02eaaba9b464ce6257",
+      "archivedSha256": "7ca3436fb23ba201ad3fc5939d5533ea0be04437bd766f02eaaba9b464ce6257",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "reflections/reflection_milestone_2.md",
+      "destinationPath": "devlopmet_flow/reflections/reflection_milestone_2.md",
+      "sourceSha256": "4724988f15195d750f4a08297ffec771509b77b5c3bac75a45ed2a97380faa3a",
+      "archivedSha256": "4724988f15195d750f4a08297ffec771509b77b5c3bac75a45ed2a97380faa3a",
+      "transformation": "Exact copy"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "AGENTS.md",
+      "destinationPath": "AI_evdence/setup-snapshot/AGENTS.md",
+      "sourceSha256": "0e1f0cf934aec91298cf3222049c60372b3cab64a162a86b95a27dc465fbe30c",
+      "archivedSha256": "0e1f0cf934aec91298cf3222049c60372b3cab64a162a86b95a27dc465fbe30c",
+      "transformation": "Exact configuration snapshot; relative paths retain their original repo meaning"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": ".github/copilot-instructions.md",
+      "destinationPath": "AI_evdence/setup-snapshot/.github/copilot-instructions.md",
+      "sourceSha256": "90597a15e38fec6966877d78d1dd4fe4b63d99406fe9a48eb80e643fc8749da7",
+      "archivedSha256": "90597a15e38fec6966877d78d1dd4fe4b63d99406fe9a48eb80e643fc8749da7",
+      "transformation": "Exact configuration snapshot; relative paths retain their original repo meaning"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": ".github/skills/traveltracker-code/SKILL.md",
+      "destinationPath": "AI_evdence/setup-snapshot/.github/skills/traveltracker-code/SKILL.md",
+      "sourceSha256": "19e75b85a25b85fc812dc470a2980cb62ad4e6b42e7084f63cbb72a68ec6541b",
+      "archivedSha256": "19e75b85a25b85fc812dc470a2980cb62ad4e6b42e7084f63cbb72a68ec6541b",
+      "transformation": "Exact configuration snapshot; relative paths retain their original repo meaning"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": ".github/skills/traveltracker-testing/SKILL.md",
+      "destinationPath": "AI_evdence/setup-snapshot/.github/skills/traveltracker-testing/SKILL.md",
+      "sourceSha256": "91752b748ff26a609e43b2fc062c00f1b57d6600fc66f8e50eb297ad468d5c93",
+      "archivedSha256": "91752b748ff26a609e43b2fc062c00f1b57d6600fc66f8e50eb297ad468d5c93",
+      "transformation": "Exact configuration snapshot; relative paths retain their original repo meaning"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": ".vscode/mcp.json",
+      "destinationPath": "AI_evdence/setup-snapshot/.vscode/mcp.json",
+      "sourceSha256": "db39256a82f6352b66ec868fe1519e001df2b87dbe036d3e0e936a371f03df27",
+      "archivedSha256": "db39256a82f6352b66ec868fe1519e001df2b87dbe036d3e0e936a371f03df27",
+      "transformation": "Exact configuration snapshot; relative paths retain their original repo meaning"
+    },
+    {
+      "sourceCommit": "68fe7ea6bd11b7d02a0af3e2fe913d55857880fe",
+      "sourcePath": "mcp.json",
+      "destinationPath": "AI_evdence/setup-snapshot/mcp.json",
+      "sourceSha256": "db39256a82f6352b66ec868fe1519e001df2b87dbe036d3e0e936a371f03df27",
+      "archivedSha256": "db39256a82f6352b66ec868fe1519e001df2b87dbe036d3e0e936a371f03df27",
+      "transformation": "Exact configuration snapshot; relative paths retain their original repo meaning"
+    }
+  ]
+}

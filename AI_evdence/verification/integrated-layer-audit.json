@@ -1,0 +1,51 @@
+{
+  "mainCommit": "7c553673edb2713e2d24eadca101eba5fe652cb0",
+  "originalFilesPresent": 26,
+  "originalFilesDeleted": [],
+  "originalFilesUnchanged": 20,
+  "originalFilesIntentionallyUpdated": [
+    "src/TravelTracker.Api/Program.cs",
+    "src/TravelTracker.Api/Properties/launchSettings.json",
+    "src/TravelTracker.Api/TravelTracker.Api.csproj",
+    "src/TravelTracker.Domain/Models/Attraction.cs",
+    "src/TravelTracker.Domain/Models/TransportMode.cs",
+    "src/TravelTracker.Domain/Types/Id64.cs"
+  ],
+  "originalInterfacesUnchanged": 11,
+  "originalModelPropertiesPreserved": {
+    "User": 8,
+    "Accomodation": 3,
+    "Attraction": 6,
+    "TransportMode": 3
+  },
+  "webHostProjects": [
+    "src/TravelTracker.Api/TravelTracker.Api.csproj"
+  ],
+  "allTestBodiesPreserved": true,
+  "tests": {
+    "total": "19",
+    "executed": "19",
+    "passed": "19",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "mainCloneModified": false,
+  "missingTypeDeclarations": [
+    "Trip",
+    "TripLeg",
+    "UserSettings",
+    "TripMapPoint"
+  ],
+  "missingTypeStatus": "Empty partial declarations only: no fields, implementations or endpoints"
+}

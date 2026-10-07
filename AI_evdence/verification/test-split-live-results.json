@@ -1,0 +1,51 @@
+{
+  "baseUrl": "http://localhost:5104",
+  "hostProject": "TravelTracker.Api",
+  "checks": [
+    "Swagger UI returns 200",
+    "One OpenAPI document has exactly seven operations and the six agreed request/response schemas",
+    "Integrated health returns 200",
+    "/api/v1/attractions POST 201 -> Location GET 200",
+    "/api/v1/transport-modes POST 201 -> Location GET 200",
+    "/api/v1/route-points POST 201 -> Location GET 200",
+    "Unknown attraction returns 404",
+    "Invalid decimal rating returns 400"
+  ],
+  "total": 8,
+  "passed": 8,
+  "paths": {
+    "/health": [
+      "get"
+    ],
+    "/api/v1/attractions/{id}": [
+      "get"
+    ],
+    "/api/v1/attractions": [
+      "post"
+    ],
+    "/api/v1/transport-modes/{id}": [
+      "get"
+    ],
+    "/api/v1/transport-modes": [
+      "post"
+    ],
+    "/api/v1/route-points/{id}": [
+      "get"
+    ],
+    "/api/v1/route-points": [
+      "post"
+    ]
+  },
+  "schemas": [
+    "AttractionRecord",
+    "CreateAttractionRequest",
+    "CreateRoutePointRequest",
+    "CreateTransportModeRequest",
+    "ProblemDetails",
+    "RoutePointRecord",
+    "TransportModeRecord"
+  ],
+  "hostLeftRunningForUser": true,
+  "hostSessionId": 65456,
+  "checkedAtUtc": "2026-10-07T04:13:39.460567+00:00"
+}

@@ -1,0 +1,55 @@
+[
+  {
+    "sourceMetadataFile": "copilot-management-draft.md.metadata.json",
+    "sessionId": "e7f8b346-b11a-4909-9c48-eb4366616e6d",
+    "model": "gpt-6-luna",
+    "exitCode": 0,
+    "filesModified": []
+  },
+  {
+    "sourceMetadataFile": "copilot-management-initial-plan.md.metadata.json",
+    "sessionId": "92e3a511-b590-4152-bb4b-afef271f5f07",
+    "model": "gpt-6-luna",
+    "exitCode": 0,
+    "filesModified": []
+  },
+  {
+    "sourceMetadataFile": "routepoint-fresh-plan.md.metadata.json",
+    "sessionId": "157a60a9-d6ca-4dc5-8839-85680c8fa91d",
+    "model": "gpt-6-luna",
+    "exitCode": 0,
+    "filesModified": []
+  },
+  {
+    "sourceMetadataFile": "routepoint-implementation-initial.metadata.json",
+    "sessionId": "cec3ea1b-0f08-428d-b152-0a8fae0c3398",
+    "model": "gpt-6-luna",
+    "exitCode": 0,
+    "filesModified": []
+  },
+  {
+    "sourceMetadataFile": "routepoint-implementation.metadata.json",
+    "sessionId": "f3474a68-f6ab-41c8-b8c0-8abe528bc19f",
+    "model": "gpt-6-luna",
+    "exitCode": 0,
+    "filesModified": [
+      "src/TravelTracker.Attractions.Api/TravelTracker.Attractions.Api.csproj",
+      "src/TravelTracker.Attractions.Api/Program.cs",
+      "src/TravelTracker.Attractions.Api/Program.TestHost.cs",
+      "src/TravelTracker.Attractions.Api/Properties/launchSettings.json",
+      "src/TravelTracker.Attractions.Api/Controllers/HealthController.cs",
+      "src/TravelTracker.Transport.Api/TravelTracker.Transport.Api.csproj",
+      "src/TravelTracker.Transport.Api/Program.cs",
+      "src/TravelTracker.Transport.Api/Program.TestHost.cs",
+      "src/TravelTracker.Transport.Api/Properties/launchSettings.json",
+      "src/TravelTracker.Transport.Api/Controllers/HealthController.cs"
+    ]
+  },
+  {
+    "sourceMetadataFile": "routepoint-review.md.metadata.json",
+    "sessionId": "470e99f3-adad-4030-b5db-f689b1998333",
+    "model": "mai-code-1.1-flash",
+    "exitCode": 0,
+    "filesModified": []
+  }
+]
