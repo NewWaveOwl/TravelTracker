@@ -69,4 +69,4 @@ Task<Attraction?> GetByIdAsync(Guid attractionId, CancellationToken cancellation
 2. Build `TravelTracker.slnx` and use `traveltracker-testing` for behavior changes. For a comment-only edit, validate documentation and build as appropriate without inventing tests that merely check wording.
 3. Report changed behavior/files, checks and their results, pre-existing failures, and any remaining gaps. Follow `CONTRIBUTING.md` for branch work and respect an explicitly requested branch name.
 
-Lecture and video provenance: [skills-sources.md](../../../docs/skills-sources.md).
+Lecture and video provenance: [skills-sources.md](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/AI_evdence/atiom_evdence/skills-sources.md).

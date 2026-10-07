@@ -6,10 +6,10 @@
 
 | Entity | Existing fields | Owner / integration addition |
 | --- | --- | --- |
-| [User](../src/TravelTracker.Domain/Models/User.cs) | UserId (Guid), Username, Email, Address?, Role, Status, CreatedAt, UpdatedAt? | Christel; unchanged |
-| [Accomodation](../src/TravelTracker.Domain/Models/Accomodation.cs) | Id (Guid), Name, Address | Christel; unchanged, original spelling retained |
-| [Attraction](../src/TravelTracker.Domain/Models/Attraction.cs) | AttractionId (Guid), Name, Address, Latitude, Longitude, EstimatedVisitMinutes | Artiom; adds optional Description and Rating |
-| [TransportMode](../src/TravelTracker.Domain/Models/TransportMode.cs) | TransportModeId (Guid), Code, DisplayName | Artiom; adds optional Description |
+| [User](../src/TravelTracker.Domain/Models/User.cs) | UserId (`EntityId<User>`), Username, Email, Address?, Role, Status, CreatedAt, UpdatedAt? | Christel; unchanged |
+| [Accomodation](../src/TravelTracker.Domain/Models/Accomodation.cs) | Id (`EntityId<Accomodation>`), Name, Address | Christel; unchanged, original spelling retained |
+| [Attraction](../src/TravelTracker.Domain/Models/Attraction.cs) | AttractionId (`EntityId<Attraction>`), Name, Address, Latitude, Longitude, EstimatedVisitMinutes | Artiom; adds optional Description and Rating |
+| [TransportMode](../src/TravelTracker.Domain/Models/TransportMode.cs) | TransportModeId (`EntityId<TransportMode>`), Code, DisplayName | Artiom; adds optional Description |
 
 [UserRole](../src/TravelTracker.Domain/Models/UserRole.cs): User = 0, Administrator = 1.
 [UserStatus](../src/TravelTracker.Domain/Models/UserStatus.cs): Active = 0, Deactivated = 1, Banned = 2.
@@ -17,11 +17,11 @@ User defaults to User role, Active status and the current UTC creation time.
 
 ## Identifiers
 
-[Id64](../src/TravelTracker.Domain/Types/Id64.cs) stores 64 random bits, prints 16 hex characters and has long/ulong conversions. Settings/trip interfaces use it; current catalogue entities use GUIDs. The constructor now explicitly converts New() to long before delegating, fixing the original CS1503 without changing its public signatures.
+[EntityId](../src/TravelTracker.Domain/Types/EntityId.cs) pairs an internal [Id64](../src/TravelTracker.Domain/Types/Id64.cs) database key with a public uuidv7. Id64 is `internal` (visible to Data only), so the Api cannot name or expose it; only the Data layer's `EntityIdGenerator` creates identities. Ids are app-issued and sequential, with no database identity or sequence.
 
 ## New location model
 
-[RoutePoint](../src/TravelTracker.Domain/Models/RoutePoint.cs) is an immutable shared record: RoutePointId (Guid), Type, Name, Address, Latitude, Longitude, SourceId?. Supported types are accommodation, attraction and transport_stop. SourceId is optional unverified metadata. A point has no schedule times.
+[RoutePoint](../src/TravelTracker.Domain/Models/RoutePoint.cs) is an immutable shared record: RoutePointId (`EntityId<RoutePoint>`), Type, Name, Address, Latitude, Longitude, SourceId?. Supported types are accommodation, attraction and transport_stop. SourceId is optional unverified metadata. A point has no schedule times.
 
 ## HTTP representations
 

@@ -1,5 +1,4 @@
 using TravelTracker.Domain.Models;
-using TravelTracker.Domain.Types;
 
 namespace TravelTracker.Data.Repositories;
 
@@ -11,18 +10,18 @@ public interface ITripRepository
     /**
      * Retrieves a user's trip history.
      *
-     * @param userId The unique identifier of the user whose trips to retrieve.
+     * @param userId The public identifier of the user whose trips to retrieve.
      * @return A task containing the user's trips.
      */
-    Task<List<Trip>> GetAllByUserIdAsync(Id64 userId);
+    Task<List<Trip>> GetAllByUserIdAsync(Guid userId);
 
     /**
      * Retrieves a trip by its unique identifier.
      *
-     * @param tripId The unique identifier to search for.
+     * @param tripId The public identifier to search for.
      * @return A task containing the matching trip, or null when it does not exist.
      */
-    Task<Trip?> GetByIdAsync(Id64 tripId);
+    Task<Trip?> GetByIdAsync(Guid tripId);
 
     /**
      * Adds a trip to the data store.
@@ -43,19 +42,19 @@ public interface ITripRepository
     /**
      * Deletes a trip from the data store.
      *
-     * @param tripId The unique identifier of the trip to delete.
+     * @param tripId The public identifier of the trip to delete.
      * @return A task containing true when the trip was deleted; otherwise, false.
      */
-    Task<bool> DeleteAsync(Id64 tripId);
+    Task<bool> DeleteAsync(Guid tripId);
 
     /**
      * Replaces the legs belonging to a trip.
      *
-     * @param tripId The unique identifier of the trip whose legs to replace.
+     * @param tripId The public identifier of the trip whose legs to replace.
      * @param legs The full ordered set of legs to store.
      * @return A task that represents the asynchronous operation.
      */
     Task ReplaceLegsAsync(
-        Id64 tripId,
+        Guid tripId,
         List<TripLeg> legs);
 }

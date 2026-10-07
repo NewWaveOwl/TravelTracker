@@ -10,7 +10,7 @@ namespace TravelTracker.Data.Repositories;
 public sealed class InMemoryRoutePointRepository : IRoutePointRepository
 {
     private readonly ConcurrentDictionary<Guid, RoutePoint> records =
-        new(TransportSeedData.Points().ToDictionary(point => point.RoutePointId));
+        new(TransportSeedData.Points().ToDictionary(point => point.RoutePointId.PublicId));
 
     /**
      * Finds a saved location.
@@ -26,7 +26,7 @@ public sealed class InMemoryRoutePointRepository : IRoutePointRepository
      */
     public Task AddAsync(RoutePoint point)
     {
-        records[point.RoutePointId] = point;
+        records[point.RoutePointId.PublicId] = point;
         return Task.CompletedTask;
     }
 }

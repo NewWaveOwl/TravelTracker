@@ -40,22 +40,16 @@ dotnet test TravelTracker.Tests.slnx --configuration Release
 
 The [test solution](TravelTracker.Tests.slnx) includes Api, Data, Domain and the test project. Isolated test hosts start automatically; a manually running API is unnecessary. Use the explicit solution filename because both solution files exist.
 
-Current verification: **the full solution builds with zero warnings/errors; 19 xUnit cases and eight live Swagger/API checks pass**. All test bodies and inputs were preserved when splitting the files; no cases were added. [Validation](docs/milestone-2/implementation/validation.md), [test selection](docs/milestone-2/implementation/test-review.md).
+[Validation and test coverage](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/validation.md) are recorded on the resource branch.
 
-## Existing collaborator code
+## Models and design
 
-All 26 original files from master 7c55367 remain present. Twenty are unchanged, including all 11 original service/repository interfaces, User/Accomodation models, role/status enums and SQL. Six have reviewed integration changes: API bootstrap/project/launch configuration, optional attraction description/rating, optional transport description, and the Id64 constructor fix. Original model properties and interface signatures are preserved.
+The API uses the original Attraction/TransportMode entities and interfaces. HTTP DTOs map DisplayName to name and Latitude/Longitude to lat/lon. RoutePoint is a reusable location. Trip, TripLeg, UserSettings and TripMapPoint are compile-only declarations with no runtime endpoints.
 
-The API now uses the original Attraction/TransportMode entities and interfaces. HTTP response DTOs preserve name/lat/lon aliases while Domain keeps DisplayName/Latitude/Longitude. RoutePoint is a new Domain model. Empty partial Trip, TripLeg, UserSettings and TripMapPoint declarations allow the existing interfaces to compile; these have no fields, services or endpoints. Their feature contracts remain unfinished.
+[Models](docs/domain.md), [API contracts](docs/api.md), [repositories/SQL](docs/data.md) and [trip-point/transport/route design](docs/trip-points-and-routes.md) describe the current implementation and future relationships. Scheduling, Trips, collection search and PATCH remain future work.
 
-The added WebApi and old Attractions.Api/Transport.Api projects have been removed. Api is the only web host; Data and Domain are class libraries. Their obsolete generated local folders were also cleaned. [Models](docs/domain.md), [interfaces](docs/api.md), [repositories/SQL](docs/data.md).
+## Milestone 2 development records
 
-The [trip-point, transport and route design](docs/trip-points-and-routes.md) explains future scheduled routes, ordered trip occurrences, stop times and boarding. Scheduling, Trips, collection search and PATCH remain future work.
+The [AI evidence](https://github.com/NewWaveOwl/TravelTracker/tree/milestone_2_AI_and_development_resource/AI_evdence/atiom_evdence) and [development flow](https://github.com/NewWaveOwl/TravelTracker/tree/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow) live on `milestone_2_AI_and_development_resource`. They include issue #9 planning, original prompts/responses, interview answers, reviewed plans, validation, reflection and the conversation/decision record.
 
-## Milestone 2 records
-
-[Current implementation package](docs/milestone-2/implementation/README.md): scope, plan, tests, review and reflection.
-
-[Historical issue #9 package](docs/milestone-2/issue-9/README.md): MCP setup, [original issue #15](https://github.com/NewWaveOwl/TravelTracker/issues/15), triage and priming. Issue #15 requests search/PATCH as well, so this scoped change does not fully complete it.
-
-[Coding skill](.github/skills/traveltracker-code/SKILL.md) and [testing skill](.github/skills/traveltracker-testing/SKILL.md) retain separate resource/layer files, one existing API host, one test project with files grouped by purpose, and /** @param @return */ documentation.
+[Coding skill](.github/skills/traveltracker-code/SKILL.md) and [testing skill](.github/skills/traveltracker-testing/SKILL.md) remain available for everyday development.

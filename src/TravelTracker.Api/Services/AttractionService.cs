@@ -1,3 +1,4 @@
+using TravelTracker.Data;
 using TravelTracker.Data.Repositories;
 using TravelTracker.Domain.Models;
 using System.Text.Json;
@@ -8,8 +9,9 @@ namespace TravelTracker.Api.Services;
 /**
  * Implements the existing shared service with its shared repository and entity.
  * @param repository Process-lifetime catalogue storage.
+ * @param ids Issues new entity identities.
  */
-public sealed class AttractionService(IAttractionRepository repository) : IAttractionService
+public sealed class AttractionService(IAttractionRepository repository, EntityIdGenerator ids) : IAttractionService
 {
     // Semaphore to serialize read-modify-write partial updates and avoid lost updates.
     private static readonly System.Threading.SemaphoreSlim updateLock = new(1, 1);
@@ -45,7 +47,7 @@ public sealed class AttractionService(IAttractionRepository repository) : IAttra
      */
     public async Task<Attraction> CreateAsync(Attraction attraction)
     {
-        attraction.AttractionId = Guid.NewGuid();
+        attraction.AttractionId = await ids.NextAsync<Attraction>();
         attraction.Name = attraction.Name.Trim();
         await repository.AddAsync(attraction);
         return attraction;
@@ -59,8 +61,9 @@ public sealed class AttractionService(IAttractionRepository repository) : IAttra
      */
     public async Task<Attraction?> UpdateAsync(Guid attractionId, Attraction attraction)
     {
-        if (await repository.GetByIdAsync(attractionId) is null) return null;
-        attraction.AttractionId = attractionId;
+        var existing = await repository.GetByIdAsync(attractionId);
+        if (existing is null) return null;
+        attraction.AttractionId = existing.AttractionId;
         attraction.Name = attraction.Name.Trim();
         await repository.UpdateAsync(attraction);
         return attraction;

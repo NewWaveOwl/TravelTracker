@@ -16,13 +16,13 @@ The existing [TravelTracker.Api](../src/TravelTracker.Api) is the only web host.
 | [ITripService](../src/TravelTracker.Api/Services/ITripService.cs) | `Trip`, `TripLeg` (empty type declarations) | `GetHistoryAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
 | [ITripMapService](../src/TravelTracker.Api/Services/ITripMapService.cs) | `TripMapPoint` (empty type declaration) | `GetMapPointsAsync` |
 
-The Attraction and TransportMode interfaces now have concrete implementations wired into Api controllers. Trips/Settings/map retain their existing contracts but have no runtime implementation or endpoint. Empty Domain declarations supply their referenced types for compilation. Attraction/transport IDs are GUIDs; settings/trip IDs use `Id64`. `ITripService.ReplaceLegsAsync` returns the saved legs, while its repository counterpart returns only task completion.
+The Attraction and TransportMode interfaces now have concrete implementations wired into Api controllers. Trips/Settings/map retain their existing contracts but have no runtime implementation or endpoint. Empty Domain declarations supply their referenced types for compilation. Every entity identity is an `EntityId<T>`: an internal `Id64` key plus a public uuidv7. The key is `internal` to Domain and Data, so the Api cannot name or expose it; edge-facing signatures take the public `Guid`. `ITripService.ReplaceLegsAsync` returns the saved legs, while its repository counterpart returns only task completion.
 
 No `IUserService` or `IAccommodationService` exists yet. Their models and internal repositories are retained (see [Data](data.md)), but there are no user/accommodation endpoints to display in Swagger.
 
 ## Shared scaffold's planned REST contract
 
-`/api/v1`, JSON camelCase, ISO 8601 UTC. Current User, Accomodation, Attraction, TransportMode and RoutePoint identifiers are GUIDs; existing Trips/Settings interfaces use `Id64`. Identifier mapping and the future Trips/Settings wire format still need agreement. This does not change the implemented catalogue's GUID contract.
+`/api/v1`, JSON camelCase, ISO 8601 UTC. Current User, Accomodation, Attraction, TransportMode and RoutePoint identifiers are GUIDs; the wire format is always the public uuidv7. The future Trips/Settings wire format still needs agreement.
 
 | Service | Routes |
 |---|---|
@@ -46,7 +46,7 @@ Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: J
 
 ## Implemented combined API
 
-The human selected one host like LAB_07. Attractions, Transport entries and Route Points share http://localhost:5104 and one Swagger document. GET /health returns status ok and service TravelTracker. Swagger is enabled in Development.
+Attractions, Transport entries and Route Points share http://localhost:5104 and one Swagger document. GET /health returns status ok and service TravelTracker. Swagger is enabled in Development.
 
 | Method and route | Service | Result |
 | --- | --- | --- |
@@ -77,6 +77,6 @@ Response: routePointId, type, name, address, lat, lon, sourceId. POST requires a
 
 The shared host owns seeded process-lifetime memory. Its singleton repositories share records between requests; restarting restores all three catalogues and discards created data. Scoped services contain creation/lookup logic. Each resource has one controller, one service and one repository, with related GET/POST methods together.
 
-Collection GET/search, PATCH and scheduled transport routes/stops/timing calculations are deferred. The earlier [issue #15 contract](milestone-2/issue-9/feature-spec.md) remains historical and is not fully implemented by this reduced scope. [Current specification](milestone-2/implementation/specification.md), [combined HTTP examples](../src/TravelTracker.Api/requests.http).
+Collection GET/search, PATCH and scheduled transport routes/stops/timing calculations remain future work. [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md), [HTTP examples](../src/TravelTracker.Api/requests.http).
 
 For future Trips integration, a trip point is an ordered occurrence of a reusable route point. A scheduled route connects route points using a transport entry; a trip leg selects that journey. Dates and boarding/stop timings belong to the scheduled route and occurrences, rather than the transport catalogue POST. See [trip points, transport and routes](trip-points-and-routes.md).

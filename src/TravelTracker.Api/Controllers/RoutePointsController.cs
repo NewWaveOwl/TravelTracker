@@ -35,10 +35,10 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
     [ProducesResponseType(typeof(RoutePointRecord), StatusCodes.Status201Created)]
     public async Task<ActionResult<RoutePointRecord>> Create(CreateRoutePointRequest request)
     {
-        var saved = await service.CreateAsync(new RoutePoint(Guid.Empty, request.Type!, request.Name!, request.Address!,
+        var saved = await service.CreateAsync(new RoutePoint(default, request.Type!, request.Name!, request.Address!,
             request.Lat!.Value, request.Lon!.Value, request.SourceId));
         var response = ToResponse(saved);
-        return CreatedAtAction(nameof(GetById), new { id = saved.RoutePointId }, response);
+        return CreatedAtAction(nameof(GetById), new { id = saved.RoutePointId.PublicId }, response);
     }
 
     /**
@@ -46,5 +46,5 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
      * @param record Entity returned by the shared service.
      * @return Its public HTTP response, including the existing name/coordinate aliases.
      */
-    private static RoutePointRecord ToResponse(RoutePoint record) => new(record.RoutePointId, record.Type, record.Name, record.Address, record.Latitude, record.Longitude, record.SourceId);
+    private static RoutePointRecord ToResponse(RoutePoint record) => new(record.RoutePointId.PublicId, record.Type, record.Name, record.Address, record.Latitude, record.Longitude, record.SourceId);
 }

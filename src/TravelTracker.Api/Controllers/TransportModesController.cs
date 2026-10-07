@@ -37,7 +37,7 @@ public sealed class TransportModesController(ITransportModeService service) : Co
     {
         var saved = await service.CreateAsync(new TransportMode { Code = request.Code!, DisplayName = request.Name!, Description = request.Description });
         var response = ToResponse(saved);
-        return CreatedAtAction(nameof(GetById), new { id = saved.TransportModeId }, response);
+        return CreatedAtAction(nameof(GetById), new { id = saved.TransportModeId.PublicId }, response);
     }
 
     /**
@@ -45,5 +45,5 @@ public sealed class TransportModesController(ITransportModeService service) : Co
      * @param record Entity returned by the shared service.
      * @return Its public HTTP response, including the existing name/coordinate aliases.
      */
-    private static TransportModeRecord ToResponse(TransportMode record) => new(record.TransportModeId, record.Code, record.DisplayName, record.Description);
+    private static TransportModeRecord ToResponse(TransportMode record) => new(record.TransportModeId.PublicId, record.Code, record.DisplayName, record.Description);
 }

@@ -1,3 +1,4 @@
+using TravelTracker.Data;
 using TravelTracker.Data.Repositories;
 using TravelTracker.Domain.Models;
 
@@ -6,8 +7,9 @@ namespace TravelTracker.Api.Services;
 /**
  * Creates and reads reusable locations through the shared Data layer.
  * @param repository Process-lifetime location storage.
+ * @param ids Issues new entity identities.
  */
-public sealed class RoutePointService(IRoutePointRepository repository) : IRoutePointService
+public sealed class RoutePointService(IRoutePointRepository repository, EntityIdGenerator ids) : IRoutePointService
 {
     /**
      * Reads one location.
@@ -23,7 +25,7 @@ public sealed class RoutePointService(IRoutePointRepository repository) : IRoute
      */
     public async Task<RoutePoint> CreateAsync(RoutePoint point)
     {
-        var saved = point with { RoutePointId = Guid.NewGuid(), Name = point.Name.Trim() };
+        var saved = point with { RoutePointId = await ids.NextAsync<RoutePoint>(), Name = point.Name.Trim() };
         await repository.AddAsync(saved);
         return saved;
     }

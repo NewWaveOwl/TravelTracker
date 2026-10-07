@@ -1,3 +1,5 @@
+using TravelTracker.Domain.Types;
+
 namespace TravelTracker.Domain.Models;
 
 /**
@@ -8,7 +10,7 @@ public sealed class Attraction
     /**
      * Gets or sets the unique identifier of the attraction.
      */
-    public Guid AttractionId { get; set; }
+    public EntityId<Attraction> AttractionId { get; set; }
 
     /**
      * Gets or sets the attraction name shown to users.

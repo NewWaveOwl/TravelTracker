@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using TravelTracker.Domain.Types;
 
 namespace TravelTracker.Domain.Models
 {
@@ -11,7 +12,7 @@ namespace TravelTracker.Domain.Models
     /// </summary>
     public sealed class User
     {
-        public Guid UserId { get; set; }   
+        public EntityId<User> UserId { get; set; }   
         public string Username { get; set; } = string.Empty;
 
         public string Email { get; set; } = string.Empty;

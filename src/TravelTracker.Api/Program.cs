@@ -1,3 +1,4 @@
+using TravelTracker.Data;
 using TravelTracker.Data.Repositories;
 using TravelTracker.Api.Services;
 
@@ -12,6 +13,7 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new() { Title = "TravelTracker API", Version = "v1" });
 });
+builder.Services.AddSingleton(EntityIdGenerator.ForSeedData());
 builder.Services.AddSingleton<IAttractionRepository, InMemoryAttractionRepository>();
 builder.Services.AddScoped<IAttractionService, AttractionService>();
 builder.Services.AddSingleton<ITransportModeRepository, InMemoryTransportModeRepository>();

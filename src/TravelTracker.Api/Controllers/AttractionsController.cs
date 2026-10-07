@@ -79,7 +79,7 @@ public sealed class AttractionsController(IAttractionService service) : Controll
             Rating = request.Rating, Address = request.Address!, Latitude = request.Lat!.Value,
             Longitude = request.Lon!.Value, EstimatedVisitMinutes = request.EstimatedVisitMinutes!.Value });
         var response = ToResponse(saved);
-        return CreatedAtAction(nameof(GetById), new { id = saved.AttractionId }, response);
+        return CreatedAtAction(nameof(GetById), new { id = saved.AttractionId.PublicId }, response);
     }
 
     /**
@@ -87,5 +87,5 @@ public sealed class AttractionsController(IAttractionService service) : Controll
      * @param record Entity returned by the shared service.
      * @return Its public HTTP response, including the existing name/coordinate aliases.
      */
-    private static AttractionRecord ToResponse(Attraction record) => new(record.AttractionId, record.Name, record.Description, record.Rating, record.Address, record.Latitude, record.Longitude, record.EstimatedVisitMinutes);
+    private static AttractionRecord ToResponse(Attraction record) => new(record.AttractionId.PublicId, record.Name, record.Description, record.Rating, record.Address, record.Latitude, record.Longitude, record.EstimatedVisitMinutes);
 }

@@ -1,23 +1,10 @@
 # Trip points, transport entries and routes
 
-## Existing main code and integrated layers
+## Current implementation
 
-The shared/default branch is master. The checked commit is 7c553673edb2713e2d24eadca101eba5fe652cb0. All 26 original files remain present. Twenty are unchanged, including all 11 original service/repository interfaces, User/Accomodation models, role/status enums and SQL. Original model properties and method signatures are preserved.
+TravelTracker.Api is the only web host; Data owns repositories and Domain owns models. Attractions, Transport entries and Route Points expose POST/GET by ID on port 5104 with seeded process-lifetime memory. HTTP DTOs preserve name/lat/lon aliases. Trips/Settings declarations supply types for existing interfaces without implementing those features.
 
-The six intentional updates build on that source:
-
-| Existing file | Integration change |
-| --- | --- |
-| [Api Program](../src/TravelTracker.Api/Program.cs) | Compose controllers, services, repositories and Swagger in the existing host |
-| [Api project](../src/TravelTracker.Api/TravelTracker.Api.csproj) | Add Swashbuckle 10.2.3 while retaining Data/Domain project references |
-| [Launch profile](../src/TravelTracker.Api/Properties/launchSettings.json) | Run the same Swagger/API on port 5104 |
-| [Attraction](../src/TravelTracker.Domain/Models/Attraction.cs) | Add optional Description and Rating; retain every original property |
-| [TransportMode](../src/TravelTracker.Domain/Models/TransportMode.cs) | Add optional Description; retain DisplayName and original properties |
-| [Id64](../src/TravelTracker.Domain/Types/Id64.cs) | Convert New() to long before constructor delegation, fixing CS1503 |
-
-Christel's User/Accomodation models/repositories and James's service/repository contracts remain unchanged. Empty partial Trip, TripLeg, UserSettings and TripMapPoint declarations supply types referenced by those contracts; they have no fields or runtime behavior. The owning features still need implementation. No original file is deleted. The separate WebApi and old Attractions/Transport host folders were removed; Api is the only web project.
-
-[Domain](domain.md), [API](api.md) and [Data](data.md) inventory the source. The full solution now builds successfully. Swagger shows implemented controllers and their DTOs; unfinished collaborator interfaces do not create endpoints. [Validation](milestone-2/implementation/validation.md) summarizes the audit and executed checks. Earlier detailed verification remains in Git history.
+[Domain](domain.md), [API](api.md) and [Data](data.md) describe current models and contracts. The relationships and timing rules below are future product design.
 
 ## Meaning of each concept
 
@@ -47,7 +34,7 @@ erDiagram
     ROUTE_POINT ||--o{ ROUTE_STOP : located_at
 ```
 
-The diagram describes the future integration. Only RoutePoint and transport entries, plus Attractions, have current GET-by-ID/POST endpoints. Scheduled routes were removed when the human requested the simple implementation; they remain future work. This update preserves main code and documents the relationships while keeping scheduling and Trips behavior as future work. These are logical relationships, not deployed SQL foreign keys.
+The diagram describes future integration. Only RoutePoint, transport entries and Attractions have current GET-by-ID/POST endpoints. Scheduling and Trips behavior remain future work. These are logical relationships, not deployed SQL foreign keys.
 
 A future scheduled-route contract would identify the transport entry, start/destination route points and each intermediate stop's point. The Trips service would select the route for a leg, associate that leg with its ordered trip-point occurrences, and save the chosen transport/location details as snapshots. The trip would stay readable if a catalogue changed or became unavailable. Final field names, ID conversions between the GUID catalogue and Id64 Trips contracts, and cross-owner validation still need review before implementation.
 
@@ -76,8 +63,8 @@ A future trip can select R1 as an itinerary leg and add visits/stays around it. 
 
 ## API and persistence boundaries
 
-The human selected one host and Swagger page like LAB_07. Resource controllers remain separate while sharing http://localhost:5104. Catalogue storage is in-memory and resets on restart. The existing Api/Data/Domain projects in [TravelTracker.slnx](../TravelTracker.slnx) form the implementation: Api references Data and Domain, Data references Domain. Api is the only web host. Attraction/Transport use the original entities and interface signatures; response DTOs retain the agreed JSON fields.
+Resource controllers remain separate while sharing http://localhost:5104. Catalogue storage is in-memory and resets on restart. The existing Api/Data/Domain projects in [TravelTracker.slnx](../TravelTracker.slnx) form the implementation: Api references Data and Domain, Data references Domain. Api is the only web host. Attraction/Transport use the original entities and interface signatures; response DTOs retain the agreed JSON fields.
 
-The main SQL Trips row currently stores one departure/destination directly; ordered trip legs, route references, point snapshots and intermediate stop occurrences need a later reviewed database migration. The original SQL mode enum also lacks bike, which the current in-memory catalogue supports. The SQL schema is unchanged; the integration changes to existing files are listed above.
+The main SQL Trips row currently stores one departure/destination directly; ordered trip legs, route references, point snapshots and intermediate stop occurrences need a later reviewed database migration. The original SQL mode enum also lacks bike, which the current in-memory catalogue supports. The SQL schema is not used by the in-memory catalogue; persistence requires a later reviewed migration.
 
-See [API contracts](api.md), [domain records](domain.md), [data status](data.md) and [implementation evidence](milestone-2/implementation/validation.md).
+See [API contracts](api.md), [domain records](domain.md), [data status](data.md) and [validation record](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/validation.md).

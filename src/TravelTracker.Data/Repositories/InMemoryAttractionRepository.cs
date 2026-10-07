@@ -10,7 +10,7 @@ namespace TravelTracker.Data.Repositories;
 public sealed class InMemoryAttractionRepository : IAttractionRepository
 {
     private readonly ConcurrentDictionary<Guid, Attraction> records =
-        new(AttractionSeedData.Create().ToDictionary(record => record.AttractionId));
+        new(AttractionSeedData.Create().ToDictionary(record => record.AttractionId.PublicId));
 
     /**
      * Reads the catalogue through the existing repository contract.
@@ -33,7 +33,7 @@ public sealed class InMemoryAttractionRepository : IAttractionRepository
      */
     public Task AddAsync(Attraction attraction)
     {
-        records[attraction.AttractionId] = Copy(attraction);
+        records[attraction.AttractionId.PublicId] = Copy(attraction);
         return Task.CompletedTask;
     }
 
@@ -44,8 +44,8 @@ public sealed class InMemoryAttractionRepository : IAttractionRepository
      */
     public Task UpdateAsync(Attraction attraction)
     {
-        if (records.TryGetValue(attraction.AttractionId, out var previous))
-            records.TryUpdate(attraction.AttractionId, Copy(attraction), previous);
+        if (records.TryGetValue(attraction.AttractionId.PublicId, out var previous))
+            records.TryUpdate(attraction.AttractionId.PublicId, Copy(attraction), previous);
         return Task.CompletedTask;
     }
 
