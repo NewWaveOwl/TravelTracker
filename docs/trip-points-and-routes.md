@@ -67,4 +67,4 @@ Resource controllers remain separate while sharing http://localhost:5104. Catalo
 
 The main SQL Trips row currently stores one departure/destination directly; ordered trip legs, route references, point snapshots and intermediate stop occurrences need a later reviewed database migration. The original SQL mode enum also lacks bike, which the current in-memory catalogue supports. The SQL schema is not used by the in-memory catalogue; persistence requires a later reviewed migration.
 
-See [API contracts](api.md), [domain records](domain.md), [data status](data.md) and [validation record](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/implementation/validation.md).
+See [API contracts](api.md), [domain records](domain.md), [data status](data.md) and [validation record](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/validation.md).

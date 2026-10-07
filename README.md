@@ -40,7 +40,7 @@ dotnet test TravelTracker.Tests.slnx --configuration Release
 
 The [test solution](TravelTracker.Tests.slnx) includes Api, Data, Domain and the test project. Isolated test hosts start automatically; a manually running API is unnecessary. Use the explicit solution filename because both solution files exist.
 
-[Validation and test coverage](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/implementation/validation.md) are recorded on the resource branch.
+[Validation and test coverage](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/validation.md) are recorded on the resource branch.
 
 ## Models and design
 
@@ -50,6 +50,6 @@ The API uses the original Attraction/TransportMode entities and interfaces. HTTP
 
 ## Milestone 2 development records
 
-The [AI evidence](https://github.com/NewWaveOwl/TravelTracker/tree/milestone_2_AI_and_development_resource/AI_evdence) and [development flow](https://github.com/NewWaveOwl/TravelTracker/tree/milestone_2_AI_and_development_resource/devlopmet_flow) live on `milestone_2_AI_and_development_resource`. They include issue #9 planning, original prompts/responses, interview answers, reviewed plans, validation, reflection and the conversation/decision record.
+The [AI evidence](https://github.com/NewWaveOwl/TravelTracker/tree/milestone_2_AI_and_development_resource/AI_evdence/atiom_evdence) and [development flow](https://github.com/NewWaveOwl/TravelTracker/tree/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow) live on `milestone_2_AI_and_development_resource`. They include issue #9 planning, original prompts/responses, interview answers, reviewed plans, validation, reflection and the conversation/decision record.
 
 [Coding skill](.github/skills/traveltracker-code/SKILL.md) and [testing skill](.github/skills/traveltracker-testing/SKILL.md) remain available for everyday development.

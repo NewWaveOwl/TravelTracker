@@ -75,6 +75,6 @@ Response: routePointId, type, name, address, lat, lon, sourceId. POST requires a
 
 The shared host owns seeded process-lifetime memory. Its singleton repositories share records between requests; restarting restores all three catalogues and discards created data. Scoped services contain creation/lookup logic. Each resource has one controller, one service and one repository, with related GET/POST methods together.
 
-Collection GET/search, PATCH and scheduled transport routes/stops/timing calculations remain future work. [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/implementation/specification.md), [HTTP examples](../src/TravelTracker.Api/requests.http).
+Collection GET/search, PATCH and scheduled transport routes/stops/timing calculations remain future work. [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md), [HTTP examples](../src/TravelTracker.Api/requests.http).
 
 For future Trips integration, a trip point is an ordered occurrence of a reusable route point. A scheduled route connects route points using a transport entry; a trip leg selects that journey. Dates and boarding/stop timings belong to the scheduled route and occurrences, rather than the transport catalogue POST. See [trip points, transport and routes](trip-points-and-routes.md).
