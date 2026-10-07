@@ -26,6 +26,28 @@ public sealed class AttractionTests
     }
 
     [Fact]
+    public async Task Create_OmittedAddressBecomesEmptyString()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/attractions",
+            new { name = "No Address Museum", lat = 45m, lon = -73m, estimatedVisitMinutes = 30 });
+        var saved = await HttpTestSupport.AssertCreatedAsync(client, response);
+        Assert.Equal(string.Empty, saved.GetProperty("address").GetString());
+    }
+
+    [Fact]
+    public async Task Create_NameIsTrimmed()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/attractions",
+            new { name = "  Trimmed Name  ", lat = 45m, lon = -73m, estimatedVisitMinutes = 30 });
+        var saved = await HttpTestSupport.AssertCreatedAsync(client, response);
+        Assert.Equal("Trimmed Name", saved.GetProperty("name").GetString());
+    }
+
+    [Fact]
     public async Task Create_UnknownPropertyReturns400()
     {
         using var factory = new ApiFactory();

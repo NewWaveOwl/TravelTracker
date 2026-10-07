@@ -50,8 +50,10 @@ The human selected one host like LAB_07. Attractions, Transport entries and Rout
 
 | Method and route | Service | Result |
 | --- | --- | --- |
-| GET /api/v1/attractions/{id} | Attractions | Saved attraction, or 404 |
-| POST /api/v1/attractions | Attractions | 201, saved attraction and details Location |
+| GET /api/v1/attractions | Attractions | 200 ordered array of attractions; optional `name` query filters case-insensitive substring matches |
+| GET /api/v1/attractions/{id} | Attractions | 200 attraction details; malformed GUID -> 400; unknown valid GUID -> 404 |
+| POST /api/v1/attractions | Attractions | 201, saved attraction and details Location; unknown JSON properties rejected (400) |
+| PATCH /api/v1/attractions/{id} | Attractions | 200 updated attraction; malformed GUID/invalid JSON/invalid fields -> 400; unknown valid GUID -> 404 |
 | GET /api/v1/transport-modes/{id} | Transport | Saved transport entry, or 404 |
 | POST /api/v1/transport-modes | Transport | 201, saved entry and details Location |
 | GET /api/v1/route-points/{id} | Transport | Saved route point, or 404 |
@@ -61,7 +63,7 @@ All IDs are generated GUIDs; JSON fields use camelCase. Standard ASP.NET Core mo
 
 ### Attraction fields
 
-Response: attractionId, name, description, rating, address, lat, lon, estimatedVisitMinutes. POST requires a nonblank name, latitude (-90 to 90), longitude (-180 to 180), and nonnegative integer estimatedVisitMinutes. Names are trimmed. Description and rating are optional; null rating means no score, otherwise 0-5 inclusive. Omitted address becomes an empty string; explicit null address is invalid.
+Response: attractionId, name, description, rating, address, lat, lon, estimatedVisitMinutes. POST requires a nonblank name, latitude (-90 to 90), longitude (-180 to 180), and nonnegative integer estimatedVisitMinutes. Names are trimmed. Description and rating are optional; null rating means no score, otherwise 0-5 inclusive. Omitted address becomes an empty string; explicit null address is invalid. PATCH accepts partial JSON objects; omitted fields are preserved, explicit null clears description or rating only. Unknown fields or attempts to set attractionId are rejected with 400.
 
 ### Transport entry fields
 
