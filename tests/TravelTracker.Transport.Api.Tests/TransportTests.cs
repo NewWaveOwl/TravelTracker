@@ -10,12 +10,13 @@ using Microsoft.Extensions.Logging;
 namespace TravelTracker.Transport.Api.Tests;
 
 /**
- * Verifies the Transport service with LAB_07-style xUnit tests in one file.
+ * Verifies the core Transport milestone workflows with 15 xUnit cases.
  */
 public sealed class TransportTests
 {
     /**
-     * Verifies independent service health.
+     * Checks the independent Transport health endpoint.
+     * @return Completion after the behavior is verified.
      */
     [Fact]
     public async Task Health_ReturnsServiceIdentity()
@@ -28,19 +29,18 @@ public sealed class TransportTests
     }
 
     /**
-     * Verifies transport entries can be created independently of routes.
+     * Lists the six seeded modes and creates a named bus entry without a schedule.
+     * @return Completion after the behavior is verified.
      */
-    [Theory]
-    [InlineData("car")]
-    [InlineData("bus")]
-    [InlineData("train")]
-    [InlineData("pedestrian")]
-    [InlineData("bike")]
-    [InlineData("plane")]
-    public async Task Create_SupportedModeDoesNotCreateASchedule(string code)
+    [Fact]
+    public async Task Create_TransportEntryDoesNotCreateASchedule()
     {
+        const string code = "bus";
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
+        var modes = await client.GetFromJsonAsync<JsonElement>("/api/v1/transport-modes");
+        Assert.Equal(new[] { "bike", "bus", "car", "pedestrian", "plane", "train" },
+            modes.EnumerateArray().Select(mode => mode.GetProperty("code").GetString()).OrderBy(value => value, StringComparer.Ordinal));
         var routesBefore = await HttpTestSupport.CountAsync(client, "/api/v1/transport-routes");
         using var response = await client.PostAsJsonAsync("/api/v1/transport-modes", new { code, name = " New Transport ", description = "A manual entry." });
         var saved = await HttpTestSupport.AssertCreatedAsync(client, response);
@@ -51,14 +51,14 @@ public sealed class TransportTests
         Assert.Equal(routesBefore, await HttpTestSupport.CountAsync(client, "/api/v1/transport-routes"));
     }
 
-    [Theory]
-    [InlineData("{\"code\":\"rocket\",\"name\":\"Test\"}")]
-    [InlineData("{\"code\":\"bus\",\"name\":\" \"}")]
-    [InlineData("{\"code\":\"bus\"}")]
-    [InlineData("{\"code\":\"bus\",\"name\":\"Test\",\"transportModeId\":\"00000000-0000-0000-0000-000000000001\"}")]
-    [InlineData("{\"code\":\"bus\",\"name\":\"Test\",\"departureAt\":\"2026-10-10T00:00:00Z\"}")]
-    public async Task Create_InvalidEntryDoesNotWrite(string json)
+    /**
+     * Rejects an unsupported transport mode without inserting an entry.
+     * @return Completion after the behavior is verified.
+     */
+    [Fact]
+    public async Task Create_UnsupportedModeDoesNotWrite()
     {
+        const string json = """{"code":"rocket","name":"Test"}""";
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         using var response = await client.PostAsync("/api/v1/transport-modes", HttpTestSupport.Json(json));
@@ -67,67 +67,77 @@ public sealed class TransportTests
     }
 
     /**
-     * Verifies typed locations and independent catalogue reference metadata.
+     * Creates the three point roles and uses them in one scheduled journey.
+     * @return Completion after the behavior is verified.
      */
-    [Theory]
-    [InlineData("accommodation")]
-    [InlineData("attraction")]
-    [InlineData("transport_stop")]
-    public async Task Create_AcceptsSupportedPointTypeAndCoordinateBoundaries(string type)
+    [Fact]
+    public async Task Create_RoutePointsFormScheduledJourney()
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         var source = Guid.Parse("00000000-0000-0000-0000-000000000999");
-        using var response = await client.PostAsJsonAsync("/api/v1/route-points", new { type, name = " New Point ", lat = -90m, lon = 180m, sourceId = source });
-        var saved = await HttpTestSupport.AssertCreatedAsync(client, response);
-        Assert.Equal(type, saved.GetProperty("type").GetString());
-        Assert.Equal(source, saved.GetProperty("sourceId").GetGuid());
-        Assert.Equal("New Point", saved.GetProperty("name").GetString());
-        Assert.Equal(string.Empty, saved.GetProperty("address").GetString());
-        Assert.Equal(4, await HttpTestSupport.CountAsync(client, "/api/v1/route-points"));
+        var points = new Dictionary<string, string>();
+        foreach (var type in new[] { "accommodation", "attraction", "transport_stop" })
+        {
+            using var response = await client.PostAsJsonAsync("/api/v1/route-points",
+                new { type, name = $" New {type} ", lat = -90m, lon = 180m, sourceId = source });
+            var saved = await HttpTestSupport.AssertCreatedAsync(client, response);
+            Assert.Equal(type, saved.GetProperty("type").GetString());
+            Assert.Equal($"New {type}", saved.GetProperty("name").GetString());
+            Assert.Equal(source, saved.GetProperty("sourceId").GetGuid());
+            points[type] = saved.GetProperty("routePointId").GetGuid().ToString();
+        }
+        Assert.Equal(6, await HttpTestSupport.CountAsync(client, "/api/v1/route-points"));
+        var request = TransportRequests.Route();
+        request["startPointId"] = points["accommodation"];
+        request["destinationPointId"] = points["attraction"];
+        var stop = request["stops"]![0]!.DeepClone();
+        stop["pointId"] = points["transport_stop"];
+        request["stops"] = new JsonArray(stop);
+        using var routeResponse = await client.PostAsJsonAsync("/api/v1/transport-routes", request);
+        var journey = await HttpTestSupport.AssertCreatedAsync(client, routeResponse);
+        Assert.Equal(points["accommodation"], journey.GetProperty("start").GetProperty("routePointId").GetGuid().ToString());
+        Assert.Equal(points["attraction"], journey.GetProperty("destination").GetProperty("routePointId").GetGuid().ToString());
+        Assert.Equal(points["transport_stop"], journey.GetProperty("stops")[0].GetProperty("point").GetProperty("routePointId").GetGuid().ToString());
     }
 
-    [Theory]
-    [InlineData("type", "\"hotel\"")]
-    [InlineData("name", """ "   " """)]
-    [InlineData("lat", "90.1")]
-    [InlineData("lon", "-180.1")]
-    [InlineData("lat", "null")]
-    [InlineData("address", "null")]
-    [InlineData("sourceId", "\"00000000-0000-0000-0000-000000000000\"")]
-    [InlineData("routePointId", "\"00000000-0000-0000-0000-000000000001\"")]
-    public async Task Create_InvalidLocationDoesNotWrite(string field, string json)
+    /**
+     * Rejects a point outside the latitude range without inserting it.
+     * @return Completion after the behavior is verified.
+     */
+    [Fact]
+    public async Task Create_InvalidPointCoordinatesDoNotWrite()
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        var request = new JsonObject { ["type"] = "attraction", ["name"] = "Valid", ["lat"] = 0, ["lon"] = 0 };
-        request[field] = JsonNode.Parse(json);
-        using var response = await client.PostAsJsonAsync("/api/v1/route-points", request);
+        using var response = await client.PostAsJsonAsync("/api/v1/route-points",
+            new { type = "attraction", name = "Invalid point", lat = 91, lon = 0 });
         await HttpTestSupport.AssertValidationAsync(response);
         Assert.Equal(3, await HttpTestSupport.CountAsync(client, "/api/v1/route-points"));
     }
 
     /**
-     * Verifies catalogue, point and route detail status contracts.
+     * Checks absent and malformed identifiers for each transport resource.
+     * @param resource Resource collection to query.
+     * @return Completion after the behavior is verified.
      */
     [Theory]
-    [InlineData("transport-modes", "00000000-0000-0000-0000-000000000101")]
-    [InlineData("route-points", "00000000-0000-0000-0000-000000000201")]
-    [InlineData("transport-routes", "00000000-0000-0000-0000-000000000301")]
-    public async Task Get_HandlesKnownUnknownAndMalformedIds(string resource, string known)
+    [InlineData("transport-modes")]
+    [InlineData("route-points")]
+    [InlineData("transport-routes")]
+    public async Task Get_AbsentAndMalformedResourcesUseDocumentedStatuses(string resource)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        using var found = await client.GetAsync($"/api/v1/{resource}/{known}");
         using var missing = await client.GetAsync($"/api/v1/{resource}/00000000-0000-0000-0000-000000000999");
         using var invalid = await client.GetAsync($"/api/v1/{resource}/not-a-guid");
-        Assert.Equal(HttpStatusCode.OK, found.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         await HttpTestSupport.AssertValidationAsync(invalid);
     }
 
     /**
-     * Verifies saved schedules, UTC normalization and computed preparation/free windows.
+     * Checks UTC times, origin preparation, multiple stops and permitted free windows.
+     * @return Completion after the behavior is verified.
      */
     [Fact]
     public async Task Create_MultipleStopsExposeDwellAndOnlyPermittedPotentialWindows()
@@ -154,15 +164,15 @@ public sealed class TransportTests
         Assert.Equal(2, await HttpTestSupport.CountAsync(client, "/api/v1/transport-routes"));
     }
 
-    [Theory]
-    [InlineData("00000000-0000-0000-0000-000000000101", "bus")]
-    [InlineData("00000000-0000-0000-0000-000000000102", "train")]
-    [InlineData("00000000-0000-0000-0000-000000000103", "pedestrian")]
-    [InlineData("00000000-0000-0000-0000-000000000104", "bike")]
-    [InlineData("00000000-0000-0000-0000-000000000105", "plane")]
-    [InlineData("00000000-0000-0000-0000-000000000106", "car")]
-    public async Task Create_DirectOvernightRouteWorksForEveryMode(string id, string code)
+    /**
+     * Checks a direct plane journey crossing midnight with origin preparation.
+     * @return Completion after the behavior is verified.
+     */
+    [Fact]
+    public async Task Create_DirectOvernightPlaneRouteHasCorrectDuration()
     {
+        const string id = "00000000-0000-0000-0000-000000000105";
+        const string code = "plane";
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         var request = TransportRequests.Route();
@@ -179,23 +189,14 @@ public sealed class TransportTests
     }
 
     /**
-     * Proves invalid schedules and missing references do not insert partial routes.
+     * Rejects a timestamp without an offset and a non-increasing journey without writing.
+     * @param field Schedule field to invalidate.
+     * @param json Invalid JSON value for that field.
+     * @return Completion after the behavior is verified.
      */
     [Theory]
-    [InlineData("name", """ "   " """)]
-    [InlineData("boardingMinutes", "-1")]
-    [InlineData("boardingMinutes", "null")]
     [InlineData("departureAt", "\"2026-10-10T08:00:00\"")]
-    [InlineData("departureAt", "\"2026-10-10T8:00:00-04:00\"")]
-    [InlineData("boardingMinutes", "2147483647")]
-    [InlineData("departureAt", "\"not-a-date\"")]
-    [InlineData("departureAt", "12")]
     [InlineData("arrivalAt", "\"2026-10-10T08:00:00-04:00\"")]
-    [InlineData("arrivalAt", "\"2026-10-10T07:00:00-04:00\"")]
-    [InlineData("stops", "null")]
-    [InlineData("stops", "[null]")]
-    [InlineData("transportModeId", "\"00000000-0000-0000-0000-000000000000\"")]
-    [InlineData("transportRouteId", "\"00000000-0000-0000-0000-000000000001\"")]
     public async Task Create_InvalidRouteFieldDoesNotWrite(string field, string json)
     {
         using var factory = new ApiFactory();
@@ -206,59 +207,41 @@ public sealed class TransportTests
         Assert.Equal(1, await HttpTestSupport.CountAsync(client, "/api/v1/transport-routes"));
     }
 
-    [Theory]
-    [InlineData("arrivalAt", "\"2026-10-10T08:00:00-04:00\"")]
-    [InlineData("departureAt", "\"2026-10-10T08:30:00-04:00\"")]
-    [InlineData("departureAt", "\"2026-10-10T16:00:00-04:00\"")]
-    [InlineData("boardingMinutes", "91")]
-    [InlineData("boardingMinutes", "-1")]
-    [InlineData("boardingMinutes", "null")]
-    [InlineData("canLeaveVehicle", "null")]
-    [InlineData("pointId", "null")]
-    public async Task Create_InvalidStopFieldDoesNotWrite(string field, string json)
-    {
-        using var factory = new ApiFactory();
-        using var client = factory.CreateClient();
-        var request = TransportRequests.Route(); request["stops"]![0]![field] = JsonNode.Parse(json);
-        using var response = await client.PostAsJsonAsync("/api/v1/transport-routes", request);
-        await HttpTestSupport.AssertValidationAsync(response);
-        Assert.Equal(1, await HttpTestSupport.CountAsync(client, "/api/v1/transport-routes"));
-    }
-
+    /**
+     * Rejects boarding time longer than the stop window without inserting a route.
+     * @return Completion after the behavior is verified.
+     */
     [Fact]
-    public async Task Create_OutOfOrderStopsAreRejectedWithoutReordering()
+    public async Task Create_StopBoardingCannotExceedDowntime()
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         var request = TransportRequests.Route();
-        var stops = (JsonArray)request["stops"]!;
-        var first = stops[0]!.DeepClone(); var second = stops[1]!.DeepClone();
-        request["stops"] = new JsonArray(second, first);
+        request["stops"]![0]!["boardingMinutes"] = 91;
         using var response = await client.PostAsJsonAsync("/api/v1/transport-routes", request);
         await HttpTestSupport.AssertValidationAsync(response);
         Assert.Equal(1, await HttpTestSupport.CountAsync(client, "/api/v1/transport-routes"));
     }
 
-    [Theory]
-    [InlineData("transportModeId")]
-    [InlineData("startPointId")]
-    [InlineData("destinationPointId")]
-    [InlineData("stop")]
-    public async Task Create_UnknownReferenceReturns404AndDoesNotWrite(string field)
+    /**
+     * Rejects an absent destination after reference resolution without partial insertion.
+     * @return Completion after the behavior is verified.
+     */
+    [Fact]
+    public async Task Create_UnknownDestinationReturns404WithoutWriting()
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         var request = TransportRequests.Route();
-        const string missing = "00000000-0000-0000-0000-000000000999";
-        if (field == "stop") request["stops"]![0]!["pointId"] = missing;
-        else request[field] = missing;
+        request["destinationPointId"] = "00000000-0000-0000-0000-000000000999";
         using var response = await client.PostAsJsonAsync("/api/v1/transport-routes", request);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(1, await HttpTestSupport.CountAsync(client, "/api/v1/transport-routes"));
     }
 
     /**
-     * Verifies catalogue and schedule stores reset together in a fresh host.
+     * Resets entries, points and scheduled routes in a new in-memory host.
+     * @return Completion after the behavior is verified.
      */
     [Fact]
     public async Task FreshHost_DiscardsCataloguePointAndRouteWrites()

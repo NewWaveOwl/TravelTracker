@@ -34,6 +34,7 @@ Use the lowest level that proves the behavior. A direct service call does not pr
 ## Write focused and deterministic tests
 
 - Follow the human-approved LAB_07-style layout for the standalone services: one xUnit project per API, with all its tests and internal host/helpers in `AttractionsTests.cs` or `TransportTests.cs`. Keep the API project references separate so their `Program` entry points do not collide. Group related cases within that file; production code still follows one feature per file.
+- For the current milestone demo, keep at most 30 discovered test cases across both APIs, including every `[InlineData]` row. Prefer core workflows and representative boundaries; document the coverage removed to meet this human-requested limit. Do not hide the old input matrix inside loops just to change the reported count.
 - Name tests by behavior and expected outcome, such as `CreateAttraction_InvalidCoordinates_DoesNotPersist`. Arrange minimal data, act on one behavior, then assert its observable result and relevant side effects.
 - Use `[Fact]` for one scenario and `[Theory]` for meaningful input variations. A regression test should fail on the old behavior when it can be demonstrated safely.
 - Fix identifiers/times/seed data; inject a clock or `TimeProvider` where time is a dependency. Avoid live network calls, arbitrary sleeps, test-order dependence, and uncontrolled shared state. Await asynchronous operations.

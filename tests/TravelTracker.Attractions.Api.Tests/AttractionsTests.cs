@@ -5,21 +5,20 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using TravelTracker.Attractions.Api.Data;
-using TravelTracker.Attractions.Api.Models;
-using TravelTracker.Attractions.Api.Validation;
 
 namespace TravelTracker.Attractions.Api.Tests;
 
 /**
- * Verifies the Attractions service with LAB_07-style xUnit tests in one file.
+ * Verifies the core Attractions milestone workflows with 15 xUnit cases.
  */
 public sealed class AttractionsTests
 {
+    private const string Path = "/api/v1/attractions/11111111-1111-1111-1111-111111111111";
+
     /**
-     * Verifies independent service health.
+     * Checks the independent Attractions health endpoint.
+     * @return Completion after the behavior is verified.
      */
     [Fact]
     public async Task Health_ReturnsServiceIdentity()
@@ -32,7 +31,8 @@ public sealed class AttractionsTests
     }
 
     /**
-     * Verifies ordered seed data and the complete public representation.
+     * Checks ordered seed data and the eight public attraction fields.
+     * @return Completion after the behavior is verified.
      */
     [Fact]
     public async Task List_ReturnsStableSeedOrderAndWireFields()
@@ -52,10 +52,12 @@ public sealed class AttractionsTests
     }
 
     /**
-     * Verifies detail identity and missing/malformed identifier semantics.
+     * Rejects an unknown or malformed attraction identifier.
+     * @param id Unknown or malformed identifier.
+     * @param expected Expected HTTP status.
+     * @return Completion after the behavior is verified.
      */
     [Theory]
-    [InlineData("11111111-1111-1111-1111-111111111111", HttpStatusCode.OK)]
     [InlineData("00000000-0000-0000-0000-000000000999", HttpStatusCode.NotFound)]
     [InlineData("not-a-guid", HttpStatusCode.BadRequest)]
     public async Task Get_UsesDocumentedStatuses(string id, HttpStatusCode expected)
@@ -67,52 +69,35 @@ public sealed class AttractionsTests
     }
 
     /**
-     * Proves creation, public Location and rejected writes through HTTP.
+     * Creates a trimmed attraction with the maximum rating and reads its Location.
+     * @return Completion after the behavior is verified.
      */
-    [Theory]
-    [InlineData(0)]
-    [InlineData(5)]
-    [InlineData(null)]
-    public async Task Create_StoresTrimmedNameAndInclusiveNullableRating(int? rating)
+    [Fact]
+    public async Task Create_ValidAttractionReturnsLocationAndSavedFields()
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         var request = AttractionRequests.Create();
-        request["rating"] = rating;
+        request["rating"] = 5;
         using var response = await client.PostAsJsonAsync("/api/v1/attractions", request);
         var saved = await HttpTestSupport.AssertCreatedAsync(client, response);
         Assert.NotEqual(Guid.Empty, saved.GetProperty("attractionId").GetGuid());
         Assert.Equal("New Museum", saved.GetProperty("name").GetString());
         Assert.Equal(string.Empty, saved.GetProperty("address").GetString());
-        Assert.Equal(rating is null ? JsonValueKind.Null : JsonValueKind.Number, saved.GetProperty("rating").ValueKind);
+        Assert.Equal(5m, saved.GetProperty("rating").GetDecimal());
         Assert.Equal(4, await HttpTestSupport.CountAsync(client, "/api/v1/attractions"));
     }
 
-    [Fact]
-    public async Task Create_OmittedOptionalsAndZeroRequiredNumbersAreAccepted()
-    {
-        using var factory = new ApiFactory();
-        using var client = factory.CreateClient();
-        using var response = await client.PostAsync("/api/v1/attractions", HttpTestSupport.Json(
-            """{"name":"Zero point","lat":0,"lon":0,"estimatedVisitMinutes":0}"""));
-        var saved = await HttpTestSupport.AssertCreatedAsync(client, response);
-        Assert.Equal(JsonValueKind.Null, saved.GetProperty("description").ValueKind);
-        Assert.Equal(JsonValueKind.Null, saved.GetProperty("rating").ValueKind);
-    }
-
+    /**
+     * Rejects a blank name and ratings just outside the permitted range without writing.
+     * @param field Field to invalidate.
+     * @param json Invalid JSON value for that field.
+     * @return Completion after the behavior is verified.
+     */
     [Theory]
-    [InlineData("name", "null")]
     [InlineData("name", """ "   " """)]
     [InlineData("rating", "-0.1")]
     [InlineData("rating", "5.1")]
-    [InlineData("lat", "91")]
-    [InlineData("lon", "-181")]
-    [InlineData("estimatedVisitMinutes", "-1")]
-    [InlineData("estimatedVisitMinutes", "1.5")]
-    [InlineData("address", "null")]
-    [InlineData("rating", "\"high\"")]
-    [InlineData("attractionId", "\"00000000-0000-0000-0000-000000000001\"")]
-    [InlineData("unexpected", "true")]
     public async Task Create_InvalidFieldDoesNotWrite(string field, string json)
     {
         using var factory = new ApiFactory();
@@ -124,85 +109,41 @@ public sealed class AttractionsTests
         Assert.Equal(3, await HttpTestSupport.CountAsync(client, "/api/v1/attractions"));
     }
 
-    [Theory]
-    [InlineData("name")]
-    [InlineData("lat")]
-    [InlineData("lon")]
-    [InlineData("estimatedVisitMinutes")]
-    public async Task Create_MissingRequiredFieldDoesNotWrite(string field)
-    {
-        using var factory = new ApiFactory();
-        using var client = factory.CreateClient();
-        var request = AttractionRequests.Create();
-        request.Remove(field);
-        using var response = await client.PostAsJsonAsync("/api/v1/attractions", request);
-        await HttpTestSupport.AssertValidationAsync(response);
-        Assert.Equal(3, await HttpTestSupport.CountAsync(client, "/api/v1/attractions"));
-    }
-
+    /**
+     * Searches with spaces and mixed case in one representative query.
+     * @return Completion after the behavior is verified.
+     */
     [Fact]
-    public async Task Create_MalformedJsonDoesNotWrite()
+    public async Task Search_TrimsQueryAndIgnoresCase()
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        using var response = await client.PostAsync("/api/v1/attractions", HttpTestSupport.Json("{"));
-        await HttpTestSupport.AssertValidationAsync(response);
-        Assert.Equal(3, await HttpTestSupport.CountAsync(client, "/api/v1/attractions"));
+        using var response = await client.GetAsync("/api/v1/attractions?name=%20%20mUsEuM%20%20");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var results = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Montreal Museum", Assert.Single(results.EnumerateArray()).GetProperty("name").GetString());
     }
 
     /**
-     * Verifies literal name matching, decoding and stable tie ordering.
+     * Returns all records for an empty query and an empty list when nothing matches.
+     * @param name Empty or unmatched query.
+     * @param expected Expected number of results.
+     * @return Completion after the behavior is verified.
      */
     [Theory]
-    [InlineData("mUsEuM", 1)]
-    [InlineData("  museum  ", 1)]
     [InlineData("", 3)]
-    [InlineData("   ", 3)]
     [InlineData("no-such-name", 0)]
-    public async Task Search_UsesTrimmedCaseInsensitiveSubstring(string name, int expected)
+    public async Task Search_EmptyAndUnmatchedQueriesReturnExpectedLists(string name, int expected)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         Assert.Equal(expected, await HttpTestSupport.CountAsync(client, "/api/v1/attractions?name=" + Uri.EscapeDataString(name)));
     }
 
-    [Fact]
-    public async Task Search_LiteralSymbolsAndSingleDecodingDoNotExpand()
-    {
-        using var factory = new ApiFactory();
-        using var client = factory.CreateClient();
-        foreach (var name in new[] { "Literal %_*[museum]", "Literal %20" })
-        {
-            var request = AttractionRequests.Create(); request["name"] = name;
-            using var created = await client.PostAsJsonAsync("/api/v1/attractions", request);
-            await HttpTestSupport.AssertCreatedAsync(client, created);
-        }
-        foreach (var literal in new[] { "_", "*", "[museum]", "%20" })
-            Assert.Equal(1, await HttpTestSupport.CountAsync(client, "/api/v1/attractions?name=" + Uri.EscapeDataString(literal)));
-        Assert.Equal(5, await HttpTestSupport.CountAsync(client, "/api/v1/attractions?name=%20"));
-        using var repeated = await client.GetAsync("/api/v1/attractions?name=museum&name=port");
-        await HttpTestSupport.AssertValidationAsync(repeated);
-        Assert.Equal(5, await HttpTestSupport.CountAsync(client, "/api/v1/attractions"));
-    }
-
-    [Fact]
-    public async Task Search_CaseEqualNamesUseGuidTieBreaker()
-    {
-        using var factory = new ApiFactory();
-        using var client = factory.CreateClient();
-        var store = factory.Services.GetRequiredService<InMemoryAttractionStore>();
-        var low = Guid.Parse("00000000-0000-0000-0000-000000000001");
-        var high = Guid.Parse("00000000-0000-0000-0000-000000000002");
-        store.Add(new(high, "same", null, null, "", 0, 0, 0));
-        store.Add(new(low, "SAME", null, null, "", 0, 0, 0));
-        var records = await client.GetFromJsonAsync<JsonElement>("/api/v1/attractions?name=same");
-        Assert.Equal(new[] { low, high }, records.EnumerateArray().Select(value => value.GetProperty("attractionId").GetGuid()));
-    }
-
     /**
-     * Proves partial updates, atomic rejection and visibility across requests.
+     * Updates selected fields, preserves omitted fields, clears optionals and refreshes search.
+     * @return Completion after the behavior is verified.
      */
-    private const string Path = "/api/v1/attractions/11111111-1111-1111-1111-111111111111";
     [Fact]
     public async Task Patch_PreservesOmittedFieldsAndClearsOnlyOptionals()
     {
@@ -226,22 +167,14 @@ public sealed class AttractionsTests
         Assert.Equal(0, await HttpTestSupport.CountAsync(client, "/api/v1/attractions?name=Montreal%20Museum"));
     }
 
-    [Theory]
-    [InlineData("{}")]
-    [InlineData("{\"name\":\" \"}")]
-    [InlineData("{\"name\":null}")]
-    [InlineData("{\"lat\":null}")]
-    [InlineData("{\"name\":\"Valid new name\",\"rating\":6}")]
-    [InlineData("{\"rating\":-1}")]
-    [InlineData("{\"lon\":181}")]
-    [InlineData("{\"estimatedVisitMinutes\":-1}")]
-    [InlineData("{\"estimatedVisitMinutes\":1.5}")]
-    [InlineData("{\"description\":12}")]
-    [InlineData("{\"attractionId\":\"00000000-0000-0000-0000-000000000001\"}")]
-    [InlineData("{\"unexpected\":true}")]
-    [InlineData("{\"name\":\"First\",\"name\":\"Second\"}")]
-    public async Task Patch_InvalidCandidateLeavesEntireRecordUnchanged(string json)
+    /**
+     * Rejects a mixed valid and invalid update without changing any saved field.
+     * @return Completion after the behavior is verified.
+     */
+    [Fact]
+    public async Task Patch_InvalidCandidateLeavesEntireRecordUnchanged()
     {
+        const string json = """{"name":"Valid new name","rating":6}""";
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         var before = await client.GetStringAsync(Path);
@@ -250,62 +183,24 @@ public sealed class AttractionsTests
         Assert.Equal(before, await client.GetStringAsync(Path));
     }
 
-    [Theory]
-    [InlineData("not-a-guid", HttpStatusCode.BadRequest)]
-    [InlineData("00000000-0000-0000-0000-000000000999", HttpStatusCode.NotFound)]
-    public async Task Patch_AbsentAndMalformedIdsUseDocumentedStatuses(string id, HttpStatusCode expected)
+    /**
+     * Returns 404 for an update to an absent attraction without inserting anything.
+     * @return Completion after the behavior is verified.
+     */
+    [Fact]
+    public async Task Patch_UnknownIdReturns404WithoutWriting()
     {
+        const string id = "00000000-0000-0000-0000-000000000999";
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         using var response = await client.PatchAsync("/api/v1/attractions/" + id, HttpTestSupport.Json("""{"name":"Valid"}"""));
-        Assert.Equal(expected, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(3, await HttpTestSupport.CountAsync(client, "/api/v1/attractions"));
     }
 
-    [Fact]
-    public async Task Patch_ConcurrentDifferentFieldsRetainBothChanges()
-    {
-        using var factory = new ApiFactory();
-        using var client = factory.CreateClient();
-        var responses = await Task.WhenAll(
-            client.PatchAsync(Path, HttpTestSupport.Json("""{"name":"Concurrent Gallery"}""")),
-            client.PatchAsync(Path, HttpTestSupport.Json("""{"rating":5}""")));
-        foreach (var response in responses) { Assert.Equal(HttpStatusCode.OK, response.StatusCode); response.Dispose(); }
-        var saved = await client.GetFromJsonAsync<JsonElement>(Path);
-        Assert.Equal("Concurrent Gallery", saved.GetProperty("name").GetString());
-        Assert.Equal(5, saved.GetProperty("rating").GetDecimal());
-    }
-
     /**
-     * Verifies the compound store boundary independently of HTTP binding.
-     */
-    [Fact]
-    public void Update_ValidationExceptionLeavesOriginalSnapshotIntact()
-    {
-        var store = new InMemoryAttractionStore();
-        var before = store.Snapshot()[0];
-        Assert.Throws<InputValidationException>(() => store.Update(before.AttractionId, current =>
-        {
-            var candidate = current with { Name = "New", Rating = 6 };
-            AttractionValidator.Validate(candidate);
-            return candidate;
-        }));
-        Assert.Equal(before, store.Get(before.AttractionId));
-    }
-
-    [Fact]
-    public void Update_DoesNotMutateEarlierReadSnapshots()
-    {
-        var store = new InMemoryAttractionStore();
-        var before = store.Snapshot()[0];
-        var saved = store.Update(before.AttractionId, current => current with { Name = "New" });
-        Assert.NotEqual(before.Name, saved!.Name);
-        Assert.Equal("New", store.Get(before.AttractionId)!.Name);
-        Assert.Equal("Montreal Museum", before.Name);
-    }
-
-    /**
-     * Verifies process-store lifetime through isolated hosts.
+     * Discards writes and restores seeds in a new in-memory host.
+     * @return Completion after the behavior is verified.
      */
     [Fact]
     public async Task FreshHost_RestoresSeedsAndDiscardsPriorWrites()

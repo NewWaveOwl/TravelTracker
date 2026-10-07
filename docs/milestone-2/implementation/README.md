@@ -8,7 +8,7 @@ Implements [Attractions feature #15](https://github.com/NewWaveOwl/TravelTracker
 | Fresh Copilot plan | [Original response](copilot-plan.md), [reviewed implementation order](implementation-plan.md) |
 | Research and scope adjustment | [Triage](triage.md) |
 | Source/test changes | [Attractions](../../../src/TravelTracker.Attractions.Api), [Transport](../../../src/TravelTracker.Transport.Api), [tests](../../../tests) |
-| Executed checks and baseline limits | [Validation](validation.md), [machine-readable evidence](verification.json) |
+| Executed checks, 30-case selection and baseline limits | [Validation](validation.md), [test overlap review](test-review.md), [machine-readable evidence](verification.json) |
 | Findings and dispositions | [Review record](review-record.md), [original Copilot response](copilot-review.md) |
 | AI SDLC reflection and tool provenance | [Reflection](reflection.md), [Copilot evidence](copilot-evidence.md) |
 

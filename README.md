@@ -32,7 +32,7 @@ dotnet test tests/TravelTracker.Attractions.Api.Tests --configuration Release --
 dotnet test tests/TravelTracker.Transport.Api.Tests --configuration Release --logger "trx;LogFileName=transport.trx"
 ```
 
-Recorded verification: 53 Attractions tests and 61 Transport tests passed; 18 real-process smoke assertions passed on ports 5104/5103, including actual restarts. [Evidence and commands](docs/milestone-2/implementation/validation.md).
+Current suite: **15 Attractions cases + 15 Transport cases = 30 total**, all passing. Each theory input counts toward the human-requested maximum of 30. [Test overlap review and reductions](docs/milestone-2/implementation/test-review.md) explains what was kept and omitted. Earlier verification also passed 18 real-process smoke assertions on ports 5104/5103, including actual restarts; those checks were not rerun for the test reduction. [Evidence and commands](docs/milestone-2/implementation/validation.md).
 
 The original shared `TravelTracker.Api`, `TravelTracker.Data` and `TravelTracker.Domain` remain an unfinished scaffold. Full-solution restore succeeds, but its build still fails at the pre-existing `Id64.cs:14` CS1503. Shared Trip/settings/read-model gaps are documented separately. The independent APIs/tests do not reference those projects; passing service checks do not mean the full solution builds.
 

@@ -157,5 +157,79 @@
     },
     "liveVerification": "Not rerun; the original live evidence is retained with its original timestamp.",
     "skillValidation": "Both changed skills passed skill-creator quick_validate.py."
+  },
+  "historicalRecordNote": "Root tests/live/copilot fields describe the initial implementation; testLayoutRefactor describes the subsequent 114-case file consolidation. Current executed test counters are in testReduction.",
+  "testReduction": {
+    "recordedAtUtc": "2026-10-07T02:10:07.673129+00:00",
+    "baselineCommit": "628a4da972070760855407826c9aacca50c312fe",
+    "maximumDiscoveredCases": 30,
+    "baselineAudit": {
+      "methods": 31,
+      "cases": 114,
+      "duplicateBodies": [],
+      "duplicateTheoryRows": []
+    },
+    "services": {
+      "Attractions": {
+        "file": "tests/TravelTracker.Attractions.Api.Tests/AttractionsTests.cs",
+        "sourceSha256": "82ca9b4f49cc582e44943ae9c8dde3298b9237ad9664a23d23a4f40bf1cabb92",
+        "baseline": {
+          "total": 53,
+          "executed": 53,
+          "passed": 53,
+          "failed": 0,
+          "notExecuted": 0
+        },
+        "after": {
+          "total": 15,
+          "executed": 15,
+          "passed": 15,
+          "failed": 0,
+          "notExecuted": 0
+        },
+        "testMethods": 11,
+        "command": "dotnet test tests/TravelTracker.Attractions.Api.Tests/TravelTracker.Attractions.Api.Tests.csproj --configuration Release --no-restore --logger \"trx;LogFileName=attractions.trx\" --results-directory tests/TravelTracker.Attractions.Api.Tests/TestResults"
+      },
+      "Transport": {
+        "file": "tests/TravelTracker.Transport.Api.Tests/TransportTests.cs",
+        "sourceSha256": "18ca551c2ad71d3210ada396af031aa6afc52395ee0c73a481db8d7b66345d33",
+        "baseline": {
+          "total": 61,
+          "executed": 61,
+          "passed": 61,
+          "failed": 0,
+          "notExecuted": 0
+        },
+        "after": {
+          "total": 15,
+          "executed": 15,
+          "passed": 15,
+          "failed": 0,
+          "notExecuted": 0
+        },
+        "testMethods": 12,
+        "command": "dotnet test tests/TravelTracker.Transport.Api.Tests/TravelTracker.Transport.Api.Tests.csproj --configuration Release --no-restore --logger \"trx;LogFileName=transport.trx\" --results-directory tests/TravelTracker.Transport.Api.Tests/TestResults"
+      }
+    },
+    "currentTotal": 30,
+    "currentMethodCount": 23,
+    "facts": 18,
+    "theories": 5,
+    "theoryRows": 12,
+    "currentDuplicateAudit": {
+      "identicalNormalizedMethodBodies": 0,
+      "repeatedRowsWithinTheory": 0,
+      "duplicateDiscoveredNames": 0
+    },
+    "coverageEquivalentToBaseline": false,
+    "coverageReview": "docs/milestone-2/implementation/test-review.md",
+    "productionSourceAndProjectReferencesUnchanged": true,
+    "skillValidation": "traveltracker-testing passed skill-creator quick_validate.py",
+    "fullSolutionBuild": {
+      "command": "dotnet build TravelTracker.slnx --configuration Release --no-restore",
+      "exitCode": 1,
+      "error": "Existing CS1503 at src/TravelTracker.Domain/Types/Id64.cs:14"
+    },
+    "liveVerification": "Not rerun; original live/process evidence remains historical."
   }
 }

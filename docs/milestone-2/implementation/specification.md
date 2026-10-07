@@ -43,7 +43,7 @@ Transport owns transport entries, reusable point snapshots and individual schedu
 
 The exact resource names, fields, status behavior, immutable snapshots and validation above are implementation decisions derived from the human's approved model. They are not invented interview answers.
 
-Keep one operation per implementation/test file, using partial controllers/services to retain LAB_07's familiar structure without collecting every action in one file. Use /** ... */ comments with @param/@return. Register scoped services/repositories and thread-safe singleton stores. Program contains startup/composition only.
+Keep one operation per production implementation file, using partial controllers/services to retain LAB_07's familiar structure. The human later requested one test file per API and at most 30 discovered xUnit cases across both APIs. Use /** ... */ comments with @param/@return. Register scoped services/repositories and thread-safe singleton stores. Program contains startup/composition only.
 
 Verify Attractions' complete existing acceptance table, and Transport's catalogue/point/route POST -> GET behavior, Location headers, mode/type validation, reference errors, multiple stops, offset normalization, overnight travel, preparation boundaries, dwell/free-window calculations, invalid atomic writes and state reset. Use focused xUnit and WebApplicationFactory tests, plus actual independent processes on 5103/5104. Recheck the full solution and report baseline failures separately.
 
