@@ -14,4 +14,4 @@ Checked on 2026-10-07 against main `68fe7ea6bd11b7d02a0af3e2fe913d55857880fe`.
 
 This archive task does not claim a new application build/test run. The [preserved validation](implementation/validation.md) records earlier actual results: build zero warnings/errors, 19 HTTP cases and eight live checks. The deletion PR separately checks current main source/tests and links after removing evidence.
 
-[Manifest](../AI_evdence/archive-manifest.md), [development process](development-process.md), [conversation record](../AI_evdence/conversation/conversation-record.md).
+[Manifest](../../AI_evdence/atiom_evdence/archive-manifest.md), [development process](development-process.md), [conversation record](../../AI_evdence/atiom_evdence/conversation/conversation-record.md).

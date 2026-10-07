@@ -1,6 +1,6 @@
 I’ll inspect the requested contracts and the lab reference, then return a scoped plan only; I will not modify files or run commands.
 
-**Historical record:** This evidence concerns the earlier search/PATCH/scheduled-route implementation. The human subsequently reduced scope to three resources with POST and GET by ID, then selected one shared host and Swagger page like LAB_07. The current correction used Codex; no new Copilot session is claimed. See [current plan](../../devlopmet_flow/implementation/implementation-plan.md) and [validation](../../devlopmet_flow/implementation/validation.md).
+**Historical record:** This evidence concerns the earlier search/PATCH/scheduled-route implementation. The human subsequently reduced scope to three resources with POST and GET by ID, then selected one shared host and Swagger page like LAB_07. The current correction used Codex; no new Copilot session is claimed. See [current plan](../../../devlopmet_flow/atiom_developmet_flow/implementation/implementation-plan.md) and [validation](../../../devlopmet_flow/atiom_developmet_flow/implementation/validation.md).
 
 The feature contract confirms standalone in-memory services and explicit API behavior; I’m locating the exact lab reference and repository guidance so the file plan reflects the existing structure, not just the spec.
 

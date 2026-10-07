@@ -23,4 +23,6 @@ This log separates direct human decisions from agent implementation choices. Ord
 | 17 | Archive all AI/development evidence in the dedicated resource branch and create a separate removal PR | Current human request | Records organised in AI_evdence/devlopmet_flow and old JSON restored here |
 | 18 | Keep reusable skills/MCP setup on main while moving evidence/history | Recommended agent default announced during archive task; no separate human answer recorded at authoring | Cleanup initially targets evidence documents; snapshots also preserved in AI_evdence |
 
-The original interview answers are preserved in [their supplied form](../AI_evdence/issue-9/evidence/human-interview-answers.md). The [conversation record](../AI_evdence/conversation/conversation-record.md) contains direct request excerpts, with assistant outcome summaries labelled separately.
+The original interview answers are preserved in [their supplied form](../../AI_evdence/atiom_evdence/issue-9/evidence/human-interview-answers.md). The [conversation record](../../AI_evdence/atiom_evdence/conversation/conversation-record.md) contains direct request excerpts, with assistant outcome summaries labelled separately.
+
+On 2026-10-07 the human explicitly requested personal subfolders `atiom_evdence` and `atiom_developmet_flow`. Records were nested under the existing evidence/flow categories; parent indexes remain available for other contributors. Original shared context retains its attribution.

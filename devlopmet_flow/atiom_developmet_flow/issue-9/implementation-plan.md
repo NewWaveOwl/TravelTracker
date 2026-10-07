@@ -1,6 +1,6 @@
 # Attraction management and name search implementation plan
 
-Reviewed handoff for [feature #15](https://github.com/NewWaveOwl/TravelTracker/issues/15) from planning [#9](https://github.com/NewWaveOwl/TravelTracker/issues/9) to implementation [#10](https://github.com/NewWaveOwl/TravelTracker/issues/10) and validation [#11](https://github.com/NewWaveOwl/TravelTracker/issues/11). The human confirmed the [specification](feature-spec.md) through the [completed interview](priming-interview.md). A revised plan was generated in fresh Copilot session `92e3a511-b590-4152-bb4b-afef271f5f07`, distinct from revised issue-draft session `e7f8b346-b11a-4909-9c48-eb4366616e6d`. Original responses and adjustments are in [Copilot review](../../AI_evdence/issue-9/copilot-review.md).
+Reviewed handoff for [feature #15](https://github.com/NewWaveOwl/TravelTracker/issues/15) from planning [#9](https://github.com/NewWaveOwl/TravelTracker/issues/9) to implementation [#10](https://github.com/NewWaveOwl/TravelTracker/issues/10) and validation [#11](https://github.com/NewWaveOwl/TravelTracker/issues/11). The human confirmed the [specification](feature-spec.md) through the [completed interview](priming-interview.md). A revised plan was generated in fresh Copilot session `92e3a511-b590-4152-bb4b-afef271f5f07`, distinct from revised issue-draft session `e7f8b346-b11a-4909-9c48-eb4366616e6d`. Original responses and adjustments are in [Copilot review](../../../AI_evdence/atiom_evdence/issue-9/copilot-review.md).
 
 ## 1 Establish the implementation baseline
 

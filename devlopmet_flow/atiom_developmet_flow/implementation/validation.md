@@ -22,4 +22,4 @@ TRX: `tests/TravelTracker.Api.Tests/TestResults/test-split.trx` (ignored). Each 
 
 Coverage is representative; internal collection/update/delete methods are untested. Scheduling, search/PATCH, authentication and SQL persistence remain future work. Trip/TripLeg/TripMapPoint/UserSettings are compile-only declarations.
 
-[Test selection](test-review.md), [review record](review-record.md), [Copilot provenance](../../AI_evdence/implementation/copilot-evidence.md). Earlier detailed verification is retained in Git history.
+[Test selection](test-review.md), [review record](review-record.md), [Copilot provenance](../../../AI_evdence/atiom_evdence/implementation/copilot-evidence.md). Earlier detailed verification is retained in Git history.

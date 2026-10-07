@@ -1,6 +1,6 @@
 # Reviewed implementation plan
 
-The human requires one API using the existing Api/Data/Domain projects and preserving collaborators' work. This replaces the separate WebApi approach. Codex revised the plan; the [original fresh Copilot plan](../../AI_evdence/implementation/copilot-plan.md) remains historical and no new Copilot session is claimed.
+The human requires one API using the existing Api/Data/Domain projects and preserving collaborators' work. This replaces the separate WebApi approach. Codex revised the plan; the [original fresh Copilot plan](../../../AI_evdence/atiom_evdence/implementation/copilot-plan.md) remains historical and no new Copilot session is claimed.
 
 1. Compare the new Main clone and latest master against Artiom. Inventory every original source file, model property and interface signature; make no edits to the Main clone.
 2. Run the existing 19-case test baseline. Move controllers/request/response DTOs, health, Swagger and launch configuration into the original TravelTracker.Api host on 5104. Retain its Data/Domain references and original interfaces.

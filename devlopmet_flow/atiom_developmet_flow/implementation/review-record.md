@@ -1,6 +1,6 @@
 # Current implementation review record
 
-Codex reviewed integration into the original Api/Data/Domain projects against the human's request, LAB_07 and both repository skills. [Validation](validation.md) records executed checks. The [historical Copilot review](../../AI_evdence/implementation/copilot-review.md) applies to earlier code; no new Copilot or completed human PR review is claimed.
+Codex reviewed integration into the original Api/Data/Domain projects against the human's request, LAB_07 and both repository skills. [Validation](validation.md) records executed checks. The [historical Copilot review](../../../AI_evdence/atiom_evdence/implementation/copilot-review.md) applies to earlier code; no new Copilot or completed human PR review is claimed.
 
 | Finding | Disposition |
 | --- | --- |

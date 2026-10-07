@@ -54,4 +54,4 @@ The reviewed specification incorporates the revised draft and the human's requir
 | Targeted and solution gates lack executable commands | Added project-specific commands, executed counts and a successful-build gate before no-build solution tests. |
 | Restart/reset test mentioned without process evidence | Added isolated-host lifecycle tests plus actual service restart smoke evidence. |
 
-The [current implementation plan](../../devlopmet_flow/issue-9/implementation-plan.md) contains the reviewed management scope. Historical pre-answer outputs remain evidence, not live requirements. No API code or tests were changed by this planning revision.
+The [current implementation plan](../../../devlopmet_flow/atiom_developmet_flow/issue-9/implementation-plan.md) contains the reviewed management scope. Historical pre-answer outputs remain evidence, not live requirements. No API code or tests were changed by this planning revision.

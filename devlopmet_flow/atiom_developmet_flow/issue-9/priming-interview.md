@@ -2,7 +2,7 @@
 
 **Human interview answers received on 2026-10-06.** The user confirmed VS Code with GitHub Copilot, C# and ASP.NET Core on .NET 10, and a standalone Attractions API on port 5104 with seeded in-memory data. The feature was revised from search alone to **attraction management and name search**. These replace the earlier provisional defaults.
 
-The [human answer record](../../AI_evdence/issue-9/evidence/human-interview-answers.md) preserves the supplied requirements.
+The [human answer record](../../../AI_evdence/atiom_evdence/issue-9/evidence/human-interview-answers.md) preserves the supplied requirements.
 
 ## Confirmed human decisions
 
@@ -29,6 +29,6 @@ The standalone service decision is now an explicit human requirement rather than
 
 ## Agent interview and planning record
 
-Copilot CLI session `bcf1c82a-fe8f-495c-bbbb-c3783bb9e15f` generated the original search draft and [priming questions](../../AI_evdence/issue-9/evidence/copilot-prime-questions.md) before the user answered. The initial fresh-session search plan remains historical evidence. After the human expanded the scope, a revised Copilot draft and a new fresh-session management plan were generated and reviewed against these confirmed answers. See [Copilot review](../../AI_evdence/issue-9/copilot-review.md) for session evidence and corrections.
+Copilot CLI session `bcf1c82a-fe8f-495c-bbbb-c3783bb9e15f` generated the original search draft and [priming questions](../../../AI_evdence/atiom_evdence/issue-9/evidence/copilot-prime-questions.md) before the user answered. The initial fresh-session search plan remains historical evidence. After the human expanded the scope, a revised Copilot draft and a new fresh-session management plan were generated and reviewed against these confirmed answers. See [Copilot review](../../../AI_evdence/atiom_evdence/issue-9/copilot-review.md) for session evidence and corrections.
 
 The human-preferences checklist in #9 can now be checked. Specification and planning completion do not imply that the future API implementation or its tests have been completed.

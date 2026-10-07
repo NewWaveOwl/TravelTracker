@@ -1,6 +1,6 @@
 # Copilot session provenance
 
-**Historical record:** This evidence concerns the earlier search/PATCH/scheduled-route implementation. The human subsequently reduced scope to three resources with POST and GET by ID, then selected one shared host and Swagger page like LAB_07. The current correction used Codex; no new Copilot session is claimed. See [current plan](../../devlopmet_flow/implementation/implementation-plan.md) and [validation](../../devlopmet_flow/implementation/validation.md).
+**Historical record:** This evidence concerns the earlier search/PATCH/scheduled-route implementation. The human subsequently reduced scope to three resources with POST and GET by ID, then selected one shared host and Swagger page like LAB_07. The current correction used Codex; no new Copilot session is claimed. See [current plan](../../../devlopmet_flow/atiom_developmet_flow/implementation/implementation-plan.md) and [validation](../../../devlopmet_flow/atiom_developmet_flow/implementation/validation.md).
 
 CLI version used: 1.0.92. These were distinct new invocations without --resume; credentials stayed in the subprocess environment and are not committed. Built-in MCP tools were disabled for local plan/code/review runs; repository/PR verification and updates use the separately configured official GitHub MCP server.
 

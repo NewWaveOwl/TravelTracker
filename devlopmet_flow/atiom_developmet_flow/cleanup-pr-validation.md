@@ -12,4 +12,4 @@ Checked on 2026-10-07 against main `825ab4344593cb3ac723e7ac9297f548801de4b2`. T
 | Active skills | Both skill validators pass; only lecture/provenance link targets changed |
 | Runtime testing | Not rerun for this documentation-only migration; earlier executed results remain in the resource branch |
 
-[Archive preservation](archive-validation.md), [manifest](../AI_evdence/archive-manifest.md), [earlier application validation](implementation/validation.md).
+[Archive preservation](archive-validation.md), [manifest](../../AI_evdence/atiom_evdence/archive-manifest.md), [earlier application validation](implementation/validation.md).

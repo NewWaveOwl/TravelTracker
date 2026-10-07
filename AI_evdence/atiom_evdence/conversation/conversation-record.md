@@ -172,7 +172,7 @@ The assistant checked main at `68fe7ea` and found PR #16 merged. The named resou
 
 The assistant asked whether reusable `.github` skills/instructions, AGENTS.md and MCP configuration should also leave main. The recommended default is to move evidence documents and retain that active setup. No additional human answer was available when this reconstructed record was authored, so this choice is recorded as an agent default, not an accepted interview answer.
 
-The cleanup is published on remove_Aivence_from_docs and targets master through [PR #19](https://github.com/NewWaveOwl/TravelTracker/pull/19). The resource branch was published before the deletion was proposed. Main advanced to `825ab43` during preparation by adding “Never force push” to AGENTS.md; the cleanup was rebased and revalidated, retaining that change. The [manifest](../archive-manifest.md), [archive validation](../../devlopmet_flow/archive-validation.md) and [cleanup validation](../../devlopmet_flow/cleanup-pr-validation.md) record preservation and link/source checks.
+The cleanup is published on remove_Aivence_from_docs and targets master through [PR #19](https://github.com/NewWaveOwl/TravelTracker/pull/19). The resource branch was published before the deletion was proposed. Main advanced to `825ab43` during preparation by adding “Never force push” to AGENTS.md; the cleanup was rebased and revalidated, retaining that change. The [manifest](../archive-manifest.md), [archive validation](../../../devlopmet_flow/atiom_developmet_flow/archive-validation.md) and [cleanup validation](../../../devlopmet_flow/atiom_developmet_flow/cleanup-pr-validation.md) record preservation and link/source checks.
 
 ## Interpretation limits
 
@@ -181,3 +181,11 @@ The cleanup is published on remove_Aivence_from_docs and targets master through 
 - Copilot sessions are distinguished from Codex changes. Archived source reviews that relied on parent-reported counts are not presented as reviewers independently running tests.
 - Future route timing/Trips relationships are design intent. The final runnable API has no scheduled route endpoints or time calculation.
 - No raw authentication material, internal reasoning, hidden system/developer instructions or package/runtime files is copied into this record.
+
+## Contributor folder organisation (2026-10-07)
+
+Direct human request:
+
+> in milestone_2_AI_and_development_resource: put my evidence in subfolder atiom_evdence and atiom_developmet_flow
+
+Assistant outcome summary: records are moved under AI_evdence/atiom_evdence and devlopmet_flow/atiom_developmet_flow. Parent indexes reserve space for other contributors. Preserved prompts, answers, verification history and configuration snapshots retain their provenance. Cleanup PR #19 has merged into master at f69ea89. A separate documentation-only follow-up repairs main's links to the relocated records.
