@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TravelTracker.Data;
+using Microsoft.Extensions.DependencyInjection;
+using TravelTracker.Api.Services;
+using TravelTracker.Domain.Models;
 
 namespace TravelTracker.Api.Tests;
 
@@ -154,6 +157,55 @@ public sealed class AttractionTests
         var results = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions?name=port");
         Assert.Single(results);
         Assert.Equal("Old Port", results[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task GetAll_DuplicateNames_DoesNotThrow_And_SortedByPublicId()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var r1 = await client.PostAsJsonAsync("/api/v1/attractions",
+            new { name = "Montreal Museum", lat = 45m, lon = -73m, estimatedVisitMinutes = 30 });
+        var s1 = await HttpTestSupport.AssertCreatedAsync(client, r1);
+        using var r2 = await client.PostAsJsonAsync("/api/v1/attractions",
+            new { name = "montreal museum", lat = 45m, lon = -73m, estimatedVisitMinutes = 30 });
+        var s2 = await HttpTestSupport.AssertCreatedAsync(client, r2);
+
+        var list = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions");
+        var matches = list.Where(e => string.Equals(e.GetProperty("name").GetString(), "montreal museum", StringComparison.OrdinalIgnoreCase))
+                          .Select(e => e.GetProperty("attractionId").GetGuid())
+                          .ToArray();
+        Assert.True(matches.Length >= 2);
+        var sorted = matches.OrderBy(g => g).ToArray();
+        Assert.Equal(sorted, matches);
+    }
+
+    [Fact]
+    public async Task Update_FullReplace_PersistsValuesAndKeepsIdentity()
+    {
+        using var factory = new ApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var svc = scope.ServiceProvider.GetRequiredService<IAttractionService>();
+        var existing = await svc.GetByIdAsync(Guid.Parse("11111111-1111-1111-1111-111111111111"));
+        Assert.NotNull(existing);
+        var updated = new Attraction
+        {
+            Name = existing.Name + " Updated",
+            Description = (existing.Description ?? string.Empty) + " Changed",
+            Rating = existing.Rating ?? 3m,
+            Address = existing.Address,
+            Latitude = existing.Latitude,
+            Longitude = existing.Longitude,
+            EstimatedVisitMinutes = existing.EstimatedVisitMinutes
+        };
+        var returned = await svc.UpdateAsync(existing.AttractionId.PublicId, updated);
+        Assert.NotNull(returned);
+        Assert.Equal(existing.AttractionId.PublicId, returned.AttractionId.PublicId);
+        var fetched = await svc.GetByIdAsync(existing.AttractionId.PublicId);
+        Assert.NotNull(fetched);
+        Assert.Equal(updated.Name, fetched.Name);
+        Assert.Equal(updated.Description, fetched.Description);
+        Assert.Equal(existing.AttractionId.PublicId, updated.AttractionId.PublicId);
     }
 
     [Fact]

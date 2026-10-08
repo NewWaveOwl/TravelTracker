@@ -28,7 +28,7 @@ public sealed class AttractionService(IAttractionRepository repository, EntityId
             filtered = filtered.Where(r => r.Name != null && r.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
         }
         return filtered.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => r.AttractionId)
+            .ThenBy(r => r.AttractionId.PublicId)
             .ToList();
     }
 
@@ -60,8 +60,10 @@ public sealed class AttractionService(IAttractionRepository repository, EntityId
      */
     public async Task<Attraction?> UpdateAsync(Guid attractionId, Attraction attraction)
     {
-        if (await repository.GetByIdAsync(attractionId) is null) return null;
-        attraction.AttractionId = await ids.NextAsync<Attraction>();
+        var existing = await repository.GetByIdAsync(attractionId);
+        if (existing is null) return null;
+        // Preserve the existing internal/public identity when replacing values.
+        attraction.AttractionId = existing.AttractionId;
         attraction.Name = attraction.Name.Trim();
         await repository.UpdateAsync(attraction);
         return attraction;
