@@ -2,6 +2,10 @@ using Microsoft.AspNetCore.Mvc;
 using TravelTracker.Api.Contracts;
 using TravelTracker.Api.Services;
 using TravelTracker.Domain.Models;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace TravelTracker.Api.Controllers;
 
@@ -24,6 +28,42 @@ public sealed class AttractionsController(IAttractionService service) : Controll
     {
         var record = await service.GetByIdAsync(id);
         return record is null ? NotFound() : Ok(ToResponse(record));
+    }
+
+    /**
+     * Lists attractions, optionally filtered by a name substring (case-insensitive).
+     * @param name Optional substring to filter attraction names.
+     * @return 200 with the ordered list of attractions.
+     */
+    [HttpGet]
+    public async Task<ActionResult<List<AttractionRecord>>> GetAll([FromQuery] string? name)
+    {
+        var records = await service.GetAllAsync(name);
+        return Ok(records.Select(ToResponse).ToList());
+    }
+
+    /**
+     * Applies a partial update described by a JSON object.
+     * The request body is bound to a JsonElement so the service can detect field presence
+     * and explicit nulls using TryGetProperty.
+     */
+    [HttpPatch("{id}")]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AttractionRecord>> Patch(Guid id, [FromBody] JsonElement patch)
+    {
+        var result = await service.UpdatePartialAsync(id, patch);
+        if (result.NotFound) return NotFound();
+        if (result.Errors is not null && result.Errors.Any())
+        {
+            var ms = new ModelStateDictionary();
+            foreach (var kv in result.Errors)
+            {
+                foreach (var e in kv.Value)
+                    ms.AddModelError(kv.Key, e);
+            }
+            return ValidationProblem(ms);
+        }
+        return Ok(ToResponse(result.Updated!));
     }
 
     /**

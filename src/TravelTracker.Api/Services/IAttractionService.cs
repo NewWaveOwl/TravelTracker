@@ -12,7 +12,13 @@ public interface IAttractionService
      *
      * @return A task containing all attractions.
      */
-    Task<List<Attraction>> GetAllAsync();
+    /**
+     * Retrieves every available attraction, optionally filtered by name.
+     *
+     * @param nameFilter Optional substring to match against attraction names (case-insensitive).
+     * @return A task containing the matching attractions, deterministically ordered.
+     */
+    Task<List<Attraction>> GetAllAsync(string? nameFilter = null);
 
     /**
      * Retrieves an attraction by its unique identifier.
@@ -40,6 +46,17 @@ public interface IAttractionService
     Task<Attraction?> UpdateAsync(
         Guid attractionId,
         Attraction attraction);
+
+    /**
+     * Applies a partial JSON patch represented as a JsonElement to an existing attraction.
+     * The JsonElement must be an object containing writable fields only. Unknown fields
+     * or attempts to change the server-owned attractionId will be treated as validation errors.
+     *
+     * @param attractionId The identifier of the attraction to update.
+     * @param patch JsonElement containing the partial update object.
+     * @return A task containing an UpdateResult describing the outcome and any validation errors.
+     */
+    Task<UpdateResult> UpdatePartialAsync(Guid attractionId, System.Text.Json.JsonElement patch);
 
     /**
      * Deletes an attraction.
