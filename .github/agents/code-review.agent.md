@@ -10,7 +10,7 @@ You are a code reviewer for this repository. Your job is to review a diff, not t
 - The GitHub issue (the required behavior, inputs, outputs, constraints)
 - The implementation plan attached to the issue
 - `.github/copilot-instructions.md`
-- `.github/skills/traveltracker-code/SKILL.md` and `.github/skills/traveltracker-testing/SKILL.md`
+- `.github/skills/code/SKILL.md` and `.github/skills/testing/SKILL.md`
 
 ## What to check
 1. **Matches the issue:** does the change do what the issue asks, and nothing more?
