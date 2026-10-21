@@ -159,6 +159,88 @@ public sealed class AttractionTests
         Assert.Equal("Old Port", results[0].GetProperty("name").GetString());
     }
 
+    /**
+     * Rejects ambiguous decoded name values without changing stored attractions.
+     * @param query Repeated name keys, including encoded and case-equivalent keys.
+     * @return Completion after checking field errors and unchanged catalogue contents.
+     */
+    [Theory]
+    [InlineData("name=museum&name=port")]
+    [InlineData("name=museum&name=museum")]
+    [InlineData("name=&name=")]
+    [InlineData("name&name=port")]
+    [InlineData("name=%20&name=%20")]
+    [InlineData("name=museum&%6Eame=port")]
+    [InlineData("%6Eame=museum&na%6De=port")]
+    [InlineData("name=museum&NAME=port")]
+    public async Task GetAll_RepeatedName_ReturnsValidationWithoutChangingCatalogue(string query)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var before = await client.GetStringAsync("/api/v1/attractions");
+
+        using var response = await client.GetAsync($"/api/v1/attractions?{query}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var errors = problem.GetProperty("errors").GetProperty("name");
+        Assert.Contains("only once", Assert.Single(errors.EnumerateArray()).GetString());
+        Assert.Equal(before, await client.GetStringAsync("/api/v1/attractions"));
+    }
+
+    /**
+     * Keeps missing and blank single-value filters equivalent to the full catalogue.
+     * @param query Missing, empty or whitespace-only name filter.
+     * @return Completion after checking the entire ordered response.
+     */
+    [Theory]
+    [InlineData("")]
+    [InlineData("?name")]
+    [InlineData("?name=")]
+    [InlineData("?name=%20%20")]
+    public async Task GetAll_MissingOrBlankName_ReturnsFullCatalogue(string query)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var all = await client.GetStringAsync("/api/v1/attractions");
+
+        using var response = await client.GetAsync($"/api/v1/attractions{query}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(all, await response.Content.ReadAsStringAsync());
+    }
+
+    /**
+     * Keeps single filters trimmed, case-insensitive and decoded exactly once.
+     * @param query Encoded single-value filter or unrelated query parameter.
+     * @param expectedName Expected match, or null when the literal filter matches nothing.
+     * @return Completion after checking successful search results.
+     */
+    [Theory]
+    [InlineData("name=%20mUsEuM%20", "Montreal Museum")]
+    [InlineData("%6Eame=port", "Old Port")]
+    [InlineData("name=port&other=one&other=two", "Old Port")]
+    [InlineData("name=%2520museum%2520", null)]
+    [InlineData("name=museum%26name%3Dport", null)]
+    [InlineData("name=%25", null)]
+    [InlineData("name=_", null)]
+    [InlineData("name=*", null)]
+    [InlineData("name=.*", null)]
+    public async Task GetAll_SingleName_PreservesLiteralSearch(string query, string? expectedName)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync($"/api/v1/attractions?{query}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var results = await response.Content.ReadFromJsonAsync<JsonElement[]>();
+        Assert.NotNull(results);
+        if (expectedName is null) Assert.Empty(results);
+        else Assert.Equal(expectedName, Assert.Single(results).GetProperty("name").GetString());
+    }
+
     [Fact]
     public async Task GetAll_DuplicateNames_DoesNotThrow_And_SortedByPublicId()
     {

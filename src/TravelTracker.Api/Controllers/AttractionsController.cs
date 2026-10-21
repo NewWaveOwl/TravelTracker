@@ -33,11 +33,19 @@ public sealed class AttractionsController(IAttractionService service) : Controll
     /**
      * Lists attractions, optionally filtered by a name substring (case-insensitive).
      * @param name Optional substring to filter attraction names.
-     * @return 200 with the ordered list of attractions.
+     * @return 200 with the ordered list, or 400 field errors for repeated name parameters.
      */
     [HttpGet]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<List<AttractionRecord>>> GetAll([FromQuery] string? name)
     {
+        // Query keys are already decoded and compared case-insensitively by ASP.NET Core.
+        if (Request.Query.TryGetValue("name", out var names) && names.Count > 1)
+        {
+            ModelState.AddModelError("name", "The name query parameter must appear only once.");
+            return ValidationProblem(ModelState);
+        }
+
         var records = await service.GetAllAsync(name);
         return Ok(records.Select(ToResponse).ToList());
     }
