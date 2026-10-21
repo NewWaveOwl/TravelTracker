@@ -8,11 +8,11 @@ The repository owner selected GitHub Issues/Projects, Actions and pull requests 
 
 On 2026-10-21 the owner explicitly selected `milestone_3` as integration and the named `feature/milestone-3-layered-service-development` branch for milestone development. Work-item PRs target the named feature branch; the final milestone PR targets `milestone_3`. [CONTRIBUTING](../../CONTRIBUTING.md) defines commands and retention.
 
-#27 remains the architectural dependency. Preparing this board/workflow does not resolve the database, identity provider, frontend or trip-contract choices owned by #27. Dependent production implementation stays blocked until its actual approved contract is linked.
+#27 is complete, as explicitly directed by the owner after [PR #61](https://github.com/NewWaveOwl/TravelTracker/pull/61) merged into `milestone_3` with actual Artiom/Christel approvals. Its [published contract](https://github.com/NewWaveOwl/TravelTracker/blob/d719b400c3f2e4f3ca69614ad0dae8f878ff3ad4/docs/milestone-3-contracts.md) still contains open decisions. Those are tracked separately in [decisions.md](decisions.md); completion of #27 does not silently choose a database, identity provider, frontend or remaining trip contract. Only applicable unresolved decisions block the corresponding implementation slices.
 
 ## Board and ownership
 
-The live board link and verified configuration are recorded in [validation](issue-28-validation.md). [board.json](board.json) is the submission-friendly issue/owner/group/dependency export. The issue's live engineering checklist is the task breakdown; do not duplicate or replace the 24 issues with draft cards.
+The [public milestone board](https://github.com/users/NewWaveOwl/projects/1/views/1) and [inventory view](https://github.com/users/NewWaveOwl/projects/1/views/2) contain the 24 issues. Verified configuration is recorded in [validation](issue-28-validation.md). [board.json](board.json) is the submission-friendly issue/owner/group/dependency export. The issue's live engineering checklist is the task breakdown; do not duplicate or replace the 24 issues with draft cards.
 
 One accountable assignee is required per issue. Preserve these selected owners:
 
@@ -67,6 +67,7 @@ See the verified rule links in [validation](issue-28-validation.md). Do not prob
 | Published board / export | Live link in [validation](issue-28-validation.md); [board.json](board.json) |
 | Approved issue batch and engineering tasks | #27–#50, preserved checklists and assignees |
 | Versioned specification and team decisions | #27; link actual approvals, not inferred checklist state |
+| Remaining contract choices | [Decision register D01–D08](decisions.md); separate from completed #27 |
 | Work-item PRs / plans / agent reports / gate logs | Each issue's linked PR; gather through #50 |
 | CI and security evidence | Exact-SHA check-run/test links; #49 and each service issue |
 | Architecture/reflection report | #50; 2–3 pages, actual service/client allocation and outcomes |

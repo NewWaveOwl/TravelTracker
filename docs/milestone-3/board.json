@@ -4,7 +4,7 @@
   "repository": "https://github.com/NewWaveOwl/TravelTracker",
   "integrationBranch": "milestone_3",
   "milestoneBranch": "feature/milestone-3-layered-service-development",
-  "statusNote": "Snapshot only. Open dependencies and unverified human gates prevent Done. Issue 28 setup proceeds with owner approval while dependency 27 remains unresolved.",
+  "statusNote": "Owner directed that #27 is complete after merged PR #61; remaining contract choices are tracked separately as D01–D08. Other Done transitions still require actual gates, CI and merged work.",
   "issues": [
     {
       "number": 27,
@@ -12,8 +12,9 @@
       "url": "https://github.com/NewWaveOwl/TravelTracker/issues/27",
       "owner": "5unekku",
       "featureGroup": "Planning and contracts",
-      "status": "Backlog",
-      "blockedBy": []
+      "status": "Done",
+      "blockedBy": [],
+      "pendingDecisions": []
     },
     {
       "number": 28,
@@ -21,10 +22,11 @@
       "url": "https://github.com/NewWaveOwl/TravelTracker/issues/28",
       "owner": "NewWaveOwl",
       "featureGroup": "Planning and tracking",
-      "status": "In progress",
+      "status": "In review",
       "blockedBy": [
         27
-      ]
+      ],
+      "pendingDecisions": []
     },
     {
       "number": 29,
@@ -35,6 +37,9 @@
       "status": "Blocked",
       "blockedBy": [
         27
+      ],
+      "pendingDecisions": [
+        "D01"
       ]
     },
     {
@@ -43,10 +48,11 @@
       "url": "https://github.com/NewWaveOwl/TravelTracker/issues/30",
       "owner": "5unekku",
       "featureGroup": "Agents and skills",
-      "status": "Blocked",
+      "status": "Backlog",
       "blockedBy": [
         27
-      ]
+      ],
+      "pendingDecisions": []
     },
     {
       "number": 31,
@@ -55,7 +61,8 @@
       "owner": "NewWaveOwl",
       "featureGroup": "Build baseline",
       "status": "Backlog",
-      "blockedBy": []
+      "blockedBy": [],
+      "pendingDecisions": []
     },
     {
       "number": 32,
@@ -66,6 +73,9 @@
       "status": "Blocked",
       "blockedBy": [
         27
+      ],
+      "pendingDecisions": [
+        "D01"
       ]
     },
     {
@@ -77,6 +87,10 @@
       "status": "Blocked",
       "blockedBy": [
         32
+      ],
+      "pendingDecisions": [
+        "D01",
+        "D02"
       ]
     },
     {
@@ -88,6 +102,11 @@
       "status": "Blocked",
       "blockedBy": [
         27
+      ],
+      "pendingDecisions": [
+        "D02",
+        "D07",
+        "D08"
       ]
     },
     {
@@ -100,6 +119,11 @@
       "blockedBy": [
         27,
         34
+      ],
+      "pendingDecisions": [
+        "D03",
+        "D06",
+        "D07"
       ]
     },
     {
@@ -112,6 +136,10 @@
       "blockedBy": [
         27,
         34
+      ],
+      "pendingDecisions": [
+        "D03",
+        "D07"
       ]
     },
     {
@@ -124,6 +152,11 @@
       "blockedBy": [
         27,
         34
+      ],
+      "pendingDecisions": [
+        "D02",
+        "D07",
+        "D08"
       ]
     },
     {
@@ -136,6 +169,11 @@
       "blockedBy": [
         27,
         34
+      ],
+      "pendingDecisions": [
+        "D03",
+        "D06",
+        "D07"
       ]
     },
     {
@@ -147,6 +185,9 @@
       "status": "Blocked",
       "blockedBy": [
         27
+      ],
+      "pendingDecisions": [
+        "D04"
       ]
     },
     {
@@ -162,6 +203,10 @@
         37,
         38,
         39
+      ],
+      "pendingDecisions": [
+        "D04",
+        "D05"
       ]
     },
     {
@@ -175,6 +220,12 @@
         34,
         39,
         40
+      ],
+      "pendingDecisions": [
+        "D03",
+        "D04",
+        "D05",
+        "D07"
       ]
     },
     {
@@ -188,6 +239,11 @@
         27,
         34,
         37
+      ],
+      "pendingDecisions": [
+        "D03",
+        "D05",
+        "D07"
       ]
     },
     {
@@ -200,6 +256,9 @@
       "blockedBy": [
         33,
         35
+      ],
+      "pendingDecisions": [
+        "D06"
       ]
     },
     {
@@ -212,7 +271,8 @@
       "blockedBy": [
         33,
         36
-      ]
+      ],
+      "pendingDecisions": []
     },
     {
       "number": 45,
@@ -224,6 +284,9 @@
       "blockedBy": [
         33,
         37
+      ],
+      "pendingDecisions": [
+        "D08"
       ]
     },
     {
@@ -236,6 +299,9 @@
       "blockedBy": [
         33,
         38
+      ],
+      "pendingDecisions": [
+        "D06"
       ]
     },
     {
@@ -250,6 +316,9 @@
         43,
         44,
         46
+      ],
+      "pendingDecisions": [
+        "D04"
       ]
     },
     {
@@ -262,6 +331,9 @@
       "blockedBy": [
         33,
         42
+      ],
+      "pendingDecisions": [
+        "D05"
       ]
     },
     {
@@ -274,7 +346,8 @@
       "blockedBy": [
         30,
         31
-      ]
+      ],
+      "pendingDecisions": []
     },
     {
       "number": 50,
@@ -298,7 +371,9 @@
         47,
         48,
         49
-      ]
+      ],
+      "pendingDecisions": []
     }
-  ]
+  ],
+  "projectUrl": "https://github.com/users/NewWaveOwl/projects/1"
 }

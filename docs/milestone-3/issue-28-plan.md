@@ -37,3 +37,7 @@ The user selected the named milestone feature branch followed by a PR into `mile
 5. Record the read-only review and any findings. Human Gate 1/2/3 signoffs must come from the actual developers/peer; never fabricate them. #28 remains pending review/dependencies until its acceptance is evidenced.
 
 No service code, frontend, Azure setup, member impersonation or instructor acceptance is part of this task.
+
+## Owner-directed reconciliation during execution
+
+While setup was in progress, #27 was closed after merged PR #61. The owner explicitly instructed: **"Treat #27 complete; track remaining decisions separately"**. Accordingly, the board marks #27 Done, [decisions.md](decisions.md) tracks the still-open choices D01–D08 without creating another issue batch, and affected cards link the decision register. #30 returns to Backlog because its only issue prerequisite is now complete. This follow-up changes no technical decision or existing issue assignment.
