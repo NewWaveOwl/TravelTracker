@@ -1,0 +1,379 @@
+{
+  "schemaVersion": 1,
+  "capturedDate": "2026-10-21",
+  "repository": "https://github.com/NewWaveOwl/TravelTracker",
+  "integrationBranch": "milestone_3",
+  "milestoneBranch": "feature/milestone-3-layered-service-development",
+  "statusNote": "Owner directed that #27 is complete after merged PR #61; remaining contract choices are tracked separately as D01–D08. Other Done transitions still require actual gates, CI and merged work.",
+  "issues": [
+    {
+      "number": 27,
+      "title": "[M3-01] Agree on the Milestone 3 architecture and contracts",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/27",
+      "owner": "5unekku",
+      "featureGroup": "Planning and contracts",
+      "status": "Done",
+      "blockedBy": [],
+      "pendingDecisions": []
+    },
+    {
+      "number": 28,
+      "title": "[M3-02] Set up the milestone board and GitHub submission workflow",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/28",
+      "owner": "NewWaveOwl",
+      "featureGroup": "Planning and tracking",
+      "status": "In review",
+      "blockedBy": [
+        27
+      ],
+      "pendingDecisions": []
+    },
+    {
+      "number": 29,
+      "title": "[M3-03] Add agents for the four architectural layers",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/29",
+      "owner": "ChristelEdee",
+      "featureGroup": "Agents and skills",
+      "status": "Blocked",
+      "blockedBy": [
+        27
+      ],
+      "pendingDecisions": [
+        "D01"
+      ]
+    },
+    {
+      "number": 30,
+      "title": "[M3-04] Update testing and review guidance for multiple services",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/30",
+      "owner": "5unekku",
+      "featureGroup": "Agents and skills",
+      "status": "Backlog",
+      "blockedBy": [
+        27
+      ],
+      "pendingDecisions": []
+    },
+    {
+      "number": 31,
+      "title": "[M3-05] Remove the existing compiler warnings",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/31",
+      "owner": "NewWaveOwl",
+      "featureGroup": "Build baseline",
+      "status": "Backlog",
+      "blockedBy": [],
+      "pendingDecisions": []
+    },
+    {
+      "number": 32,
+      "title": "[M3-06] Create the independent frontend application",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/32",
+      "owner": "ChristelEdee",
+      "featureGroup": "Frontend foundation",
+      "status": "Blocked",
+      "blockedBy": [
+        27
+      ],
+      "pendingDecisions": [
+        "D01"
+      ]
+    },
+    {
+      "number": 33,
+      "title": "[M3-07] Connect frontend sign-in to the identity provider",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/33",
+      "owner": "ChristelEdee",
+      "featureGroup": "Authentication",
+      "status": "Blocked",
+      "blockedBy": [
+        32
+      ],
+      "pendingDecisions": [
+        "D01",
+        "D02"
+      ]
+    },
+    {
+      "number": 34,
+      "title": "[M3-08] Establish API bearer authentication and scope policies",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/34",
+      "owner": "NewWaveOwl",
+      "featureGroup": "Authentication",
+      "status": "Blocked",
+      "blockedBy": [
+        27
+      ],
+      "pendingDecisions": [
+        "D02",
+        "D07",
+        "D08"
+      ]
+    },
+    {
+      "number": 35,
+      "title": "[M3-09] Run Attractions independently with EF Core storage",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/35",
+      "owner": "NewWaveOwl",
+      "featureGroup": "Attractions service",
+      "status": "Blocked",
+      "blockedBy": [
+        27,
+        34
+      ],
+      "pendingDecisions": [
+        "D03",
+        "D06",
+        "D07"
+      ]
+    },
+    {
+      "number": 36,
+      "title": "[M3-10] Run Transport independently with EF Core storage",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/36",
+      "owner": "NewWaveOwl",
+      "featureGroup": "Transport service",
+      "status": "Blocked",
+      "blockedBy": [
+        27,
+        34
+      ],
+      "pendingDecisions": [
+        "D03",
+        "D07"
+      ]
+    },
+    {
+      "number": 37,
+      "title": "[M3-11] Add the Users service for the authenticated profile",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/37",
+      "owner": "ChristelEdee",
+      "featureGroup": "Users service",
+      "status": "Blocked",
+      "blockedBy": [
+        27,
+        34
+      ],
+      "pendingDecisions": [
+        "D02",
+        "D07",
+        "D08"
+      ]
+    },
+    {
+      "number": 38,
+      "title": "[M3-12] Add the Accommodations service",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/38",
+      "owner": "ChristelEdee",
+      "featureGroup": "Accommodations service",
+      "status": "Blocked",
+      "blockedBy": [
+        27,
+        34
+      ],
+      "pendingDecisions": [
+        "D03",
+        "D06",
+        "D07"
+      ]
+    },
+    {
+      "number": 39,
+      "title": "[M3-13] Implement the agreed trip domain rules",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/39",
+      "owner": "5unekku",
+      "featureGroup": "Trips service",
+      "status": "Blocked",
+      "blockedBy": [
+        27
+      ],
+      "pendingDecisions": [
+        "D04"
+      ]
+    },
+    {
+      "number": 40,
+      "title": "[M3-14] Validate trip references through service HTTP contracts",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/40",
+      "owner": "5unekku",
+      "featureGroup": "Trips service",
+      "status": "Blocked",
+      "blockedBy": [
+        35,
+        36,
+        37,
+        38,
+        39
+      ],
+      "pendingDecisions": [
+        "D04",
+        "D05"
+      ]
+    },
+    {
+      "number": 41,
+      "title": "[M3-15] Add atomic trip persistence and protected endpoints",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/41",
+      "owner": "5unekku",
+      "featureGroup": "Trips service",
+      "status": "Blocked",
+      "blockedBy": [
+        34,
+        39,
+        40
+      ],
+      "pendingDecisions": [
+        "D03",
+        "D04",
+        "D05",
+        "D07"
+      ]
+    },
+    {
+      "number": 42,
+      "title": "[M3-16] Add the Settings service",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/42",
+      "owner": "5unekku",
+      "featureGroup": "Settings service",
+      "status": "Blocked",
+      "blockedBy": [
+        27,
+        34,
+        37
+      ],
+      "pendingDecisions": [
+        "D03",
+        "D05",
+        "D07"
+      ]
+    },
+    {
+      "number": 43,
+      "title": "[M3-17] Build attraction search and editing views",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/43",
+      "owner": "NewWaveOwl",
+      "featureGroup": "Attractions service",
+      "status": "Blocked",
+      "blockedBy": [
+        33,
+        35
+      ],
+      "pendingDecisions": [
+        "D06"
+      ]
+    },
+    {
+      "number": 44,
+      "title": "[M3-18] Build transport and route-point selection views",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/44",
+      "owner": "NewWaveOwl",
+      "featureGroup": "Transport service",
+      "status": "Blocked",
+      "blockedBy": [
+        33,
+        36
+      ],
+      "pendingDecisions": []
+    },
+    {
+      "number": 45,
+      "title": "[M3-19] Build the authenticated profile view",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/45",
+      "owner": "ChristelEdee",
+      "featureGroup": "Users service",
+      "status": "Blocked",
+      "blockedBy": [
+        33,
+        37
+      ],
+      "pendingDecisions": [
+        "D08"
+      ]
+    },
+    {
+      "number": 46,
+      "title": "[M3-20] Build accommodation search and creation views",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/46",
+      "owner": "ChristelEdee",
+      "featureGroup": "Accommodations service",
+      "status": "Blocked",
+      "blockedBy": [
+        33,
+        38
+      ],
+      "pendingDecisions": [
+        "D06"
+      ]
+    },
+    {
+      "number": 47,
+      "title": "[M3-21] Build the agreed trip creation and details flow",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/47",
+      "owner": "5unekku",
+      "featureGroup": "Trips service",
+      "status": "Blocked",
+      "blockedBy": [
+        41,
+        43,
+        44,
+        46
+      ],
+      "pendingDecisions": [
+        "D04"
+      ]
+    },
+    {
+      "number": 48,
+      "title": "[M3-22] Build the user settings view",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/48",
+      "owner": "5unekku",
+      "featureGroup": "Settings service",
+      "status": "Blocked",
+      "blockedBy": [
+        33,
+        42
+      ],
+      "pendingDecisions": [
+        "D05"
+      ]
+    },
+    {
+      "number": 49,
+      "title": "[M3-23] Extend CI to validate all services and the client",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/49",
+      "owner": "5unekku",
+      "featureGroup": "Validation and delivery",
+      "status": "Blocked",
+      "blockedBy": [
+        30,
+        31
+      ],
+      "pendingDecisions": []
+    },
+    {
+      "number": 50,
+      "title": "[M3-24] Prepare the architecture report and submission evidence",
+      "url": "https://github.com/NewWaveOwl/TravelTracker/issues/50",
+      "owner": "NewWaveOwl",
+      "featureGroup": "Validation and delivery",
+      "status": "Blocked",
+      "blockedBy": [
+        28,
+        35,
+        36,
+        37,
+        38,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49
+      ],
+      "pendingDecisions": []
+    }
+  ],
+  "projectUrl": "https://github.com/users/NewWaveOwl/projects/1"
+}

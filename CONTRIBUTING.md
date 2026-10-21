@@ -1,5 +1,34 @@
 # Git Workflow
 
+## Milestone 3 branch strategy
+
+For #27–#50, the integration branch is **`milestone_3`**, as selected by the repository owner. The milestone development branch is **`feature/milestone-3-layered-service-development`**. This section overrides references to `master` in the general workflow below for Milestone 3 work; the repository's default branch remains unchanged.
+
+| Change | Start / update from | PR target | Keep after merge? |
+| --- | --- | --- | --- |
+| Milestone bootstrap | `origin/milestone_3` | Establish the named milestone branch at that revision | Yes |
+| Individual work item, e.g. `m3-02-board-workflow` | `origin/feature/milestone-3-layered-service-development` | `feature/milestone-3-layered-service-development` | Work-item branch can be removed only when requested |
+| Final milestone submission | The named milestone branch | `milestone_3` | **Keep the named milestone branch** |
+
+```powershell
+git fetch origin
+git switch -c m3-02-board-workflow origin/feature/milestone-3-layered-service-development
+# Edit, validate and commit with an issue reference, e.g. Refs #28.
+git push -u origin m3-02-board-workflow
+```
+
+Never push changes directly to `milestone_3` or the named milestone branch. Initial creation of the named branch at the integration commit is the bootstrap exception; all later updates go through reviewed PRs. Do not merge an integration branch into a work-item branch. Update an unpushed work-item branch by rebasing onto its actual PR base. Agents must never force push, including `--force-with-lease`; after a pushed branch needs a rebase, a human handles any resulting force push. Never rebase/force push a shared milestone branch.
+
+If `milestone_3` advances during milestone development, bring those updates into the shared milestone branch through a separate reviewed synchronization PR. Do not bypass its protections or rewrite its shared history. Check for new contract changes before beginning each work item.
+
+Both milestone branches require a PR, one approval from another team member, approval of the latest push, resolved conversations and the passing `test` check. They reject force pushes and deletion, with no bypass actors. Automatic branch deletion must remain disabled. Read back repository settings before claiming enforcement; a checklist alone does not enforce these rules.
+
+Use the PR template and [milestone workflow](docs/milestone-3/workflow.md). Record the three human gates: developer specification/plan approval before implementation; developer diff/test/secret verification afterward; another member's GitHub review before merge. An agent report never substitutes for a human signoff. Failed checks, unapproved plans, open dependencies or unresolved Critical/High findings prevent Done.
+
+The final milestone PR title is **Milestone 3: Layered Service Development with AI Agents**, with head `feature/milestone-3-layered-service-development` and base `milestone_3`. Create it once reviewed work exists on the feature branch; link the board/export, issues, work-item PRs, plans, validation, agent findings, actual peer approvals and #50's report. Submit the GitHub milestone PR URL. The source handout names Azure DevOps; the user's GitHub-only choice does not establish instructor acceptance.
+
+## General workflow outside Milestone 3
+
 ## Rule
 
 **You never push to `master`. Every change goes on a branch, gets rebased onto `origin/master`, and goes up as a PR.**
