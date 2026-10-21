@@ -65,6 +65,8 @@ All IDs are generated GUIDs; JSON fields use camelCase. Standard ASP.NET Core mo
 
 Response: attractionId, name, description, rating, address, lat, lon, estimatedVisitMinutes. POST requires a nonblank name, latitude (-90 to 90), longitude (-180 to 180), and nonnegative integer estimatedVisitMinutes. Names are trimmed. Description and rating are optional; null rating means no score, otherwise 0-5 inclusive. Omitted address becomes an empty string; explicit null address is invalid. PATCH accepts partial JSON objects; omitted fields are preserved, explicit null clears description or rating only. Unknown fields or attempts to set attractionId are rejected with 400.
 
+Collection GET trims a single `name` query value and matches a literal, ordinal case-insensitive substring of the name. Missing, empty or whitespace-only input returns the full catalogue; no match returns `200 []`. Results are ordered by name using ordinal case-insensitive comparison, then public GUID. Query keys and values are decoded once by ASP.NET Core. Repeated `name` parameters return `400 application/problem+json` with an `errors.name` entry before search runs, including equal/blank values and equivalent encoded or case-varied keys (for example `name=museum&%6Eame=port`). Rejected queries leave the catalogue unchanged.
+
 ### Transport entry fields
 
 Response: transportModeId, code, name, description. POST requires a nonblank name and one exact lowercase code: car, bus, train, pedestrian, bike or plane. Description is optional. Names are trimmed; multiple entries may share a code. ITransportModeService manages entries without journey dates.

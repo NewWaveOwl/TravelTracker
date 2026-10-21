@@ -105,7 +105,7 @@ Run the full test suite from the repository root:
 dotnet test TravelTracker.Tests.slnx --configuration Release
 ```
 
-The suite contains **20 test cases** covering health, attraction and transport operations, route points, validation and concurrent identity generation.
+The suite contains **62 test cases** covering health, attraction and transport operations, route points, validation and concurrent identity generation. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search.
 
 Tests create isolated application hosts automatically, so a manually running API is unnecessary. GitHub Actions runs the test solution for pull requests.
 
