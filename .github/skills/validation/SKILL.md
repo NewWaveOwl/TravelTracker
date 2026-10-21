@@ -22,6 +22,7 @@ dotnet test TravelTracker.Tests.slnx --configuration Release
 - A failure that also fails on a clean `origin/<PR-base>` is pre-existing; say so and show how you checked. Everything else is a regression you own.
 - If the build fails, tests are blocked. Say that; do not claim they passed.
 - Report the actual discovered cases and meaningful coverage. The old 30-case demo cap is retired (see `testing`); never delete tests to fit a historical number.
+- Build output has **zero warnings and zero errors** for the changed projects. Report the warning count from the build summary. Pre-existing warnings are listed in issue #31 and must not be hidden by a green exit code.
 
 ## 2. Review the diff
 
