@@ -19,6 +19,8 @@ git push -u origin m3-02-board-workflow
 
 Never push changes directly to `milestone_3` or the named milestone branch. Initial creation of the named branch at the integration commit is the bootstrap exception; all later updates go through reviewed PRs. Do not merge an integration branch into a work-item branch. Update an unpushed work-item branch by rebasing onto its actual PR base. Agents must never force push, including `--force-with-lease`; after a pushed branch needs a rebase, a human handles any resulting force push. Never rebase/force push a shared milestone branch.
 
+If `milestone_3` advances during milestone development, bring those updates into the shared milestone branch through a separate reviewed synchronization PR. Do not bypass its protections or rewrite its shared history. Check for new contract changes before beginning each work item.
+
 Both milestone branches require a PR, one approval from another team member, approval of the latest push, resolved conversations and the passing `test` check. They reject force pushes and deletion, with no bypass actors. Automatic branch deletion must remain disabled. Read back repository settings before claiming enforcement; a checklist alone does not enforce these rules.
 
 Use the PR template and [milestone workflow](docs/milestone-3/workflow.md). Record the three human gates: developer specification/plan approval before implementation; developer diff/test/secret verification afterward; another member's GitHub review before merge. An agent report never substitutes for a human signoff. Failed checks, unapproved plans, open dependencies or unresolved Critical/High findings prevent Done.
