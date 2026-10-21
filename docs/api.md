@@ -30,8 +30,8 @@ No `IUserService` or `IAccommodationService` exists yet. Their models and intern
 | Accommodations | `GET /accommodations`, `GET/POST/PATCH /accommodations/{id}` |
 | Transport | `GET /transport-modes`, `GET /transport-modes/{id}` |
 | Attractions | `GET/POST /attractions`, `GET/PATCH /attractions/{id}` |
-| Trips | `GET /trips?userId=`, `POST /trips`, `GET/PATCH/DELETE /trips/{id}`, `PUT /trips/{id}/legs`, `GET /trips/{id}/map-points` |
-| Settings | `GET/PUT /settings/{userId}` |
+| Trips | `GET /trips` (the caller's own trips), `POST /trips`, `GET/PATCH/DELETE /trips/{id}`, `PUT /trips/{id}/legs`, `GET /trips/{id}/map-points` |
+| Settings | `GET/PUT /settings` (the caller's own settings) |
 | Ticket import (future) | `POST /ticket-imports`, `GET /ticket-imports/{id}`, `POST /ticket-imports/{id}/confirm` |
 | All | `GET /health` |
 
@@ -79,6 +79,6 @@ Response: routePointId, type, name, address, lat, lon, sourceId. POST requires a
 
 The shared host owns seeded process-lifetime memory. Its singleton repositories share records between requests; restarting restores all three catalogues and discards created data. Scoped services contain creation/lookup logic. Each resource has one controller, one service and one repository, with related GET/POST methods together.
 
-Collection GET/search, PATCH and scheduled transport routes/stops/timing calculations remain future work. [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md), [HTTP examples](../src/TravelTracker.Api/requests.http).
+Attraction list/name search and attraction PATCH are implemented (see the route table). Transport collection listing, route-point collection/PATCH/DELETE, scheduled transport routes, stops and timing calculations remain future work. The contract for the six-service target is in [milestone 3 contracts](milestone-3-contracts.md). [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md), [HTTP examples](../src/TravelTracker.Api/requests.http).
 
 For future Trips integration, a trip point is an ordered occurrence of a reusable route point. A scheduled route connects route points using a transport entry; a trip leg selects that journey. Dates and boarding/stop timings belong to the scheduled route and occurrences, rather than the transport catalogue POST. See [trip points, transport and routes](trip-points-and-routes.md).

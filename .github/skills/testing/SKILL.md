@@ -32,6 +32,22 @@ The existing one-project/resource-file layout and former 30-case limit are histo
 - One xUnit project, `tests/TravelTracker.Api.Tests`, referencing `TravelTracker.Api`. Tests are grouped by resource: `HealthTests.cs`, `AttractionTests.cs`, `TransportModeTests.cs`, `RoutePointTests.cs`. Shared helpers: `Support/ApiFactory.cs` and `Support/HttpTestSupport.cs`. Reuse matching files where cohesive; use additional purpose-based files when new service or boundary coverage warrants them.
 - Each test creates and disposes its own factory, client and in-memory stores. No shared mutable state, no ordering dependence.
 - Reuse existing projects for the combined demo. Requested independent-service or provider integration work may need its own focused test project; if none exists and tests are requested, create .NET 10 xUnit under `tests/`, added to the solution, with only the references it needs. Add `Microsoft.AspNetCore.Mvc.Testing` for HTTP tests; check which package versions exist instead of guessing. If `Program` must be visible to `WebApplicationFactory`, use a dedicated `public partial class Program` file.
+Responsibilities for the milestone:
+
+- **Unit:** domain rules and service decisions (trip rules, name trimming, code validation). Fakes for repositories. No HTTP.
+- **HTTP integration:** routing, binding, DataAnnotations, status codes, problem details, `Location` headers, JSON field names. Runs through `WebApplicationFactory`.
+- **Relational persistence:** EF Core queries, constraints, migrations, atomic trip saves and concurrency tokens. The stored data and relational rules matter, not a particular provider. EF InMemory is acceptable while no provider-specific behavior is depended on. Once the provider is chosen (open decision 3 in the contracts) and the code relies on provider-specific behavior, move those tests to that provider.
+- **Selected client end-to-end:** a few journeys (sign in, create attraction, plan a trip, view it) against local services with seeded data. Required only after the frontend exists (issues #32 and #39).
+
+**Fake identities versus real token validation.** Most HTTP tests may use a test authentication scheme that supplies a chosen identity (subject, role, status). That proves authorization rules: ownership, banned-user read-only, admin without private trip access. It does not prove that the Api validates tokens. A fake-identity test must not be cited as evidence that tokens are validated. Real token validation tests are added once the identity provider is chosen (open decision 2).
+
+## Project layout
+
+- Current project: one xUnit project, `tests/TravelTracker.Api.Tests`, referencing `TravelTracker.Api`. Tests are grouped by resource: `HealthTests.cs`, `AttractionTests.cs`, `TransportModeTests.cs`, `RoutePointTests.cs`, plus `EntityIdGeneratorTests.cs`. Shared helpers: `Support/ApiFactory.cs` and `Support/HttpTestSupport.cs`. Put new tests in the matching file; do not create a new test file per feature (a `ServiceTests.cs` was previously rejected for this reason).
+- Target layout for the six-service milestone (see `docs/milestone-3-contracts.md`): each service gets its own test project alongside its own Api, Data and Domain projects, with HTTP tests against that service's host. A cross-service contract test lives in its own project and checks only public DTO shapes and status codes. Creating those projects needs an explicit request and an approved plan.
+- Each test creates and disposes its own factory, client and in-memory stores. No shared mutable state, no ordering dependence.
+- No discovered-count cap. The current master count is 41 discovered and passing (counting every `[InlineData]` row). Each test covers exactly one concern; several asserts on that same concern belong in one test, not in several tests. Add tests where behavior needs proof, not to hit a number. Do not hide a matrix in a loop to lower the count; use `[Theory]` rows so each case is visible in the report.
+- Only create a new test project if none exists and one is requested: .NET 10 xUnit under `tests/`, added to the solution, with only the references it needs. Add `Microsoft.AspNetCore.Mvc.Testing` for HTTP tests; check which package versions exist instead of guessing. If `Program` must be visible to `WebApplicationFactory`, use a dedicated `public partial class Program` file.
 - Replace external services and configuration in the test host. No credentials, cloud services or production databases in routine tests.
 
 ## Writing tests
@@ -49,6 +65,7 @@ The existing one-project/resource-file layout and former 30-case limit are histo
 Take exact expectations from the current contract, and do not implement planned features just to have something to test.
 
 - **Attractions / route points:** validation boundaries (required fields, coordinate ranges, rating, visit duration, supported types), unknown JSON properties rejected, not found, persisted values round-trip.
+- **Attraction list and PATCH:** name filter case-insensitive substring; PATCH preserves omitted fields, clears only description or rating on explicit null, rejects attempts to set `attractionId`, and leaves the stored record unchanged when validation fails.
 - **Transport:** supported codes (car, bus, train, pedestrian, bike, plane), unknown code rejected, nothing persisted by a rejected request.
 - **Concurrency:** lost-update protection where updates exist, shown to fail without the fix.
 - **Trips, once implemented:** one-way versus round-trip legs, connected ordered legs without gaps, arrival after departure, no overlapping legs, visits within trip dates, failed validation leaves the aggregate unchanged.
