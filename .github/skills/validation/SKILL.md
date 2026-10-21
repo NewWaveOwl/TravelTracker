@@ -19,13 +19,15 @@ dotnet test TravelTracker.Tests.slnx --configuration Release
 
 - Tests were actually discovered and executed. Zero tests is not a pass.
 - Report total, passed, failed and skipped counts as printed.
-- A failure that also fails on a clean `origin/master` is pre-existing; say so and show how you checked. Everything else is a regression you own.
+- A failure that also fails on a clean `origin/<PR-base>` is pre-existing; say so and show how you checked. Everything else is a regression you own.
 - If the build fails, tests are blocked. Say that; do not claim they passed.
-- The combined API suite is capped at 30 discovered cases (see `testing`). Confirm the count has not exceeded it.
+- Report the actual discovered cases and meaningful coverage. The old 30-case demo cap is retired (see `testing`); never delete tests to fit a historical number.
 
 ## 2. Review the diff
 
-Run `git status` and `git diff origin/master...HEAD` (plus uncommitted changes). Confirm:
+Resolve `<PR-base>` to the explicitly requested target branch, otherwise the repository default; verify it exists before comparing.
+
+Run `git status` and `git diff origin/<PR-base>...HEAD` (plus uncommitted changes). Confirm:
 
 - **Matches the issue/plan** and nothing more. Flag scope creep (scheduling, search, PATCH, new projects) unless requested.
 - **Conventions** from `.github/copilot-instructions.md` and `code`: layer responsibilities, one primary type per file, GET-by-ID and POST grouped per resource, `Program.cs` limited to composition, `/** @param @return */` docs on new or changed members, unrelated comments preserved.
@@ -41,6 +43,12 @@ If the contract, capabilities or limitations changed, `docs/api.md`, `docs/domai
 
 Run the API (`dotnet run --project src/TravelTracker.Api --launch-profile http`, Swagger at `http://localhost:5104/swagger`) and exercise the changed endpoint, including one failure case. Passing tests is not the same as a working endpoint; say which you verified.
 
-## 5. Report
+## 5. CI and delivery, when requested
+
+Inspect the actual pipeline and agreed quality gates. Restore, build and execute tests; publish TRX/coverage evidence even on test failure where supported. Application artifacts require passing checks. A configured percentage or an echo step does not enforce a coverage gate.
+
+For requested Azure DevOps delivery, build once and promote the same immutable tested artifact through environments. Keep environment settings and secrets outside artifacts, use least-privilege service connections, honor configured approvals/checks, and verify health after deployment. Define observable failure handling and a rollback approach, including migration compatibility. Example YAML echo steps do not prove deployment, and a health response alone does not prove persistence or all dependencies healthy. Do not deploy as a side effect of editing guidance.
+
+## 6. Report
 
 State plainly: commands run, build result, test counts, baseline versus new failures, what behavior was verified and how, and what was not verified. Do not hedge what was verified and do not claim what was not. Only after this gate passes move on to `commit`.
