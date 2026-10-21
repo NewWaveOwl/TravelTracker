@@ -13,6 +13,10 @@ The ground truth is `docs/`, then the code. Not memory, not the README's aspirat
 2. Read the source for the area you are planning. Build a two-column list: **implemented** (reachable through the running API and covered by tests) versus **planned only** (docs, empty partial types such as `Trip`, `TripLeg`, `UserSettings`, `TripMapPoint`, `schema.sql`, interfaces without endpoints).
 3. When docs and code disagree, report the discrepancy. Do not silently pick one. Docs describe intent; code describes reality; the human decides which to change. Check `git log` and open issues/PRs so you do not plan work that is done or in flight.
 
+## Lecture and milestone alignment
+
+Use [skills-sources.md](../../../docs/skills-sources.md) to identify relevant course material. Map the requested milestone to observable acceptance evidence: independent services and contracts, event flow/recovery, security controls/threat model, layered tests, or controlled delivery. Do not infer milestone completion from folder names, placeholder models or resource controllers. Lecture examples and exercises do not authorize extra work; reconcile course requirements, product docs and explicit user scope, reporting conflicts. The old demo's host/resource restrictions are context rather than a permanent roadmap veto.
+
 ## 2. Come up with features
 
 Derive candidates from the docs, never from imagination:
