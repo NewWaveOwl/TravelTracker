@@ -156,7 +156,7 @@
         <mxCell id="settings-label" value="&lt;b&gt;SETTINGS SERVICE&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#64748B&quot;&gt;independent process&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=16;fontColor=#0F172A;" vertex="1" parent="1">
           <mxGeometry x="1735" y="355" width="280" height="55" as="geometry"/>
         </mxCell>
-        <mxCell id="settings-api" value="&lt;b&gt;HTTP API&lt;/b&gt;&lt;br&gt;/settings/{userId}&lt;br&gt;GET | PUT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=14;fontColor=#1E3A8A;" vertex="1" parent="1">
+        <mxCell id="settings-api" value="&lt;b&gt;HTTP API&lt;/b&gt;&lt;br&gt;/settings&lt;br&gt;GET | PUT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=14;fontColor=#1E3A8A;" vertex="1" parent="1">
           <mxGeometry x="1745" y="420" width="260" height="105" as="geometry"/>
         </mxCell>
         <mxCell id="settings-service" value="&lt;b&gt;Application service&lt;/b&gt;&lt;br&gt;ISettingsService&lt;br&gt;get-or-create + update defaults" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">

@@ -8,7 +8,7 @@ The current implementation provides a working API for **attractions, transport e
 
 | Area | Current functionality |
 | --- | --- |
-| Attractions | Create and retrieve attractions with a name, address, coordinates, estimated visit duration, optional description and optional rating. |
+| Attractions | Create, list (with case-insensitive name search), retrieve and partially update attractions with a name, address, coordinates, estimated visit duration, optional description and optional rating. |
 | Transport entries | Create and retrieve named transport entries using `car`, `bus`, `train`, `pedestrian`, `bike` or `plane`. |
 | Route points | Create and retrieve reusable locations of type `accommodation`, `attraction` or `transport_stop`. |
 | Validation | Validate required fields, supported codes and types, coordinate ranges, ratings and visit duration. |
@@ -29,7 +29,7 @@ The following features are not yet available through the running application:
 - Accommodation management as a separate resource.
 - Trips, ordered itinerary legs, history, settings and map views.
 - Scheduled journeys, departure and arrival times, and stop timing.
-- Collection listing, search, PATCH and DELETE endpoints.
+- Collection listing, PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
 - Persistent database storage.
 - A traveller-facing frontend.
 
@@ -85,7 +85,9 @@ Base URL: `http://localhost:5104`
 | --- | --- | --- |
 | Health | GET | `/health` |
 | Attractions | POST | `/api/v1/attractions` |
+| Attractions | GET | `/api/v1/attractions` (optional `name` filter) |
 | Attractions | GET | `/api/v1/attractions/{id}` |
+| Attractions | PATCH | `/api/v1/attractions/{id}` |
 | Transport entries | POST | `/api/v1/transport-modes` |
 | Transport entries | GET | `/api/v1/transport-modes/{id}` |
 | Route points | POST | `/api/v1/route-points` |
@@ -105,7 +107,9 @@ Run the full test suite from the repository root:
 dotnet test TravelTracker.Tests.slnx --configuration Release
 ```
 
-The suite contains **20 test cases** covering health, attraction and transport operations, route points, validation and concurrent identity generation.
+The suite discovers **41 test cases** (counting each theory row) covering health, attraction and transport operations, route points, validation and concurrent identity generation. Count at master `16ffb8a`.
+
+Contracts for the planned multi-service architecture are in [milestone 3 contracts](docs/milestone-3-contracts.md).
 
 Tests create isolated application hosts automatically, so a manually running API is unnecessary. GitHub Actions runs the test solution for pull requests.
 

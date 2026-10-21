@@ -96,7 +96,7 @@
   <rect class="api" x="740" y="425" width="260" height="100"/><text class="box-title" x="870" y="452">HTTP API</text><text class="box-line" x="870" y="477">/transport-modes</text><text class="box-line" x="870" y="500">GET collection / by ID</text>
   <rect class="api" x="1075" y="425" width="260" height="100"/><text class="box-title" x="1205" y="452">HTTP API</text><text class="box-line" x="1205" y="477">/attractions</text><text class="box-line" x="1205" y="500">GET | POST | PATCH</text>
   <rect class="api-trip" x="1410" y="425" width="260" height="100"/><text class="box-title" x="1540" y="452">HTTP API</text><text class="box-line" x="1540" y="477">/trips | /legs | /map-points</text><text class="box-line" x="1540" y="500">History is a Trips query</text>
-  <rect class="api" x="1745" y="425" width="260" height="100"/><text class="box-title" x="1875" y="452">HTTP API</text><text class="box-line" x="1875" y="477">/settings/{userId}</text><text class="box-line" x="1875" y="500">GET | PUT</text>
+  <rect class="api" x="1745" y="425" width="260" height="100"/><text class="box-title" x="1875" y="452">HTTP API</text><text class="box-line" x="1875" y="477">/settings</text><text class="box-line" x="1875" y="500">GET | PUT</text>
 
   <!-- Application services -->
   <rect class="app" x="70" y="565" width="260" height="110"/><text class="box-title" x="200" y="594">Application service</text><text class="box-line" x="200" y="620">Planned IUserService</text><text class="box-line" x="200" y="645">login, profile, role/status</text>

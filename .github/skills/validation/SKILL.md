@@ -21,7 +21,8 @@ dotnet test TravelTracker.Tests.slnx --configuration Release
 - Report total, passed, failed and skipped counts as printed.
 - A failure that also fails on a clean `origin/master` is pre-existing; say so and show how you checked. Everything else is a regression you own.
 - If the build fails, tests are blocked. Say that; do not claim they passed.
-- The combined API suite is capped at 30 discovered cases (see `testing`). Confirm the count has not exceeded it.
+- Build output has **zero warnings and zero errors** for the changed projects. Report the warning count from the build summary. Pre-existing warnings are listed in issue #31 and must not be hidden by a green exit code.
+- Report the discovered count, and compare it with the last recorded count (41 at master `16ffb8a`). A drop needs an explanation; there is no cap.
 
 ## 2. Review the diff
 
