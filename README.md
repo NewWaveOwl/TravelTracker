@@ -122,6 +122,8 @@ Design documents include planned features as well as implemented behavior. The c
 
 ## Development records
 
+Milestone 3 uses [the GitHub board and submission workflow](docs/milestone-3/workflow.md), including work-item PRs into `feature/milestone-3-layered-service-development` and a final milestone PR into `milestone_3`. The workflow links ownership, dependencies, approved plans, validation and actual human signoffs.
+
 Milestone 2 planning, AI evidence, reviews, validation and reflections are maintained on the `milestone_2_AI_and_development_resource` branch:
 
 - [AI evidence](https://github.com/NewWaveOwl/TravelTracker/tree/milestone_2_AI_and_development_resource/AI_evdence)
