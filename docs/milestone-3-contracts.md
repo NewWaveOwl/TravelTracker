@@ -2,8 +2,6 @@
 
 Contract version: 0.1 (draft for approval). Issue #27 (M3-01). Checked against master `16ffb8a` and the open issues on 2026-10-19.
 
-**Approval status: pending.** This draft is not approved. The issue requires James (@5unekku), Artiom and Christel to approve it. Record each approval in the table at the end before any production implementation starts. Items marked **Open decision** must not be implemented until the owner records a choice here.
-
 Docs describe intent and code describes reality. Where they disagree, the disagreement is listed in section 2 and is not resolved silently.
 
 ## 1. Services and ownership
