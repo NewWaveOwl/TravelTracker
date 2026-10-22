@@ -21,8 +21,9 @@ dotnet test TravelTracker.Tests.slnx --configuration Release
 - Report total, passed, failed and skipped counts as printed.
 - A failure that also fails on a clean `origin/<PR-base>` is pre-existing; say so and show how you checked. Everything else is a regression you own.
 - If the build fails, tests are blocked. Say that; do not claim they passed.
-- Report the actual discovered cases and meaningful coverage. The old 30-case demo cap is retired (see `testing`); never delete tests to fit a historical number.
 - Build output has **zero warnings and zero errors** for the changed projects. Report the warning count from the build summary. Pre-existing warnings are listed in issue #31 and must not be hidden by a green exit code.
+- Compare discovered, executed and passed counts against the baseline. A count that dropped means coverage was removed; justify it or restore it. There is no maximum, but new behavior needs new tests.
+- Code changes require zero build warnings and errors from your change and passing tests. Documentation-only changes need consistency checks instead: referenced paths and links exist, and counts and commands in docs match what you ran.
 
 ## 2. Review the diff
 
@@ -30,8 +31,8 @@ Resolve `<PR-base>` to the explicitly requested target branch, otherwise the rep
 
 Run `git status` and `git diff origin/<PR-base>...HEAD` (plus uncommitted changes). Confirm:
 
-- **Matches the issue/plan** and nothing more. Flag scope creep (scheduling, search, PATCH, new projects) unless requested.
-- **Conventions** from `.github/copilot-instructions.md` and `code`: layer responsibilities, one primary type per file, GET-by-ID and POST grouped per resource, `Program.cs` limited to composition, `/** @param @return */` docs on new or changed members, unrelated comments preserved.
+- **Matches the issue/plan** and nothing more. Flag scope creep beyond the approved milestone issue unless requested. Check no secrets are staged (`git diff --cached`). For boundary or security-sensitive changes, run the read-only `code-review` agent on the diff and resolve every Critical and High finding before merge.
+- **Conventions** from `.github/copilot-instructions.md` and `code`: layer responsibilities, one-way service and layer dependencies, HTTP-only frontend boundary, one primary type per file, `Program.cs` limited to composition, `/** @param @return */` docs on new or changed members, unrelated comments preserved.
 - **Behavior has tests**, including failure paths, and the tests assert something meaningful (see `testing`). A bug fix has a regression test.
 - **No secrets or personal data** in source, logs, tests or docs. No debug leftovers or commented-out code.
 - **No generated files** (`bin/`, `obj/`, `TestResults/`, coverage output) or unrelated formatting churn.
@@ -42,7 +43,7 @@ If the contract, capabilities or limitations changed, `docs/api.md`, `docs/domai
 
 ## 4. Behavior check (when the change is user-visible)
 
-Run the API (`dotnet run --project src/TravelTracker.Api --launch-profile http`, Swagger at `http://localhost:5104/swagger`) and exercise the changed endpoint, including one failure case. Passing tests is not the same as a working endpoint; say which you verified.
+Run the affected service and any client that calls it (for the API: `dotnet run --project src/TravelTracker.Api --launch-profile http`, Swagger at `http://localhost:5104/swagger`) and exercise the changed endpoint, including one failure case. Passing tests is not the same as a working endpoint; say which you verified.
 
 ## 5. CI and delivery, when requested
 
