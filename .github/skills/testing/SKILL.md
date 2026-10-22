@@ -25,11 +25,27 @@ Use the lowest level that proves the behavior. A direct service call does not pr
 
 ## Project layout
 
-- One xUnit project, `tests/TravelTracker.Api.Tests`, referencing `TravelTracker.Api`. Tests are grouped by resource: `HealthTests.cs`, `AttractionTests.cs`, `TransportModeTests.cs`, `RoutePointTests.cs`. Shared helpers: `Support/ApiFactory.cs` and `Support/HttpTestSupport.cs`. Put new tests in the matching file; do not create a new test file per feature (a `ServiceTests.cs` was previously rejected for this reason).
-- Each test creates and disposes its own factory, client and in-memory stores. No shared mutable state, no ordering dependence.
-- The combined API suite stays at **30 discovered cases or fewer**, counting every `[InlineData]` row. Prefer core workflows and representative boundaries, and note what coverage was dropped to stay under the cap. Do not hide a matrix in a loop to lower the count.
-- Only create a new test project if none exists and one is requested: .NET 10 xUnit under `tests/`, added to the solution, with only the references it needs. Add `Microsoft.AspNetCore.Mvc.Testing` for HTTP tests; check which package versions exist instead of guessing. If `Program` must be visible to `WebApplicationFactory`, use a dedicated `public partial class Program` file.
+- Each service and the frontend own a test project under `tests/`, referencing only the project it tests (plus shared contracts). Today that is `tests/TravelTracker.Api.Tests`. Feature tests live with the behavior they prove, in the file matching the resource or capability (for example `AttractionTests.cs`); extend the matching file instead of creating a new file per feature. `Support/` holds shared helpers such as `ApiFactory.cs` and `HttpTestSupport.cs`.
+- Each test creates and disposes its own factory, client and stores. No shared mutable state, no ordering dependence.
+- There is no fixed cap on test count. Coverage must be meaningful: every public behavior, validation boundary and failure path in the change gets a test. Never delete useful coverage to reduce a count, and never pad with duplicates. Do not hide a matrix in a loop; each `[InlineData]` row counts as a discovered case.
+- Services are tested in isolation. A service test host replaces other services with fakes or stubbed `HttpClient` handlers, and the frontend is tested against the services' HTTP contract only, never their internals or databases.
+- Only create a new test project when a new service or client needs one: .NET 10 xUnit under `tests/`, added to the solution, with only the references it needs. Add `Microsoft.AspNetCore.Mvc.Testing` for HTTP tests; check which package versions exist instead of guessing. If `Program` must be visible to `WebApplicationFactory`, use a dedicated `public partial class Program` file.
 - Replace external services and configuration in the test host. No credentials, cloud services or production databases in routine tests.
+
+## Responsibilities by level
+
+- **Unit:** business rules and decisions with constructor-injected fakes.
+- **HTTP:** routing, binding, validation, status, body and headers through `WebApplicationFactory<Program>`.
+- **Relational persistence:** queries, constraints, migrations and atomic writes against a real relational provider.
+- **Bearer validation:** see the next section.
+- **Client end-to-end:** a few selected frontend journeys over HTTP against locally running services with seeded data. Not a substitute for lower levels.
+
+## Authorization versus bearer validation
+
+These prove different things; label each test with which one it is.
+
+- **Fake-identity authorization tests** use a test authentication scheme that supplies a claims principal. They prove authorization rules (ownership, roles, banned or deactivated users, 401 versus 403 versus absent). The authorization policies stay on; only authentication is replaced. They say nothing about token validity.
+- **Real bearer-validation tests** send actual signed JWTs through the production `JwtBearer` configuration (test signing key or local issuer). They must prove rejection of a bad signature, wrong issuer, wrong audience and expired token, and acceptance of a valid token. A fake scheme can never satisfy this.
 
 ## Writing tests
 
@@ -49,7 +65,7 @@ Take exact expectations from the current contract, and do not implement planned 
 - **Transport:** supported codes (car, bus, train, pedestrian, bike, plane), unknown code rejected, nothing persisted by a rejected request.
 - **Concurrency:** lost-update protection where updates exist, shown to fail without the fix.
 - **Trips, once implemented:** one-way versus round-trip legs, connected ordered legs without gaps, arrival after departure, no overlapping legs, visits within trip dates, failed validation leaves the aggregate unchanged.
-- **Authorization, once implemented:** unauthenticated calls, ownership, another user's private record appearing absent, banned users read-only, deactivated users denied, administrators not seeing other travellers' private trips.
+- **Authorization (fake identities):** unauthenticated calls, ownership, another user's private record appearing absent, banned users read-only, deactivated users denied, administrators not seeing other travellers' private trips.
 - **Failure:** absent resources, dependency timeout, cancellation, stale edits, rollback with no partial writes.
 - **Events, when implemented:** duplicate delivery gives one effect, retries stop at the limit, permanent failures are not retried, poison messages are dead-lettered.
 - **Contracts:** field names, identifier serialization (`Guid` versus `Id64` as agreed), status codes, backward compatibility.
@@ -68,7 +84,7 @@ dotnet build TravelTracker.slnx --configuration Release --no-restore
 dotnet test TravelTracker.slnx --configuration Release --no-build --no-restore
 ```
 
-1. Run the changed tests first, then the wider suite, and rerun after any further edit or failure fix.
+1. Before any behavioral change, record the baseline (discovered, passed, failed, skipped) so later counts can be compared. Run the changed tests first, then the wider suite, and rerun after any further edit or failure fix.
 2. Collect TRX or `XPlat Code Coverage` only if the runner supports it; keep results out of commits. Coverage points at gaps; it is not a quality score and has no invented target.
 3. CI work follows restore, build, test, publishes results even on failure, and gates deployment on passing tests. Match this repo's actual setup (`.github/workflows/ci.yml`) and do not create a pipeline or deploy unasked.
 4. Report the commands, discovered and executed counts, pass/fail/skip, baseline versus new failures, behavior covered and boundaries left unverified. If the build fails, say tests were blocked.
