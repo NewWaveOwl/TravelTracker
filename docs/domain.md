@@ -29,7 +29,11 @@ The Api [response DTOs](../src/TravelTracker.Api/Contracts) preserve the agreed 
 
 ## Unfinished feature types
 
-[Trip](../src/TravelTracker.Domain/Models/Trip.cs), [TripLeg](../src/TravelTracker.Domain/Models/TripLeg.cs), [UserSettings](../src/TravelTracker.Domain/Models/UserSettings.cs) and [TripMapPoint](../src/TravelTracker.Domain/Models/TripMapPoint.cs) are empty partial declarations needed by the existing interfaces. They supply no fields, validation, persistence or endpoints. James's Trips/Settings feature contracts still need definition before implementation. Stay, Visit and TicketImport remain roadmap concepts.
+[UserSettings](../src/TravelTracker.Domain/Models/UserSettings.cs) and [TripMapPoint](../src/TravelTracker.Domain/Models/TripMapPoint.cs) are empty partial declarations needed by the existing interfaces. They supply no fields, persistence or endpoints. Stay, Visit and TicketImport remain roadmap concepts; stay/visit invariants are deferred.
+
+## Trip rules (implemented, pure domain)
+
+[Trip](../src/TravelTracker.Domain/Models/Trip.cs) and [TripLeg](../src/TravelTracker.Domain/Models/TripLeg.cs) are immutable. `Trip.Create` / `WithLegs` throw [TripValidationException](../src/TravelTracker.Domain/Models/TripValidationException.cs) listing every [TripError](../src/TravelTracker.Domain/Models/TripError.cs) (field path plus message), so a rejected edit leaves the old trip unchanged. Enforced: first leg starts at an accommodation; one-way ends at an attraction; round trip returns to its start and visits an attraction; legs are sequenced 1..n, connected, arrive after departing, do not overlap, and sit inside the trip start/end. Leg times carry an offset that must match the trip time zone; [TripTime.Resolve](../src/TravelTracker.Domain/Models/TripTime.cs) rejects impossible local times and requires an explicit offset for ambiguous ones. Nothing is corrected silently. Trip ownership, ids and persistence are not part of this layer.
 
 ## Planned trip rules
 
