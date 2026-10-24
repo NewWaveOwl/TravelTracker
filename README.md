@@ -12,12 +12,13 @@ The current implementation provides a working API for **attractions, transport e
 | Transport entries | Create and retrieve named transport entries using `car`, `bus`, `train`, `pedestrian`, `bike` or `plane`. |
 | Route points | Create and retrieve reusable locations of type `accommodation`, `attraction` or `transport_stop`. |
 | Validation | Validate required fields, supported codes and types, coordinate ranges, ratings and visit duration. |
+| API authentication | Validate bearer tokens and require separate catalogue read/write permissions. Health remains anonymous. |
 | API exploration | Use one Swagger page to inspect and execute all implemented endpoints. |
 | Health | Check the API’s status and service identity through `/health`. |
 
 New records receive public UUIDv7 identifiers. The identity system separates public identifiers from internal numeric keys.
 
-Repositories contain sample data and store changes **in memory**. Created records remain available until the API restarts; restarting restores the sample data. No database setup or external service is required to run the current API.
+Repositories contain sample data and store changes **in memory**. Created records remain available until the API restarts; restarting restores the sample data. No database setup is required. Protected requests need an access token from the configured identity provider; automated tests use isolated local signing keys.
 
 ## Project status
 
@@ -25,7 +26,7 @@ TravelTracker currently provides the catalogue and location foundation for futur
 
 The following features are not yet available through the running application:
 
-- User registration, authentication and account management.
+- User registration, interactive sign-in, account standing and account management.
 - Accommodation management as a separate resource.
 - Trips, ordered itinerary legs, history, settings and map views.
 - Scheduled journeys, departure and arrival times, and stop timing.
@@ -69,7 +70,7 @@ Build the solution:
 dotnet build TravelTracker.slnx --configuration Release
 ```
 
-Start the API:
+Configure the identity provider's authority, issuer, audience and scope claim as described in [API authentication](docs/authentication.md), then start the API. Missing or insecure configuration fails startup:
 
 ```powershell
 dotnet run --project src/TravelTracker.Api --launch-profile http
@@ -93,7 +94,7 @@ Base URL: `http://localhost:5104`
 | Route points | POST | `/api/v1/route-points` |
 | Route points | GET | `/api/v1/route-points/{id}` |
 
-In Swagger, expand an endpoint, select **Try it out**, enter the required values and select **Execute**.
+In Swagger, select **Authorize** and enter an access token for this API. Reads require `catalogue.read`; writes require `catalogue.write`. Then expand an endpoint, select **Try it out**, enter the required values and select **Execute**. `/health` is anonymous. Missing or invalid tokens return `401`; missing permissions return `403`.
 
 Successful creation returns `201 Created`, the saved record and a `Location` header. Use the returned identifier to retrieve the record. Unknown identifiers return `404 Not Found`; invalid request input returns `400 Bad Request`.
 
@@ -107,7 +108,7 @@ Run the full test suite from the repository root:
 dotnet test TravelTracker.Tests.slnx --configuration Release
 ```
 
-The suite contains **62 test cases** covering health, attraction and transport operations, route points, validation and concurrent identity generation. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search.
+The suite covers health, attraction and transport operations, route points, validation, concurrent identity generation, and real bearer-token validation and scope policies. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search. Tests configure isolated signing keys and require no external identity provider.
 
 Contracts for the planned multi-service architecture are in [milestone 3 contracts](docs/milestone-3-contracts.md).
 

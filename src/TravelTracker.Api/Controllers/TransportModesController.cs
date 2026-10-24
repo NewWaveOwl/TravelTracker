@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authorization;
+using TravelTracker.Api.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using TravelTracker.Api.Contracts;
 using TravelTracker.Api.Services;
@@ -19,6 +21,7 @@ public sealed class TransportModesController(ITransportModeService service) : Co
      * @return 200 with its HTTP representation, or 404 when absent.
      */
     [HttpGet("{id}")]
+    [Authorize(Policy = ScopePolicies.CatalogueRead)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TransportModeRecord>> GetById(Guid id)
     {
@@ -32,6 +35,7 @@ public sealed class TransportModesController(ITransportModeService service) : Co
      * @return 201 with the saved representation and details Location; invalid input returns 400.
      */
     [HttpPost]
+    [Authorize(Policy = ScopePolicies.CatalogueWrite)]
     [ProducesResponseType(typeof(TransportModeRecord), StatusCodes.Status201Created)]
     public async Task<ActionResult<TransportModeRecord>> Create(CreateTransportModeRequest request)
     {
