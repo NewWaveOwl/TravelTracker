@@ -141,7 +141,7 @@ public sealed class AttractionTests
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        var list = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions");
+        var list = (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions"))!;
         var names = list.Select(e => e.GetProperty("name").GetString()).ToArray();
         Assert.Equal(new[] { "Montreal Museum", "Old Port", "Science Centre" }, names);
     }
@@ -154,7 +154,7 @@ public sealed class AttractionTests
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        var results = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions?name=port");
+        var results = (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions?name=port"))!;
         Assert.Single(results);
         Assert.Equal("Old Port", results[0].GetProperty("name").GetString());
     }
@@ -171,7 +171,7 @@ public sealed class AttractionTests
             new { name = "montreal museum", lat = 45m, lon = -73m, estimatedVisitMinutes = 30 });
         var s2 = await HttpTestSupport.AssertCreatedAsync(client, r2);
 
-        var list = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions");
+        var list = (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions"))!;
         var matches = list.Where(e => string.Equals(e.GetProperty("name").GetString(), "montreal museum", StringComparison.OrdinalIgnoreCase))
                           .Select(e => e.GetProperty("attractionId").GetGuid())
                           .ToArray();
