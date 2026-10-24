@@ -104,10 +104,13 @@ See the [API documentation](docs/api.md) and [HTTP examples](src/TravelTracker.A
 Run the full test suite from the repository root:
 
 ```powershell
-dotnet test TravelTracker.Tests.slnx --configuration Release
+dotnet build TravelTracker.Tests.slnx --configuration Release
+dotnet test TravelTracker.Tests.slnx --configuration Release --no-build
 ```
 
-The suite contains **62 test cases** covering health, attraction and transport operations, route points, validation and concurrent identity generation. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search.
+CI runs these same two commands. Warnings fail the build (`Directory.Build.props`), and a boundary test fails if Domain gains references or Data becomes a web project. CI uploads the `.trx` results as a `test-results` artifact even when tests fail.
+
+The suite contains **64 test cases** covering health, attraction and transport operations, route points, validation, concurrent identity generation and project dependency boundaries. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search.
 
 Contracts for the planned multi-service architecture are in [milestone 3 contracts](docs/milestone-3-contracts.md).
 
