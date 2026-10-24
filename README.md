@@ -132,10 +132,13 @@ See the [API documentation](docs/api.md) and [HTTP examples](src/TravelTracker.T
 Run application, domain and HTTP tests from the repository root (no PostgreSQL needed):
 
 ```powershell
-dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"
+dotnet build TravelTracker.Tests.slnx --configuration Release
+dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --filter "Category!=PostgreSQL"
 ```
 
-The suite covers health, attraction and transport operations, route points, validation, concurrent identity generation, and real bearer-token validation and scope policies. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search. Tests configure isolated signing keys and require no external identity provider. Application/domain/HTTP tests use EF InMemory and need no PostgreSQL. Relational tests marked `Category=PostgreSQL` require real PostgreSQL for constraints, migrations, locking, rollback and restart.
+CI runs these commands plus the PostgreSQL group. Warnings fail the build (`Directory.Build.props`), and a boundary test fails if Domain gains references or Data becomes a web project. CI uploads the `.trx` results as a `test-results` artifact even when tests fail.
+
+The suite covers health, attraction and transport operations, route points, validation, concurrent identity generation, project dependency boundaries, and real bearer-token validation and scope policies. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search. Tests configure isolated signing keys and require no external identity provider. Application/domain/HTTP tests use EF InMemory and need no PostgreSQL. Relational tests marked `Category=PostgreSQL` require real PostgreSQL for constraints, migrations, locking, rollback and restart.
 
 Contracts for the planned multi-service architecture are in [milestone 3 contracts](docs/milestone-3-contracts.md).
 
