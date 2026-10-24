@@ -102,10 +102,13 @@ See the [API documentation](docs/api.md) and [HTTP examples](src/TravelTracker.A
 Run the full test suite from the repository root:
 
 ```powershell
-dotnet test TravelTracker.Tests.slnx --configuration Release
+dotnet build TravelTracker.Tests.slnx --configuration Release
+dotnet test TravelTracker.Tests.slnx --configuration Release --no-build
 ```
 
-The suite currently discovers and passes **41 test cases** covering health, attraction and transport operations, route points, validation and concurrent identity generation.
+CI runs these same two commands. Warnings fail the build (`Directory.Build.props`), and a boundary test fails if Domain gains references or Data becomes a web project. CI uploads the `.trx` results as a `test-results` artifact even when tests fail.
+
+The suite currently discovers and passes **43 test cases** covering health, attraction and transport operations, route points, validation and concurrent identity generation.
 
 Tests create isolated application hosts automatically, so a manually running API is unnecessary. GitHub Actions runs the test solution for pull requests.
 
