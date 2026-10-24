@@ -2,6 +2,8 @@
 
 [TravelTracker.Domain](../src/TravelTracker.Domain) owns the business models used by the API and Data projects. Existing names, property types and identifiers are preserved.
 
+Bearer validation belongs to the API, not Domain. The authenticated identity is the validated `(iss, sub)` pair; mapping it to a public User UUID and enforcing account standing remain future Users work. See [authentication boundaries](authentication.md).
+
 ## Existing entities
 
 | Entity | Existing fields | Owner / integration addition |
