@@ -33,6 +33,7 @@ public sealed class TripTests {
         var round = Trip.Create("t", Zone, Day, Day.AddHours(10), true,
             [Leg(1, hotel, stop, 1, 2), Leg(2, stop, museum, 2, 4, "bus"), Leg(3, museum, hotel, 5, 6, "car")]);
         Assert.Equal(3, round.Legs.Count);
+        Assert.Throws<NotSupportedException>(() => ((IList<TripLeg>)round.Legs).Clear());
     }
 
     /**

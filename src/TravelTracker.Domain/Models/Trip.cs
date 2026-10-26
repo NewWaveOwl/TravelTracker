@@ -46,7 +46,7 @@ public sealed class Trip {
     public static Trip Create(string name, TimeZoneInfo timeZone, DateTimeOffset start, DateTimeOffset end, bool isRoundTrip, IEnumerable<TripLeg> legs) {
         var snapshot = legs.ToList();
         var errors = Validate(name, timeZone, start, end, isRoundTrip, snapshot);
-        return errors.Count > 0 ? throw new TripValidationException(errors) : new(name, timeZone, start, end, isRoundTrip, snapshot);
+        return errors.Count > 0 ? throw new TripValidationException(errors) : new(name, timeZone, start, end, isRoundTrip, snapshot.AsReadOnly());
     }
 
     /**
