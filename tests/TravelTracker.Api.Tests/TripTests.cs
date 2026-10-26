@@ -85,6 +85,8 @@ public sealed class TripTests {
         Assert.Throws<TripValidationException>(() => TripTime.Resolve(ambiguous, Zone, TimeSpan.FromHours(5)));
         Assert.Equal(TimeSpan.FromHours(1), TripTime.Resolve(ambiguous, Zone, TimeSpan.FromHours(1)).Offset);
         Assert.Equal(TimeSpan.FromHours(2), TripTime.Resolve(new(2026, 6, 1, 8, 0, 0), Zone).Offset);
+        Assert.Throws<TripValidationException>(() => TripTime.Resolve(new(2026, 6, 1, 8, 0, 0), Zone, TimeSpan.FromHours(5)));
+        Assert.Equal(TimeSpan.FromHours(2), TripTime.Resolve(new(2026, 6, 1, 8, 0, 0), Zone, TimeSpan.FromHours(2)).Offset);
     }
 
     /**

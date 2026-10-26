@@ -10,7 +10,7 @@ public static class TripTime {
      *
      * @param local The wall-clock time as typed.
      * @param zone The trip time zone.
-     * @param chosenOffset The offset the traveller picked, only needed when the time is ambiguous.
+     * @param chosenOffset The offset the traveller picked, required when the time is ambiguous; if given otherwise it must match the zone.
      * @return The absolute time.
      * @throws TripValidationException when the time is impossible, ambiguous without an offset, or the offset does not fit.
      */
@@ -18,7 +18,10 @@ public static class TripTime {
         local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
         if (zone.IsInvalidTime(local))
             throw Reject($"{local:s} does not exist in {zone.Id} (clocks skip it); choose another time.");
-        if (!zone.IsAmbiguousTime(local)) return new(local, zone.GetUtcOffset(local));
+        if (!zone.IsAmbiguousTime(local)) {
+            var actual = zone.GetUtcOffset(local);
+            return chosenOffset is { } given && given != actual ? throw Reject($"offset {given} is not valid for {local:s} in {zone.Id}; it is {actual}.") : new(local, actual);
+        }
         var offsets = zone.GetAmbiguousTimeOffsets(local);
         if (chosenOffset is not { } offset)
             throw Reject($"{local:s} happens twice in {zone.Id}; choose one of the offsets {string.Join(", ", offsets)}.");
