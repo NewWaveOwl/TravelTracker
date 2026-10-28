@@ -39,6 +39,8 @@ Run `git status` and `git diff origin/<PR-base>...HEAD` (plus uncommitted change
 
 ## 3. Docs sync
 
+For persistence changes, verify that provider configuration, migrations and relational test evidence target the selected PostgreSQL database with Npgsql. Database decision 3 is resolved; SQLite or EF InMemory runs cannot stand in for PostgreSQL persistence checks. Keep credentials and local connection overrides out of staged files. Do not claim that the current in-memory host already uses PostgreSQL solely because the technology decision is documented.
+
 If the contract, capabilities or limitations changed, `docs/api.md`, `docs/domain.md`, `docs/data.md` and the README tables must say the same as the code. Docs are the ground truth for planning, so a stale doc is a defect.
 
 ## 4. Behavior check (when the change is user-visible)

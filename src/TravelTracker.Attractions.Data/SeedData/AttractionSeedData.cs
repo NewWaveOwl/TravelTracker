@@ -1,7 +1,7 @@
-using TravelTracker.Domain.Models;
-using TravelTracker.Domain.Types;
+using TravelTracker.Attractions.Domain.Models;
+using TravelTracker.Attractions.Domain.Types;
 
-namespace TravelTracker.Data.SeedData;
+namespace TravelTracker.Attractions.Data.SeedData;
 
 /**
  * Supplies the existing fixed examples using the shared attraction entity.

@@ -1,6 +1,14 @@
 # Data Layer
 
-The original [SQL schema](../src/Database/schema.sql) and all six existing [repository interfaces](../src/TravelTracker.Data/Repositories) from master are unchanged. TravelTracker.Data now implements the original Attraction/TransportMode interfaces and the new RoutePoint interface using process-lifetime memory. No DbContext or SQL persistence implementation exists yet.
+[TravelTracker.Attractions.Data](../src/TravelTracker.Attractions.Data) owns the implemented PostgreSQL/EF Core context, migrations, attraction repository and identity allocator. [TravelTracker.Data](../src/TravelTracker.Data) retains Transport/Route Point in-memory stores and the other unfinished service contracts. The historical [SQL schema](../src/Database/schema.sql) is not the applied migration history of Attractions. See [migration/startup/ownership and test instructions](attractions-service.md).
+
+## Selected database
+
+**PostgreSQL is the selected database**, confirmed by the repository owner on 2026-10-28. EF Core persistence uses the `Npgsql.EntityFrameworkCore.PostgreSQL` provider. This resolves database decision 3 in [Milestone 3 contracts](milestone-3-contracts.md) for #35, #36 and the persistence work in #41. Provider package versions must be compatible with the project's .NET/EF Core version; no PostgreSQL server version has been selected here.
+
+Keep each service's database ownership separate. Domain models remain free of EF Core/Npgsql dependencies; provider configuration, mappings and migrations belong in Data and API composition. Generate and verify migrations against PostgreSQL, and use isolated PostgreSQL databases for relational persistence tests. SQLite and EF InMemory are not substitutes for that evidence. Connection strings and credentials come from environment-specific configuration and must not be committed or logged.
+
+PostgreSQL is now implemented for the independent Attractions service. The remaining Transport/Route Points host still uses in-memory repositories. The existing SQL schema remains a historical foundation, separate from Attractions migrations. See [Npgsql's provider documentation](https://www.npgsql.org/efcore/).
 
 ## Schema
 
@@ -25,7 +33,7 @@ Note: `Trips` stores one leg directly on the row (one transport, one departure, 
 |---|---|---|
 | [IUserRepository](../src/TravelTracker.Data/Repositories/IUserRepository.cs) | internal / `Guid` | `GetByIdAsync`, `GetByEmailAsync`, `GetAllAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ChangeStatusAsync` |
 | [IAccomadationRepository](../src/TravelTracker.Data/Repositories/IAccomadationRepository.cs) | internal / `Guid` | `GetByIdAsync`, `GetAllAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync` |
-| [IAttractionRepository](../src/TravelTracker.Data/Repositories/IAttractionRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync` |
+| [IAttractionRepository](../src/TravelTracker.Attractions.Data/Repositories/IAttractionRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync` |
 | [ITransportModeRepository](../src/TravelTracker.Data/Repositories/ITransportModeRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `AddAsync`, `UpdateAsync` |
 | [ISettingsRepository](../src/TravelTracker.Data/Repositories/ISettingsRepository.cs) | public / `Guid` (public id) | `GetByUserIdAsync`, `UpsertAsync` |
 | [ITripRepository](../src/TravelTracker.Data/Repositories/ITripRepository.cs) | public / `Guid` (public id) | `GetAllByUserIdAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
@@ -41,9 +49,11 @@ Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: J
 
 ## Implemented in-memory repositories
 
-[InMemoryAttractionRepository](../src/TravelTracker.Data/Repositories/InMemoryAttractionRepository.cs) and [InMemoryTransportModeRepository](../src/TravelTracker.Data/Repositories/InMemoryTransportModeRepository.cs) implement the existing interfaces using the existing Domain entities. [InMemoryRoutePointRepository](../src/TravelTracker.Data/Repositories/InMemoryRoutePointRepository.cs) implements the new location contract. Api registers these thread-safe repositories as singletons and services as scoped.
+[EfAttractionRepository](../src/TravelTracker.Attractions.Data/Repositories/EfAttractionRepository.cs) uses the request-scoped AttractionsDbContext. Its `Attractions` table stores application-issued `Id` (bigint), unique `PublicId` (uuid), name/address/description, numeric coordinates/rating, visit duration, owner issuer/subject and shared visibility. These persistence-only identity/ownership fields do not expand the public response DTO. Transactions lock the target row for PATCH and roll back rejected candidates; database constraints enforce coordinate/rating/duration/name/ownership invariants. The migration is under `src/TravelTracker.Attractions.Data/Migrations`.
 
-Attraction/transport reads and writes copy mutable entities so callers cannot alter stored values without a repository operation. RoutePoint is immutable. Completed Tasks honor the original asynchronous signatures; memory operations perform no external I/O. Internal collection/update/delete methods required by the original contracts are implemented. Controllers expose GET-by-ID and POST for transport entries and route points; attractions also expose GET list with name filter and PATCH.
+[InMemoryTransportModeRepository](../src/TravelTracker.Data/Repositories/InMemoryTransportModeRepository.cs) and [InMemoryRoutePointRepository](../src/TravelTracker.Data/Repositories/InMemoryRoutePointRepository.cs) retain thread-safe singleton stores in the remaining host. Its application services remain scoped.
+
+Attraction reads return detached domain copies; EF rows do not escape Data. Transport reads/writes copy mutable entities; RoutePoint is immutable. Transport memory methods return completed Tasks, while Attractions uses cancellable asynchronous PostgreSQL I/O. Internal collection/update/delete methods remain internal contracts; controllers expose GET-by-ID and POST for Transport/Route Points, and create/detail/list/name-search/PATCH for Attractions.
 
 [Seeds](../src/TravelTracker.Data/SeedData) load once per repository instance. Created records survive requests and reset on restart. All six transport codes, including bike, are supported in memory; the SQL enum is unchanged. SourceId is unverified metadata rather than a database foreign key. Scheduling/timing calculations remain future work.
 

@@ -86,7 +86,7 @@ public sealed class AuthenticationTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
         using var client = factory.CreateClient();
         using var health = await client.GetAsync("/health");
-        using var catalogue = await client.GetAsync("/api/v1/attractions");
+        using var catalogue = await client.GetAsync("/test/identity");
         using var swagger = await client.GetAsync("/swagger/v1/swagger.json");
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, catalogue.StatusCode);
@@ -138,7 +138,7 @@ public sealed class AuthenticationTests
         using var factory = new ApiFactory { ClockSkewSeconds = skew };
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(lifetimeOffsetSeconds: expiryOffset));
-        using var response = await client.GetAsync("/api/v1/attractions");
+        using var response = await client.GetAsync("/test/identity");
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
     }
 
@@ -150,7 +150,7 @@ public sealed class AuthenticationTests
         using var factory = new ApiFactory { ValidAlgorithms = [algorithm] };
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(failure: failure));
-        using var response = await client.GetAsync("/api/v1/attractions");
+        using var response = await client.GetAsync("/test/identity");
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
     }
 
@@ -159,7 +159,7 @@ public sealed class AuthenticationTests
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/api/v1/attractions");
+        using var response = await client.GetAsync("/test/identity");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(factory.Discovery);
         Assert.Equal(new[] { $"{ApiFactory.Issuer}/.well-known/openid-configuration", $"{ApiFactory.Issuer}/keys" },
@@ -173,7 +173,7 @@ public sealed class AuthenticationTests
     {
         using var factory = new ApiFactory { MetadataIssuer = metadataIssuer };
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/api/v1/attractions");
+        using var response = await client.GetAsync("/test/identity");
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
         Assert.DoesNotContain(response.Headers.WwwAuthenticate, header => header.Parameter?.Contains("error_description") == true);
     }
@@ -184,7 +184,7 @@ public sealed class AuthenticationTests
         const string expected = "https://tokens.example.test/v2";
         using var factory = new ApiFactory { ExpectedIssuer = expected, MetadataIssuer = expected };
         using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/api/v1/attractions");
+        using var response = await client.GetAsync("/test/identity");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -245,7 +245,7 @@ public sealed class AuthenticationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = failure == "missing" ? null :
             new AuthenticationHeaderValue("Bearer", failure == "malformed" ? "not-a-jwt" : factory.CreateToken(failure: failure));
-        using var response = await client.GetAsync("/api/v1/attractions");
+        using var response = await client.GetAsync("/test/identity");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Contains(response.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
     }
@@ -264,7 +264,7 @@ public sealed class AuthenticationTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(scopes));
-        using var response = await client.GetAsync("/api/v1/attractions");
+        using var response = await client.GetAsync("/test/identity");
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
     }
 
@@ -276,7 +276,7 @@ public sealed class AuthenticationTests
         using var factory = new ApiFactory { ScopeClaimType = "scp" };
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(scopes, claimType: claimType));
-        using var response = await client.GetAsync("/api/v1/attractions");
+        using var response = await client.GetAsync("/test/identity");
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
     }
 
@@ -287,17 +287,13 @@ public sealed class AuthenticationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer",
             factory.CreateToken("trips.read catalogue.read", failure: "repeated-scopes"));
-        using var response = await client.GetAsync("/api/v1/attractions");
+        using var response = await client.GetAsync("/test/identity");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Theory]
-    [InlineData("GET", "/api/v1/attractions", "catalogue.write")]
-    [InlineData("GET", "/api/v1/attractions/11111111-1111-1111-1111-111111111111", "catalogue.write")]
     [InlineData("GET", "/api/v1/transport-modes/00000000-0000-0000-0000-000000000101", "catalogue.write")]
     [InlineData("GET", "/api/v1/route-points/00000000-0000-0000-0000-000000000201", "catalogue.write")]
-    [InlineData("POST", "/api/v1/attractions", "catalogue.read")]
-    [InlineData("PATCH", "/api/v1/attractions/11111111-1111-1111-1111-111111111111", "catalogue.read")]
     [InlineData("POST", "/api/v1/transport-modes", "catalogue.read")]
     [InlineData("POST", "/api/v1/route-points", "catalogue.read")]
     public async Task ResourceOperation_RejectsOppositePermission(string method, string path, string scopes)
@@ -314,10 +310,6 @@ public sealed class AuthenticationTests
     }
 
     [Theory]
-    [InlineData("GET", "/api/v1/attractions")]
-    [InlineData("GET", "/api/v1/attractions/11111111-1111-1111-1111-111111111111")]
-    [InlineData("POST", "/api/v1/attractions")]
-    [InlineData("PATCH", "/api/v1/attractions/11111111-1111-1111-1111-111111111111")]
     [InlineData("GET", "/api/v1/transport-modes/11111111-1111-1111-1111-111111111111")]
     [InlineData("POST", "/api/v1/transport-modes")]
     [InlineData("GET", "/api/v1/route-points/11111111-1111-1111-1111-111111111111")]
@@ -330,22 +322,6 @@ public sealed class AuthenticationTests
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
         using var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [Theory]
-    [InlineData("catalogue.read", 403)]
-    [InlineData("catalogue.write", 201)]
-    public async Task Create_RequiresWriteScopeAndRejectedWriteDoesNotPersist(string scopes, int status)
-    {
-        using var factory = new ApiFactory();
-        using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(scopes));
-        using var response = await client.PostAsJsonAsync("/api/v1/attractions",
-            new { name = "Permission test", lat = 45m, lon = -73m, estimatedVisitMinutes = 30 });
-        Assert.Equal((HttpStatusCode)status, response.StatusCode);
-        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken("catalogue.read"));
-        var records = await client.GetFromJsonAsync<JsonElement>("/api/v1/attractions?name=Permission%20test");
-        Assert.Equal(status == 201 ? 1 : 0, records.GetArrayLength());
     }
 
     [Fact]

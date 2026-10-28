@@ -26,6 +26,8 @@ Course material informs the requested work; exercises are not additional tasks. 
 
 ## Layers and DI
 
+**Selected persistence:** PostgreSQL with `Npgsql.EntityFrameworkCore.PostgreSQL` (owner decision, 2026-10-28; [Data contract](../../../docs/data.md)). Attractions now has dedicated Api/Data/Domain projects and implemented PostgreSQL migrations on port 5104; the remaining Transport/Route Points host uses memory on 5105. Both use the shared TravelTracker.Security bearer infrastructure library; never reference another host's Api/Data projects. Use compatible .NET/EF Core/Npgsql versions and environment-specific connection configuration. Keep provider types out of Domain and HTTP DTOs. Do not replace PostgreSQL with SQLite or infer untested support for other databases. Use [Attractions access/startup rules](../../../docs/attractions-service.md), including live Users checks and server-owned private/shared ownership.
+
 | Project | Owns |
 | --- | --- |
 | `TravelTracker.Api` | Thin HTTP handlers (bind, validate, call, map to a response) and services (business rules, coordination). |

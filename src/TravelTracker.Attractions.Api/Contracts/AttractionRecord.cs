@@ -1,4 +1,4 @@
-namespace TravelTracker.Api.Contracts;
+namespace TravelTracker.Attractions.Api.Contracts;
 
 /**
  * Represents the agreed attraction HTTP response mapped from the shared Domain entity.

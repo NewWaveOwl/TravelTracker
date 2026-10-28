@@ -2,7 +2,7 @@
 
 TravelTracker is a .NET 10 backend for a travel-planning application. The project aims to bring journeys, accommodation stays and attraction visits together in one itinerary, with trip history and a map view.
 
-The current implementation provides a working API for **attractions, transport entries and route points**. These resources run in one application and can be explored through Swagger. Full itinerary planning and the traveller-facing interface remain under development.
+**Attractions now runs independently on port 5104 with PostgreSQL persistence and creator-private/admin-shared access.** Transport entries and Route Points remain in `TravelTracker.Api` on port 5105 with in-memory storage. Both hosts provide Development Swagger. Full itinerary planning and the traveller-facing interface remain under development.
 
 ## Current capabilities
 
@@ -18,7 +18,7 @@ The current implementation provides a working API for **attractions, transport e
 
 New records receive public UUIDv7 identifiers. The identity system separates public identifiers from internal numeric keys.
 
-Repositories contain sample data and store changes **in memory**. Created records remain available until the API restarts; restarting restores the sample data. No database setup is required. Protected requests need an access token from the configured identity provider; automated tests use isolated local signing keys.
+Attractions records survive restarts in its service-owned PostgreSQL database. Transport/Route Point changes remain in memory and reset on restart. Protected requests need a validated access token; Attractions also requires a configured live Users access endpoint. See [independent Attractions startup, privacy rules and PostgreSQL testing](docs/attractions-service.md). Automated tests use isolated signing keys, Users HTTP stubs and disposable PostgreSQL databases.
 
 ## Project status
 
@@ -31,10 +31,10 @@ The following features are not yet available through the running application:
 - Trips, ordered itinerary legs, history, settings and map views.
 - Scheduled journeys, departure and arrival times, and stop timing.
 - Collection listing, PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
-- Persistent database storage.
+- Persistent database storage for the remaining service hosts.
 - A traveller-facing frontend.
 
-User and accommodation models and repository contracts exist. `Trip`, `TripLeg`, `UserSettings` and `TripMapPoint` are placeholder declarations supporting existing interfaces; their runtime features are unfinished.
+User and accommodation models and repository contracts exist. Trip/TripLeg domain rules are implemented, but their HTTP/persistence features remain unfinished. UserSettings and TripMapPoint remain placeholders.
 
 A route point describes a reusable location. A transport entry describes a transport option. Neither currently represents a scheduled journey.
 
@@ -42,18 +42,24 @@ A route point describes a reusable location. A transport entry describes a trans
 
 - .NET 10 and ASP.NET Core.
 - Swagger/OpenAPI through Swashbuckle.
-- In-memory repositories.
+- PostgreSQL persistence for Attractions; in-memory repositories for Transport/Route Points.
+- PostgreSQL through EF Core/Npgsql (owner decision, 2026-10-28), implemented for Attractions; other service persistence remains separate work.
 - xUnit and ASP.NET Core test hosts.
 - GitHub Actions for pull-request testing.
 
 | Project | Responsibility |
 | --- | --- |
-| `src/TravelTracker.Api` | Application startup, controllers, HTTP contracts and services. |
+| `src/TravelTracker.Attractions.Api` | Independent attraction HTTP contracts, application rules and live Users access checks. |
+| `src/TravelTracker.Attractions.Data` | PostgreSQL context, migrations, repositories and application-issued identities. |
+| `src/TravelTracker.Attractions.Domain` | Attraction model, identifiers and invariants without web/EF dependencies. |
+| `src/TravelTracker.Security` | Shared bearer validation and OpenAPI security infrastructure. |
+| `src/TravelTracker.Api` | Remaining Transport/Route Points startup, controllers and services. |
 | `src/TravelTracker.Data` | Repositories, sample data and identity generation. |
 | `src/TravelTracker.Domain` | Shared models and identifier types. |
-| `tests/TravelTracker.Api.Tests` | HTTP integration tests and identity-generation tests. |
+| `tests/TravelTracker.Api.Tests` | Remaining host, shared authentication, trip-domain and identity tests. |
+| `tests/TravelTracker.Attractions.Api.Tests` | Attraction HTTP, PostgreSQL durability/privacy and real-bearer integration tests. |
 
-The SQL schema in `src/Database/schema.sql` is a foundation for future persistence. The current API does not use it to store records.
+The historical SQL schema in `src/Database/schema.sql` is not applied automatically. Attractions uses its committed EF migrations; other hosts still have no database persistence.
 
 ## Getting started
 
@@ -73,7 +79,7 @@ dotnet build TravelTracker.slnx --configuration Release
 Start the API in Development to inspect health and Swagger; Development-only placeholder identity settings let it start without an external provider:
 
 ```powershell
-dotnet run --project src/TravelTracker.Api --launch-profile http
+dotnet run --project src/TravelTracker.Attractions.Api --launch-profile http
 ```
 
 The Development placeholders point to `identity.example.invalid`, which is not a running identity provider. Requests carrying a token cannot complete discovery until these values are replaced. Health and Swagger work without a token. Protected operations need a real provider-issued token; override the placeholders with the provider's settings before using them:
@@ -86,11 +92,11 @@ $env:Authentication__Bearer__Audience = 'traveltracker-api'
 
 Use the provider's exact issuer from its discovery document; it need not equal the authority URL. See [API authentication](docs/authentication.md) for scope, algorithm and clock-tolerance settings. Production has no provider defaults and rejects missing or insecure configuration at startup.
 
-Open [Swagger](http://localhost:5104/swagger). The `http` launch profile runs the application in Development and enables Swagger.
+Open [Swagger](http://localhost:5104/swagger). The `http` launch profile runs Attractions in Development and enables Swagger. Its public health response does not assert PostgreSQL/Users readiness. Start the remaining host separately on 5105 when needed.
 
 ## API endpoints
 
-Base URL: `http://localhost:5104`
+Attractions base URL: `http://localhost:5104`; Transport/Route Points: `http://localhost:5105`. Both expose `/health`; Attractions identifies itself as `Attractions`. Configure PostgreSQL/migrations and the live Users boundary using the [service guide](docs/attractions-service.md).
 
 | Resource | Method | Route |
 | --- | --- | --- |
@@ -118,11 +124,11 @@ Run the full test suite from the repository root:
 dotnet test TravelTracker.Tests.slnx --configuration Release
 ```
 
-The suite covers health, attraction and transport operations, route points, validation, concurrent identity generation, and real bearer-token validation and scope policies. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search. Tests configure isolated signing keys and require no external identity provider.
+The suite covers health, attraction and transport operations, route points, validation, concurrent identity generation, and real bearer-token validation and scope policies. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search. Tests configure isolated signing keys and require no external identity provider. Attraction persistence tests require PostgreSQL; they never substitute SQLite/EF InMemory.
 
 Contracts for the planned multi-service architecture are in [milestone 3 contracts](docs/milestone-3-contracts.md).
 
-Tests create isolated application hosts automatically, so a manually running API is unnecessary. GitHub Actions runs the test solution for pull requests.
+Tests create isolated application hosts automatically. PostgreSQL suites require `TRAVELTRACKER_TEST_POSTGRES` with permission to create disposable test databases; see the service guide. GitHub Actions supplies an isolated PostgreSQL service and runs both test projects.
 
 ## Documentation
 

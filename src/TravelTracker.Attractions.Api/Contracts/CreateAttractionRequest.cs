@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
-namespace TravelTracker.Api.Contracts;
+namespace TravelTracker.Attractions.Api.Contracts;
 
 /**
  * Accepts writable attraction fields with standard ASP.NET Core validation.
@@ -9,6 +9,8 @@ namespace TravelTracker.Api.Contracts;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class CreateAttractionRequest
 {
+    [Required, RegularExpression("^(private|shared)$")]
+    public string Visibility { get; init; } = "private";
     [Required]
     public string? Name { get; init; }
     public string? Description { get; init; }

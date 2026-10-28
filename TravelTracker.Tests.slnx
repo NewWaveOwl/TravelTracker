@@ -1,10 +1,15 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/TravelTracker.Attractions.Api/TravelTracker.Attractions.Api.csproj" />
+    <Project Path="src/TravelTracker.Attractions.Data/TravelTracker.Attractions.Data.csproj" />
+    <Project Path="src/TravelTracker.Attractions.Domain/TravelTracker.Attractions.Domain.csproj" />
+    <Project Path="src/TravelTracker.Security/TravelTracker.Security.csproj" />
     <Project Path="src/TravelTracker.Api/TravelTracker.Api.csproj" />
     <Project Path="src/TravelTracker.Data/TravelTracker.Data.csproj" />
     <Project Path="src/TravelTracker.Domain/TravelTracker.Domain.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TravelTracker.Attractions.Api.Tests/TravelTracker.Attractions.Api.Tests.csproj" />
     <Project Path="tests/TravelTracker.Api.Tests/TravelTracker.Api.Tests.csproj" />
   </Folder>
 </Solution>
