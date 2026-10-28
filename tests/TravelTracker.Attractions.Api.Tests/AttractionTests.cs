@@ -1,12 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TravelTracker.Data;
+using TravelTracker.Attractions.Data;
 using Microsoft.Extensions.DependencyInjection;
-using TravelTracker.Api.Services;
-using TravelTracker.Domain.Models;
+using TravelTracker.Attractions.Api.Services;
+using TravelTracker.Attractions.Domain.Models;
 
-namespace TravelTracker.Api.Tests;
+namespace TravelTracker.Attractions.Api.Tests;
 
 /**
  * Verifies attraction creation, lookup and input validation through HTTP.
@@ -270,6 +270,7 @@ public sealed class AttractionTests
     {
         using var factory = new ApiFactory();
         using var scope = factory.Services.CreateScope();
+        factory.PrepareScope(scope.ServiceProvider);
         var svc = scope.ServiceProvider.GetRequiredService<IAttractionService>();
         var existing = await svc.GetByIdAsync(Guid.Parse("11111111-1111-1111-1111-111111111111"));
         Assert.NotNull(existing);
@@ -408,8 +409,10 @@ public sealed class AttractionTests
     [Fact]
     public async Task Service_GetAll_SearchTrimCaseInsensitive()
     {
-        var repo = new TravelTracker.Data.Repositories.InMemoryAttractionRepository();
-        var service = new TravelTracker.Api.Services.AttractionService(repo, EntityIdGenerator.ForSeedData());
+        using var factory = new ApiFactory();
+        using var scope = factory.Services.CreateScope();
+        factory.PrepareScope(scope.ServiceProvider);
+        var service = scope.ServiceProvider.GetRequiredService<IAttractionService>();
         var results = await service.GetAllAsync(" museum ");
         Assert.All(results, r => Assert.Contains("museum", r.Name, StringComparison.OrdinalIgnoreCase));
     }
@@ -417,9 +420,12 @@ public sealed class AttractionTests
     [Fact]
     public async Task Service_UpdatePartialAsync_Concurrent_AllChangesApplied()
     {
-        var repo = new TravelTracker.Data.Repositories.InMemoryAttractionRepository();
-        var service = new TravelTracker.Api.Services.AttractionService(repo, EntityIdGenerator.ForSeedData());
-        var seeded = await service.CreateAsync(new TravelTracker.Domain.Models.Attraction
+        using var factory = new ApiFactory();
+        using var scope = factory.Services.CreateScope();
+        factory.PrepareScope(scope.ServiceProvider);
+        var service = scope.ServiceProvider.GetRequiredService<IAttractionService>();
+        var repo = scope.ServiceProvider.GetRequiredService<TravelTracker.Attractions.Data.Repositories.IAttractionRepository>();
+        var seeded = await service.CreateAsync(new TravelTracker.Attractions.Domain.Models.Attraction
         {
             Name = "Seed",
             Address = "A",
@@ -442,7 +448,12 @@ public sealed class AttractionTests
             JsonDocument.Parse("{ \"estimatedVisitMinutes\": 99 }").RootElement
         };
 
-        var tasks = patches.Select(p => service.UpdatePartialAsync(id, p)).ToArray();
+        var tasks = patches.Select(async patch =>
+        {
+            using var patchScope = factory.Services.CreateScope();
+            factory.PrepareScope(patchScope.ServiceProvider);
+            return await patchScope.ServiceProvider.GetRequiredService<IAttractionService>().UpdatePartialAsync(id, patch);
+        }).ToArray();
         var results = await Task.WhenAll(tasks);
         Assert.All(results, r => Assert.False(r.NotFound));
         Assert.All(results, r => Assert.Null(r.Errors));

@@ -4,13 +4,13 @@ HTTP contracts for the shared scaffold and the implemented combined API.
 
 ## Current state
 
-The existing [TravelTracker.Api](../src/TravelTracker.Api) is the only web host. Its controllers/services use TravelTracker.Data repositories and TravelTracker.Domain entities. All three implemented resources share port 5104 and /swagger. Original service-interface signatures are unchanged.
+Attractions has dedicated [Api](../src/TravelTracker.Attractions.Api), [Data](../src/TravelTracker.Attractions.Data) and [Domain](../src/TravelTracker.Attractions.Domain) projects and runs on 5104 with PostgreSQL. [TravelTracker.Api](../src/TravelTracker.Api) retains Transport/Route Points on 5105. Both use shared bearer infrastructure; Attractions also applies the approved privacy/live-standing rules. See the [service contract and startup guide](attractions-service.md).
 
 ## Existing service interfaces
 
 | Preserved interface | Wraps | Declared methods |
 |---|---|---|
-| [IAttractionService](../src/TravelTracker.Api/Services/IAttractionService.cs) | `Attraction` | `GetAllAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync` |
+| [IAttractionService](../src/TravelTracker.Attractions.Api/Services/IAttractionService.cs) | `Attraction` | `GetAllAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync` |
 | [ITransportModeService](../src/TravelTracker.Api/Services/ITransportModeService.cs) | `TransportMode` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `CreateAsync`, `UpdateAsync` |
 | [ISettingsService](../src/TravelTracker.Api/Services/ISettingsService.cs) | `UserSettings` (empty type declaration) | `GetOrCreateAsync`, `UpdateAsync` |
 | [ITripService](../src/TravelTracker.Api/Services/ITripService.cs) | `Trip`, `TripLeg` (empty type declarations) | `GetHistoryAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
@@ -44,11 +44,11 @@ The planned Trips service will validate referenced user/place/transport IDs via 
 Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: James.
 
 
-## Implemented combined API
+## Implemented APIs
 
 All resource operations now require a validated bearer access token and their exact catalogue scope: GET uses `catalogue.read`; POST and PATCH use `catalogue.write`. `/health` is explicitly anonymous. Authentication failures return `401` with a Bearer challenge; missing permissions return `403` before input validation. Read and write permissions are independent. Both fallback authorization (no attribute) and bare `[Authorize]` default to `catalogue.read`; mutations must still declare their write policy. See [configuration, identity rules and the complete policy map](authentication.md). This implements resource-server authentication, not sign-in or Users account-standing/ownership checks.
 
-Attractions, Transport entries and Route Points share http://localhost:5104 and one Swagger document. GET /health returns status ok and service TravelTracker. Swagger is enabled in Development.
+Attractions runs at http://localhost:5104 with its own Swagger document and `GET /health` returning `status: ok`, `service: Attractions`. Transport/Route Points remain at http://localhost:5105 with `service: TravelTracker`. Health is anonymous. Development Swagger is enabled per host. Attraction response fields remain compatible; creation adds optional `visibility` (`private` by default, `shared` only for administrators). See [privacy, account-standing and Users-dependency failures](attractions-service.md).
 
 | Method and route | Service | Result |
 | --- | --- | --- |
@@ -79,8 +79,8 @@ The Api controllers use the original asynchronous ITransportModeService and IAtt
 
 Response: routePointId, type, name, address, lat, lon, sourceId. POST requires an exact lowercase type (accommodation, attraction or transport_stop), nonblank name and valid coordinates. Address defaults to empty and cannot be explicitly null. Optional sourceId is unverified GUID metadata; the API does not contact another service. A point is a reusable location, not a scheduled journey.
 
-The shared host owns seeded process-lifetime memory. Its singleton repositories share records between requests; restarting restores all three catalogues and discards created data. Scoped services contain creation/lookup logic. Each resource has one controller, one service and one repository, with related GET/POST methods together.
+Attractions owns its durable PostgreSQL store, scoped context/repository and application rules. Optional examples seed an empty store only; restarting retains records. Transport/Route Points retain their process-lifetime memory. Each resource keeps cohesive controller/service/repository responsibilities. PostgreSQL row-locking transactions protect attraction PATCH validation and atomic updates.
 
-Attraction list/name search and attraction PATCH are implemented (see the route table). Transport collection listing, route-point collection/PATCH/DELETE, scheduled transport routes, stops and timing calculations remain future work. The contract for the six-service target is in [milestone 3 contracts](milestone-3-contracts.md). [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md), [HTTP examples](../src/TravelTracker.Api/requests.http).
+Attraction list/name search and attraction PATCH are implemented (see the route table). Transport collection listing, route-point collection/PATCH/DELETE, scheduled transport routes, stops and timing calculations remain future work. The contract for the six-service target is in [milestone 3 contracts](milestone-3-contracts.md). [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md), [Attractions HTTP examples](../src/TravelTracker.Attractions.Api/requests.http).
 
 For future Trips integration, a trip point is an ordered occurrence of a reusable route point. A scheduled route connects route points using a transport entry; a trip leg selects that journey. Dates and boarding/stop timings belong to the scheduled route and occurrences, rather than the transport catalogue POST. See [trip points, transport and routes](trip-points-and-routes.md).

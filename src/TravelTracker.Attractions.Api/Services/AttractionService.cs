@@ -1,27 +1,30 @@
-using Microsoft.AspNetCore.Mvc.ModelBinding;
+using TravelTracker.Attractions.Api.Access;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
-using TravelTracker.Data;
-using TravelTracker.Data.Repositories;
-using TravelTracker.Domain.Models;
+using TravelTracker.Attractions.Data;
+using TravelTracker.Attractions.Data.Repositories;
+using TravelTracker.Attractions.Domain.Models;
 
-namespace TravelTracker.Api.Services;
+namespace TravelTracker.Attractions.Api.Services;
 
 /**
- * Implements the existing shared service with its shared repository and entity.
- * @param repository Process-lifetime catalogue storage.
+ * Applies attraction rules and server-resolved visibility over durable storage.
+ * @param repository The scoped PostgreSQL repository boundary.
+ * @param ids The single-instance application identity allocator.
+ * @param caller The validated identity and live Users permission context.
  */
-public sealed class AttractionService(IAttractionRepository repository, EntityIdGenerator ids) : IAttractionService
+public sealed class AttractionService(IAttractionRepository repository, EntityIdGenerator ids, CallerContext caller) : IAttractionService
 {
-    // Semaphore to serialize read-modify-write partial updates and avoid lost updates.
-    private static readonly System.Threading.SemaphoreSlim updateLock = new(1, 1);
     /**
      * Reads all entries through the existing contract.
+     * @param nameFilter Optional ordinal case-insensitive name substring.
+     * @param cancellationToken Cancels database work.
      * @return A task containing the stored entries.
      */
-    public async Task<List<Attraction>> GetAllAsync(string? nameFilter = null)
+    public async Task<List<Attraction>> GetAllAsync(string? nameFilter = null, CancellationToken cancellationToken = default)
     {
-        var records = await repository.GetAllAsync();
-        IEnumerable<Attraction> filtered = records;
+        var records = await repository.GetVisibleAsync(caller.Issuer, caller.Subject, !caller.IsBanned, cancellationToken);
+        IEnumerable<Attraction> filtered = records.Where(caller.CanRead);
         if (!string.IsNullOrWhiteSpace(nameFilter))
         {
             var q = nameFilter.Trim();
@@ -36,19 +39,30 @@ public sealed class AttractionService(IAttractionRepository repository, EntityId
      * Reads one saved entry.
      * @param attractionId Identifier to find.
      * @return A task containing the entry, or null when absent.
+     * @param cancellationToken Cancels database work for the request.
      */
-    public Task<Attraction?> GetByIdAsync(Guid attractionId) => repository.GetByIdAsync(attractionId);
+    public async Task<Attraction?> GetByIdAsync(Guid attractionId, CancellationToken cancellationToken = default)
+    {
+        var record = await repository.GetByIdAsync(attractionId, cancellationToken);
+        return record is not null && caller.CanRead(record) ? record : null;
+    }
 
     /**
      * Creates an entity from HTTP-validated values.
      * @param attraction Writable entity values; its supplied identifier is replaced.
      * @return A task containing the stored entity with a generated identifier.
+     * @param cancellationToken Cancels database work for the request.
      */
-    public async Task<Attraction> CreateAsync(Attraction attraction)
+    public async Task<Attraction> CreateAsync(Attraction attraction, CancellationToken cancellationToken = default)
     {
-        attraction.AttractionId = await ids.NextAsync<Attraction>();
+        if (string.IsNullOrEmpty(caller.Subject) || caller.IsBanned || attraction.IsShared && !caller.IsAdministrator)
+            throw new UnauthorizedAccessException("Caller cannot create this attraction.");
+        attraction.OwnerIssuer = caller.Issuer;
+        attraction.OwnerSubject = caller.Subject;
+        if (attraction.Validate().Count != 0) throw new ValidationException("Invalid attraction values.");
+        attraction.AttractionId = await ids.NextAsync<Attraction>(cancellationToken);
         attraction.Name = attraction.Name.Trim();
-        await repository.AddAsync(attraction);
+        await repository.AddAsync(attraction, cancellationToken);
         return attraction;
     }
 
@@ -57,15 +71,22 @@ public sealed class AttractionService(IAttractionRepository repository, EntityId
      * @param attractionId Identifier of the entity to replace.
      * @param attraction New values supplied by the caller.
      * @return A task containing the entity, or null when absent; no HTTP update endpoint is exposed.
+     * @param cancellationToken Cancels database work for the request.
      */
-    public async Task<Attraction?> UpdateAsync(Guid attractionId, Attraction attraction)
+    public async Task<Attraction?> UpdateAsync(Guid attractionId, Attraction attraction, CancellationToken cancellationToken = default)
     {
-        var existing = await repository.GetByIdAsync(attractionId);
-        if (existing is null) return null;
+        await using var transaction = await repository.BeginWriteAsync(attractionId, cancellationToken);
+        var existing = await GetByIdAsync(attractionId, cancellationToken);
+        if (existing is null || !caller.CanWrite(existing)) return null;
+        if (attraction.Validate().Count != 0) throw new ValidationException("Invalid attraction values.");
+        attraction.OwnerIssuer = existing.OwnerIssuer;
+        attraction.OwnerSubject = existing.OwnerSubject;
+        attraction.IsShared = existing.IsShared;
         // Preserve the existing internal/public identity when replacing values.
         attraction.AttractionId = existing.AttractionId;
         attraction.Name = attraction.Name.Trim();
-        await repository.UpdateAsync(attraction);
+        await repository.UpdateAsync(attraction, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return attraction;
     }
 
@@ -73,14 +94,28 @@ public sealed class AttractionService(IAttractionRepository repository, EntityId
      * Removes an attraction through the existing contract.
      * @param attractionId Identifier to remove.
      * @return A task containing whether it was removed.
+     * @param cancellationToken Cancels database work for the request.
      */
-    public Task<bool> DeleteAsync(Guid attractionId) => repository.DeleteAsync(attractionId);
-
-    public async Task<UpdateResult> UpdatePartialAsync(Guid attractionId, JsonElement patch)
+    public async Task<bool> DeleteAsync(Guid attractionId, CancellationToken cancellationToken = default)
     {
-        await updateLock.WaitAsync();
-        try
+        var record = await GetByIdAsync(attractionId, cancellationToken);
+        return record is not null && caller.CanWrite(record) && await repository.DeleteAsync(attractionId, cancellationToken);
+    }
+
+    /**
+     * Validates an independent candidate under a database row lock and commits atomically.
+     * @param attractionId The public identifier to update.
+     * @param patch Presence-aware writable JSON fields.
+     * @param cancellationToken Cancels database work and commit.
+     * @return The accepted record, field errors, absent/private status or forbidden status.
+     */
+    public async Task<UpdateResult> UpdatePartialAsync(Guid attractionId, JsonElement patch, CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await repository.BeginWriteAsync(attractionId, cancellationToken);
         {
+            var existing = await repository.GetByIdAsync(attractionId, cancellationToken);
+            if (existing is null || !caller.CanRead(existing)) return new UpdateResult(null, null, NotFound: true);
+            if (!caller.CanWrite(existing)) return new UpdateResult(null, null, Forbidden: true);
             // Patch must be an object
             if (patch.ValueKind != JsonValueKind.Object)
             {
@@ -102,12 +137,10 @@ public sealed class AttractionService(IAttractionRepository repository, EntityId
             if (provided.Count == 0)
                 return new UpdateResult(null, new Dictionary<string, string[]> { ["patch"] = new[] { "Empty update object is not allowed." } });
 
-            var existing = await repository.GetByIdAsync(attractionId);
-            if (existing is null) return new UpdateResult(null, null, NotFound: true);
-
             // Start from a copy
             var candidate = new Attraction
             {
+                OwnerIssuer = existing.OwnerIssuer, OwnerSubject = existing.OwnerSubject, IsShared = existing.IsShared,
                 AttractionId = existing.AttractionId,
                 Name = existing.Name,
                 Description = existing.Description,
@@ -191,9 +224,9 @@ public sealed class AttractionService(IAttractionRepository repository, EntityId
                             break;
                     }
                 }
-                catch (Exception ex)
+                catch (Exception exception) when (exception is InvalidOperationException or FormatException)
                 {
-                    AddError(name, "Invalid value: " + ex.Message);
+                    AddError(name, "Invalid value type.");
                 }
             }
 
@@ -206,16 +239,12 @@ public sealed class AttractionService(IAttractionRepository repository, EntityId
             // Trim candidate name
             candidate.Name = candidate.Name?.Trim() ?? string.Empty;
 
-            // Final validation (redundant checks)
-            if (string.IsNullOrEmpty(candidate.Name))
-                return new UpdateResult(null, new Dictionary<string, string[]> { ["name"] = new[] { "Name must not be empty." } });
+            var invariantErrors = candidate.Validate();
+            if (invariantErrors.Count != 0) return new UpdateResult(null, invariantErrors);
 
-            await repository.UpdateAsync(candidate);
+            await repository.UpdateAsync(candidate, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return new UpdateResult(candidate, null, NotFound: false);
-        }
-        finally
-        {
-            updateLock.Release();
         }
     }
 

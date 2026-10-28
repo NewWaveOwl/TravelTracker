@@ -5,7 +5,7 @@ using TravelTracker.Api.Authentication;
 using Microsoft.OpenApi;
 
 /**
- * Starts one API host for Attractions, Transport entries and Route Points.
+ * Starts the remaining host for Transport entries and Route Points.
  * @param args Application configuration arguments.
  */
 var builder = WebApplication.CreateBuilder(args);
@@ -25,8 +25,6 @@ builder.Services.AddSwaggerGen(options =>
     options.OperationFilter<BearerSecurityOperationFilter>();
 });
 builder.Services.AddSingleton(EntityIdGenerator.ForSeedData());
-builder.Services.AddSingleton<IAttractionRepository, InMemoryAttractionRepository>();
-builder.Services.AddScoped<IAttractionService, AttractionService>();
 builder.Services.AddSingleton<ITransportModeRepository, InMemoryTransportModeRepository>();
 builder.Services.AddScoped<ITransportModeService, TransportModeService>();
 builder.Services.AddSingleton<IRoutePointRepository, InMemoryRoutePointRepository>();

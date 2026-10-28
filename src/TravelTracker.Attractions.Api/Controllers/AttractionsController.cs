@@ -1,23 +1,26 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TravelTracker.Api.Authentication;
-using TravelTracker.Api.Contracts;
-using TravelTracker.Api.Services;
-using TravelTracker.Domain.Models;
+using TravelTracker.Attractions.Api.Contracts;
+using TravelTracker.Attractions.Api.Access;
+using TravelTracker.Attractions.Api.Services;
+using TravelTracker.Attractions.Domain.Models;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
-namespace TravelTracker.Api.Controllers;
+namespace TravelTracker.Attractions.Api.Controllers;
 
 /**
- * Exposes creation and lookup using the existing shared project structure.
- * @param service Shared application service for this resource.
+ * Exposes the independent attraction contract with scope and ownership enforcement.
+ * @param service The request-scoped attraction application service.
+ * @param caller The validated identity and live Users access context.
  */
 [ApiController]
 [Route("api/v1/attractions")]
-public sealed class AttractionsController(IAttractionService service) : ControllerBase
+[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
+public sealed class AttractionsController(IAttractionService service, CallerContext caller) : ControllerBase
 {
     /**
      * Reads a resource by its generated GUID.
@@ -29,7 +32,7 @@ public sealed class AttractionsController(IAttractionService service) : Controll
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AttractionRecord>> GetById(Guid id)
     {
-        var record = await service.GetByIdAsync(id);
+        var record = await service.GetByIdAsync(id, HttpContext.RequestAborted);
         return record is null ? NotFound() : Ok(ToResponse(record));
     }
 
@@ -50,7 +53,7 @@ public sealed class AttractionsController(IAttractionService service) : Controll
             return ValidationProblem(ModelState);
         }
 
-        var records = await service.GetAllAsync(name);
+        var records = await service.GetAllAsync(name, HttpContext.RequestAborted);
         return Ok(records.Select(ToResponse).ToList());
     }
 
@@ -64,8 +67,9 @@ public sealed class AttractionsController(IAttractionService service) : Controll
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AttractionRecord>> Patch(Guid id, [FromBody] JsonElement patch)
     {
-        var result = await service.UpdatePartialAsync(id, patch);
+        var result = await service.UpdatePartialAsync(id, patch, HttpContext.RequestAborted);
         if (result.NotFound) return NotFound();
+        if (result.Forbidden) return Forbid();
         if (result.Errors is not null && result.Errors.Any())
         {
             var ms = new ModelStateDictionary();
@@ -89,9 +93,10 @@ public sealed class AttractionsController(IAttractionService service) : Controll
     [ProducesResponseType(typeof(AttractionRecord), StatusCodes.Status201Created)]
     public async Task<ActionResult<AttractionRecord>> Create(CreateAttractionRequest request)
     {
-        var saved = await service.CreateAsync(new Attraction { Name = request.Name!, Description = request.Description,
+        if (request.Visibility == "shared" && !caller.IsAdministrator) return Forbid();
+        var saved = await service.CreateAsync(new Attraction { IsShared = request.Visibility == "shared", Name = request.Name!, Description = request.Description,
             Rating = request.Rating, Address = request.Address!, Latitude = request.Lat!.Value,
-            Longitude = request.Lon!.Value, EstimatedVisitMinutes = request.EstimatedVisitMinutes!.Value });
+            Longitude = request.Lon!.Value, EstimatedVisitMinutes = request.EstimatedVisitMinutes!.Value }, HttpContext.RequestAborted);
         var response = ToResponse(saved);
         return CreatedAtAction(nameof(GetById), new { id = saved.AttractionId.PublicId }, response);
     }

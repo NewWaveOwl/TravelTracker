@@ -25,7 +25,6 @@ public sealed class EntityIdGenerator(Func<Task<long>> readHighestKey) {
      * @return A generator that never reuses a seeded key.
      */
     public static EntityIdGenerator ForSeedData() => new(() => Task.FromResult(new[] {
-        AttractionSeedData.Create().Max(record => (long)record.AttractionId.Key),
         TransportSeedData.Transports().Max(record => (long)record.TransportModeId.Key),
         TransportSeedData.Points().Max(record => (long)record.RoutePointId.Key)
     }.Max()));
