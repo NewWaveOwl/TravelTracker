@@ -17,12 +17,12 @@ Branch: `m3-03-layer-agents`
 
 | Agent | Production paths | Test files it may edit |
 |---|---|---|
-| `domain-dev` | `src/TravelTracker.Domain/**` | None in the current solution; it must not edit the existing API test files. |
-| `data-persistence` | `src/TravelTracker.Data/**` | `tests/TravelTracker.Api.Tests/EntityIdGeneratorTests.cs`, `tests/TravelTracker.Api.Tests/RoutePointTests.cs`, `tests/TravelTracker.Api.Tests/TransportModeTests.cs` |
+| `domain-dev` | `src/TravelTracker.Domain/**` | None; it must not edit existing API test files. |
+| `data-persistence` | `src/TravelTracker.Data/**` | `tests/TravelTracker.Api.Tests/EntityIdGeneratorTests.cs` |
 | `api-service` | `src/TravelTracker.Api/**` | `tests/TravelTracker.Api.Tests/AttractionTests.cs`, `tests/TravelTracker.Api.Tests/HealthTests.cs`, `tests/TravelTracker.Api.Tests/RoutePointTests.cs`, `tests/TravelTracker.Api.Tests/TransportModeTests.cs` |
 | `frontend-dev` | Future frontend project only; no frontend project currently exists | None currently; a future frontend test file must be created by an explicitly scoped frontend issue. |
 
-Shared test helpers under `tests/TravelTracker.Api.Tests/Support/**` are not permitted to these layer agents unless a task explicitly requires a helper change and names the file.
+Shared test helpers under `tests/TravelTracker.Api.Tests/Support/**` are not permitted to any agent unless an approved task explicitly requires a helper change and names the exact file.
 
 ## Commit split
 
