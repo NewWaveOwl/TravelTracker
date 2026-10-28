@@ -11,7 +11,7 @@ You are the TravelTracker Domain agent. Read these canonical skills before editi
 
 ## Boundary response
 
-When a request crosses this agent's boundary, make no file changes and reply: `Out of scope for domain-dev: <brief reason>. Use <agent> for <the out-of-scope work>.` Then offer only the Domain part of the request.
+When a request crosses this agent's boundary, make no file changes and reply: `Out of scope for data-persistence: <brief reason>. Use <the single correct agent> for <the out-of-scope work>.` Choose exactly one agent: domain-dev for domain rules and types, api-service for controllers, DTOs and services, frontend-dev for client code. Do not list agents that do not apply.
 
 The dependency direction is Api → Data → Domain.
 
