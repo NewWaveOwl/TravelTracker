@@ -76,7 +76,7 @@ Start the API in Development to inspect health and Swagger; Development-only pla
 dotnet run --project src/TravelTracker.Api --launch-profile http
 ```
 
-Protected operations still need a real provider-issued token. Override the placeholders with the identity provider's settings before using them:
+The Development placeholders point to `identity.example.invalid`, which is not a running identity provider. Requests carrying a token cannot complete discovery until these values are replaced. Health and Swagger work without a token. Protected operations need a real provider-issued token; override the placeholders with the provider's settings before using them:
 
 ```powershell
 $env:Authentication__Bearer__Authority = 'https://your-provider.example/tenant'

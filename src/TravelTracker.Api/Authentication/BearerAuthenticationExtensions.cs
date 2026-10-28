@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace TravelTracker.Api.Authentication;
 
@@ -60,8 +61,22 @@ public static class BearerAuthenticationExtensions
                 {
                     OnTokenValidated = async context =>
                     {
-                        var metadata = context.Options.ConfigurationManager is null ? null :
-                            await context.Options.ConfigurationManager.GetConfigurationAsync(context.HttpContext.RequestAborted);
+                        OpenIdConnectConfiguration? metadata;
+                        try
+                        {
+                            metadata = context.Options.ConfigurationManager is null ? null :
+                                await context.Options.ConfigurationManager.GetConfigurationAsync(context.HttpContext.RequestAborted);
+                        }
+                        catch (Exception exception) when (exception is not OperationCanceledException ||
+                            !context.HttpContext.RequestAborted.IsCancellationRequested)
+                        {
+                            context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                                .CreateLogger("TravelTracker.Authentication").LogWarning(
+                                    "Bearer discovery metadata retrieval failed ({FailureType}). Check authority availability and configuration.",
+                                    exception.GetType().Name);
+                            context.Fail("Discovery metadata unavailable.");
+                            return;
+                        }
                         if (!string.Equals(metadata?.Issuer, bearer.Issuer, StringComparison.Ordinal))
                         {
                             context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()

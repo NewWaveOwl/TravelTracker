@@ -46,3 +46,13 @@ The user requested verification and fixes for the supplied review comment. Basel
 Validation: solution restore passed; Release build passed with **0 warnings and 0 errors**. Focused authentication suite: **77 passed**. Full suite: **139 passed, 0 failed, 0 skipped** (all 112 baseline cases retained plus 27 review regressions). Report: ignored `tests/TravelTracker.Api.Tests/TestResults/issue-34-review.trx`. Live `dotnet run --project src/TravelTracker.Api --launch-profile http --no-build --configuration Release` with a loopback URL override and no bearer environment variables returned health 200, anonymous catalogue 401, and a valid Swagger bearer scheme. The started processes were stopped afterward. Diff whitespace checks passed.
 
 Repository-required read-only code-review agent reviewed the follow-up diff including the discovery helper: **0 Critical, 0 High, 0 Medium, 0 Low findings**; verdict **Ready to merge**, conditional on final checks and CI. No code was edited by the reviewer. This is agent review evidence, not team-member approval. Actual provider integration and the frontend journey remain outside what these checks prove.
+
+## Nonblocking approval follow-up
+
+After approval of the 139-case version, the user raised three nonblocking notes. The callback now catches metadata retrieval failures, logs the safe exception category with a specific discovery-retrieval message, and rejects authentication without exposing exception text. Request-aborted cancellation still propagates. A new callback regression proves the failure and diagnostic behavior without leaking a sensitive test marker. README explicitly states that `.invalid` Development placeholders cannot discover a token issuer and must be replaced before using tokens.
+
+The Swagger note was checked against the current policy map: all existing protected operations, including fallback and bare `[Authorize]`, require a scope and can return 403 for a valid token without that scope. Anonymous health is already excluded. No current authentication-only endpoint was found, so no Swagger response was removed.
+
+Release build: **0 warnings, 0 errors**. Full API suite: **140 passed, 0 failed, 0 skipped**, retaining all 139 approved cases and adding the diagnostic regression. `git diff --check` passed. Approval does not authorize merging; the PR remains open.
+
+Read-only follow-up review found no production defect and one Low test finding: rendered log messages alone would not detect a separately attached exception. Resolved by capturing separate exception objects and asserting that none are logged, as well as checking rendered messages and the authentication failure for the sensitive marker.

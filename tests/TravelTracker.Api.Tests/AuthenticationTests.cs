@@ -9,6 +9,10 @@ using TravelTracker.Api.Authentication;
 using Swashbuckle.AspNetCore.Swagger;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace TravelTracker.Api.Tests;
 
@@ -17,6 +21,34 @@ namespace TravelTracker.Api.Tests;
  */
 public sealed class AuthenticationTests
 {
+    [Fact]
+    public async Task PostValidation_MetadataFailureLogsSafeDiagnosticAndRejectsIdentity()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Authentication:Bearer:Authority"] = ApiFactory.Issuer,
+            ["Authentication:Bearer:Issuer"] = ApiFactory.Issuer,
+            ["Authentication:Bearer:Audience"] = ApiFactory.Audience
+        }).Build();
+        using var logs = new AuthenticationLogCapture();
+        var services = new ServiceCollection();
+        services.AddLogging(logging => logging.ClearProviders().AddProvider(logs));
+        services.AddApiBearerAuthentication(configuration);
+        using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get(JwtBearerDefaults.AuthenticationScheme);
+        options.ConfigurationManager = new UnavailableConfigurationManager();
+        var context = new TokenValidatedContext(new DefaultHttpContext { RequestServices = provider },
+            new AuthenticationScheme(JwtBearerDefaults.AuthenticationScheme, null, typeof(JwtBearerHandler)), options);
+
+        await options.Events.OnTokenValidated(context);
+
+        Assert.NotNull(context.Result?.Failure);
+        Assert.Contains(logs.Messages, message => message.Contains("discovery metadata retrieval failed (HttpRequestException)"));
+        Assert.DoesNotContain(logs.Messages, message => message.Contains("sensitive-test-marker"));
+        Assert.Empty(logs.Exceptions);
+        Assert.DoesNotContain("sensitive-test-marker", context.Result.Failure.Message);
+    }
+
     [Theory]
     [InlineData("Authority", "")]
     [InlineData("Authority", "http://issuer.example.test")]
