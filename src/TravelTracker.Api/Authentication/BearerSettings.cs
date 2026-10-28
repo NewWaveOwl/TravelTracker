@@ -10,4 +10,6 @@ public sealed class BearerSettings
     public string Issuer { get; set; } = "";
     public string Audience { get; set; } = "";
     public string ScopeClaimType { get; set; } = "scope";
+    public int ClockSkewSeconds { get; set; } = 30;
+    public string[] ValidAlgorithms { get; set; } = ["RS256"];
 }

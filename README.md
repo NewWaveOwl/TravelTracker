@@ -70,11 +70,21 @@ Build the solution:
 dotnet build TravelTracker.slnx --configuration Release
 ```
 
-Configure the identity provider's authority, issuer, audience and scope claim as described in [API authentication](docs/authentication.md), then start the API. Missing or insecure configuration fails startup:
+Start the API in Development to inspect health and Swagger; Development-only placeholder identity settings let it start without an external provider:
 
 ```powershell
 dotnet run --project src/TravelTracker.Api --launch-profile http
 ```
+
+Protected operations still need a real provider-issued token. Override the placeholders with the identity provider's settings before using them:
+
+```powershell
+$env:Authentication__Bearer__Authority = 'https://your-provider.example/tenant'
+$env:Authentication__Bearer__Issuer = 'https://your-provider.example/tenant'
+$env:Authentication__Bearer__Audience = 'traveltracker-api'
+```
+
+Use the provider's exact issuer from its discovery document; it need not equal the authority URL. See [API authentication](docs/authentication.md) for scope, algorithm and clock-tolerance settings. Production has no provider defaults and rejects missing or insecure configuration at startup.
 
 Open [Swagger](http://localhost:5104/swagger). The `http` launch profile runs the application in Development and enables Swagger.
 

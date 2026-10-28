@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
-using TravelTracker.Api.Authentication;
 using Microsoft.AspNetCore.Mvc;
+using TravelTracker.Api.Authentication;
 using TravelTracker.Api.Contracts;
 using TravelTracker.Api.Services;
 using TravelTracker.Domain.Models;

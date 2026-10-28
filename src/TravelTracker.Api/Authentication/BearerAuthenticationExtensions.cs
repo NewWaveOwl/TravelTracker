@@ -23,6 +23,11 @@ public static class BearerAuthenticationExtensions
             .Validate(settings => IsHttps(settings.Issuer), "Bearer Issuer must be an absolute HTTPS URL.")
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Audience), "Bearer Audience is required.")
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.ScopeClaimType), "Bearer ScopeClaimType is required.")
+            .Validate(settings => settings.ClockSkewSeconds is >= 0 and <= 120,
+                "Bearer ClockSkewSeconds must be between 0 and 120.")
+            .Validate(settings => settings.ValidAlgorithms is { Length: > 0 } && settings.ValidAlgorithms.All(
+                algorithm => algorithm is "RS256" or "RS384" or "RS512" or "PS256" or "PS384" or "PS512"
+                    or "ES256" or "ES384" or "ES512"), "Bearer ValidAlgorithms must list supported asymmetric JWT algorithms.")
             .ValidateOnStart();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
@@ -47,17 +52,36 @@ public static class BearerAuthenticationExtensions
                     ValidAudience = bearer.Audience,
                     ValidateLifetime = true,
                     RequireExpirationTime = true,
-                    ClockSkew = TimeSpan.Zero,
+                    ClockSkew = TimeSpan.FromSeconds(bearer.ClockSkewSeconds),
+                    ValidAlgorithms = bearer.ValidAlgorithms,
                     NameClaimType = "sub"
                 };
                 options.Events = new JwtBearerEvents
                 {
-                    OnTokenValidated = context =>
+                    OnTokenValidated = async context =>
                     {
+                        var metadata = context.Options.ConfigurationManager is null ? null :
+                            await context.Options.ConfigurationManager.GetConfigurationAsync(context.HttpContext.RequestAborted);
+                        if (!string.Equals(metadata?.Issuer, bearer.Issuer, StringComparison.Ordinal))
+                        {
+                            context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                                .CreateLogger("TravelTracker.Authentication").LogWarning(
+                                    "Bearer discovery issuer does not match configured Issuer. Check Authentication:Bearer settings.");
+                            context.Fail("Discovery issuer mismatch.");
+                            return;
+                        }
                         // Never substitute a request header or body value for the validated subject.
                         var subjects = context.Principal?.FindAll("sub").ToArray();
                         if (subjects is not { Length: 1 } || string.IsNullOrWhiteSpace(subjects[0].Value))
                             context.Fail("A single subject is required.");
+                    },
+                    OnAuthenticationFailed = context =>
+                    {
+                        // Log only the failure category: exception messages may contain token details.
+                        context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("TravelTracker.Authentication").LogWarning(
+                                "Bearer validation failed ({FailureType}). Check issuer, audience, lifetime and signing settings.",
+                                context.Exception.GetType().Name);
                         return Task.CompletedTask;
                     }
                 };
@@ -65,10 +89,11 @@ public static class BearerAuthenticationExtensions
         services.AddAuthorization();
         services.AddOptions<AuthorizationOptions>().Configure<IOptions<BearerSettings>>((options, settings) =>
         {
-            options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
             foreach (var scope in new[] { ScopePolicies.CatalogueRead, ScopePolicies.CatalogueWrite })
                 options.AddPolicy(scope, policy => policy.RequireAuthenticatedUser()
                     .RequireAssertion(context => ScopePolicies.HasScope(context.User, settings.Value.ScopeClaimType, scope)));
+            options.DefaultPolicy = options.GetPolicy(ScopePolicies.CatalogueRead)!;
+            options.FallbackPolicy = options.DefaultPolicy;
         });
         return services;
     }

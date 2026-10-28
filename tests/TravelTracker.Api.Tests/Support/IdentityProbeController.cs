@@ -18,4 +18,19 @@ public sealed class IdentityProbeController : ControllerBase
     [HttpGet]
     [Authorize(Policy = ScopePolicies.CatalogueRead)]
     public IActionResult Get() => Ok(new { subject = User.Identity?.Name, issuer = User.FindFirst("iss")?.Value });
+
+    /**
+     * Exercises the fallback policy with no authorization metadata.
+     * @return Success only after the fallback read permission check.
+     */
+    [HttpGet("fallback")]
+    public IActionResult Fallback() => Ok();
+
+    /**
+     * Exercises the default policy used by bare Authorize.
+     * @return Success only after the default read permission check.
+     */
+    [HttpGet("default")]
+    [Authorize]
+    public IActionResult Default() => Ok();
 }
