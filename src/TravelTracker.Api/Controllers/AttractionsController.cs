@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TravelTracker.Api.Authentication;
 using TravelTracker.Api.Contracts;
 using TravelTracker.Api.Services;
 using TravelTracker.Domain.Models;
@@ -23,6 +25,7 @@ public sealed class AttractionsController(IAttractionService service) : Controll
      * @return 200 with its HTTP representation, or 404 when absent.
      */
     [HttpGet("{id}")]
+    [Authorize(Policy = ScopePolicies.CatalogueRead)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AttractionRecord>> GetById(Guid id)
     {
@@ -36,6 +39,7 @@ public sealed class AttractionsController(IAttractionService service) : Controll
      * @return 200 with the ordered list, or 400 field errors for repeated name parameters.
      */
     [HttpGet]
+    [Authorize(Policy = ScopePolicies.CatalogueRead)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<List<AttractionRecord>>> GetAll([FromQuery] string? name)
     {
@@ -56,6 +60,7 @@ public sealed class AttractionsController(IAttractionService service) : Controll
      * and explicit nulls using TryGetProperty.
      */
     [HttpPatch("{id}")]
+    [Authorize(Policy = ScopePolicies.CatalogueWrite)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AttractionRecord>> Patch(Guid id, [FromBody] JsonElement patch)
     {
@@ -80,6 +85,7 @@ public sealed class AttractionsController(IAttractionService service) : Controll
      * @return 201 with the saved representation and details Location; invalid input returns 400.
      */
     [HttpPost]
+    [Authorize(Policy = ScopePolicies.CatalogueWrite)]
     [ProducesResponseType(typeof(AttractionRecord), StatusCodes.Status201Created)]
     public async Task<ActionResult<AttractionRecord>> Create(CreateAttractionRequest request)
     {

@@ -46,6 +46,8 @@ Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: J
 
 ## Implemented combined API
 
+All resource operations now require a validated bearer access token and their exact catalogue scope: GET uses `catalogue.read`; POST and PATCH use `catalogue.write`. `/health` is explicitly anonymous. Authentication failures return `401` with a Bearer challenge; missing permissions return `403` before input validation. Read and write permissions are independent. Both fallback authorization (no attribute) and bare `[Authorize]` default to `catalogue.read`; mutations must still declare their write policy. See [configuration, identity rules and the complete policy map](authentication.md). This implements resource-server authentication, not sign-in or Users account-standing/ownership checks.
+
 Attractions, Transport entries and Route Points share http://localhost:5104 and one Swagger document. GET /health returns status ok and service TravelTracker. Swagger is enabled in Development.
 
 | Method and route | Service | Result |
