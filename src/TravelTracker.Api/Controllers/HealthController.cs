@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace TravelTracker.Api.Controllers;
@@ -5,6 +6,7 @@ namespace TravelTracker.Api.Controllers;
 /**
  * Reports the health of the combined API.
  */
+[AllowAnonymous]
 [ApiController]
 [Route("health")]
 public sealed class HealthController : ControllerBase

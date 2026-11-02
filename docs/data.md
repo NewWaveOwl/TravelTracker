@@ -4,6 +4,8 @@ The original [SQL schema](../src/Database/schema.sql) and all six existing [repo
 
 ## Schema
 
+API bearer authentication adds no tables, token storage or signing keys to Data. Future subject-to-account mapping must use the validated `(iss, sub)` pair; it is not currently implemented. See [API authentication](authentication.md).
+
 Enums: `TransportMode` (`car`, `bus`, `train`, `pedestrian`, `plane`), `TripType` (`one_way`, `round_trip`).
 
 | Table | Columns |
