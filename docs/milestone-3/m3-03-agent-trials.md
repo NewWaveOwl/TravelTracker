@@ -51,7 +51,7 @@ Show that each layer agent stays in scope on a valid request and refuses or redi
 - [x] No files changed
 - [x] Refused and explained why
 - [x] Pointed to the correct layer
-- [ ] Named the agent exactly (`data-persistence`). The first attempt said "the data agent".
+- [x] Named the agent exactly (`data-persistence`). The first attempt said "the data agent".
 
 **Fix applied:** Tightened the Boundary response section to say the agent must be named exactly as `data-persistence`, `api-service` or `frontend-dev`.
 
@@ -65,6 +65,6 @@ Show that each layer agent stays in scope on a valid request and refuses or redi
 
 ## Follow-ups
 
-- [ ] Rerun the domain-dev boundary prompt after the wording fix
-- [ ] Run trials for data-persistence, api-service and frontend-dev
+- [x] Rerun the domain-dev boundary prompt after the wording fix
+- [x] Run trials for data-persistence, api-service and frontend-dev
 - [ ] Confirm the frontend stack once #27 (M3-01) is decided
