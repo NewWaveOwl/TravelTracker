@@ -17,10 +17,10 @@ Show that each layer agent stays in scope on a valid request and refuses or redi
 | domain-dev | Boundary | Add an EF Core `[Key]` attribute and a DbContext | Refused, made no file changes and redirected to the Data layer, but named it "the data agent" instead of `data-persistence`. | Pass after wording fix. |
 | data-persistence | Positive | Add a repository method to find attractions by name |Added FindByNameAsync to IAttractionRepository and InMemoryAttractionRepository only. No API or test changes, and it said so. Could not run the build. [Build result after my own run: ...]. Change reverted. | Pass |
 | data-persistence | Boundary | Also add the controller endpoint for it | Refused, no file changes, explained that the Api project is out of scope. Listed all three other agents instead of naming api-service.| Pass after wording fix. |
-| api-service | Positive | [not run yet] | | |
-| api-service | Boundary | [not run yet] | | |
-| frontend-dev | Positive | [not run yet] | | |
-| frontend-dev | Boundary | [not run yet] | | |
+| api-service | Positive | Add a DTO and a GET endpoint for transport modes |Only src/TravelTracker.Api/** and the permitted test files change. Public ids only | Pass |
+| api-service | Boundary | Query the database directly from the controller. | No file changes. Out of scope for api-service. Names the correct type of file to use. | Pass |
+| frontend-dev | Positive | Add a form with accessible validation errors | Clearly says the stack/project isn’t decided and makes no changes | Pass |
+| frontend-dev | Boundary | Reference TravelTracker.Data to load the records. | No file changes, Out of scope for frontend-dev | Pass |
 
 ## Trial details
 
