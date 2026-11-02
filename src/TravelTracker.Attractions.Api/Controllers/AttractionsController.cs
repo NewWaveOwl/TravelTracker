@@ -62,6 +62,7 @@ public sealed class AttractionsController(IAttractionService service, CallerCont
      * The request body is bound to a JsonElement so the service can detect field presence
      * and explicit nulls using TryGetProperty.
      */
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [HttpPatch("{id}")]
     [Authorize(Policy = ScopePolicies.CatalogueWrite)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -88,6 +89,7 @@ public sealed class AttractionsController(IAttractionService service, CallerCont
      * @param request Writable fields accepted by the HTTP contract.
      * @return 201 with the saved representation and details Location; invalid input returns 400.
      */
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [HttpPost]
     [Authorize(Policy = ScopePolicies.CatalogueWrite)]
     [ProducesResponseType(typeof(AttractionRecord), StatusCodes.Status201Created)]

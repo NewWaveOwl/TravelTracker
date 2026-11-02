@@ -37,3 +37,11 @@ Commands: `dotnet restore TravelTracker.slnx`; `dotnet build TravelTracker.slnx 
 ## Independent read-only review
 
 The repository-required code-review agent inspected the extraction, ownership/middleware, EF identity/transactions/migration and tests. It found two Medium issues: optional demo seeds could collide with existing app-issued keys, and malformed Users credentials/response charset could escape as 500. Both were fixed with regression tests and re-reviewed. Final result: **0 Critical, 0 High, 0 Medium, 0 Low actionable findings; Ready to merge subject to final build/test and CI checks**. This is agent review evidence, not another team member's approval. No merge is authorized or claimed.
+
+## PR #70 blocking-review fixes (2026-11-02)
+
+Added defensive issuer/subject checks before the Users lookup (401), even though the shared bearer validator already rejects missing/blank subjects. Users failure paths now log distinct safe reasons for configuration, HTTP, transport, timeout and response/protocol failures; caller cancellation propagates without an outage log. Diagnostics exclude credentials, identities, response bodies and raw exception text.
+
+Extracted exception response mapping from composition: authorization 403, validation/integrity constraints 400, uniqueness 409, transient PostgreSQL outages 503, unexpected errors 500, cancellation 408 or no problem body on client abort. POST/PATCH OpenAPI advertises conflicts. No delete endpoint, distributed allocator or multi-replica seeding claim was added.
+
+Validation: restore succeeded; Release build had 0 warnings and 0 errors. Both suites passed: 164 Attractions + 89 remaining-host tests = **253 passed, 0 failed, 0 skipped** (31 new cases; original 222 retained). Tests cover signed missing/blank subjects over HTTP, defensive middleware claims, distinct safe Users diagnostics, cancellation and the production exception middleware pipeline. PostgreSQL remains real and isolated; Users/discovery remain controlled test dependencies. The initial baseline attempt failed because the local test server started on the wrong port; corrected before the successful runs. Read-only review found one Low test gap, resolved by testing blank issuer/subject independently; no Critical/High/Medium findings.

@@ -20,8 +20,16 @@ public sealed class AttractionAccessMiddleware(RequestDelegate next)
     {
         if (context.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>()?.ControllerTypeInfo.AsType() != typeof(Controllers.AttractionsController))
         { await next(context); return; }
-        caller.Issuer = context.User.FindFirst("iss")!.Value;
-        caller.Subject = context.User.FindFirst("sub")!.Value;
+        var issuer = context.User.FindFirst("iss")?.Value;
+        var subject = context.User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject))
+        {
+            await Results.Problem(statusCode: StatusCodes.Status401Unauthorized,
+                title: "A validated issuer and subject are required.").ExecuteAsync(context);
+            return;
+        }
+        caller.Issuer = issuer;
+        caller.Subject = subject;
         var access = await users.ResolveAsync(caller.Issuer, caller.Subject, context.RequestAborted);
         if (access is null || access.Status == "deactivated" ||
             access.Status == "banned" && !HttpMethods.IsGet(context.Request.Method))

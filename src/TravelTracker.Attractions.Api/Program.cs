@@ -1,10 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Diagnostics;
-using Npgsql;
 using Microsoft.OpenApi;
 using TravelTracker.Api.Authentication;
 using TravelTracker.Attractions.Api.Access;
 using TravelTracker.Attractions.Api.Services;
+using TravelTracker.Attractions.Api.Errors;
 using TravelTracker.Attractions.Data;
 using TravelTracker.Attractions.Data.Repositories;
 
@@ -44,13 +43,7 @@ public partial class AttractionsProgram
         builder.Services.AddHttpClient<UsersAccessClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         var app = builder.Build();
-        app.UseExceptionHandler(error => error.Run(async context =>
-        {
-            var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-            var status = exception is NpgsqlException or DbUpdateException ? 503 : 500;
-            await Results.Problem(statusCode: status, title: status == 503
-                ? "Attraction storage is unavailable." : "The request could not be completed.").ExecuteAsync(context);
-        }));
+        app.UseExceptionHandler(error => error.Run(AttractionExceptionHandler.HandleAsync));
         if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
         {
             await using var scope = app.Services.CreateAsyncScope();

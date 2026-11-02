@@ -28,7 +28,7 @@ public sealed class PrivacyPersistenceTests
             ["Users:AccessEndpoint"] = "https://users.example.test/resolve-access",
             ["Users:ServiceAccessToken"] = malformedCredential ? "invalid\ncredential" : "test-service-token"
         }).Build();
-        var client = new UsersAccessClient(http, configuration);
+        var client = new UsersAccessClient(http, configuration, Microsoft.Extensions.Logging.Abstractions.NullLogger<UsersAccessClient>.Instance);
         Assert.Null(await client.ResolveAsync(ApiFactory.Issuer, "alice", CancellationToken.None));
     }
 
