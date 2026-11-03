@@ -33,6 +33,7 @@ public sealed class PrivacyPersistenceTests
     }
 
     [Fact]
+    [Trait("Category", "PostgreSQL")]
     public async Task EnablingExampleSeeding_DoesNotOverwriteOrCollideWithAnExistingUnseededDatabase()
     {
         using var database = new PostgresTestDatabase();
@@ -56,9 +57,10 @@ public sealed class PrivacyPersistenceTests
     }
 
     [Fact]
+    [Trait("Category", "PostgreSQL")]
     public async Task PostgreSqlConstraints_RejectInvalidValuesAndDuplicatePublicIdentifiers()
     {
-        using var factory = new ApiFactory();
+        using var factory = new ApiFactory(usePostgres: true);
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<AttractionsDbContext>();
         var invalid = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => database.Database.ExecuteSqlRawAsync(
@@ -69,6 +71,24 @@ public sealed class PrivacyPersistenceTests
         Assert.Equal("23505", duplicate.SqlState);
         var repository = scope.ServiceProvider.GetRequiredService<TravelTracker.Attractions.Data.Repositories.IAttractionRepository>();
         Assert.Equal(4m, (await repository.GetByIdAsync(Guid.Parse("11111111-1111-1111-1111-111111111111")))!.Rating);
+    }
+
+    [Fact]
+    [Trait("Category", "PostgreSQL")]
+    public async Task UpdatingADeletedRow_ThrowsConcurrencyInsteadOfRecreatingTheRecord()
+    {
+        using var factory = new ApiFactory(usePostgres: true);
+        using var first = factory.Services.CreateScope();
+        using var second = factory.Services.CreateScope();
+        var repository = first.ServiceProvider.GetRequiredService<TravelTracker.Attractions.Data.Repositories.IAttractionRepository>();
+        var other = second.ServiceProvider.GetRequiredService<TravelTracker.Attractions.Data.Repositories.IAttractionRepository>();
+        var id = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var stale = await repository.GetByIdAsync(id);
+        Assert.NotNull(stale);
+        Assert.True(await other.DeleteAsync(id));
+        stale.Name = "Stale replacement";
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repository.UpdateAsync(stale));
+        Assert.Null(await other.GetByIdAsync(id));
     }
 
     private static object Place(string name = "Private place", string visibility = "private") =>
@@ -171,6 +191,7 @@ public sealed class PrivacyPersistenceTests
     }
 
     [Fact]
+    [Trait("Category", "PostgreSQL")]
     public async Task CreateAndPatch_SurviveHostRestartAndMigrationsWithoutReseedingChanges()
     {
         using var database = new PostgresTestDatabase();
@@ -203,9 +224,10 @@ public sealed class PrivacyPersistenceTests
     }
 
     [Fact]
+    [Trait("Category", "PostgreSQL")]
     public async Task MixedInvalidPatch_PersistsNoPartialChanges()
     {
-        using var factory = new ApiFactory();
+        using var factory = new ApiFactory(usePostgres: true);
         using var client = factory.CreateClient();
         const string url = "/api/v1/attractions/11111111-1111-1111-1111-111111111111";
         var before = await client.GetStringAsync(url);

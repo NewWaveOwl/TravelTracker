@@ -13,6 +13,7 @@ internal sealed class UsersBackchannelHandler(bool unavailable) : HttpMessageHan
 {
     internal int Calls { get; private set; }
     internal string? ForcedStatus { get; set; }
+    internal HttpStatusCode? ForcedResponseCode { get; set; }
     internal bool InvalidCharset { get; init; }
 
     /**
@@ -24,6 +25,7 @@ internal sealed class UsersBackchannelHandler(bool unavailable) : HttpMessageHan
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Calls++;
+        if (ForcedResponseCode is { } statusCode) return new(statusCode);
         if (unavailable) return new(HttpStatusCode.ServiceUnavailable);
         if (request.Method != HttpMethod.Post || request.Headers.Authorization?.Parameter != "test-service-token")
             return new(HttpStatusCode.Unauthorized);

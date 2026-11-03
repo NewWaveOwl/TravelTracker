@@ -44,7 +44,7 @@ public interface IAttractionService
      *
      * @param attractionId The unique identifier of the attraction to update.
      * @param attraction The new attraction values.
-     * @return A task containing the updated attraction, or null when it does not exist.
+     * @return A task containing the updated attraction, or null when absent/private; visible but unwritable records throw UnauthorizedAccessException.
      * @param cancellationToken Cancels database work for the request.
      */
     Task<Attraction?> UpdateAsync(

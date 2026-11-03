@@ -46,3 +46,7 @@ The implementation preserves the explicit independence boundary: the Attractions
 - Use the repository's layer/testing guidance and required read-only review; resolve Critical/High findings, inspect staged files for secrets/generated outputs, commit with #35, push and open a PR against `milestone_3`. Team approval is required for merge; do not merge automatically.
 
 The owner subsequently approved the full implementation/access plan. PostgreSQL, independent hosting, real-bearer validation, private/shared ownership and the live standing dependency are now implemented in this branch. Verification of a deployed Users service, selected identity provider and the frontend remains distinct from the isolated consumer-contract tests.
+
+## Testing clarification (2026-11-03)
+
+The owner's PR review explicitly requests EF InMemory for local application/domain/HTTP tests. The current implementation uses it by default only in the isolated test host. PostgreSQL remains the runtime database and the required provider for marked relational tests (constraints, migrations, locking, rollback and restart); see the updated [service testing instructions](attractions-service.md). This supersedes the original requirement to provision PostgreSQL for every HTTP test, without weakening relational evidence.

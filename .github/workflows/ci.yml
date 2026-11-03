@@ -37,4 +37,9 @@ jobs:
           dotnet-version: 10.0.x
           cache: true
           cache-dependency-path: "**/*.csproj"
-      - run: dotnet test TravelTracker.Tests.slnx --configuration Release
+      - name: Application and domain tests (EF InMemory, no PostgreSQL connection)
+        env:
+          TRAVELTRACKER_TEST_POSTGRES: ""
+        run: dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"
+      - name: PostgreSQL relational tests
+        run: dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --filter "Category=PostgreSQL"

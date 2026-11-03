@@ -29,7 +29,7 @@ The existing one-project/resource-file layout and former 30-case limit are histo
 
 ## Project layout
 
-- Each service and the frontend own a test project under `tests/`, referencing only the project it tests (plus shared contracts). Current projects are `tests/TravelTracker.Api.Tests` for Transport/Route Points/shared domain, and `tests/TravelTracker.Attractions.Api.Tests` for the independent Attractions host. The latter requires `TRAVELTRACKER_TEST_POSTGRES` pointing to an isolated PostgreSQL instance with CREATEDB permission; it fails rather than skipping or substituting a provider when absent. Feature tests live with their resource/capability; `PrivacyPersistenceTests.cs` covers the extraction's ownership and durable boundaries. `Support/` holds shared helpers, isolated stores, keys and dependency HTTP stubs. See [service testing](../../../docs/attractions-service.md).
+- Each service and the frontend own a test project under `tests/`, referencing only the project it tests (plus shared contracts). Current projects are `tests/TravelTracker.Api.Tests` for Transport/Route Points/shared domain, and `tests/TravelTracker.Attractions.Api.Tests` for the independent Attractions host. The latter defaults to isolated EF InMemory for application/domain/HTTP tests. Run `--filter "Category!=PostgreSQL"` without PostgreSQL. Relational tests carry `Category=PostgreSQL`, explicitly select PostgreSQL and require `TRAVELTRACKER_TEST_POSTGRES` with CREATEDB; these fail rather than skip/fallback if it is missing. Feature tests live with their resource/capability; `PrivacyPersistenceTests.cs` covers the extraction's ownership and durable boundaries. `Support/` holds shared helpers, isolated stores, keys and dependency HTTP stubs. See [service testing](../../../docs/attractions-service.md).
 - Each test creates and disposes its own factory, client and stores. No shared mutable state, no ordering dependence.
 - There is no fixed cap on test count. Coverage must be meaningful: every public behavior, validation boundary and failure path in the change gets a test. Never delete useful coverage to reduce a count, and never pad with duplicates. Do not hide a matrix in a loop; each `[InlineData]` row counts as a discovered case.
 - Services are tested in isolation. A service test host replaces other services with fakes or stubbed `HttpClient` handlers, and the frontend is tested against the services' HTTP contract only, never their internals or databases.
@@ -57,7 +57,7 @@ These prove different things; label each test with which one it is.
 - `[Fact]` for one scenario, `[Theory]` for meaningful input variation. A regression test should fail against the old behavior when that can be shown safely.
 - Be deterministic: fixed ids, times and seed data; inject `TimeProvider` where time matters; no live network, no sleeps; await everything.
 - Choose small fakes, stubs or mocks according to the behavior being proved; use Arrange-Act-Assert. Verify a dependency call only when it is the behavior (invalid input never writes; an accepted operation commits once).
-- PostgreSQL relational guarantees need real PostgreSQL verification. SQLite and EF InMemory do not establish PostgreSQL query, migration, constraint, transaction or concurrency behavior. Lightweight fakes remain appropriate for isolated application/domain tests, but label them accordingly rather than treating them as persistence integration evidence.
+- PostgreSQL relational guarantees need real PostgreSQL verification. SQLite and EF InMemory do not establish PostgreSQL query, migration, constraint, transaction or concurrency behavior. Use test-only EF InMemory for sequential application/domain/HTTP tests and lightweight fakes for isolated decisions. The InMemory adapter has no row locks or transaction guarantees; never run concurrency/durability claims against it. Production continues to use Npgsql only.
 - HTTP tests assert status, body schema and relevant headers, including creation `Location` and problem details. For auth, a test scheme may supply identities, but the authorization rules stay on.
 - Use `/** ... */` with `@param` and `@return` on test helpers that need documentation (see `code`). Comments explain intent, not assertions.
 
@@ -78,10 +78,12 @@ Take exact expectations from the current contract, and do not implement planned 
 ## Run and report
 
 ```powershell
-dotnet test TravelTracker.Tests.slnx --configuration Release
+dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"
+# With TRAVELTRACKER_TEST_POSTGRES configured (CREATEDB):
+dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category=PostgreSQL"
 ```
 
-Test hosts start automatically. When the full solution matters:
+Test hosts start automatically. CI runs both groups; an unfiltered full run requires PostgreSQL. Do not silently skip relational failures. When the full solution matters:
 
 ```powershell
 dotnet restore TravelTracker.slnx

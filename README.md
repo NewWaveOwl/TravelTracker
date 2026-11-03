@@ -18,7 +18,7 @@ TravelTracker is a .NET 10 backend for a travel-planning application. The projec
 
 New records receive public UUIDv7 identifiers. The identity system separates public identifiers from internal numeric keys.
 
-Attractions records survive restarts in its service-owned PostgreSQL database. Transport/Route Point changes remain in memory and reset on restart. Protected requests need a validated access token; Attractions also requires a configured live Users access endpoint. See [independent Attractions startup, privacy rules and PostgreSQL testing](docs/attractions-service.md). Automated tests use isolated signing keys, Users HTTP stubs and disposable PostgreSQL databases.
+Attractions records survive restarts in its service-owned PostgreSQL database. Transport/Route Point changes remain in memory and reset on restart. Protected requests need a validated access token; Attractions also requires a configured live Users access endpoint. See [independent Attractions startup, privacy rules and PostgreSQL testing](docs/attractions-service.md). Automated application tests use isolated EF InMemory stores, signing keys and Users HTTP stubs; relational tests use disposable PostgreSQL databases.
 
 ## Project status
 
@@ -118,17 +118,17 @@ See the [API documentation](docs/api.md) and [HTTP examples](src/TravelTracker.A
 
 ## Testing
 
-Run the full test suite from the repository root:
+Run application, domain and HTTP tests from the repository root (no PostgreSQL needed):
 
 ```powershell
-dotnet test TravelTracker.Tests.slnx --configuration Release
+dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"
 ```
 
-The suite covers health, attraction and transport operations, route points, validation, concurrent identity generation, and real bearer-token validation and scope policies. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search. Tests configure isolated signing keys and require no external identity provider. Attraction persistence tests require PostgreSQL; they never substitute SQLite/EF InMemory.
+The suite covers health, attraction and transport operations, route points, validation, concurrent identity generation, and real bearer-token validation and scope policies. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search. Tests configure isolated signing keys and require no external identity provider. Application/domain/HTTP tests use EF InMemory and need no PostgreSQL. Relational tests marked `Category=PostgreSQL` require real PostgreSQL for constraints, migrations, locking, rollback and restart.
 
 Contracts for the planned multi-service architecture are in [milestone 3 contracts](docs/milestone-3-contracts.md).
 
-Tests create isolated application hosts automatically. PostgreSQL suites require `TRAVELTRACKER_TEST_POSTGRES` with permission to create disposable test databases; see the service guide. GitHub Actions supplies an isolated PostgreSQL service and runs both test projects.
+Tests create isolated application hosts automatically. PostgreSQL suites require `TRAVELTRACKER_TEST_POSTGRES` with permission to create disposable test databases; see the service guide. Run `--filter "Category=PostgreSQL"` for that group or omit the filter for the complete gate. GitHub Actions supplies PostgreSQL and runs both groups.
 
 ## Documentation
 

@@ -9,6 +9,7 @@ namespace TravelTracker.Attractions.Api.Tests;
 internal sealed class AuthenticationLogCapture : ILoggerProvider, ILogger
 {
     internal ConcurrentQueue<string> Messages { get; } = new();
+    internal ConcurrentQueue<LogLevel> Levels { get; } = new();
     internal ConcurrentQueue<Exception> Exceptions { get; } = new();
 
     /**
@@ -31,6 +32,7 @@ internal sealed class AuthenticationLogCapture : ILoggerProvider, ILogger
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
         Func<TState, Exception?, string> formatter)
     {
+        Levels.Enqueue(logLevel);
         Messages.Enqueue(formatter(state, exception));
         if (exception is not null) Exceptions.Enqueue(exception);
     }

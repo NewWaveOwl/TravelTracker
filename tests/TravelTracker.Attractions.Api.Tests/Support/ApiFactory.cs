@@ -1,4 +1,10 @@
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using TravelTracker.Attractions.Data;
+using TravelTracker.Attractions.Data.Repositories;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -20,19 +26,21 @@ namespace TravelTracker.Attractions.Api.Tests;
 internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractions.Api.AttractionsProgram>
 {
     private readonly PostgresTestDatabase? ownedDatabase;
-    private readonly string databaseConnection;
+    private readonly string? databaseConnection;
+    private readonly string memoryDatabaseName = Guid.NewGuid().ToString("N");
     internal bool UsersUnavailable { get; init; }
     internal bool SeedExamples { get; init; } = true;
     internal UsersBackchannelHandler? Users { get; private set; }
 
     /**
-     * Creates a fresh store, or reuses an explicitly owned store for restart tests.
-     * @param connectionString The retained test database, or null for a new isolated database.
+     * Defaults to EF InMemory for application tests; relational tests explicitly select PostgreSQL.
+     * @param connectionString The retained PostgreSQL database for restart tests, or null.
+     * @param usePostgres Whether to create a fresh isolated PostgreSQL database.
      */
-    internal ApiFactory(string? connectionString = null)
+    internal ApiFactory(string? connectionString = null, bool usePostgres = false)
     {
-        if (connectionString is null) ownedDatabase = new PostgresTestDatabase();
-        databaseConnection = connectionString ?? ownedDatabase!.ConnectionString;
+        if (connectionString is null && usePostgres) ownedDatabase = new PostgresTestDatabase();
+        databaseConnection = connectionString ?? ownedDatabase?.ConnectionString;
     }
 
     /**
@@ -98,8 +106,8 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractio
             new Dictionary<string, string?>
             {
                 ["Authentication:Bearer:Authority"] = Issuer,
-                ["ConnectionStrings:Attractions"] = databaseConnection,
-                ["Database:ApplyMigrations"] = "true",
+                ["ConnectionStrings:Attractions"] = databaseConnection ?? "Host=unused.test;Database=unused",
+                ["Database:ApplyMigrations"] = (databaseConnection is not null).ToString(),
                 ["Database:SeedExamples"] = SeedExamples.ToString(),
                 ["Users:AccessEndpoint"] = "https://users.example.test/api/v1/users/resolve-access",
                 ["Users:ServiceAccessToken"] = "test-service-token",
@@ -111,6 +119,15 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractio
             }));
         builder.ConfigureTestServices(services =>
         {
+            if (databaseConnection is null)
+            {
+                services.RemoveAll<DbContextOptions<AttractionsDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AttractionsDbContext>>();
+                services.AddDbContextFactory<AttractionsDbContext>(options => options.UseInMemoryDatabase(memoryDatabaseName));
+                services.AddScoped<IAttractionRepository, InMemoryEfAttractionRepository>();
+                services.AddSingleton<IHostedService>(provider => new InMemoryAttractionsInitializer(
+                    provider.GetRequiredService<IServiceScopeFactory>(), SeedExamples));
+            }
             Users = new UsersBackchannelHandler(UsersUnavailable);
             services.AddHttpClient<UsersAccessClient>().ConfigurePrimaryHttpMessageHandler(() => Users);
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>

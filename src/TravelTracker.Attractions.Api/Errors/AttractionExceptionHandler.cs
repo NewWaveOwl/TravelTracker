@@ -18,8 +18,10 @@ public static class AttractionExceptionHandler
     public static async Task HandleAsync(HttpContext context)
     {
         var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("AttractionFailures");
         if (exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested)
         {
+            logger.LogWarning("Attraction request was canceled by the caller; status {StatusCode}.", 499);
             context.Response.StatusCode = 499;
             return;
         }
@@ -28,6 +30,8 @@ public static class AttractionExceptionHandler
         {
             UnauthorizedAccessException => StatusCodes.Status403Forbidden,
             ValidationException => StatusCodes.Status400BadRequest,
+            DbUpdateConcurrencyException => StatusCodes.Status409Conflict,
+            _ when postgres?.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected => StatusCodes.Status409Conflict,
             _ when postgres?.SqlState == PostgresErrorCodes.UniqueViolation => StatusCodes.Status409Conflict,
             _ when postgres?.SqlState.StartsWith("23", StringComparison.Ordinal) == true => StatusCodes.Status400BadRequest,
             OperationCanceledException => StatusCodes.Status408RequestTimeout,
@@ -44,6 +48,10 @@ public static class AttractionExceptionHandler
             503 => "Attraction storage is unavailable.",
             _ => "The request could not be completed."
         };
+        // Never log raw provider exceptions, identities, URLs or request bodies.
+        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning,
+            "Attraction request failed with HTTP {StatusCode} ({FailureKind}).", status,
+            exception is OperationCanceledException ? "cancellation" : status == 409 ? "conflict" : "request failure");
         await Results.Problem(statusCode: status, title: title).ExecuteAsync(context);
     }
 }

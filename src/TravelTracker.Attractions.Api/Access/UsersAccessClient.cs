@@ -39,8 +39,7 @@ public sealed class UsersAccessClient(HttpClient http, IConfiguration configurat
             };
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", configuration["Users:ServiceAccessToken"]);
             using var response = await http.SendAsync(request, cancellationToken);
-            if (response.StatusCode == HttpStatusCode.NotFound) return new("deactivated", "traveller");
-            if (!response.IsSuccessStatusCode)
+            if (response.StatusCode != HttpStatusCode.OK)
             {
                 logger.LogWarning("Users access lookup returned HTTP {StatusCode}.", (int)response.StatusCode);
                 return null;

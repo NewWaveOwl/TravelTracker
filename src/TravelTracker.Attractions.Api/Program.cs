@@ -43,7 +43,7 @@ public partial class AttractionsProgram
         builder.Services.AddHttpClient<UsersAccessClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         var app = builder.Build();
-        app.UseExceptionHandler(error => error.Run(AttractionExceptionHandler.HandleAsync));
+        app.UseAttractionExceptionHandling();
         if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
         {
             await using var scope = app.Services.CreateAsyncScope();

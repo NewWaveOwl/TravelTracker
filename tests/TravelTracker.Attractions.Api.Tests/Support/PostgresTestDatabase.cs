@@ -22,7 +22,7 @@ internal sealed class PostgresTestDatabase : IDisposable
     public PostgresTestDatabase()
     {
         adminConnection = Environment.GetEnvironmentVariable("TRAVELTRACKER_TEST_POSTGRES") ??
-            throw new InvalidOperationException("Set TRAVELTRACKER_TEST_POSTGRES to an isolated PostgreSQL instance with CREATEDB permission. SQLite is not a substitute.");
+            throw new InvalidOperationException("PostgreSQL relational tests require TRAVELTRACKER_TEST_POSTGRES with CREATEDB permission. For application tests without PostgreSQL, use --filter Category!=PostgreSQL.");
         using var admin = new NpgsqlConnection(adminConnection);
         admin.Open();
         using var command = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin);

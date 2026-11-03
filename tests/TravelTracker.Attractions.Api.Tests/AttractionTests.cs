@@ -375,9 +375,10 @@ public sealed class AttractionTests
     }
 
     [Fact]
+    [Trait("Category", "PostgreSQL")]
     public async Task Patch_ConcurrentUpdates_AllChangesApplied()
     {
-        using var factory = new ApiFactory();
+        using var factory = new ApiFactory(usePostgres: true);
         using var client = factory.CreateClient();
         var id = "11111111-1111-1111-1111-111111111111";
         var patches = new object[]
@@ -418,9 +419,10 @@ public sealed class AttractionTests
     }
 
     [Fact]
+    [Trait("Category", "PostgreSQL")]
     public async Task Service_UpdatePartialAsync_Concurrent_AllChangesApplied()
     {
-        using var factory = new ApiFactory();
+        using var factory = new ApiFactory(usePostgres: true);
         using var scope = factory.Services.CreateScope();
         factory.PrepareScope(scope.ServiceProvider);
         var service = scope.ServiceProvider.GetRequiredService<IAttractionService>();

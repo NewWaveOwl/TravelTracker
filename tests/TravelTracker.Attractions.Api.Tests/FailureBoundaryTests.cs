@@ -60,6 +60,8 @@ public sealed class FailureBoundaryTests
     [InlineData("timeout", "timeout")]
     [InlineData("transport", "transport failure")]
     [InlineData("http", "HTTP 503")]
+    [InlineData("not-found", "HTTP 404")]
+    [InlineData("unexpected-success", "HTTP 201")]
     [InlineData("json", "invalid JSON")]
     [InlineData("status", "invalid status or role")]
     [InlineData("role", "invalid status or role")]
@@ -123,12 +125,19 @@ public sealed class FailureBoundaryTests
     [InlineData("validation", 400)]
     [InlineData("cancel", 408)]
     [InlineData("unknown", 500)]
+    [InlineData("serialization", 409)]
+    [InlineData("deadlock", 409)]
+    [InlineData("wrapped-serialization", 409)]
+    [InlineData("wrapped-deadlock", 409)]
+    [InlineData("concurrency", 409)]
     public async Task ExceptionPipeline_ReturnsSafeNonRetryableOrTransientOutcome(string failure, int status)
     {
+        using var capture = new AuthenticationLogCapture();
         var builder = WebApplication.CreateBuilder();
+        builder.Logging.ClearProviders().AddProvider(capture);
         builder.WebHost.UseTestServer();
         await using var app = builder.Build();
-        app.UseExceptionHandler(error => error.Run(AttractionExceptionHandler.HandleAsync));
+        app.UseAttractionExceptionHandling();
         app.Run(_ => throw CreateFailure(failure));
         await app.StartAsync();
         using var client = app.GetTestClient();
@@ -137,18 +146,52 @@ public sealed class FailureBoundaryTests
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("application/problem+json", response.Content.Headers.ContentType!.ToString());
         Assert.DoesNotContain("secret", body);
+        Assert.Contains(capture.Messages, message => message.Contains($"HTTP {status}"));
+        Assert.DoesNotContain(capture.Messages, message => message.Contains("secret"));
+        Assert.Empty(capture.Exceptions);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ActualPipeline_AbortedRequestLogsWarningWithoutRawExceptionOrProblemBody(bool ioFailure)
+    {
+        using var capture = new AuthenticationLogCapture();
+        var builder = WebApplication.CreateBuilder();
+        builder.Logging.ClearProviders().AddProvider(capture);
+        builder.WebHost.UseTestServer();
+        await using var app = builder.Build();
+        app.UseAttractionExceptionHandling();
+        app.Run(context =>
+        {
+            context.RequestAborted = new CancellationToken(true);
+            throw ioFailure ? new IOException("secret") : new OperationCanceledException("secret");
+        });
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync("/");
+        Assert.Equal(499, (int)response.StatusCode);
+        Assert.Equal("", await response.Content.ReadAsStringAsync());
+        Assert.Contains(capture.Messages, message => message.Contains("canceled by the caller; status 499"));
+        Assert.Contains(LogLevel.Warning, capture.Levels);
+        Assert.DoesNotContain(capture.Messages, message => message.Contains("secret"));
+        Assert.Empty(capture.Exceptions);
     }
 
     [Fact]
     public async Task AbortedRequest_DoesNotWriteAnErrorBody()
     {
-        var context = new DefaultHttpContext();
+        using var capture = new AuthenticationLogCapture();
+        await using var services = new ServiceCollection().AddLogging(logging => logging.AddProvider(capture)).BuildServiceProvider();
+        var context = new DefaultHttpContext { RequestServices = services };
         context.Response.Body = new MemoryStream();
         context.RequestAborted = new CancellationToken(true);
         context.Features.Set<IExceptionHandlerFeature>(new ExceptionHandlerFeature { Error = new OperationCanceledException() });
         await AttractionExceptionHandler.HandleAsync(context);
         Assert.Equal(499, context.Response.StatusCode);
         Assert.Equal(0, context.Response.Body.Length);
+        Assert.Contains("499", Assert.Single(capture.Messages));
+        Assert.Empty(capture.Exceptions);
     }
 
     /**
@@ -158,6 +201,9 @@ public sealed class FailureBoundaryTests
      */
     private static Exception CreateFailure(string failure) => failure switch
     {
+        "serialization" or "deadlock" => new PostgresException("secret", "ERROR", "ERROR", failure == "serialization" ? "40001" : "40P01"),
+        "wrapped-serialization" or "wrapped-deadlock" => new DbUpdateException("secret", CreateFailure(failure[8..])),
+        "concurrency" => new DbUpdateConcurrencyException("secret"),
         "unique" or "check" => new PostgresException("secret", "ERROR", "ERROR", failure == "unique" ? "23505" : "23514"),
         "wrapped-unique" or "wrapped-check" => new DbUpdateException("secret", CreateFailure(failure[8..])),
         "unavailable" => new NpgsqlException("secret", new System.IO.IOException("secret")),
@@ -179,6 +225,8 @@ public sealed class FailureBoundaryTests
         {
             if (failure == "timeout") throw new TaskCanceledException("secret");
             if (failure == "transport") throw new HttpRequestException("secret");
+            if (failure == "unexpected-success") return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created));
+            if (failure == "not-found") return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
             if (failure == "http") return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
             var json = failure switch
             {
