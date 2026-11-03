@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TravelTracker.Api.Authentication;
 using TravelTracker.Api.Contracts;
 using TravelTracker.Api.Services;
 using TravelTracker.Domain.Models;
@@ -19,6 +21,7 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
      * @return 200 with its HTTP representation, or 404 when absent.
      */
     [HttpGet("{id}")]
+    [Authorize(Policy = ScopePolicies.CatalogueRead)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<RoutePointRecord>> GetById(Guid id)
     {
@@ -32,6 +35,7 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
      * @return 201 with the saved representation and details Location; invalid input returns 400.
      */
     [HttpPost]
+    [Authorize(Policy = ScopePolicies.CatalogueWrite)]
     [ProducesResponseType(typeof(RoutePointRecord), StatusCodes.Status201Created)]
     public async Task<ActionResult<RoutePointRecord>> Create(CreateRoutePointRequest request)
     {

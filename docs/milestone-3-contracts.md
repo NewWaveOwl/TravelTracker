@@ -74,22 +74,22 @@ Layer rules every reviewer checks:
 - Validation failures return `400` with problem details. Field errors name the request field, per the design rule that every problem sits next to the field that caused it.
 - Malformed IDs return `400`. Unknown but well-formed IDs return `404`.
 - Unknown JSON properties are rejected with `400` on writes that enforce it (currently attraction create and PATCH).
-- `401 Unauthorized`: no valid bearer token. Not implemented yet.
-- `403 Forbidden`: an authenticated user asks for something they can see but not change (for example a banned user's write). Not implemented yet.
+- `401 Unauthorized`: no valid bearer token. Implemented for the combined catalogue API by #34.
+- `403 Forbidden`: a valid token lacks the required permission. Implemented for catalogue scopes by #34; account-standing rules (for example a banned user's write) remain future work.
 - `404 Not Found`: also used for another user's private item, so it looks absent. Design section 3 rule.
 - `412 Precondition Failed`: a stale edit when two saves race (decided by James). The server sends an ETag with a record, the client returns it in `If-Match` on save, and a stale tag is refused with `412`. Applies to trips and settings once they exist; the design requires the later save to be refused. Not implemented yet.
 - `503 Service Unavailable`: a required dependency (for example Users during a protected action) is down. The design says protected actions wait rather than trust stale permissions. Not implemented yet.
 
 ## 6. Identity, ownership and scopes (proposed)
 
-Blocked on open decision 2 (OIDC provider). The rules below hold for any provider.
+The representative combined API now implements configurable JWT bearer validation and catalogue read/write policies for #34; see [authentication configuration, policy map and adoption recipe](authentication.md). The user approved its implementation plan in chat on 2026-10-24. No provider was selected: authority, exact issuer, audience and scope claim name are deployment settings. Provider-specific integration, Users mapping and the other services remain dependent on the open decisions below. The proposed rules below describe that remaining work.
 
 - Authentication: the Api validates the bearer JWT signature, issuer, audience and expiry. Unit tests may fake identities, but a separate test set must prove real token validation (see the testing skill).
 - Subject mapping (proposed): the Api must work with any OIDC provider, so it cannot assume `sub` is our UUID. It maps the token's issuer and `sub` pair to the Users record, which carries the public UUIDv7. The Users service remains the authority for account standing. The Api checks it live (no cached answer) before any action that a restricted account could not perform; reads that every standing allows need no check. If Users is unavailable during a required check, the action fails with `503`. James proposes replacing the `UserStatus` enum (active, deactivated, banned) with a nullable `SpecialStatus`: null for normal users, `Deactivated` or `Banned` for restricted ones. This changes the Users domain model, so it needs Christel's approval (open decision 8).
 - Ownership: a trip's owner is the authenticated subject. `GET /trips?userId=` is replaced by `GET /trips`, which returns the caller's own trips, so a caller cannot list another user's trips by changing a parameter (decided by James). Settings work the same way: `GET/PUT /settings` has no user ID in the path, and the internal `userId` is taken from the authenticated caller (decided by James). Administrators do not get private trip access.
 - Banned users: read own data, write nothing (`403` on writes). Deactivated users: `401` or `403`, nothing allowed (to be decided with the OIDC provider).
 
-Endpoint-to-scope policy (proposed names, none implemented):
+Endpoint-to-scope policy (catalogue policies implemented in the combined API; other service policies proposed):
 
 | Endpoint group | Read scope | Write scope | Notes |
 | --- | --- | --- | --- |
@@ -133,7 +133,7 @@ Ticket import, nearby suggestions and free-time summary (M3 features in design s
 Each needs an owner choice recorded here before the dependent issue starts.
 
 1. **Frontend stack.** React Native or an ASP.NET Core client. Blocks #32 and #33.
-2. **OIDC provider.** Which identity provider issues the tokens, and its issuer and audience values. Blocks #33, #34 and #37.
+2. **OIDC provider.** Which identity provider issues the tokens, and its issuer and audience values. Blocks #33, #37 and deployed-provider verification of #34. The #34 representative resource-server pattern is implemented with configurable settings and real bearer-validation tests; no provider-specific compatibility is claimed.
 3. **EF Core database provider.** Blocks #35, #36 and the persistence parts of #41. `schema.sql` is PostgreSQL-style DDL; that is not a provider decision. Requirement (James): the code must not couple to one provider; it should work on effectively any provider EF Core supports. Provider-specific features (native enums, native uuid types) are avoided unless a later decision accepts them.
 4. **Trip and scheduled-route boundary.** Option A or B above, and the trip leg ID type. Blocks #39, #40 and #41.
 5. **Trips and Settings wire IDs.** Public `Guid` only, or a different identifier for these services. Blocks #40 and #42.
