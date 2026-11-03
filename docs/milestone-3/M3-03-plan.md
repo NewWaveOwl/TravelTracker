@@ -38,7 +38,7 @@ Shared test helpers under `tests/TravelTracker.Api.Tests/Support/**` are not per
 5. `.github/agents/frontend-dev.agent.md` — create only after approval; reference the code skill, remain stack-neutral, enforce HTTP-only DTO integration, and list the absence of current frontend test files.
 6. `.github/copilot-instructions.md` — make the discovery-routing changes as a separately staged commit.
 7. `.github/copilot-instructions.md` — make the search/PATCH and test-command corrections as a separately staged commit.
-8. `docs/milestone-3/M3-03-agent-trials.md` — document representative positive prompts and boundary-violation prompts after all four agents exist. Record tool/path verification and any unavailable agent-runtime tools; do not claim trials were run unless they were actually run.
+8. `docs/milestone-3/m3-03-agent-trials.md` — document representative positive prompts and boundary-violation prompts after all four agents exist. Record tool/path verification and any unavailable agent-runtime tools; do not claim trials were run unless they were actually run.
 
 ## Verification
 

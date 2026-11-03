@@ -32,10 +32,9 @@ Behavior changes require tests for public success and failure behavior. Do not e
 
 ## Responsibilities
 
-- Group GET-by-ID and POST per resource in the existing controller, service and repository. Do not split actions into per-action partial files.
-
 - Define HTTP request and response DTOs, thin controllers or endpoints, application services, and workflow orchestration.
 - Keep controllers thin: bind HTTP input, call application services, and map results to public responses. Put request validation and orchestration in services; keep domain rules in Domain.
+- Group GET-by-ID and POST per resource in the existing controller, service and repository. Do not split actions into per-action partial files.
 - Document relevant HTTP outcomes, including `200`, `201`, `400`, and `404`, plus other statuses when relevant to the contract. Creation returns `201 Created` with a useful `Location` header.
 - Expose `PublicId` only in public HTTP responses. Never expose `Id64` or another internal key in a DTO, response, or log.
 - Keep `Program.cs` focused on configuration, dependency injection, middleware, and route mapping.
