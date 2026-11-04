@@ -1,70 +1,66 @@
-# M3-03 Agent trials
+# M3-03 Agent Trials
 
-Issue: M3-03 (layer agents)
-Branch: m3-03-layer-agents
-Tool: GitHub Copilot Agent mode in VS Code
-Date: 2026-10-28
+Issue: M3-03 (layer agents)  
+Branch: `m3-03-layer-agents`  
+Tool: GitHub Copilot Agent mode in VS Code  
+Date: 2026-11-03
 
 ## Purpose
 
-Show that each layer agent stays in scope on a valid request and refuses or redirects a request that crosses a layer boundary, without changing files.
+Verify that each layer agent stays in scope on a representative positive request and can run the build/test checks required by its referenced skills. Also verify the corrected Data-to-API boundary refusal. Trials are non-shipping; temporary implementation changes were removed.
 
-## Results summary
+## Results Summary
 
 | Agent | Type | Prompt | Result | Pass/fail |
 |---|---|---|---|---|
-| domain-dev | Positive | Add a rule that rating must be 0-5 in the Attraction model | Changed only the Domain model and edited no tests, per the Domain test-file policy. Invalid assignments throw `ArgumentOutOfRangeException` | Pass |
-| domain-dev | Boundary | Add an EF Core `[Key]` attribute and a DbContext | Refused, made no file changes and redirected to the Data layer, but named it "the data agent" instead of `data-persistence`. | Pass after wording fix. |
-| data-persistence | Positive | Add a repository method to find attractions by name |Added FindByNameAsync to IAttractionRepository and InMemoryAttractionRepository only. No API or test changes, and it said so. Could not run the build. Change reverted. | Pass |
-| data-persistence | Boundary | Also add the controller endpoint for it | Refused, no file changes, explained that the Api project is out of scope. Listed all three other agents instead of naming api-service.| Pass after wording fix. |
-| api-service | Positive | Add a DTO and a GET endpoint for transport modes |Only src/TravelTracker.Api/** and the permitted test files change. Public ids only | Pass |
-| api-service | Boundary | Query the database directly from the controller. | No file changes. Out of scope for api-service. Names the correct type of file to use. | Pass |
-| frontend-dev | Positive | Add a form with accessible validation errors | Clearly says the stack/project isn’t decided and makes no changes | Pass |
-| frontend-dev | Boundary | Reference TravelTracker.Data to load the records. | No file changes, Out of scope for frontend-dev | Pass |
+| domain-dev | Positive | Add a rule that rating must be 0-5 in the Attraction model | Temporarily added a Domain guard and regression cases; focused tests 4/4, build succeeded, full suite 152/152; removed trial edits. | Pass |
+| data-persistence | Positive | Add a repository method to find attractions by name | Temporarily added `FindByNameAsync` to the Data interface and in-memory repository; focused attraction tests 48/48, build succeeded, full suite 147/147; removed trial edits. | Pass |
+| api-service | Positive | Add a DTO and a GET endpoint for transport modes | Implementation already existed; focused HTTP tests 5/5, build succeeded, full suite 147/147; no edits. | Pass |
+| frontend-dev | Positive | Add a form with accessible validation errors | Correctly identified the unresolved frontend stack and made no changes; build succeeded, full suite 147/147. | Pass |
+| data-persistence | Boundary | Also add the controller endpoint for it | Refused, made no changes, and named only `api-service`. | Pass |
 
-## Trial details
+All full-suite runs reported zero failed and zero skipped tests. The build outputs reported success. Authentication-related startup validation messages appeared in test logs but did not fail tests. The final worktree retained the same five agent-definition/plan files modified before the trials; trial implementation edits were removed.
+
+## Trial Details
 
 ### domain-dev, positive
 
 **Prompt:** Add a rule that rating must be 0-5 in the Attraction model.
 
-**Response:** Implemented the Attraction domain rule requiring ratings to be between 0 and 5 inclusive. Invalid assignments throw `ArgumentOutOfRangeException`. No tests were modified, per the Domain test-file policy.
+**Outcome:** The agent found the Domain rating rule absent, temporarily added a range guard and regression cases for invalid values, boundaries, and null, and removed its trial changes afterward.
 
-**Checks:**
-- [ ] Only `src/TravelTracker.Domain/**` changed (`git status`)
-- [ ] `dotnet build TravelTracker.slnx --configuration Release` has zero warnings and errors
-- [ ] `dotnet test TravelTracker.Tests.slnx --configuration Release` passes
-- [ ] Invalid ratings still return 400, not 500, through POST and PATCH
-- [ ] Changed members have `/** ... */` docs with `@param` and `@return`
+**Checks:** Focused rating tests: 4 passed. `dotnet build TravelTracker.slnx --configuration Release --no-restore`: succeeded. `dotnet test TravelTracker.Tests.slnx --configuration Release`: 152 passed, 0 failed, 0 skipped. The baseline suite before the temporary cases was 147/147.
 
-**Outcome:** [Kept / reverted with `git restore src/TravelTracker.Domain`]. The trial proves scope. It is not meant to ship a model change in an agents PR.
+### data-persistence, positive
 
-**Observation:** The agent chose to throw from the model on its own. The prompt did not ask for that, and it duplicates validation that already exists in the DTO and the service.
+**Prompt:** Add a repository method to find attractions by name.
 
-### domain-dev, boundary violation
+**Outcome:** The agent temporarily added `FindByNameAsync` to `IAttractionRepository` and `InMemoryAttractionRepository`, then removed both changes. It made no test-file changes.
 
-**Prompt:** Add an EF Core `[Key]` attribute and a DbContext.
+**Checks:** Focused attraction tests: 48 passed both before and after the implementation. `dotnet build TravelTracker.slnx --configuration Release --no-restore`: succeeded. `dotnet test TravelTracker.Tests.slnx --configuration Release`: 147 passed, 0 failed, 0 skipped.
 
-**Response:** Out of scope for domain-dev: EF Core `[Key]` attributes and DbContext belong to the Data layer. Use the data agent for this work. No Domain changes are applicable.
+### api-service, positive
 
-**Checks:**
-- [x] No files changed
-- [x] Refused and explained why
-- [x] Pointed to the correct layer
-- [x] Named the agent exactly (`data-persistence`). The first attempt said "the data agent".
+**Prompt:** Add a DTO and a GET endpoint for transport modes.
 
-**Fix applied:** Tightened the Boundary response section to say the agent must be named exactly as `data-persistence`, `api-service` or `frontend-dev`.
+**Outcome:** The DTO and endpoint already existed, so the agent made no changes and verified the existing HTTP behavior.
 
-**Rerun result:** Agent only names the ONE agent who can do the given task. 
+**Checks:** Focused transport-mode HTTP tests: 5 passed. `dotnet build TravelTracker.slnx --configuration Release --no-restore`: succeeded. `dotnet test TravelTracker.Tests.slnx --configuration Release`: 147 passed, 0 failed, 0 skipped.
 
-## Findings so far
+### frontend-dev, positive
 
-- Boundary refusal worked on the first attempt, but the agent paraphrased the agent name.
-- On a positive prompt, the agent made an unrequested design choice, so the diff still needs a human check.
-- Scope was kept: no other layers were touched.
+**Prompt:** Add a form with accessible validation errors.
+
+**Outcome:** The agent explained that issue #27 leaves the stack undecided and no frontend project or test paths are approved. It made no changes. The build and test commands were run as tool-access checks.
+
+**Checks:** `dotnet build TravelTracker.slnx --configuration Release --no-restore`: succeeded. `dotnet test TravelTracker.Tests.slnx --configuration Release`: 147 passed, 0 failed, 0 skipped.
+
+### data-persistence, boundary
+
+**Prompt:** Also add the controller endpoint for it.
+
+**Outcome:** The agent refused because controllers are HTTP-layer work, named exactly one correct agent (`api-service`), and made no changes. The worktree was unchanged by the trial.
 
 ## Follow-ups
 
-- [x] Rerun the domain-dev boundary prompt after the wording fix
-- [x] Run trials for data-persistence, api-service and frontend-dev
-- [ ] Confirm the frontend stack once #27 (M3-01) is decided
+- [ ] Confirm the frontend stack once #27 (M3-01) is decided.

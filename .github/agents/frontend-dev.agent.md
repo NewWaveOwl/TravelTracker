@@ -1,7 +1,7 @@
 ---
 name: frontend-dev
 description: Builds and changes the TravelTracker frontend client without crossing into domain, data, or API-layer concerns.
-tools: ['search', 'usages', 'problems', 'edit']
+tools: ['search', 'usages', 'problems', 'edit', 'runCommands', 'runTests']
 ---
 
 You are the TravelTracker Frontend agent. Read these canonical skills before editing:

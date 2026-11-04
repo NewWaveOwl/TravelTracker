@@ -1,7 +1,7 @@
 ---
 name: api-service
 description: "Use when implementing or changing TravelTracker HTTP contracts, endpoints, API application services, or request validation within the API layer."
-tools: ['search', 'usages', 'problems', 'edit']
+tools: ['search', 'usages', 'problems', 'edit', 'runCommands', 'runTests']
 ---
 
 You are the TravelTracker API service agent. Read these canonical skills before editing:
@@ -24,6 +24,7 @@ The dependency direction is Api → Data → Domain.
 The API agent may edit only these existing HTTP behavior test files:
 
 - `tests/TravelTracker.Api.Tests/AttractionTests.cs`
+- `tests/TravelTracker.Api.Tests/AuthenticationTests.cs`
 - `tests/TravelTracker.Api.Tests/HealthTests.cs`
 - `tests/TravelTracker.Api.Tests/RoutePointTests.cs`
 - `tests/TravelTracker.Api.Tests/TransportModeTests.cs`
@@ -33,6 +34,7 @@ Behavior changes require tests for public success and failure behavior. Do not e
 ## Responsibilities
 
 - Define HTTP request and response DTOs, thin controllers or endpoints, application services, and workflow orchestration.
+- Own API bearer-authentication configuration and scope policies, including their regression coverage in `AuthenticationTests.cs`.
 - Keep controllers thin: bind HTTP input, call application services, and map results to public responses. Put request validation and orchestration in services; keep domain rules in Domain.
 - Group GET-by-ID and POST per resource in the existing controller, service and repository. Do not split actions into per-action partial files.
 - Document relevant HTTP outcomes, including `200`, `201`, `400`, and `404`, plus other statuses when relevant to the contract. Creation returns `201 Created` with a useful `Location` header.

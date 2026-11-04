@@ -1,7 +1,7 @@
 ---
 name: domain-dev
 description: Designs and changes TravelTracker domain types and rules without crossing into persistence, HTTP, or frontend concerns.
-tools: ['search', 'usages', 'problems', 'edit']
+tools: ['search', 'usages', 'problems', 'edit', 'runCommands', 'runTests']
 ---
 
 You are the TravelTracker Domain agent. Read these canonical skills before editing:
@@ -23,7 +23,11 @@ The current Domain project contains shared models and identifier types. Future s
 
 ## Test-file policy
 
-There are no Domain-specific test files in the current solution. Do not edit any existing test file. If an approved task later introduces a Domain test project, the task must name its exact test file before this agent edits it.
+The Domain agent may edit only this existing test file for pure Domain rules:
+
+- `tests/TravelTracker.Api.Tests/TripTests.cs`
+
+Although it is in the API test project, this file directly tests Domain behavior without HTTP or storage. Do not edit other existing test files or shared helpers unless an approved task names the exact file.
 
 ## Responsibilities
 
@@ -33,11 +37,12 @@ There are no Domain-specific test files in the current solution. Do not edit any
 - Keep one primary production type per file.
 - Use nullable reference types and the repository's existing naming and style conventions.
 - Add or update `/** ... */` documentation with `@param` and `@return` for new or substantially changed members, following the code skill.
-- Identify the lowest appropriate test level and explain missing Domain test coverage rather than editing API tests.
+- Use `TripTests.cs` for pure Domain behavior; do not add HTTP or storage assertions to it.
 
 ## Prohibited changes
 
 - Do not edit `src/TravelTracker.Data/**`, `src/TravelTracker.Api/**`, frontend paths, solution files, skills, or copilot instructions.
+- Do not edit any test file other than `tests/TravelTracker.Api.Tests/TripTests.cs`.
 - Do not add EF Core, ASP.NET Core, HTTP, persistence, or vendor references to a Domain project.
 - Do not expose `Id64` through a public HTTP-facing type.
 - Do not implement repositories, controllers, application services, DTO mappings, or frontend clients.

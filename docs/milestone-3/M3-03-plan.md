@@ -11,15 +11,15 @@ Branch: `m3-03-layer-agents`
 - `domain-dev`, `data-persistence`, and `api-service` each reference both `.github/skills/code/SKILL.md` and `.github/skills/testing/SKILL.md`.
 - `frontend-dev` references `.github/skills/code/SKILL.md` and remains stack-neutral because issue #27 and `docs/milestone-3-contracts.md` do not record a React Native versus ASP.NET Core decision.
 - The current implementation remains in `src/TravelTracker.Domain`, `src/TravelTracker.Data`, and `src/TravelTracker.Api`; the proposed per-service project layout is defined by issue #27 and is not restated in the discovery instructions.
-- Agent metadata uses the existing repository tool-name vocabulary: `search`, `changes`, `usages`, `problems`, `edit`, `runCommands`, and `runTests` as applicable. These are agent-runtime identifiers, not local PowerShell commands.
+- Agent metadata uses the existing repository tool-name vocabulary: `search`, `changes`, `usages`, `problems`, `edit`, `runCommands`, and `runTests` as applicable. All four agents need `runCommands` and `runTests` to execute the build and test checks required by their referenced skills. These are agent-runtime identifiers, not local PowerShell commands.
 
 ## Exact paths and test-file permissions
 
 | Agent | Production paths | Test files it may edit |
 |---|---|---|
-| `domain-dev` | `src/TravelTracker.Domain/**` | None; it must not edit existing API test files. |
+| `domain-dev` | `src/TravelTracker.Domain/**` | `tests/TravelTracker.Api.Tests/TripTests.cs` (pure Domain rules; no HTTP or storage) |
 | `data-persistence` | `src/TravelTracker.Data/**` | `tests/TravelTracker.Api.Tests/EntityIdGeneratorTests.cs` |
-| `api-service` | `src/TravelTracker.Api/**` | `tests/TravelTracker.Api.Tests/AttractionTests.cs`, `tests/TravelTracker.Api.Tests/HealthTests.cs`, `tests/TravelTracker.Api.Tests/RoutePointTests.cs`, `tests/TravelTracker.Api.Tests/TransportModeTests.cs` |
+| `api-service` | `src/TravelTracker.Api/**` | `tests/TravelTracker.Api.Tests/AttractionTests.cs`, `tests/TravelTracker.Api.Tests/AuthenticationTests.cs`, `tests/TravelTracker.Api.Tests/HealthTests.cs`, `tests/TravelTracker.Api.Tests/RoutePointTests.cs`, `tests/TravelTracker.Api.Tests/TransportModeTests.cs` |
 | `frontend-dev` | Future frontend project only; no frontend project currently exists | None currently; a future frontend test file must be created by an explicitly scoped frontend issue. |
 
 Shared test helpers under `tests/TravelTracker.Api.Tests/Support/**` are not permitted to any agent unless an approved task explicitly requires a helper change and names the exact file.
@@ -47,4 +47,4 @@ Shared test helpers under `tests/TravelTracker.Api.Tests/Support/**` are not per
 - Validate that each agent references canonical skills by path and does not duplicate their content.
 - Confirm the frontend agent does not select a stack that issue #27 leaves open.
 - Check that the two `.github/copilot-instructions.md` changes can be staged as two independent commits.
-- Run documentation/path consistency checks and any available representative agent trials after implementation; no application build is required for agent-only Markdown changes unless the repository validation gate requires it.
+- Run documentation/path consistency checks and representative positive and boundary agent trials after implementation; positive trials must use `runCommands` and `runTests` to run the checks required by the relevant skill. No application build is required for agent-only Markdown changes unless the repository validation gate requires it.
