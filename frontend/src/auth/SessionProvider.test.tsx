@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { StrictMode, type ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 const auth = vi.hoisted(() => ({ isAuthenticated: true, isLoading: false, error: undefined as Error | undefined, loginWithRedirect: vi.fn(), logout: vi.fn(), getAccessTokenSilently: vi.fn() }));
 vi.mock('@auth0/auth0-react', () => ({ Auth0Provider: ({ children }: { children: ReactNode }) => children, useAuth0: () => auth }));
 vi.mock('./config', () => ({ authConfig: { domain: 'tenant.auth0.com', clientId: 'public-id', audience: 'api', scope: 'openid catalogue.read' } }));
 import SessionProvider from './SessionProvider';
 import Account from '../components/Account';
-afterEach(() => { cleanup(); vi.restoreAllMocks(); sessionStorage.clear(); vi.clearAllMocks(); vi.unstubAllGlobals(); auth.error = undefined; auth.isAuthenticated = true; });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); sessionStorage.clear(); vi.clearAllMocks(); vi.unstubAllGlobals(); auth.error = undefined; auth.isAuthenticated = true; auth.isLoading = false; });
 it('runs protected access in StrictMode and reports success', async () => {
   auth.getAccessTokenSilently.mockResolvedValue('test-access-token');
   const fetch = vi.fn().mockResolvedValue(new Response('{"name":"Example Bus"}'));
@@ -78,4 +78,13 @@ it('blocks further protected calls when the API rejects authentication', async (
   fireEvent.click(screen.getByRole('button', { name: 'Check API access' }));
   expect(await screen.findByRole('button', { name: 'Sign in' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Check API access' })).toBeNull();
+});
+it('offers reload instead of an endless session-startup spinner', () => {
+  vi.useFakeTimers(); auth.isLoading = true; auth.isAuthenticated = false;
+  render(<SessionProvider><Account /></SessionProvider>);
+  expect(screen.getByText('Checking your sign-in session…')).toBeTruthy();
+  act(() => { vi.advanceTimersByTime(15000); });
+  expect(screen.getByRole('heading', { name: 'Sign-in check timed out' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy();
+  expect(screen.queryByText('Checking your sign-in session…')).toBeNull();
 });

@@ -75,6 +75,7 @@ export default function SessionProvider({ children }: { children: ReactNode }) {
   if (!authConfig) return <>{children}</>;
   return <Auth0Provider domain={authConfig.domain} clientId={authConfig.clientId}
     cacheLocation="memory" useRefreshTokens={false}
+    authorizeTimeoutInSeconds={10} httpTimeoutInSeconds={10}
     authorizationParams={{ redirect_uri: window.location.origin, audience: authConfig.audience, scope: authConfig.scope }}
     onRedirectCallback={() => {
       window.history.replaceState(null, '', `${window.location.pathname}#/account`);

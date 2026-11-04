@@ -51,7 +51,7 @@ The SDK keeps tokens in memory (`cacheLocation=memory`); no application token lo
 
 `getAccessTokenSilently` supplies access tokens, never ID tokens. The SDK checks cached token expiration and may renew via its hosted session. Renewal failure and API `401` block further protected calls and offer sign-in; `403` displays insufficient permission without logging the user out. No automatic retry occurs after API rejection. Logout blocks calls before contacting Auth0 and aborts pending requests; a late token result cannot start an authenticated request. Already accepted server work cannot be undone by client logout. Provider logout failure preserves the local block and offers explicit sign-in to reconnect.
 
-Tokens are attached only by the opt-in protected client to a named configured service and relative `/api/v1/` path. It rejects non-HTTPS destinations outside loopback, refuses cross-origin redirects, omits cookies, bounds HTTP waiting and never exposes provider error text. Anonymous health requests continue without bearer headers. Identity claims are not treated as Users roles or account-standing decisions.
+Tokens are attached only by the opt-in protected client to a named configured service and relative `/api/v1/` path. It rejects non-HTTPS destinations outside loopback, refuses cross-origin redirects, omits cookies, bounds HTTP waiting and never exposes provider error text. Anonymous health requests continue without bearer headers. Auth0 authorization and HTTP waits are limited to ten seconds. If SDK initialization still remains pending for fifteen seconds, the account page replaces its spinner with a connection-error panel offering Reload and Back to start; navigation remains usable. Identity claims are not treated as Users roles or account-standing decisions.
 
 ## Verification
 
@@ -71,7 +71,7 @@ Current verification evidence (2026-11-03):
 - Auth0 discovery is reachable and the application/API grant is configured. An anonymous authorization check now returns `login_required`, and browser navigation reaches Auth0 Universal Login.
 - The owner reported successful hosted login and return to TravelTracker. This is manual owner evidence; the agent-controlled browser tab is a separate session.
 - The account-page access check now targets Transport's stable public sample, with the running API configured for the real tenant issuer and `traveltracker-api` audience. Anonymous requests remain protected. The signed-in protected-call result and hosted logout are awaiting owner verification.
-- Frontend build passes without warnings. All 41 frontend tests pass, including UI recovery for renewal failure, API `401`, API `403`, logout races and storage failure. Existing real JWT backend tests cover signature, issuer, audience, expiry and scope enforcement; they use test signing keys, not Auth0-issued tokens.
+- Frontend build passes without warnings. All 42 frontend tests pass, including UI recovery for renewal failure, API `401`, API `403`, logout races and storage failure. Existing real JWT backend tests cover signature, issuer, audience, expiry and scope enforcement; they use test signing keys, not Auth0-issued tokens.
 - The PR's original CI run passed. Later commits require their own CI result.
 
 Issue #33 must not be declared complete based only on mocked tests. Record the real protected-call and logout results before marking the PR ready.

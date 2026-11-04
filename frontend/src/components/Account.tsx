@@ -6,10 +6,18 @@ import Feedback, { type FeedbackKind } from './Feedback';
 export default function Account() {
   const session = useSession();
   const [result, setResult] = useState<{ kind: FeedbackKind; text: string } | null>(null);
+  const [startupTimedOut, setStartupTimedOut] = useState(false);
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => { if (!session.authenticated) { request.current?.abort(); setResult(null); } }, [session.authenticated]);
+  useEffect(() => {
+    setStartupTimedOut(false);
+    if (!session.loading) return;
+    const timer = window.setTimeout(() => setStartupTimedOut(true), 15000);
+    return () => window.clearTimeout(timer);
+  }, [session.loading]);
   if (!session.configured) return <Feedback kind="unavailable">Sign-in setup is pending. Configure the Auth0 application using the frontend setup guide.</Feedback>;
+  if (session.loading && startupTimedOut) return <Feedback kind="network" title="Sign-in check timed out" eyebrow="CONNECTION ERROR" retry={() => window.location.reload()} retryLabel="Reload" backToStart>We could not check your session. Reload to try again, or return to the start.</Feedback>;
   if (session.loading) return <Feedback kind="loading">Checking your sign-in session…</Feedback>;
   if (session.message && !session.authenticated && session.message !== 'You are signed out.') return <Feedback kind="unexpected" title="Unable to sign in" eyebrow="SIGN-IN ERROR" retry={() => void session.signIn()} retryLabel="Sign in" backToStart>{session.message}</Feedback>;
   const checkAccess = async () => {
