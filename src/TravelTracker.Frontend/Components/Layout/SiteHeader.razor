@@ -3,7 +3,7 @@
 
 <header>
     <a class="brand" href="/">TravelTracker<img src="assets/logo.svg" alt="" /></a>
-    <nav aria-label="Main navigation">
+    <nav class="primary-navigation" aria-label="Main navigation">
         <a aria-current="@CurrentWhenAt("new-trip")" href="new-trip">New Trip</a>
         <a aria-current="@CurrentWhenAt("history")" href="history">History</a>
     </nav>
@@ -12,6 +12,8 @@
     @if (menuOpen)
     {
         <nav id="menu" class="menu" aria-label="More navigation">
+            <a class="mobile-navigation-link" aria-current="@CurrentWhenAt("new-trip")" href="new-trip">New Trip</a>
+            <a class="mobile-navigation-link" aria-current="@CurrentWhenAt("history")" href="history">History</a>
             <a href="settings">Settings</a>
             <a href="services">Service status</a>
         </nav>

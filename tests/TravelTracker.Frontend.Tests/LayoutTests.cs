@@ -38,7 +38,7 @@ public sealed class LayoutTests : BunitContext
 
         header.Find("button[aria-label='Menu']").Click();
 
-        Assert.Equal("services", header.Find("#menu a:nth-child(2)").GetAttribute("href"));
+        Assert.Equal("services", header.Find("#menu a[href='services']").GetAttribute("href"));
         Assert.Equal("true", header.Find("button[aria-label='Menu']").GetAttribute("aria-expanded"));
     }
 
