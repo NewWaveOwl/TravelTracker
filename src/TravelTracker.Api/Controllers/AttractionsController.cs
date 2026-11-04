@@ -33,11 +33,17 @@ public sealed class AttractionsController(IAttractionService service) : Controll
     /**
      * Lists attractions, optionally filtered by a name substring (case-insensitive).
      * @param name Optional substring to filter attraction names.
-     * @return 200 with the ordered list of attractions.
+     * @return 200 with the ordered list, or 400 for repeated name query values.
      */
     [HttpGet]
     public async Task<ActionResult<List<AttractionRecord>>> GetAll([FromQuery] string? name)
     {
+        if (Request.Query.TryGetValue("name", out var names) && names.Count > 1)
+        {
+            ModelState.AddModelError("name", "Specify the name query parameter at most once.");
+            return ValidationProblem(ModelState);
+        }
+
         var records = await service.GetAllAsync(name);
         return Ok(records.Select(ToResponse).ToList());
     }
