@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-Attractions now owns an independent Api/Data/Domain service on 5104 with PostgreSQL and private/shared access. Transport entries and Route Points remain in TravelTracker.Api on 5105 with in-memory stores. HTTP DTOs preserve name/lat/lon aliases. Trip/TripLeg domain rules exist, but trip/settings HTTP and persistence features remain unfinished. See [independent Attractions startup and access rules](attractions-service.md).
+Attractions now owns an independent Api/Data/Domain service on 5104 with PostgreSQL and private/shared access. Transport entries and Route Points run independently in TravelTracker.Transport.Api on 5105 with PostgreSQL storage. HTTP DTOs preserve name/lat/lon aliases. Trip/TripLeg domain rules exist, but trip/settings HTTP and persistence features remain unfinished. See [independent Attractions startup and access rules](attractions-service.md).
 
 [Domain](domain.md), [API](api.md) and [Data](data.md) describe current models and contracts. The relationships and timing rules below are future product design.
 
@@ -63,8 +63,6 @@ A future trip can select R1 as an itinerary leg and add visits/stays around it. 
 
 ## API and persistence boundaries
 
-Resource controllers remain separate while sharing http://localhost:5104. Catalogue storage is in-memory and resets on restart. The existing Api/Data/Domain projects in [TravelTracker.slnx](../TravelTracker.slnx) form the implementation: Api references Data and Domain, Data references Domain. Api is the only web host. Attraction/Transport use the original entities and interface signatures; response DTOs retain the agreed JSON fields.
-
-The main SQL Trips row currently stores one departure/destination directly; ordered trip legs, route references, point snapshots and intermediate stop occurrences need a later reviewed database migration. The original SQL mode enum also lacks bike, which the current in-memory catalogue supports. The SQL schema is not used by the in-memory catalogue; persistence requires a later reviewed migration.
+Transport and Route Points now run independently on port 5105 with their own Domain/Data/Api projects and PostgreSQL migrations. Public sample UUIDs and the name/lat/lon response aliases remain unchanged. The historical SQL schema is not the applied service migration. See [Transport startup and selection](transport-service.md). Scheduled routes, ordered stops, trip persistence and timing remain separate work.
 
 See [API contracts](api.md), [domain records](domain.md), [data status](data.md) and [validation record](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/validation.md).

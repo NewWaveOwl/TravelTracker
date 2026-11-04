@@ -4,11 +4,11 @@
 
 Auth0 handles credentials and authentication; the Users service remains responsible for TravelTracker profiles, roles and account standing. Provider selection does not replace those checks. Expiry and permission-failure behavior is covered by automated client and backend tests; see the linked evidence for limits. Any client secret stays on the Blazor server, never in the browser.
 
-The existing `TravelTracker.Api` is the representative resource server. It validates access tokens with ASP.NET Core's real JWT bearer handler. It does not issue tokens or implement sign-in. Other service issues must adopt this pattern and independently verify their endpoints.
+The independent `TravelTracker.Transport.Api` is the representative resource server. It validates access tokens with ASP.NET Core's real JWT bearer handler. It does not issue tokens or implement sign-in. Other service issues must adopt this pattern and independently verify their endpoints.
 
 ## Configuration and startup
 
-Plain `dotnet run --project src/TravelTracker.Api --launch-profile http` starts in Development using the placeholder identity settings in `appsettings.Development.json`. Health and Swagger work immediately and anonymous catalogue requests return `401`. These placeholders do not provide a running identity provider or valid access tokens. There are no signing keys or authentication bypasses in Development defaults.
+After configuring `ConnectionStrings__Transport` and migrations ([Transport startup](transport-service.md)), `dotnet run --project src/TravelTracker.Transport.Api --launch-profile http` starts in Development using the placeholder identity settings in `appsettings.Development.json`. Health and Swagger work immediately and anonymous catalogue requests return `401`. These placeholders do not provide a running identity provider or valid access tokens. There are no signing keys or authentication bypasses in Development defaults.
 
 To use protected operations, set these deployment-owned values before starting the API (PowerShell example; substitute your selected provider's actual values):
 
@@ -17,7 +17,7 @@ $env:Authentication__Bearer__Authority = 'https://identity.example.invalid/tenan
 $env:Authentication__Bearer__Issuer = 'https://identity.example.invalid/tenant'
 $env:Authentication__Bearer__Audience = 'traveltracker-api'
 $env:Authentication__Bearer__ScopeClaimType = 'scope'
-dotnet run --project src/TravelTracker.Api --launch-profile http
+dotnet run --project src/TravelTracker.Transport.Api --launch-profile http
 ```
 
 The addresses above are documentation placeholders, not a running identity service. Configure each environment through environment variables or its own configuration source. Authority is the HTTPS OIDC discovery base address, Issuer is the exact expected `iss`, and Audience is this API's resource identifier. They are identifiers, not secrets. Production settings remain blank and must be supplied. Missing values, non-HTTPS authority/issuer, and blank scope claim names fail startup in every environment. Do not put credentials, real tokens, private keys or client secrets in committed settings or HTTP examples. The resource server needs no client secret.
@@ -41,9 +41,9 @@ Authority and Issuer are intentionally independent: a legitimate discovery base 
 | GET `/api/v1/attractions/{id}` | `catalogue.read` |
 | POST `/api/v1/attractions` | `catalogue.write` |
 | PATCH `/api/v1/attractions/{id}` | `catalogue.write` |
-| GET `/api/v1/transport-modes/{id}` | `catalogue.read` |
+| GET `/api/v1/transport-modes` and `/api/v1/transport-modes/{id}` | `catalogue.read` |
 | POST `/api/v1/transport-modes` | `catalogue.write` |
-| GET `/api/v1/route-points/{id}` | `catalogue.read` |
+| GET `/api/v1/route-points` and `/api/v1/route-points/{id}` | `catalogue.read` |
 | POST `/api/v1/route-points` | `catalogue.write` |
 
 Read and write are independent. A write-only token cannot subsequently GET the created Location without read permission. Missing/invalid tokens yield `401` and a Bearer challenge; valid tokens lacking a required scope yield `403`, before model binding or mutation. Existing validation and not-found semantics apply after permission checks. Both the fallback policy (no attribute) and default policy (bare `[Authorize]`) require `catalogue.read`. Authors must still add explicit write policies to mutations; the read default does not infer permissions from HTTP verbs. Deliberately public endpoints require `[AllowAnonymous]`. Swagger names the read permission for implicit policies and correctly lists both `401` and `403`.

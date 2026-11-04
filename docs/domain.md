@@ -31,7 +31,7 @@ User defaults to User role, Active status and the current UTC creation time.
 
 ## HTTP representations
 
-The Api [response DTOs](../src/TravelTracker.Api/Contracts) preserve the agreed JSON contract. AttractionRecord maps the original Latitude/Longitude to lat/lon; TransportModeRecord maps DisplayName to name; RoutePointRecord similarly maps coordinates. These DTOs describe HTTP responses, while storage/services use the Domain entities. Existing model property names are retained.
+The Api [response DTOs](../src/TravelTracker.Transport.Api/Contracts) preserve the agreed JSON contract. AttractionRecord maps the original Latitude/Longitude to lat/lon; TransportModeRecord maps DisplayName to name; RoutePointRecord similarly maps coordinates. These DTOs describe HTTP responses, while storage/services use the Domain entities. Existing model property names are retained.
 
 ## Unfinished feature types
 
@@ -48,4 +48,6 @@ The Api [response DTOs](../src/TravelTracker.Api/Contracts) preserve the agreed 
 - Supported transport codes are car, bus, train, pedestrian, bike and plane.
 - Trips retain location/transport snapshots and enforce ownership/privacy and account status.
 
-The [trip-point/transport/route design](trip-points-and-routes.md) distinguishes reusable locations/entries from scheduled journeys and ordered trip occurrences. These trip/schedule rules are future work; current endpoints are POST and GET by ID for the three catalogue resources.
+The [trip-point/transport/route design](trip-points-and-routes.md) distinguishes reusable locations/entries from scheduled journeys and ordered trip occurrences. These trip/schedule rules are future work; Transport and Route Points expose create/detail/collection selection; Attractions also supports PATCH.
+
+Transport owns dedicated service domain models and identity types in `src/TravelTracker.Transport.Domain`; the historical shared RoutePoint is retained for existing Trip snapshots and does not cross the new service HTTP boundary.
