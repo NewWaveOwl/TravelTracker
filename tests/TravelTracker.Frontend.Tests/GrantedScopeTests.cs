@@ -16,7 +16,8 @@ public sealed class GrantedScopeTests
         factory.Auth0.GrantedScope = grant;
         factory.Auth0.SpoofedGrantedScope = "catalogue.write impersonated-provider-claim";
         using var browser = factory.CreateBrowser();
-        await factory.StartSignInAsync(browser);
+        var authorize = await factory.StartSignInAsync(browser);
+        Assert.Equal(FrontendFactory.RequestedScope, System.Web.HttpUtility.ParseQueryString(authorize.Query)["scope"]);
         await factory.CompleteSignInAsync(browser);
         var scopes = await browser.GetStringAsync("/test/granted-scope");
         Assert.Equal(expected, scopes);

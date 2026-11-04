@@ -33,7 +33,19 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
      * @param cancellationToken View cancellation.
      * @return Parsed response; 401 revokes only the session that made the request.
      */
-    public async Task<T?> SendJsonAsync<T>(string service, HttpMethod method, string path, object? body, CancellationToken cancellationToken = default)
+    public Task<T?> SendJsonAsync<T>(string service, HttpMethod method, string path, object? body, CancellationToken cancellationToken = default) =>
+        SendCoreAsync<T>(service, method, path, body, cancellationToken);
+
+    /**
+     * Sends the server-owned setup secret only to the configured Users bootstrap endpoint.
+     * @param secret Operator-provisioned secret that never enters the browser.
+     * @param cancellationToken Cancels a closed setup view.
+     * @return The confirmed administrator profile.
+     */
+    public Task<T?> BootstrapFirstAdministratorAsync<T>(string secret, CancellationToken cancellationToken = default) =>
+        SendCoreAsync<T>("Users", HttpMethod.Post, "/api/v1/users/bootstrap-first-administrator", new { }, cancellationToken, secret);
+
+    async Task<T?> SendCoreAsync<T>(string service, HttpMethod method, string path, object? body, CancellationToken cancellationToken, string? bootstrapSecret = null)
     {
         var url = directory.ProtectedUrlFor(service, path);
         var user = (await authentication.GetAuthenticationStateAsync()).User;
@@ -41,7 +53,7 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
         var token = sessions.IsActive(user) ? AccessTokenClaims.ActiveToken(user, timeProvider.GetUtcNow()) : null;
         if (token is null) throw SignedOut();
         T? result;
-        try { result = await client.SendJsonAsync<T>(method, url, body, cancellationToken, token); }
+        try { result = await client.SendJsonAsync<T>(method, url, body, cancellationToken, token, bootstrapSecret); }
         catch (ApiError error) when (error.Status == 401)
         {
             sessions.Revoke(sessionId);

@@ -1,0 +1,29 @@
+@implements IDisposable
+@using TravelTracker.Frontend.Services
+@inject AdminAccessState Access
+
+@if (checkedAccess && Access.IsAdministrator)
+{
+    <a class="@Class" href="administrator">Administrator Panel</a>
+}
+
+@code {
+    [Parameter] public string? Class { get; set; }
+    readonly CancellationTokenSource closed = new();
+    bool disposed;
+    bool checkedAccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Access.Changed += RefreshDisplay;
+        try { await Access.RefreshAsync(closed.Token); }
+        catch (ApiError) { /* An unavailable or forbidden authority never exposes an administrator link. */ }
+        catch (OperationCanceledException) when (closed.IsCancellationRequested) { }
+        finally { checkedAccess = true; }
+    }
+
+    void RefreshDisplay() { if (!disposed) _ = InvokeAsync(StateHasChanged); }
+
+    /** Cancels a closed menu and removes its navigation-state subscription. */
+    public void Dispose() { disposed = true; Access.Changed -= RefreshDisplay; closed.Cancel(); closed.Dispose(); }
+}

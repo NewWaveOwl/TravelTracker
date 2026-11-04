@@ -26,6 +26,9 @@ public sealed class AccountTests : BunitContext
         Services.AddSingleton(new ServiceDirectory(new Dictionary<string, string> { ["Transport"] = "http://localhost:5105" }));
         Services.AddSingleton(new ServiceClient(new HttpClient(handler ?? StubHandler.Status(200, "{}")), NullLogger<ServiceClient>.Instance));
         Services.AddScoped<ProtectedClient>();
+        Services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        Services.AddScoped<TravelTracker.Frontend.Api.Users.UsersClient>();
+        Services.AddScoped<TravelTracker.Frontend.Services.AdminAccessState>();
         Services.AddLogging();
     }
 

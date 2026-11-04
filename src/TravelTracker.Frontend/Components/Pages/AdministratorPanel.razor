@@ -1,0 +1,59 @@
+@page "/administrator"
+
+<PageTitle>Administrator Panel | TravelTracker</PageTitle>
+<section class="administrator-panel">
+    <small>ADMINISTRATION</small>
+    <h1 tabindex="-1">Administrator Panel</h1>
+    @if (status is not null) { <p role="status" class="admin-status">@status</p> }
+    @if (error is not null)
+    {
+        <section class="admin-error" role="alert" tabindex="-1" @ref="errorSummary"><h2>@ErrorTitle</h2><p>@error</p>
+            @if (!busy) { <button @onclick="LoadAsync">Retry account and users</button> }
+        </section>
+    }
+    @if (loading)
+    {
+        <Feedback Kind="FeedbackKind.Loading">Checking administrator access and loading users…</Feedback>
+    }
+    else if (!allowed)
+    {
+        <Feedback Kind="FeedbackKind.Permission" Title="Administrator access required">Only an active administrator can view users and change roles. <a href="account">Return to your account</a>.</Feedback>
+    }
+    else
+    {
+        <nav class="admin-tabs" aria-label="Administrator sections"><a href="administrator" aria-current="page">All users</a></nav>
+        <p>Accounts registered with TravelTracker through sign-in appear here. This list does not include every account in the identity provider’s directory.</p>
+        @if (target is not null)
+        {
+            <form class="admin-confirmation" aria-labelledby="role-change-heading" @onsubmit="ConfirmAsync" @onsubmit:preventDefault>
+                <h2 id="role-change-heading" tabindex="-1" @ref="confirmationHeading">Confirm role change</h2>
+                <p><strong>@target.Email</strong>: @target.Role → @NewRole</p>
+                <p>@(NewRole == "administrator" ? "Administrator access allows this user to manage registered users and their roles." : target.UserId == me?.UserId ? "Demoting your own account will remove your access to this panel." : "This user will lose administrator access.")</p>
+                <label for="role-change-reason">Reason *<textarea id="role-change-reason" @bind="reason" maxlength="500" aria-describedby="reason-help" disabled="@busy"></textarea></label>
+                <small id="reason-help">Give a reason for the audit record, up to 500 characters.</small>
+                <div class="actions"><button type="submit" disabled="@busy">@(busy ? "Changing role…" : "Confirm role change")</button><button type="button" class="secondary" disabled="@busy" @onclick="CancelChange">Cancel</button></div>
+            </form>
+        }
+        <section aria-labelledby="all-users-heading" aria-busy="@busy.ToString().ToLowerInvariant()">
+            <h2 id="all-users-heading">All users</h2>
+            <p role="status">@users.Count registered users</p>
+            @if (users.Count == 0)
+            {
+                <p>No registered users were returned. Retry to refresh the list.</p><button @onclick="LoadAsync" disabled="@busy">Refresh users</button>
+            }
+            else
+            {
+                <div class="admin-table-scroll"><table class="admin-users-table"><caption class="visually-hidden">Registered TravelTracker users and role management</caption><thead><tr><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead><tbody>
+                @foreach (var user in users)
+                {
+                    <tr @key="user.UserId"><th scope="row">@user.Email @(user.UserId == me?.UserId ? "(you)" : "")</th><td>@user.Role</td><td>@user.Status</td><td>
+                        <button class="secondary" disabled="@(busy || LastActiveAdministrator(user) || InactiveTraveller(user))" @onclick="() => BeginChange(user)">@(user.Role == "administrator" ? "Demote to traveller" : "Promote to administrator")<span class="visually-hidden">: @user.Email</span></button>
+                        @if (LastActiveAdministrator(user)) { <small>The last active administrator cannot be demoted.</small> }
+                        @if (InactiveTraveller(user)) { <small>Only active accounts can be promoted.</small> }
+                    </td></tr>
+                }
+                </tbody></table></div>
+            }
+        </section>
+    }
+</section>

@@ -406,8 +406,9 @@ public sealed class SignInFlowTests
         var browser = factory.CreateBrowser();
         await SignInAsync(factory, browser);
         await browser.GetAsync(FrontendFactory.ProtectedReadPath);
+        var signOutToken = FrontendFactory.AntiforgeryTokenFrom(await AccountHtmlAsync(browser));
         factory.Transport.Forget();
-        await browser.PostAsync("/auth/logout", new FormUrlEncodedContent([new("__RequestVerificationToken", FrontendFactory.AntiforgeryTokenFrom(await AccountHtmlAsync(browser)))]));
+        await browser.PostAsync("/auth/logout", new FormUrlEncodedContent([new("__RequestVerificationToken", signOutToken)]));
 
         var response = await browser.GetAsync(FrontendFactory.ProtectedReadPath);
 

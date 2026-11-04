@@ -16,6 +16,8 @@ builder.Services.AddSingleton<SessionRegistry>();
 builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationStateProvider>();
 builder.Services.AddScoped<ProtectedClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Attractions.AttractionsClient>();
+builder.Services.AddScoped<TravelTracker.Frontend.Api.Users.UsersClient>();
+builder.Services.AddScoped<TravelTracker.Frontend.Services.AdminAccessState>();
 
 var auth0 = Auth0Settings.TryRead(builder.Configuration);
 builder.Services.AddSingleton(new AuthSetup(auth0));

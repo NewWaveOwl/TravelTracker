@@ -36,3 +36,9 @@ Results are recorded after implementation. Backend API/security/ownership behavi
 - Running the actual frontend on a separate loopback port returned 200 for `/attractions` with the expected anonymous sign-in prompt and 200 for the map asset. SHA-256 matches the supplied image exactly.
 - PostgreSQL relational tests and the live Auth0 + Users + PostgreSQL browser journey were **not run locally** because this worktree has no configured isolated PostgreSQL/Users environment. The PR's existing CI supplies PostgreSQL and runs the relational group.
 - `git diff --check` passed. Independent read-only review found two medium and one low issue; all were corrected and re-reviewed with **0 remaining actionable findings**. See [review record](issue-43-review.md).
+
+### Owner-requested administrator follow-up
+
+PR #75 also includes the subsequently requested independent Users service, one-time first-administrator bootstrap, verified traveller provisioning, **Administrator Panel → All users**, audited promotion/demotion and the burger-menu Attractions entry. See [administrator contracts and verification](first-administrator-setup.md). This extends the original frontend-only scope by explicit owner request.
+
+The complete local suite subsequently passed 503 cases with isolated PostgreSQL (481 ordinary and 22 relational), with zero failures or skips and a zero-warning build. The signed-in administrator listing and last-admin protection were verified live. After the owner-approved Auth0 grant setup, a fresh sign-in displayed **Create attraction** and opened the form; no live attraction was submitted. The original evidence above remains the record for the initial workspace commit.

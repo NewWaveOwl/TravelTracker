@@ -41,6 +41,8 @@ public sealed class AttractionWorkspaceTests : BunitContext
         Services.AddSingleton(sessions);
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         Services.AddSingleton(new AttractionsClient(client));
+        Services.AddSingleton(new TravelTracker.Frontend.Api.Users.UsersClient(client, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build()));
+        Services.AddScoped<TravelTracker.Frontend.Services.AdminAccessState>();
         Services.AddLogging();
         return authentication;
     }

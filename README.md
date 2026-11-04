@@ -26,7 +26,7 @@ TravelTracker currently provides the catalogue and location foundation for futur
 
 The following features are not yet available through the running application:
 
-- Application account standing and account management. Auth0 sign-in is wired into the Blazor app; see [setup and verification status](docs/frontend-auth0.md).
+- Full account profile editing and status management. Verified account provisioning, live standing, first-administrator setup and administrator role management are available through the independent Users service; see [setup](docs/first-administrator-setup.md).
 - Accommodation management as a separate resource.
 - Trips, ordered itinerary legs, history, settings and map views.
 - Scheduled journeys, departure and arrival times, and stop timing.
@@ -43,7 +43,7 @@ A route point describes a reusable location. A transport entry describes a trans
 - Auth0 for hosted sign-in and logout, using the ASP.NET Core OpenID Connect handler with authorization-code flow and PKCE in the Blazor server. The APIs validate bearer access tokens. See [Auth0 setup and verification](docs/frontend-auth0.md).
 - .NET 10 and ASP.NET Core.
 - Swagger/OpenAPI through Swashbuckle.
-- PostgreSQL persistence for Attractions; in-memory repositories for Transport/Route Points.
+- PostgreSQL persistence for Attractions and Users; in-memory repositories for Transport/Route Points.
 - PostgreSQL through EF Core/Npgsql (owner decision, 2026-10-28), implemented for Attractions; other service persistence remains separate work.
 - xUnit and ASP.NET Core test hosts.
 - GitHub Actions for pull-request testing.
@@ -54,11 +54,15 @@ A route point describes a reusable location. A transport entry describes a trans
 | `src/TravelTracker.Attractions.Data` | PostgreSQL context, migrations, repositories and application-issued identities. |
 | `src/TravelTracker.Attractions.Domain` | Attraction model, identifiers and invariants without web/EF dependencies. |
 | `src/TravelTracker.Security` | Shared bearer validation and OpenAPI security infrastructure. |
+| `src/TravelTracker.Users.Api` | Independent HTTPS account provisioning, bootstrap, administrator role management and service access contracts. |
+| `src/TravelTracker.Users.Data` | Service-owned PostgreSQL accounts, migrations, transactional role changes and administrator audit. |
+| `src/TravelTracker.Users.Domain` | Account identity, role and standing model without web/EF dependencies. |
 | `src/TravelTracker.Api` | Remaining Transport/Route Points startup, controllers and services. |
 | `src/TravelTracker.Data` | Repositories, sample data and identity generation. |
 | `src/TravelTracker.Domain` | Shared models and identifier types. |
 | `tests/TravelTracker.Api.Tests` | Remaining host, shared authentication, trip-domain and identity tests. |
 | `tests/TravelTracker.Attractions.Api.Tests` | Attraction HTTP, PostgreSQL durability/privacy and real-bearer integration tests. |
+| `tests/TravelTracker.Users.Tests` | Account domain, real-bearer HTTP and PostgreSQL bootstrap/role/audit tests. |
 
 The historical SQL schema in `src/Database/schema.sql` is not applied automatically. Attractions uses its committed EF migrations; other hosts still have no database persistence.
 
@@ -163,3 +167,13 @@ Configure the frontend's Auth0 application and API grant with `catalogue.read ca
 **Choose on map** opens the supplied Montreal screenshot as a static preview with editable latitude/longitude. Use applies a validated coordinate draft; Cancel leaves the form location intact. Live OpenStreetMap tiles, address lookup and pin placement are future integration work. The optional visit duration ± field calculates a planning range but is explicitly not saved by the existing API.
 
 See [implementation and verification](docs/issue-43-implementation.md).
+
+## First administrator setup
+
+The independent Users service now supplies the one-time, verified-identity administrator setup, current account profile and live Attractions access lookup. See [first administrator setup](docs/first-administrator-setup.md) for configuration, HTTPS, PostgreSQL, verification and scope limits. The administrator user-management extension below adds listing, role changes and verified traveller provisioning; full profile/status management remains separate.
+
+## Administrator user management
+
+An active Users-service administrator can open **Administrator Panel → All users** from the burger menu or account page. The list shows registered TravelTracker accounts, their email, role and standing. Promote/demote requires an explicit confirmation and a written audit reason; the server refuses stale requests, inactive promotions and removal of the last active administrator. Changes are persisted with an actor/target/before/after/reason audit in the same PostgreSQL transaction. These application roles do not grant Auth0 catalogue scopes or access to private trips.
+
+First authenticated profile access verifies an unregistered sign-in through the configured provider and creates an ordinary traveller account. Token role claims and request fields cannot select the initial role. Auth0 directory accounts that have never registered with TravelTracker do not appear automatically.

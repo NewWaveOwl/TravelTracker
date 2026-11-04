@@ -32,9 +32,10 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
      * @param body Public writable contract, or null for a read.
      * @param cancellationToken Cancels work when the consuming view closes.
      * @param accessToken Optional bearer supplied by ProtectedClient.
+     * @param bootstrapSecret Optional server-held first-administrator secret, restricted to the exact HTTPS bootstrap endpoint.
      * @return Parsed response; throws ApiError or caller cancellation.
      */
-    public async Task<T?> SendJsonAsync<T>(HttpMethod method, string url, object? body, CancellationToken cancellationToken = default, string? accessToken = null)
+    public async Task<T?> SendJsonAsync<T>(HttpMethod method, string url, object? body, CancellationToken cancellationToken = default, string? accessToken = null, string? bootstrapSecret = null)
     {
         if (method != HttpMethod.Get && method != HttpMethod.Post && method != HttpMethod.Patch)
             throw new ApiError(FailureKind.Unexpected, "Unsupported request method.");
@@ -44,6 +45,13 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (body is not null) request.Content = JsonContent.Create(body);
         if (accessToken is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        if (bootstrapSecret is not null)
+        {
+            var destination = new Uri(url);
+            if (method != HttpMethod.Post || destination.Scheme != Uri.UriSchemeHttps || destination.AbsolutePath != "/api/v1/users/bootstrap-first-administrator" || destination.Query.Length != 0 || destination.Fragment.Length != 0)
+                throw new ApiError(FailureKind.Unexpected, "Invalid administrator setup destination.");
+            request.Headers.Add("X-Bootstrap-Secret", bootstrapSecret);
+        }
         try
         {
             using var response = await httpClient.SendAsync(request, bounded.Token);
@@ -95,7 +103,7 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
         400 or 422 => "Check the highlighted attraction fields and try again.",
         404 => "This attraction is no longer available. Refresh the catalogue.",
         409 or 412 => "This attraction changed while you were editing. Review the latest record before saving again.",
-        >= 500 => "The attractions service is unavailable. Your entries are retained; try again shortly.",
+        >= 500 => "The requested service is unavailable. Your entries are retained; try again shortly.",
         _ => "The request could not be completed.",
     };
 
