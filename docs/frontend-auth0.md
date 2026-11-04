@@ -1,6 +1,6 @@
 # Frontend Auth0 sign-in (#33)
 
-TravelTracker uses **Auth0** as its identity provider (owner decision, 2026-11-03). The React app uses the official `@auth0/auth0-react` SDK for authorization-code flow with PKCE, callback state/nonce handling, access-token acquisition and hosted logout. TravelTracker never collects provider passwords. Public tenant/application settings are supplied in the ignored local configuration. Live verification currently awaits the application's user-delegated API access grant; successful sign-in and protected API acceptance have not yet been established.
+TravelTracker uses **Auth0** as its identity provider (owner decision, 2026-11-03). The React app uses the official `@auth0/auth0-react` SDK for authorization-code flow with PKCE, callback state/nonce handling, access-token acquisition and hosted logout. TravelTracker never collects provider passwords. Public tenant/application settings are supplied in the ignored local configuration. The application user-delegated API access grant is configured and the hosted login page is reachable. The owner reported successful hosted sign-in and return to TravelTracker. Protected API acceptance and provider logout are still being verified; see the evidence section below.
 
 ## Auth0 dashboard setup
 
@@ -60,12 +60,20 @@ From `frontend`, run `npm run build` and `npm test`. Tests use a mocked SDK and 
 Live checklist after registration:
 
 1. Open the account icon and select **Sign in**. Confirm the browser redirects to the configured Auth0 tenant and returns to `#/account`. No callback code/state should remain in the URL.
-2. Select **Check API access**. With an authorized token and configured Attractions dependencies, the GET collection request must succeed. Do not paste tokens into logs/screenshots.
+2. Start Transport (`TravelTracker.Api`, port 5105) with the Auth0 bearer settings above. Select **Check API access**. The client reads the existing Example Bus sample through `GET /api/v1/transport-modes/00000000-0000-0000-0000-000000000101`, requiring `catalogue.read`. This proves a protected public DTO read without depending on Attractions' separate PostgreSQL/Users setup. The check uses no backend assemblies and grants no write permission. Do not paste tokens into logs/screenshots.
 3. Cancel/deny login and verify recoverable messaging. An invalid callback/state must not authenticate.
 4. Use a test account without `catalogue.read`; verify `403` and no retry/logout loop. Test a rejected/expired session; verify re-sign-in is offered and protected calls stop.
 5. Sign out during token acquisition and during an API call; verify new authenticated calls stop, no late success appears, and reload stays locally signed out. Confirm a new explicit login reconnects.
 6. Stop an API/dependency and verify a useful error while navigation remains usable. `/health` success alone does not prove protected access.
 
-Real login, audience/scope acceptance and provider logout remain unverified until tenant configuration and service dependencies are available. Issue #33 must not be declared complete based only on mocked tests.
+Current verification evidence (2026-11-03):
+
+- Auth0 discovery is reachable and the application/API grant is configured. An anonymous authorization check now returns `login_required`, and browser navigation reaches Auth0 Universal Login.
+- The owner reported successful hosted login and return to TravelTracker. This is manual owner evidence; the agent-controlled browser tab is a separate session.
+- The account-page access check now targets Transport's stable public sample, with the running API configured for the real tenant issuer and `traveltracker-api` audience. Anonymous requests remain protected. The signed-in protected-call result and hosted logout are awaiting owner verification.
+- Frontend build passes without warnings. All 41 frontend tests pass, including UI recovery for renewal failure, API `401`, API `403`, logout races and storage failure. Existing real JWT backend tests cover signature, issuer, audience, expiry and scope enforcement; they use test signing keys, not Auth0-issued tokens.
+- The PR's original CI run passed. Later commits require their own CI result.
+
+Issue #33 must not be declared complete based only on mocked tests. Record the real protected-call and logout results before marking the PR ready.
 
 References: [Auth0 React quickstart](https://auth0.com/docs/quickstart/spa/react), [SDK source](https://github.com/auth0/auth0-react).

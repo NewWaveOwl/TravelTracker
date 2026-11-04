@@ -15,9 +15,9 @@ export default function Account() {
   const checkAccess = async () => {
     request.current?.abort();
     const controller = new AbortController(); request.current = controller;
-    setResult({ kind: 'loading', text: 'Checking access to Attractions…' });
+    setResult({ kind: 'loading', text: 'Checking access to Transport…' });
     try {
-      await session.get('Attractions', '/api/v1/attractions', controller.signal);
+      await session.get('Transport', '/api/v1/transport-modes/00000000-0000-0000-0000-000000000101', controller.signal);
       if (!controller.signal.aborted) setResult({ kind: 'success', text: 'Your protected request completed successfully.' });
     } catch (error) {
       if (!controller.signal.aborted) setResult({ kind: error instanceof ApiError ? error.kind : 'unexpected', text: error instanceof ApiError ? error.message : 'The request could not be completed.' });

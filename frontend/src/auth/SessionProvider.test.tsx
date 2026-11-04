@@ -10,10 +10,12 @@ import Account from '../components/Account';
 afterEach(() => { cleanup(); vi.restoreAllMocks(); sessionStorage.clear(); vi.clearAllMocks(); vi.unstubAllGlobals(); auth.error = undefined; auth.isAuthenticated = true; });
 it('runs protected access in StrictMode and reports success', async () => {
   auth.getAccessTokenSilently.mockResolvedValue('test-access-token');
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]')));
+  const fetch = vi.fn().mockResolvedValue(new Response('{"name":"Example Bus"}'));
+  vi.stubGlobal('fetch', fetch);
   render(<StrictMode><SessionProvider><Account /></SessionProvider></StrictMode>);
   fireEvent.click(screen.getByRole('button', { name: 'Check API access' }));
   expect(await screen.findByText('Your protected request completed successfully.')).toBeTruthy();
+  expect(fetch.mock.calls[0][0]).toBe('http://localhost:3000/services/transport/api/v1/transport-modes/00000000-0000-0000-0000-000000000101');
 });
 it('removes protected controls immediately even if provider logout fails', async () => {
   auth.logout.mockRejectedValue(new Error('private diagnostics'));
@@ -51,4 +53,29 @@ it('keeps navigation usable but fails closed when storage reads are unavailable'
   render(<SessionProvider><Account /></SessionProvider>);
   expect(screen.queryByRole('button', { name: 'Check API access' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+});
+it('offers sign-in again when token renewal reports an expired session', async () => {
+  auth.getAccessTokenSilently.mockRejectedValue(new Error('login_required'));
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  render(<SessionProvider><Account /></SessionProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Check API access' }));
+  expect(await screen.findByRole('button', { name: 'Sign in' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Check API access' })).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
+});
+it('retains sign-out and a useful permission error for a forbidden API call', async () => {
+  auth.getAccessTokenSilently.mockResolvedValue('test-access-token');
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 403 })));
+  render(<SessionProvider><Account /></SessionProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Check API access' }));
+  expect(await screen.findByText('You do not have permission for this action.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
+});
+it('blocks further protected calls when the API rejects authentication', async () => {
+  auth.getAccessTokenSilently.mockResolvedValue('test-access-token');
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401 })));
+  render(<SessionProvider><Account /></SessionProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Check API access' }));
+  expect(await screen.findByRole('button', { name: 'Sign in' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Check API access' })).toBeNull();
 });
