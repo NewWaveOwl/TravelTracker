@@ -2,7 +2,7 @@
 
 TravelTracker uses **Auth0** as its identity provider (owner decision, 2026-11-03). The Blazor Web App in `src/TravelTracker.Frontend` signs users in with the ASP.NET Core OpenID Connect handler: authorization-code flow with PKCE, callback state and nonce handling, access-token acquisition and hosted logout. TravelTracker never collects provider passwords.
 
-Status of the evidence: the hosted login, protected Transport read and hosted logout were manually confirmed by the owner (2026-11-03) on the earlier React client. This port to Blazor has automated tests but has **not** been run against a live Auth0 tenant yet; repeat the live checklist below before treating #33 as verified for Blazor.
+Status of the evidence: hosted login and a protected Transport read were verified against a live Auth0 tenant in the Blazor client on 2026-11-04. Hosted logout was previously confirmed by the owner on the React client (2026-11-03), but has not yet been verified live in Blazor. The remaining checklist and session review findings below still apply before treating #33 as fully verified.
 
 ## Auth0 dashboard setup
 
@@ -61,6 +61,21 @@ The frontend calls the services from the server over HTTP, so no CORS or proxy s
 - Development runs over plain HTTP on localhost, so the handler uses query response mode and SameSite=Lax correlation cookies. Use HTTPS in any deployment.
 
 ## Verification
+
+### Live Blazor check, 2026-11-04
+
+Verified against PR #74 commit `61cc90c`:
+
+- Reused the existing Auth0 Single Page Application with PKCE and no client secret. Stored the domain, client ID, audience and scopes in the frontend's local .NET user-secrets store, outside git.
+- Added `http://localhost:5100/signin-oidc` to Allowed Callback URLs and `http://localhost:5100/` to Allowed Logout URLs. Existing React URLs were preserved.
+- Started the frontend at `http://localhost:5100` and Transport at `http://localhost:5105`, with Transport configured for the same discovery issuer, `traveltracker-api` audience and `scope` claim.
+- Selected **Sign in** and reached the hosted login without a callback URL mismatch. The owner completed login; the browser returned to `/account` without callback code or state in the URL and displayed **You are signed in**.
+- The interactive account page displayed **Your protected request completed successfully.** after the Transport API check. This verifies the live browser-to-Blazor-to-Transport path, beyond an anonymous health check.
+- The Release build completed with zero warnings and zero errors. `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL"` passed all 352 cases: 86 frontend, 89 API and 177 Attractions, with none failed or skipped.
+
+Not verified live in this check: hosted logout, concurrent sign-out, canceled login, expired/rejected authentication, missing permissions, API outages or PostgreSQL persistence. Review findings remain open: an already-open circuit can retain its token after another tab signs out, and an API `401` only changes the current account page's local state rather than invalidating the session. This evidence does not resolve those findings or establish completion of #33.
+
+### Automated coverage and remaining live checklist
 
 Run `dotnet test tests/TravelTracker.Frontend.Tests`. The tests use stub HTTP handlers and a fake authentication state for token attachment, expiry, path and URL validation, rejected tokens (`401`), insufficient permission (`403`), sign-out during a request, redirects, failure-code mapping and the account page states. `SignInFlowTests` also drives the real OpenID Connect handler headlessly against an in-process fake Auth0 tenant (discovery, signing keys, token endpoint with a PKCE check): authorize redirect, callback, session, expired token, wrong nonce, missing correlation cookie, rejected PKCE verifier, denied grant, and sign-out with and without an antiforgery token. It also refuses id tokens with the wrong issuer, audience or signature or an expired one, replayed callbacks, token endpoint errors, and a token response with no access token; it checks the secret goes only to the token endpoint, the session cookie is HttpOnly and SameSite=Lax with no token in it, and the session ends when the access token does (fake clock). "Check API access" is covered by restoring the user from the real session cookie the way circuit start does and running the same `ProtectedClient` call against a stub Transport: it asserts the issued token is sent as the bearer, and that nothing is sent when signed out, expired or after sign-out, with Transport 401 and 403 surfaced. These establish client behavior against a protocol-faithful fake, not live Auth0 or real networking. Only the SignalR transport of the circuit itself is not driven; the bUnit page tests cover the button's rendering and states. Existing real JWT backend tests cover signature, issuer, audience, expiry and scope enforcement with test signing keys, not Auth0-issued tokens.
 
