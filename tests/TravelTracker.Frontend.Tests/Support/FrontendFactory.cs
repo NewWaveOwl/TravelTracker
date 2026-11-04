@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -20,8 +21,9 @@ namespace TravelTracker.Frontend.Tests.Support;
  *
  * @param signInConfigured False to host the app with no Auth0 settings.
  * @param clientSecret Set to host the app as a regular web application with a client secret.
+ * @param keyDirectory Share one data protection key ring between hosts, so a second host accepts the first host's session cookie like a restarted app does.
  */
-public sealed partial class FrontendFactory(bool signInConfigured = true, string? clientSecret = null) : WebApplicationFactory<Program>
+public sealed partial class FrontendFactory(bool signInConfigured = true, string? clientSecret = null, string? keyDirectory = null) : WebApplicationFactory<Program>
 {
     public const string ProtectedReadPath = "/test/protected-read";
 
@@ -55,6 +57,8 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
             services.AddSingleton<TimeProvider>(Clock);
             services.AddHttpClient<ServiceClient>().ConfigurePrimaryHttpMessageHandler(() => Transport);
             services.AddTransient<IStartupFilter, ProtectedReadFilter>();
+            if (keyDirectory is not null)
+                services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyDirectory)).SetApplicationName("traveltracker-tests");
         });
     }
 

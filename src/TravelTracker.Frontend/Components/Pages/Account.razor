@@ -30,6 +30,10 @@ else
         {
             <p role="status">@sessionMessage</p>
         }
+        @if (SignedOut == "local")
+        {
+            <p role="status">Signed out locally. Provider logout could not be completed. Use Sign in when you want to reconnect.</p>
+        }
         <div class="actions">
             @if (signedIn)
             {
@@ -56,6 +60,10 @@ else
 
     [SupplyParameterFromQuery(Name = "signin")]
     string? SignInFailure { get; set; }
+
+    /** Set to "local" when sign-out ended the session here but Auth0's own logout could not be started. */
+    [SupplyParameterFromQuery(Name = "signedout")]
+    string? SignedOut { get; set; }
 
     bool loaded;
     bool signedIn;

@@ -41,6 +41,7 @@ public static class AuthExtensions
             options.ClientSecret = settings.ClientSecret;
             options.ResponseType = OpenIdConnectResponseType.Code;
             options.ResponseMode = OpenIdConnectResponseMode.Query;
+            options.BackchannelTimeout = TimeSpan.FromSeconds(10);
             options.UsePkce = true;
             options.SaveTokens = false;
             options.GetClaimsFromUserInfoEndpoint = false;
@@ -108,12 +109,41 @@ public static class AuthExtensions
      */
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/auth/login", () => Results.Challenge(new AuthenticationProperties { RedirectUri = AccountPath }, [OpenIdConnectDefaults.AuthenticationScheme]));
+        endpoints.MapGet("/auth/login", async (HttpContext context, ILoggerFactory loggers) =>
+        {
+            try
+            {
+                await context.ChallengeAsync(OpenIdConnectDefaults.AuthenticationScheme, new AuthenticationProperties { RedirectUri = AccountPath });
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // most likely the tenant's discovery document could not be fetched; nothing was sent to the browser yet
+                loggers.CreateLogger("TravelTracker.Frontend.Auth").LogError(exception, "Could not start Auth0 sign-in");
+                context.Response.Redirect($"{AccountPath}?signin={LoginFailure.StartFailed}");
+            }
+        });
         // the antiforgery middleware only records its verdict; an endpoint that binds no form must check it itself.
         // the refusal needs a body, or status-code-page re-execution runs antiforgery a second time and throws
-        endpoints.MapPost("/auth/logout", (HttpContext context) => context.Features.Get<IAntiforgeryValidationFeature>()?.IsValid == true
-            ? Results.SignOut(new AuthenticationProperties { RedirectUri = "/" }, [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme])
-            : Results.Text("The sign-out request could not be verified. Go back and try again.", statusCode: StatusCodes.Status400BadRequest)).WithMetadata(new RequireAntiforgeryTokenAttribute());
+        endpoints.MapPost("/auth/logout", async (HttpContext context, ILoggerFactory loggers) =>
+        {
+            if (context.Features.Get<IAntiforgeryValidationFeature>()?.IsValid != true)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsync("The sign-out request could not be verified. Go back and try again.");
+                return;
+            }
+            // the local session ends first, so a provider failure below can never leave the user signed in
+            await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            try
+            {
+                await context.SignOutAsync(OpenIdConnectDefaults.AuthenticationScheme, new AuthenticationProperties { RedirectUri = "/" });
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                loggers.CreateLogger("TravelTracker.Frontend.Auth").LogError(exception, "Signed out locally but Auth0 logout could not be started");
+                context.Response.Redirect($"{AccountPath}?signedout=local");
+            }
+        }).WithMetadata(new RequireAntiforgeryTokenAttribute());
         return endpoints;
     }
 }

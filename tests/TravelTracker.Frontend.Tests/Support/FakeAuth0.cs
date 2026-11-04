@@ -44,6 +44,9 @@ public sealed class FakeAuth0(string clientId) : HttpMessageHandler
     /** Leaves access_token out of the token response, as a misconfigured API grant can. */
     public bool OmitAccessToken { get; set; }
 
+    /** Makes every request to the tenant fail at the transport level, as a down or unreachable tenant would. */
+    public bool Unreachable { get; set; }
+
     /** Makes the token endpoint answer with this status and an OAuth error body instead of tokens. */
     public HttpStatusCode? TokenEndpointFailure { get; set; }
 
@@ -51,6 +54,8 @@ public sealed class FakeAuth0(string clientId) : HttpMessageHandler
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (Unreachable)
+            throw new HttpRequestException("tenant unreachable");
         var url = request.RequestUri!.AbsoluteUri;
         if (url == $"{Authority}.well-known/openid-configuration")
             return Json(new

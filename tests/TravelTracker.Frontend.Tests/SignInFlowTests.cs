@@ -1,5 +1,6 @@
 using System.Net;
 using System.Web;
+using Microsoft.Extensions.DependencyInjection;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Tests.Support;
 
@@ -407,5 +408,76 @@ public sealed class SignInFlowTests
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Null(factory.Transport.LastRequest);
+    }
+
+    // recoverable failures when the tenant cannot be reached
+
+    [Fact]
+    public async Task SignInWithAnUnreachableTenantRedirectsToAFixedMessageInsteadOfAnError()
+    {
+        using var factory = new FrontendFactory();
+        factory.Auth0.Unreachable = true;
+        var browser = factory.CreateBrowser();
+
+        var login = await browser.GetAsync("/auth/login");
+        var page = await (await browser.GetAsync(login.Headers.Location!.OriginalString)).Content.ReadAsStringAsync();
+
+        Assert.Equal($"/account?signin={LoginFailure.StartFailed}", login.Headers.Location!.OriginalString);
+        Assert.Contains("Unable to start sign-in. Please try again.", page);
+        Assert.DoesNotContain("tenant unreachable", page);
+    }
+
+    [Fact]
+    public async Task SignOutEndsTheLocalSessionEvenWhenAuth0LogoutCannotBeStarted()
+    {
+        var keys = Directory.CreateTempSubdirectory("traveltracker-keys").FullName;
+        try
+        {
+            // the first host signs in; a restarted host has not loaded the tenant's discovery document and the tenant is down
+            string sessionCookie;
+            using (var first = new FrontendFactory(keyDirectory: keys))
+            {
+                var browser = first.CreateBrowser();
+                var callback = await SignInAsync(first, browser);
+                sessionCookie = callback.Headers.GetValues("Set-Cookie").Single(cookie => cookie.StartsWith(".AspNetCore.Cookies")).Split(';')[0];
+            }
+            using var restarted = new FrontendFactory(keyDirectory: keys);
+            restarted.Auth0.Unreachable = true;
+            var returning = restarted.CreateBrowser();
+            HttpRequestMessage WithSession(HttpMethod method, string path)
+            {
+                var request = new HttpRequestMessage(method, path);
+                request.Headers.Add("Cookie", sessionCookie);
+                return request;
+            }
+            var pageResponse = await returning.SendAsync(WithSession(HttpMethod.Get, "/account"));
+            var html = await pageResponse.Content.ReadAsStringAsync();
+            Assert.Contains("You are signed in", html);
+            var token = FrontendFactory.AntiforgeryTokenFrom(html);
+
+            var logout = WithSession(HttpMethod.Post, "/auth/logout");
+            logout.Content = new FormUrlEncodedContent([new("__RequestVerificationToken", token)]);
+            var response = await returning.SendAsync(logout);
+
+            Assert.Equal("/account?signedout=local", response.Headers.Location!.OriginalString);
+            Assert.Contains(response.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith(".AspNetCore.Cookies=;"));
+            var followUp = await (await returning.GetAsync("/account?signedout=local")).Content.ReadAsStringAsync();
+            Assert.Contains("Signed out locally", followUp);
+            Assert.DoesNotContain("You are signed in", followUp);
+        }
+        finally
+        {
+            Directory.Delete(keys, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Auth0CallsAreBoundedToTenSeconds()
+    {
+        using var factory = new FrontendFactory();
+
+        var options = factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>>().Get("OpenIdConnect");
+
+        Assert.Equal(TimeSpan.FromSeconds(10), options.BackchannelTimeout);
     }
 }
