@@ -1,0 +1,41 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+
+<header>
+    <a class="brand" href="/">TravelTracker<img src="assets/logo.svg" alt="" /></a>
+    <nav aria-label="Main navigation">
+        <a aria-current="@CurrentWhenAt("new-trip")" href="new-trip">New Trip</a>
+        <a aria-current="@CurrentWhenAt("history")" href="history">History</a>
+    </nav>
+    <a class="icon" href="account" aria-label="Your account"><img src="assets/account.svg" alt="" /></a>
+    <button class="icon" aria-label="Menu" aria-expanded="@menuOpen.ToString().ToLowerInvariant()" aria-controls="menu" @onclick="() => menuOpen = !menuOpen"><img src="assets/menu.svg" alt="" /></button>
+    @if (menuOpen)
+    {
+        <nav id="menu" class="menu" aria-label="More navigation">
+            <a href="settings">Settings</a>
+            <a href="services">Service status</a>
+        </nav>
+    }
+</header>
+
+@code {
+    bool menuOpen;
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+
+    void OnLocationChanged(object? _sender, LocationChangedEventArgs _arguments)
+    {
+        menuOpen = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    /**
+     * Marks a main navigation link as the current page for assistive technology.
+     *
+     * @param relativePath The route the link points at, without a leading slash.
+     * @return "page" when the browser is on that route; otherwise null so the attribute is omitted.
+     */
+    string? CurrentWhenAt(string relativePath) => Navigation.ToBaseRelativePath(Navigation.Uri).TrimEnd('/') == relativePath ? "page" : null;
+}
