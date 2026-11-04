@@ -11,8 +11,9 @@ namespace TravelTracker.Frontend.Api;
  * @param client Performs the bounded request.
  * @param timeProvider The clock used to decide whether the token has expired.
  * @param logger Receives expired and rejected sessions, never token values.
+ * @param sessions Checks and revokes the shared server session across cookies and circuits.
  */
-public sealed class ProtectedClient(AuthenticationStateProvider authentication, ServiceDirectory directory, ServiceClient client, TimeProvider timeProvider, ILogger<ProtectedClient> logger)
+public sealed class ProtectedClient(AuthenticationStateProvider authentication, ServiceDirectory directory, ServiceClient client, TimeProvider timeProvider, ILogger<ProtectedClient> logger, SessionRegistry sessions)
 {
     /**
      * Reads a protected JSON resource.
@@ -25,7 +26,11 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
     public async Task<T?> GetJsonAsync<T>(string service, string path, CancellationToken cancellationToken = default)
     {
         var url = directory.ProtectedUrlFor(service, path);
-        var token = await ActiveTokenAsync() ?? throw SignedOut();
+        var user = (await authentication.GetAuthenticationStateAsync()).User;
+        var sessionId = SessionRegistry.IdFor(user);
+        var token = sessions.IsActive(user) ? AccessTokenClaims.ActiveToken(user, timeProvider.GetUtcNow()) : null;
+        if (token is null)
+            throw SignedOut();
         T? result;
         try
         {
@@ -33,6 +38,8 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
         }
         catch (ApiError error) when (error.Status == 401)
         {
+            // Revoke the session that sent this request, never a later replacement sign-in.
+            sessions.Revoke(sessionId);
             logger.LogWarning("{Service} rejected the access token", service);
             throw new ApiError(FailureKind.Permission, "Your session was rejected. Sign in again.", 401);
         }
@@ -42,18 +49,10 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
         }
         cancellationToken.ThrowIfCancellationRequested();
         // a sign-out while the request was in flight must not let a late success through
-        if (await ActiveTokenAsync() is null)
+        var currentUser = (await authentication.GetAuthenticationStateAsync()).User;
+        if (!sessions.IsActive(user) || !sessions.IsActive(currentUser) || SessionRegistry.IdFor(currentUser) != sessionId)
             throw SignedOut();
         return result;
-    }
-
-    async Task<string?> ActiveTokenAsync()
-    {
-        var state = await authentication.GetAuthenticationStateAsync();
-        var token = AccessTokenClaims.ActiveToken(state.User, timeProvider.GetUtcNow());
-        if (token is null && state.User.Identity?.IsAuthenticated == true)
-            logger.LogInformation("The signed-in user's access token has expired");
-        return token;
     }
 
     static ApiError SignedOut() => new(FailureKind.Permission, "Sign in to continue.", 401);

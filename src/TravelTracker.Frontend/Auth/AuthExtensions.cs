@@ -33,6 +33,14 @@ public static class AuthExtensions
             options.Cookie.HttpOnly = true;
             options.Cookie.SameSite = SameSiteMode.Lax;
             options.SlidingExpiration = false;
+            options.Events.OnValidatePrincipal = async context =>
+            {
+                if (!context.HttpContext.RequestServices.GetRequiredService<SessionRegistry>().IsActive(context.Principal!))
+                {
+                    context.RejectPrincipal();
+                    await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                }
+            };
         })
         .AddOpenIdConnect(options =>
         {
@@ -67,10 +75,15 @@ public static class AuthExtensions
                     if (string.IsNullOrEmpty(token))
                     {
                         logger.LogWarning("Sign-in completed without an access token for audience {Audience}", settings.Audience);
+                        context.Fail("An access token is required.");
                         return Task.CompletedTask;
                     }
                     var expiresAt = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow().AddSeconds(int.TryParse(context.TokenEndpointResponse?.ExpiresIn, out var seconds) ? seconds : 0);
-                    ((ClaimsIdentity)context.Principal!.Identity!).AddClaims(
+                    var identity = (ClaimsIdentity)context.Principal!.Identity!;
+                    // Provider claims cannot choose server-owned token or session metadata.
+                    foreach (var claim in context.Principal.FindAll(AccessTokenClaims.Token).Concat(context.Principal.FindAll(AccessTokenClaims.ExpiresAt)).Concat(context.Principal.FindAll(SessionRegistry.SessionIdClaim)).ToArray())
+                        ((ClaimsIdentity)claim.Subject!).RemoveClaim(claim);
+                    identity.AddClaims(
                     [
                         new Claim(AccessTokenClaims.Token, token),
                         new Claim(AccessTokenClaims.ExpiresAt, expiresAt.ToUnixTimeSeconds().ToString()),
@@ -79,6 +92,16 @@ public static class AuthExtensions
                     context.Properties!.ExpiresUtc = expiresAt;
                     context.Properties.IsPersistent = false;
                     return Task.CompletedTask;
+                },
+                OnTicketReceived = async context =>
+                {
+                    // Register only after nonce, correlation and protocol validation have succeeded.
+                    var sessions = context.HttpContext.RequestServices.GetRequiredService<SessionRegistry>();
+                    // OIDC handles its callback before default cookie authentication populates HttpContext.User.
+                    var previous = await context.HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    if (previous.Principal is not null)
+                        sessions.Revoke(SessionRegistry.IdFor(previous.Principal));
+                    ((ClaimsIdentity)context.Principal!.Identity!).AddClaim(new Claim(SessionRegistry.SessionIdClaim, sessions.Create(context.Properties!.ExpiresUtc!.Value)));
                 },
                 OnRedirectToIdentityProviderForSignOut = context =>
                 {
@@ -133,6 +156,7 @@ public static class AuthExtensions
                 return;
             }
             // the local session ends first, so a provider failure below can never leave the user signed in
+            context.RequestServices.GetRequiredService<SessionRegistry>().Revoke(SessionRegistry.IdFor(context.User));
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             try
             {

@@ -1,6 +1,11 @@
 using System.Net;
 using System.Web;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging.Abstractions;
+using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Tests.Support;
 
@@ -431,17 +436,18 @@ public sealed class SignInFlowTests
     public async Task SignOutEndsTheLocalSessionEvenWhenAuth0LogoutCannotBeStarted()
     {
         var keys = Directory.CreateTempSubdirectory("traveltracker-keys").FullName;
+        var sessions = new SessionRegistry(TimeProvider.System);
         try
         {
-            // the first host signs in; a restarted host has not loaded the tenant's discovery document and the tenant is down
+            // Share sessions here to isolate an uncached discovery outage; a real process restart invalidates sessions.
             string sessionCookie;
-            using (var first = new FrontendFactory(keyDirectory: keys))
+            using (var first = new FrontendFactory(keyDirectory: keys, sessionRegistry: sessions))
             {
                 var browser = first.CreateBrowser();
                 var callback = await SignInAsync(first, browser);
                 sessionCookie = callback.Headers.GetValues("Set-Cookie").Single(cookie => cookie.StartsWith(".AspNetCore.Cookies")).Split(';')[0];
             }
-            using var restarted = new FrontendFactory(keyDirectory: keys);
+            using var restarted = new FrontendFactory(keyDirectory: keys, sessionRegistry: sessions);
             restarted.Auth0.Unreachable = true;
             var returning = restarted.CreateBrowser();
             HttpRequestMessage WithSession(HttpMethod method, string path)
@@ -479,5 +485,154 @@ public sealed class SignInFlowTests
         var options = factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>>().Get("OpenIdConnect");
 
         Assert.Equal(TimeSpan.FromSeconds(10), options.BackchannelTimeout);
+    }
+
+    /**
+     * Reads a test cookie using the real cookie handler's data protection format.
+     *
+     * @param factory The host that issued the encrypted cookie.
+     * @param callback The successful OIDC callback response.
+     * @return The authenticated principal and cookie header for controlled restoration tests.
+     */
+    static (System.Security.Claims.ClaimsPrincipal User, string Cookie) SessionFrom(FrontendFactory factory, HttpResponseMessage callback)
+    {
+        var cookie = callback.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith(".AspNetCore.Cookies=")).Split(';')[0];
+        var value = cookie[(cookie.IndexOf('=') + 1)..];
+        var options = factory.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get("Cookies");
+        return (options.TicketDataFormat.Unprotect(Uri.UnescapeDataString(value))!.Principal, cookie);
+    }
+
+    [Fact]
+    public async Task HttpSignOutRevokesOtherOpenCircuitsAndDropsTheirInflightResponse()
+    {
+        using var factory = new FrontendFactory();
+        var browser = factory.CreateBrowser();
+        var callback = await SignInAsync(factory, browser);
+        var (user, _) = SessionFrom(factory, callback);
+        using var firstScope = factory.Services.CreateScope();
+        using var secondScope = factory.Services.CreateScope();
+        var first = firstScope.ServiceProvider.GetRequiredService<AuthenticationStateProvider>();
+        var second = secondScope.ServiceProvider.GetRequiredService<AuthenticationStateProvider>();
+        ((IHostEnvironmentAuthenticationStateProvider)first).SetAuthenticationState(Task.FromResult(new AuthenticationState(user)));
+        ((IHostEnvironmentAuthenticationStateProvider)second).SetAuthenticationState(Task.FromResult(new AuthenticationState(user)));
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new StubHandler((_, _) => { entered.TrySetResult(); return completion.Task; });
+        var client = new ProtectedClient(second, factory.Services.GetRequiredService<ServiceDirectory>(),
+            new ServiceClient(new HttpClient(handler), NullLogger<ServiceClient>.Instance), factory.Clock,
+            NullLogger<ProtectedClient>.Instance, factory.Services.GetRequiredService<SessionRegistry>());
+        var pending = client.GetJsonAsync<object>("Transport", "/api/v1/transport-modes/example");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var token = FrontendFactory.AntiforgeryTokenFrom(await AccountHtmlAsync(browser));
+
+        var logout = await browser.PostAsync("/auth/logout", new FormUrlEncodedContent([new("__RequestVerificationToken", token)]));
+        completion.SetResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") });
+
+        Assert.Equal(HttpStatusCode.Redirect, logout.StatusCode);
+        Assert.False((await first.GetAuthenticationStateAsync()).User.Identity!.IsAuthenticated);
+        Assert.False((await second.GetAuthenticationStateAsync()).User.Identity!.IsAuthenticated);
+        Assert.Equal(401, (await Assert.ThrowsAsync<ApiError>(() => pending)).Status);
+    }
+
+    [Fact]
+    public async Task ARejectedTokenCannotBeRestoredByAnOldCookieAndAFreshSignInWorks()
+    {
+        using var factory = new FrontendFactory();
+        var browser = factory.CreateBrowser();
+        var callback = await SignInAsync(factory, browser);
+        var (_, oldCookie) = SessionFrom(factory, callback);
+        factory.Transport.RespondWith(401);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await browser.GetAsync(FrontendFactory.ProtectedReadPath)).StatusCode);
+        factory.Transport.Forget();
+        factory.Transport.RespondWith(200);
+        Assert.False(await SignedInAsync(browser));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await browser.GetAsync(FrontendFactory.ProtectedReadPath)).StatusCode);
+        Assert.Null(factory.Transport.LastRequest);
+        using var replay = factory.CreateDefaultClient();
+        using var stale = new HttpRequestMessage(HttpMethod.Get, "/account");
+        stale.Headers.Add("Cookie", oldCookie);
+
+        var refused = await replay.SendAsync(stale);
+
+        Assert.DoesNotContain("You are signed in", await refused.Content.ReadAsStringAsync());
+        Assert.Contains(refused.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith(".AspNetCore.Cookies=;"));
+        factory.Auth0.AccessToken = "replacement-token";
+        await SignInAsync(factory, browser);
+        Assert.True(await SignedInAsync(browser));
+        factory.Transport.RespondWith(200, "{}");
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync(FrontendFactory.ProtectedReadPath)).StatusCode);
+        Assert.Equal("Bearer replacement-token", factory.Transport.LastRequest!.Headers.Authorization!.ToString());
+    }
+
+    [Fact]
+    public async Task ReplacingTheBrowserSessionRevokesOldCircuitsWithoutRevokingTheReplacement()
+    {
+        using var factory = new FrontendFactory();
+        var browser = factory.CreateBrowser();
+        var firstCallback = await SignInAsync(factory, browser);
+        var (firstUser, _) = SessionFrom(factory, firstCallback);
+        using var scope = factory.Services.CreateScope();
+        var oldCircuit = scope.ServiceProvider.GetRequiredService<AuthenticationStateProvider>();
+        ((IHostEnvironmentAuthenticationStateProvider)oldCircuit).SetAuthenticationState(Task.FromResult(new AuthenticationState(firstUser)));
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new StubHandler((_, _) => { entered.TrySetResult(); return completion.Task; });
+        var client = new ProtectedClient(oldCircuit, factory.Services.GetRequiredService<ServiceDirectory>(),
+            new ServiceClient(new HttpClient(handler), NullLogger<ServiceClient>.Instance), factory.Clock,
+            NullLogger<ProtectedClient>.Instance, factory.Services.GetRequiredService<SessionRegistry>());
+        var pending = client.GetJsonAsync<object>("Transport", "/api/v1/transport-modes/example");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        factory.Auth0.AccessToken = "replacement-token";
+        await SignInAsync(factory, browser);
+        completion.SetResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+
+        Assert.Equal(401, (await Assert.ThrowsAsync<ApiError>(() => pending)).Status);
+        Assert.False((await oldCircuit.GetAuthenticationStateAsync()).User.Identity!.IsAuthenticated);
+        Assert.True(await SignedInAsync(browser));
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync(FrontendFactory.ProtectedReadPath)).StatusCode);
+        Assert.Equal("Bearer replacement-token", factory.Transport.LastRequest!.Headers.Authorization!.ToString());
+    }
+
+    [Fact]
+    public async Task RevokingOneBrowserSessionDoesNotAffectAnotherSignedInBrowser()
+    {
+        using var factory = new FrontendFactory();
+        var first = factory.CreateBrowser();
+        await SignInAsync(factory, first);
+        var second = factory.CreateBrowser();
+        await SignInAsync(factory, second);
+        var token = FrontendFactory.AntiforgeryTokenFrom(await AccountHtmlAsync(first));
+
+        await first.PostAsync("/auth/logout", new FormUrlEncodedContent([new("__RequestVerificationToken", token)]));
+
+        Assert.False(await SignedInAsync(first));
+        Assert.True(await SignedInAsync(second));
+        Assert.Equal(HttpStatusCode.OK, (await second.GetAsync(FrontendFactory.ProtectedReadPath)).StatusCode);
+    }
+
+    [Fact]
+    public async Task AProcessRestartRejectsTheOldCookieEvenWithTheSameEncryptionKeys()
+    {
+        var keys = Directory.CreateTempSubdirectory("traveltracker-restart").FullName;
+        try
+        {
+            string oldCookie;
+            using (var first = new FrontendFactory(keyDirectory: keys))
+                oldCookie = SessionFrom(first, await SignInAsync(first, first.CreateBrowser())).Cookie;
+            using var restarted = new FrontendFactory(keyDirectory: keys);
+            var browser = restarted.CreateBrowser();
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/account");
+            request.Headers.Add("Cookie", oldCookie);
+
+            var response = await browser.SendAsync(request);
+
+            Assert.DoesNotContain("You are signed in", await response.Content.ReadAsStringAsync());
+            Assert.Contains(response.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith(".AspNetCore.Cookies=;"));
+        }
+        finally
+        {
+            Directory.Delete(keys, recursive: true);
+        }
     }
 }

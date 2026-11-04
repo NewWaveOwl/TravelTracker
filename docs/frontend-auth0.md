@@ -2,7 +2,7 @@
 
 TravelTracker uses **Auth0** as its identity provider (owner decision, 2026-11-03). The Blazor Web App in `src/TravelTracker.Frontend` signs users in with the ASP.NET Core OpenID Connect handler: authorization-code flow with PKCE, callback state and nonce handling, access-token acquisition and hosted logout. TravelTracker never collects provider passwords.
 
-Status of the evidence: hosted login and a protected Transport read were verified against a live Auth0 tenant in the Blazor client on 2026-11-04. Hosted logout was previously confirmed by the owner on the React client (2026-11-03), but has not yet been verified live in Blazor. The remaining checklist and session review findings below still apply before treating #33 as fully verified.
+Status of the evidence: hosted login, a protected Transport read and hosted logout were verified against a live Auth0 tenant in the Blazor client on 2026-11-04, including logout updating a second open tab without reloading it. The session invalidation follow-up below addresses the two original review findings; the remaining live failure checklist still applies before treating #33 as fully verified.
 
 ## Auth0 dashboard setup
 
@@ -53,12 +53,17 @@ The frontend calls the services from the server over HTTP, so no CORS or proxy s
 | Resource servers | ASP.NET APIs; validate access tokens and enforce scopes/standing |
 
 - The Blazor server receives the tokens. The browser only holds an encrypted, HttpOnly, SameSite=Lax session cookie. The access token rides in that cookie as a claim so interactive circuits can read it without an HTTP context. No token is logged or written to local/session storage.
-- The session ends when the access token does (the cookie expires with it). There is no silent renewal. Expiry, a rejected token (API `401`) and a missing token all show a sign-in prompt and stop protected calls; `403` shows insufficient permission without ending the session. No automatic retry follows an API rejection.
-- Sign-out is a POST with an antiforgery token. It clears the session cookie and redirects to Auth0's logout endpoint, which returns to the start page. The circuit is dropped by that navigation. A sign-out that lands while a protected request is in flight discards the late result, because the user is re-read after every await.
+- Each completed login receives a random server-owned session ID. A server-side registry holds active IDs and their expiry, without storing bearer tokens. Cookie validation and protected calls require an active registered session as well as an unexpired access token. The session ends when the access token does; there is no silent renewal.
+- Sign-out is a POST with an antiforgery token. It revokes the registered session before clearing the cookie or starting hosted logout. Open circuits for that session receive an authentication-state change and show the sign-in state. Protected calls check session validity before sending and again before returning a result, so a late success from a revoked or replaced session is discarded. Provider logout failure does not restore the local session.
+- An API `401` revokes the session that sent the rejected request. Navigation, refreshing the page, reopening a tab or replaying its cookie cannot restore it; a new sign-in creates a new session. A successful replacement sign-in revokes the previous cookie session so existing tabs cannot keep using the earlier login. A late `401` from an old request does not revoke a newer login. `403` shows insufficient permission without ending the session. No automatic retry follows an API rejection.
 - Tokens are attached only by `ProtectedClient` to a named configured service and a relative `/api/v1/` path. It rejects non-HTTPS service URLs outside loopback, URLs with credentials, query or fragment, and any other path. The HTTP client does not follow redirects and does not use cookies, and waiting is bounded to eight seconds. Anonymous health requests continue without bearer headers.
 - Calls to Auth0 are limited to ten seconds. If the tenant cannot be reached when sign-in starts, the app redirects to `/account?signin=start-failed` with a fixed message instead of an error page. If it cannot be reached at sign-out, the local session is still ended first and the account page says the provider logout could not be completed (`/account?signedout=local`).
 - Provider errors from the callback are logged on the server and mapped to a fixed code (`/account?signin=<code>`); only static recovery text is rendered. Identity claims are not treated as Users roles or account-standing decisions.
 - Development runs over plain HTTP on localhost, so the handler uses query response mode and SameSite=Lax correlation cookies. Use HTTPS in any deployment.
+
+The registry is local to one frontend process. Restarting it signs out existing sessions, even if their encrypted cookies are still readable; unknown session IDs fail closed. Expired entries are removed during registry use. Multiple frontend instances require a shared session registry and cross-instance revocation notifications before deployment; sticky routing alone does not provide that guarantee.
+
+This protects bearer-token use and returned API data from stale circuits and replayed revoked cookies. The session ID is obtained from the validated encrypted cookie or the circuit's server-side principal, never a client-supplied request field. Local revocation stops this frontend from using a token; it does not revoke an already-issued bearer token at Auth0 or cancel a request already accepted by a backend.
 
 ## Verification
 
@@ -73,7 +78,20 @@ Verified against PR #74 commit `61cc90c`:
 - The interactive account page displayed **Your protected request completed successfully.** after the Transport API check. This verifies the live browser-to-Blazor-to-Transport path, beyond an anonymous health check.
 - The Release build completed with zero warnings and zero errors. `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL"` passed all 352 cases: 86 frontend, 89 API and 177 Attractions, with none failed or skipped.
 
-Not verified live in this check: hosted logout, concurrent sign-out, canceled login, expired/rejected authentication, missing permissions, API outages or PostgreSQL persistence. Review findings remain open: an already-open circuit can retain its token after another tab signs out, and an API `401` only changes the current account page's local state rather than invalidating the session. This evidence does not resolve those findings or establish completion of #33.
+Not verified live in this initial check: hosted logout, concurrent sign-out, canceled login, expired/rejected authentication, missing permissions, API outages or PostgreSQL persistence. At the time of this check, review found that an already-open circuit retained its token after another tab signed out, and an API `401` only changed the account page's local state. The follow-up below fixes those session invalidation paths and adds a live logout check; this initial live check alone does not establish completion of #33.
+
+### Session invalidation follow-up
+
+The frontend now registers each login, revokes that session on logout or an API `401`, validates it when restoring the cookie and sending protected calls, and notifies existing circuits of revocation. Regression tests cover the production authentication provider and session registry, including separate circuit scopes and restoration through the real cookie middleware. These are deterministic application tests against a fake provider and stub backend, separate from the live Auth0 check above.
+
+Follow-up verification on 2026-11-04:
+
+- `dotnet restore TravelTracker.slnx` and `dotnet build TravelTracker.slnx --configuration Release --no-restore` passed, with zero build warnings or errors.
+- `dotnet test TravelTracker.Tests.slnx --configuration Release --no-restore --filter "Category!=PostgreSQL"` passed 367 cases: 101 frontend, 89 API and 177 Attractions, with none failed or skipped. The frontend gained 15 regression cases. PostgreSQL tests were not run locally.
+- Independent read-only security review found no remaining actionable findings after the replacement-login edge case was fixed.
+- Restarted the frontend, completed a live hosted sign-in and opened the account page in two browser tabs. The second tab successfully read the protected Transport resource. Signing out in the first tab completed hosted logout and returned to the home page; the second tab immediately showed **Sign in** and removed its earlier API-success result without a reload. Refreshing it remained signed out.
+
+Live canceled-login, expiry/rejection, missing-permission, API-outage and in-flight sign-out checks remain outside this follow-up; deterministic tests cover the relevant session revocation and late-response behavior.
 
 ### Automated coverage and remaining live checklist
 

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Time.Testing;
 using TravelTracker.Frontend.Api;
+using TravelTracker.Frontend.Auth;
 using System.Text.RegularExpressions;
 using System.Web;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -22,8 +23,9 @@ namespace TravelTracker.Frontend.Tests.Support;
  * @param signInConfigured False to host the app with no Auth0 settings.
  * @param clientSecret Set to host the app as a regular web application with a client secret.
  * @param keyDirectory Share one data protection key ring between hosts, so a second host accepts the first host's session cookie like a restarted app does.
+ * @param sessionRegistry Optional shared registry for tests isolating discovery failure from restart invalidation.
  */
-public sealed partial class FrontendFactory(bool signInConfigured = true, string? clientSecret = null, string? keyDirectory = null) : WebApplicationFactory<Program>
+public sealed partial class FrontendFactory(bool signInConfigured = true, string? clientSecret = null, string? keyDirectory = null, SessionRegistry? sessionRegistry = null) : WebApplicationFactory<Program>
 {
     public const string ProtectedReadPath = "/test/protected-read";
 
@@ -55,6 +57,8 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
             services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options => options.BackchannelHttpHandler = Auth0);
             services.Configure<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme, options => options.TimeProvider = Clock);
             services.AddSingleton<TimeProvider>(Clock);
+            if (sessionRegistry is not null)
+                services.AddSingleton(sessionRegistry);
             services.AddHttpClient<ServiceClient>().ConfigurePrimaryHttpMessageHandler(() => Transport);
             services.AddTransient<IStartupFilter, ProtectedReadFilter>();
             if (keyDirectory is not null)

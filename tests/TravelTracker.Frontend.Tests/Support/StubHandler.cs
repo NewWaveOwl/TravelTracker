@@ -12,7 +12,7 @@ public sealed class StubHandler(Func<HttpRequestMessage, CancellationToken, Task
     public HttpRequestMessage? LastRequest { get; private set; }
 
     /** Changes every later answer to this status, for tests that flip a service from healthy to rejecting. */
-    public void RespondWith(int status) => respond = (_, _) => Task.FromResult(new HttpResponseMessage((System.Net.HttpStatusCode)status));
+    public void RespondWith(int status, string body = "") => respond = (_, _) => Task.FromResult(new HttpResponseMessage((System.Net.HttpStatusCode)status) { Content = new StringContent(body) });
 
     /** Clears the recorded request so a test can assert that nothing new was sent. */
     public void Forget() => LastRequest = null;

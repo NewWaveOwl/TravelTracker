@@ -75,15 +75,33 @@ else
     {
         if (!Setup.Configured)
             return;
-        var user = (await Authentication.GetAuthenticationStateAsync()).User;
-        signedIn = AccessTokenClaims.ActiveToken(user, Clock.GetUtcNow()) is not null;
-        if (!signedIn && user.Identity?.IsAuthenticated == true)
-            sessionMessage = "Your session has expired. Sign in again to continue.";
+        Authentication.AuthenticationStateChanged += OnAuthenticationChanged;
+        await UpdateSessionAsync(Authentication.GetAuthenticationStateAsync());
         loaded = true;
     }
 
+    async Task UpdateSessionAsync(Task<AuthenticationState> pending)
+    {
+        var user = (await pending).User;
+        var previouslySignedIn = signedIn;
+        signedIn = AccessTokenClaims.ActiveToken(user, Clock.GetUtcNow()) is not null;
+        if (!signedIn && (previouslySignedIn || user.Identity?.IsAuthenticated == true))
+        {
+            sessionMessage = "Your session has expired. Sign in again to continue.";
+            result = null;
+            request?.Cancel();
+        }
+    }
+
+    void OnAuthenticationChanged(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
+    {
+        await UpdateSessionAsync(state);
+        StateHasChanged();
+    });
+
     public void Dispose()
     {
+        Authentication.AuthenticationStateChanged -= OnAuthenticationChanged;
         request?.Cancel();
         request?.Dispose();
     }

@@ -13,14 +13,17 @@ public sealed class ProtectedClientTests
     const string Path = "/api/v1/transport-modes/00000000-0000-0000-0000-000000000101";
 
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
-    readonly SwitchableAuthentication authentication = new();
+    readonly SwitchableAuthentication authentication;
+
+    public ProtectedClientTests() => authentication = new(new SessionRegistry(clock));
 
     ProtectedClient ClientFor(StubHandler handler, string serviceUrl = "http://localhost:5105") => new(
         authentication,
         new ServiceDirectory(new Dictionary<string, string> { ["Transport"] = serviceUrl }),
         new ServiceClient(new HttpClient(handler), NullLogger<ServiceClient>.Instance),
         clock,
-        NullLogger<ProtectedClient>.Instance);
+        NullLogger<ProtectedClient>.Instance,
+        authentication.Sessions);
 
     [Fact]
     public async Task SendsTheBearerTokenToTheConfiguredService()

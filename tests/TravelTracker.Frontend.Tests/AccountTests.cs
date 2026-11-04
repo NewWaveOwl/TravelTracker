@@ -13,13 +13,16 @@ namespace TravelTracker.Frontend.Tests;
 public sealed class AccountTests : BunitContext
 {
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
-    readonly SwitchableAuthentication authentication = new();
+    readonly SwitchableAuthentication authentication;
+
+    public AccountTests() => authentication = new(new SessionRegistry(clock));
 
     void Configure(bool signInConfigured, StubHandler? handler = null)
     {
         Services.AddSingleton(new AuthSetup(signInConfigured ? new Auth0Settings("tenant.auth0.com", "client", null, "traveltracker-api", Auth0Settings.DefaultScope) : null));
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         Services.AddSingleton<TimeProvider>(clock);
+        Services.AddSingleton(authentication.Sessions);
         Services.AddSingleton(new ServiceDirectory(new Dictionary<string, string> { ["Transport"] = "http://localhost:5105" }));
         Services.AddSingleton(new ServiceClient(new HttpClient(handler ?? StubHandler.Status(200, "{}")), NullLogger<ServiceClient>.Instance));
         Services.AddScoped<ProtectedClient>();
@@ -119,5 +122,43 @@ public sealed class AccountTests : BunitContext
 
         page.WaitForAssertion(() => Assert.Contains("permission", page.Find(".feedback p").TextContent));
         Assert.Equal("You are signed in", page.Find("section.form-panel h2").TextContent);
+    }
+
+    [Fact]
+    public void SharedSessionRevocationUpdatesTheOpenAccountPage()
+    {
+        Configure(signInConfigured: true);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        using var provider = new SessionAuthenticationStateProvider(authentication.Sessions);
+        provider.SetAuthenticationState(Task.FromResult(new AuthenticationState(authentication.User)));
+        Services.AddSingleton<AuthenticationStateProvider>(provider);
+        var page = Render<Account>();
+        page.Find(".actions button").Click();
+        page.WaitForAssertion(() => Assert.Contains("completed successfully", page.Markup));
+
+        authentication.Sessions.Revoke(SessionRegistry.IdFor(authentication.User));
+
+        page.WaitForAssertion(() => Assert.Equal("Sign in", page.Find("section.form-panel h2").TextContent));
+        Assert.DoesNotContain("completed successfully", page.Markup);
+        Assert.Empty(page.FindAll("form[action='auth/logout']"));
+    }
+
+    [Fact]
+    public void RejectedSessionStaysSignedOutWhenTheAccountPageIsRecreated()
+    {
+        Configure(signInConfigured: true, StubHandler.Status(401));
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        using var provider = new SessionAuthenticationStateProvider(authentication.Sessions);
+        provider.SetAuthenticationState(Task.FromResult(new AuthenticationState(authentication.User)));
+        Services.AddSingleton<AuthenticationStateProvider>(provider);
+        var page = Render<Account>();
+        page.Find(".actions button").Click();
+        page.WaitForAssertion(() => Assert.Equal("Sign in", page.Find("section.form-panel h2").TextContent));
+        page.Dispose();
+
+        var returned = Render<Account>();
+
+        Assert.Equal("Sign in", returned.Find("section.form-panel h2").TextContent);
+        Assert.DoesNotContain("Check API access", returned.Markup);
     }
 }

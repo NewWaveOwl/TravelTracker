@@ -1,6 +1,7 @@
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +12,8 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddSingleton(new ServiceDirectory(serviceUrls));
 builder.Services.AddHttpClient<ServiceClient>().ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<SessionRegistry>();
+builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationStateProvider>();
 builder.Services.AddScoped<ProtectedClient>();
 
 var auth0 = Auth0Settings.TryRead(builder.Configuration);
