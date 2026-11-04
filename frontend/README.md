@@ -15,6 +15,6 @@ Copy `.env.example` to `.env.local` to override service locations. `VITE_*` valu
 
 The Figma FianlView canvas supplies the application shell (92:3466), reusable form (92:3488), and feedback styling (92:3462). Original logo/account/menu SVGs are local assets. Fonts ship with the app through Fontsource. The 1920px reference layout adapts to smaller displays. Hash navigation supports static hosting, back/forward, labelled controls, skip navigation and page-heading focus.
 
-Auth0 sign-in, hosted logout and protected HTTP access are implemented through the official SDK. Follow the [Auth0 setup and verification guide](../docs/frontend-auth0.md) for tenant registration, public settings and backend configuration. Real-provider acceptance is pending configuration; no credentials or tokens are committed.
+Auth0 sign-in, hosted logout and protected HTTP access are implemented through the official SDK. Follow the [Auth0 setup and verification guide](../docs/frontend-auth0.md) for tenant registration, public settings and backend configuration. Hosted sign-in, the protected Transport sample read and logout were manually verified with the development Auth0 tenant. No credentials or tokens are committed. Failure-path coverage and verification limits are recorded in the guide.
 
 New Trip demonstrates the reusable required-field form and explicitly reports that nothing was saved. History and Settings are placeholders. Catalogue administration, trip persistence and maps remain separate issues. No database code, backend assemblies or fabricated trip data are included.

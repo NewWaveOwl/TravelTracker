@@ -1,6 +1,6 @@
 # Frontend Auth0 sign-in (#33)
 
-TravelTracker uses **Auth0** as its identity provider (owner decision, 2026-11-03). The React app uses the official `@auth0/auth0-react` SDK for authorization-code flow with PKCE, callback state/nonce handling, access-token acquisition and hosted logout. TravelTracker never collects provider passwords. Public tenant/application settings are supplied in the ignored local configuration. The application user-delegated API access grant is configured and the hosted login page is reachable. The owner reported successful hosted sign-in and return to TravelTracker. Protected API acceptance and provider logout are still being verified; see the evidence section below.
+TravelTracker uses **Auth0** as its identity provider (owner decision, 2026-11-03). The React app uses the official `@auth0/auth0-react` SDK for authorization-code flow with PKCE, callback state/nonce handling, access-token acquisition and hosted logout. TravelTracker never collects provider passwords. Public tenant/application settings are supplied in the ignored local configuration. The development application/API grant is configured. The owner verified hosted sign-in, a successful protected Transport read and hosted logout with protected access still unavailable after refresh. These are manual checks in the owner's browser; automated failure-path evidence is listed below.
 
 ## Auth0 dashboard setup
 
@@ -70,10 +70,11 @@ Current verification evidence (2026-11-03):
 
 - Auth0 discovery is reachable and the application/API grant is configured. An anonymous authorization check now returns `login_required`, and browser navigation reaches Auth0 Universal Login.
 - The owner reported successful hosted login and return to TravelTracker. This is manual owner evidence; the agent-controlled browser tab is a separate session.
-- The account-page access check now targets Transport's stable public sample, with the running API configured for the real tenant issuer and `traveltracker-api` audience. Anonymous requests remain protected. The signed-in protected-call result and hosted logout are awaiting owner verification.
+- The account-page access check now targets Transport's stable public sample, with the running API configured for the real tenant issuer and `traveltracker-api` audience. Anonymous requests remain protected. The owner reported “Your protected request completed successfully.” from this live read. The server requires the configured issuer/audience and `catalogue.read` scope; no token values were collected in chat or committed.
 - Frontend build passes without warnings. All 42 frontend tests pass, including UI recovery for renewal failure, API `401`, API `403`, logout races and storage failure. Existing real JWT backend tests cover signature, issuer, audience, expiry and scope enforcement; they use test signing keys, not Auth0-issued tokens.
-- The PR's original CI run passed. Later commits require their own CI result.
+- The owner confirmed hosted sign-out and that Check API access remains unavailable after refreshing until another explicit sign-in. Automated tests also cover provider-logout failure, locally signed-out reload and late token/response races.
+- PR CI passed for the implementation and startup-recovery changes. Final documentation updates require their own CI result.
 
-Issue #33 must not be declared complete based only on mocked tests. Record the real protected-call and logout results before marking the PR ready.
+The minimum #33 client journey is verified in development. Live cancellation/denial was observed during initial configuration troubleshooting; expiry, API `401`/`403`, storage failures and logout races are covered by controlled automated tests, not claimed as real expired-Auth0-token experiments. Production deployment, long-duration session behavior, provider key rotation and the separate Users/Attractions integration remain outside this verification. Independent PR approval is still required before merge.
 
 References: [Auth0 React quickstart](https://auth0.com/docs/quickstart/spa/react), [SDK source](https://github.com/auth0/auth0-react).

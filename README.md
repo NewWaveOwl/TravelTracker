@@ -26,7 +26,7 @@ TravelTracker currently provides the catalogue and location foundation for futur
 
 The following features are not yet available through the running application:
 
-- Completed live identity-provider verification, account standing and account management. The frontend has Auth0 sign-in integration pending tenant configuration and live verification; see [setup](docs/frontend-auth0.md).
+- Application account standing and account management. Auth0 sign-in, a protected Transport read and logout have been manually verified in development; see [setup and evidence](docs/frontend-auth0.md).
 - Accommodation management as a separate resource.
 - Trips, ordered itinerary legs, history, settings and map views.
 - Scheduled journeys, departure and arrival times, and stop timing.
