@@ -1,5 +1,9 @@
 <section class="feedback @(IsError ? "error" : "")" role="@(IsError ? "alert" : "status")" aria-busy="@(Kind == FeedbackKind.Loading ? "true" : "false")">
-    <h2>@Heading</h2>
+    @if (Eyebrow is not null)
+    {
+        <small>@Eyebrow</small>
+    }
+    <h2>@(Title ?? Heading)</h2>
     <p>@ChildContent</p>
     @if (Retry.HasDelegate)
     {
@@ -13,6 +17,14 @@
 
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
+
+    /** Replaces the default heading for the kind. */
+    [Parameter]
+    public string? Title { get; set; }
+
+    /** A small label shown above the heading. */
+    [Parameter]
+    public string? Eyebrow { get; set; }
 
     /** When set, a Retry button is shown that invokes it. */
     [Parameter]

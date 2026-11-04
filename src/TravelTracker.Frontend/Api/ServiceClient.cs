@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace TravelTracker.Frontend.Api;
 
 /**
- * Reads public JSON HTTP contracts with bounded waiting and cancellation.
+ * Reads JSON HTTP contracts with bounded waiting and cancellation; cookies and redirects are never followed.
  *
  * @param httpClient The client used for outbound requests.
  * @param logger Receives every failure that is turned into an ApiError.
@@ -18,14 +18,17 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
      *
      * @param url The public service URL.
      * @param cancellationToken Cancels work when the consuming view closes.
+     * @param accessToken An optional bearer token; only ProtectedClient passes one, to a validated service URL.
      * @return The parsed response; throws a categorized ApiError on failure and OperationCanceledException when the caller cancelled.
      */
-    public async Task<T?> GetJsonAsync<T>(string url, CancellationToken cancellationToken = default)
+    public async Task<T?> GetJsonAsync<T>(string url, CancellationToken cancellationToken = default, string? accessToken = null)
     {
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         bounded.CancelAfter(Timeout);
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        if (accessToken is not null)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         try
         {
             using var response = await httpClient.SendAsync(request, bounded.Token);
