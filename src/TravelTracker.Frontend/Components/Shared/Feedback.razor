@@ -1,0 +1,46 @@
+<section class="feedback @(IsError ? "error" : "")" role="@(IsError ? "alert" : "status")" aria-busy="@(Kind == FeedbackKind.Loading ? "true" : "false")">
+    @if (Eyebrow is not null)
+    {
+        <small>@Eyebrow</small>
+    }
+    <h2>@(Title ?? Heading)</h2>
+    <p>@ChildContent</p>
+    @if (Retry.HasDelegate)
+    {
+        <button @onclick="Retry">Retry</button>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public FeedbackKind Kind { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /** Replaces the default heading for the kind. */
+    [Parameter]
+    public string? Title { get; set; }
+
+    /** A small label shown above the heading. */
+    [Parameter]
+    public string? Eyebrow { get; set; }
+
+    /** When set, a Retry button is shown that invokes it. */
+    [Parameter]
+    public EventCallback Retry { get; set; }
+
+    bool IsError => Kind is FeedbackKind.Validation or FeedbackKind.Permission or FeedbackKind.Network or FeedbackKind.Unavailable or FeedbackKind.Unexpected;
+
+    string Heading => Kind switch
+    {
+        FeedbackKind.Loading => "Loading…",
+        FeedbackKind.Empty => "Nothing here yet",
+        FeedbackKind.Validation => "Check your details",
+        FeedbackKind.Permission => "Permission denied",
+        FeedbackKind.Network => "Unable to connect",
+        FeedbackKind.Unavailable => "Service unavailable",
+        FeedbackKind.Unexpected => "Something went wrong",
+        _ => "Service is available",
+    };
+}

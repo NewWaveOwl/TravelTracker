@@ -1,0 +1,74 @@
+@implements IDisposable
+@using System.Text.Json
+@inject ServiceDirectory Services
+@inject ServiceClient Client
+@inject ILogger<HealthCheck> Logger
+
+<label for="service">Service</label>
+<select id="service" value="@service" @onchange="ChangeServiceAsync">
+    @foreach (var name in Services.Names)
+    {
+        <option @key="name" value="@name">@name</option>
+    }
+</select>
+<Feedback Kind="kind" Retry="RetryCallback">@Message</Feedback>
+
+@code {
+    string service = "";
+    FeedbackKind kind = FeedbackKind.Loading;
+    CancellationTokenSource? check;
+
+    EventCallback RetryCallback => kind == FeedbackKind.Loading ? default : EventCallback.Factory.Create(this, CheckAsync);
+
+    string Message => kind switch
+    {
+        FeedbackKind.Success => $"{service} responded to its public health check.",
+        FeedbackKind.Loading => $"Checking {service}…",
+        _ => "The service could not be reached. Try again shortly; you can keep using navigation.",
+    };
+
+    protected override Task OnInitializedAsync()
+    {
+        service = Services.Names.First();
+        return CheckAsync();
+    }
+
+    public void Dispose()
+    {
+        check?.Cancel();
+        check?.Dispose();
+    }
+
+    Task ChangeServiceAsync(ChangeEventArgs change)
+    {
+        service = (string)change.Value!;
+        return CheckAsync();
+    }
+
+    /** Asks the selected service for its anonymous health, dropping any check that is still in flight. */
+    async Task CheckAsync()
+    {
+        check?.Cancel();
+        check?.Dispose();
+        var current = check = new CancellationTokenSource();
+        kind = FeedbackKind.Loading;
+        try
+        {
+            await Client.GetJsonAsync<JsonElement>(Services.UrlFor(service, "health"), current.Token);
+            kind = FeedbackKind.Success;
+        }
+        catch (OperationCanceledException) when (current.IsCancellationRequested)
+        {
+            // superseded by a newer check or the view closed; the newer check owns the state
+        }
+        catch (ApiError error)
+        {
+            kind = Enum.Parse<FeedbackKind>(error.Kind.ToString());
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Health check of {Service} failed unexpectedly", service);
+            kind = FeedbackKind.Unexpected;
+        }
+    }
+}

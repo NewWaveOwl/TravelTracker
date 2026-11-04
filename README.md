@@ -26,13 +26,13 @@ TravelTracker currently provides the catalogue and location foundation for futur
 
 The following features are not yet available through the running application:
 
-- User registration, interactive sign-in, account standing and account management.
+- Application account standing and account management. Auth0 sign-in is wired into the Blazor app; see [setup and verification status](docs/frontend-auth0.md).
 - Accommodation management as a separate resource.
 - Trips, ordered itinerary legs, history, settings and map views.
 - Scheduled journeys, departure and arrival times, and stop timing.
 - Collection listing, PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
 - Persistent database storage for the remaining service hosts.
-- Complete traveller-facing feature screens (the React navigation and HTTP foundation is in `frontend/`).
+- Complete traveller-facing feature screens (the Blazor navigation and HTTP foundation is in `src/TravelTracker.Frontend`).
 
 User and accommodation models and repository contracts exist. Trip/TripLeg domain rules are implemented, but their HTTP/persistence features remain unfinished. UserSettings and TripMapPoint remain placeholders.
 
@@ -40,6 +40,7 @@ A route point describes a reusable location. A transport entry describes a trans
 
 ## Technology and structure
 
+- Auth0 for hosted sign-in and logout, using the ASP.NET Core OpenID Connect handler with authorization-code flow and PKCE in the Blazor server. The APIs validate bearer access tokens. See [Auth0 setup and verification](docs/frontend-auth0.md).
 - .NET 10 and ASP.NET Core.
 - Swagger/OpenAPI through Swashbuckle.
 - PostgreSQL persistence for Attractions; in-memory repositories for Transport/Route Points.
@@ -63,7 +64,7 @@ The historical SQL schema in `src/Database/schema.sql` is not applied automatica
 
 ## Getting started
 
-The independent React client lives in [frontend](frontend/README.md). With Node 22.12+ installed, run `npm ci` and `npm run dev` from that folder. It provides the Figma-based shell, shared form/status displays and public service health checks; trip saving and sign-in remain separate features.
+The independent Blazor Web App lives in [src/TravelTracker.Frontend](src/TravelTracker.Frontend). Run `dotnet run --project src/TravelTracker.Frontend --launch-profile http` and open http://localhost:5100. It runs in interactive Server mode and calls the services over HTTP from the server, so no browser CORS or proxy setup is needed; service URLs live under `Services` in its `appsettings.json` (Attractions 5104, Transport 5105). It provides the Figma-based shell, shared form/status displays and public service health checks; Auth0 sign-in and a protected Transport read are on the account page once the `Auth0` settings are provided (see [Auth0 setup](docs/frontend-auth0.md)); trip saving remains a separate feature. Its tests are in `tests/TravelTracker.Frontend.Tests`.
 
 Install the **.NET 10 SDK**, then clone the repository:
 
@@ -134,6 +135,7 @@ Tests create isolated application hosts automatically. PostgreSQL suites require
 
 ## Documentation
 
+- [Auth0 sign-in, application registration and verification](docs/frontend-auth0.md)
 - [Product design and roadmap](docs/design.md)
 - [API contracts](docs/api.md)
 - [Domain models](docs/domain.md)
