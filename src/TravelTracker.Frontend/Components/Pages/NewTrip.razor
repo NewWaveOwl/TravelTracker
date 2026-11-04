@@ -1,5 +1,15 @@
 @page "/new-trip"
+@using TravelTracker.Frontend.Components.Transport
+@using TravelTracker.Frontend.Features.Transport
+<PageTitle>New Trip | TravelTracker</PageTitle>
 
-<PageHeading Title="New Trip" />
+<TransportWorkspace SelectionChanged="SelectionUpdated" />
 <p>Add the details below. Fields marked * are required.</p>
 <TripForm />
+
+@if (selection.Count > 0) { <p role="status">@selection.Count transport entries retained in this trip draft. Trip persistence is not yet connected.</p> }
+
+@code {
+    IReadOnlyList<TransportSelection> selection = [];
+    void SelectionUpdated(IReadOnlyList<TransportSelection> value) => selection = value;
+}

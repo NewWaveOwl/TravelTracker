@@ -183,3 +183,9 @@ An active Users-service administrator can open **Administrator Panel → All use
 First authenticated profile access verifies an unregistered sign-in through the configured provider and creates an ordinary traveller account. Token role claims and request fields cannot select the initial role. Auth0 directory accounts that have never registered with TravelTracker do not appear automatically.
 
 For Transport startup, set `ConnectionStrings__Transport`, apply migrations and optionally enable stable examples before running the service. See [Transport startup and selection](docs/transport-service.md).
+
+## Transport and destination selection (#44)
+
+Open **New Trip** (`/new-trip`) and sign in with `catalogue.read` to browse saved transport entries and accommodation, attraction or transport-stop locations. Filter by name and mode/type, inspect saved details, and add ordered choices to the draft transport chain. Its green panels, pale-red selection and circle/line tracker follow the selected Version 1 design. The destination coordinate map provides selectable saved markers; the list remains available for overlapping markers. It has no street tiles or address lookup.
+
+Sessions granted `catalogue.write` can create transport entries and destinations. New locations require valid coordinates and a confirmed server-issued public ID before selection. Pending inputs remain available after rejected or failed saves. The existing trip form remains a placeholder: the selection callback retains public catalogue records in the page draft, without saving a trip. Travel and transfer times are not supplied by the catalogue and are not fabricated. See [implementation and verification](docs/issue-44-implementation.md) and the [implementation plan](docs/issue-44-plan.md).

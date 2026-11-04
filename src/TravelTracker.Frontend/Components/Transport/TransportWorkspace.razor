@@ -1,0 +1,91 @@
+@using TravelTracker.Frontend.Api.Transport
+@using TravelTracker.Frontend.Features.Transport
+
+<section class="transport-workspace" aria-labelledby="transport-heading">
+    <h1 id="transport-heading">Build your itinerary</h1>
+    <p>Choose saved transport and locations. Your chain is a draft; it is not a scheduled journey.</p>
+    @if (!signedIn) { <p role="status"><a href="/account">Sign in</a> to choose saved transport.</p> }
+    else
+    {
+        @if (error is not null) { <div class="transport-error" role="alert"><p>@error</p><button class="secondary" @onclick="LoadAsync" disabled="@busy">Retry catalogue</button></div> }
+        @if (status is not null) { <p role="status">@status</p> }
+        <div class="transport-columns" aria-busy="@busy.ToString().ToLowerInvariant()">
+            <aside class="transport-panel" aria-label="Selected transport chain">
+                <h2>Your transport chain</h2><p>@selections.Count selected entries</p>
+                <ol class="transport-chain">
+                    @for (var i = 0; i < selections.Count; i++)
+                    {
+                        var index = i; var entry = selections[index];
+                        <li class="@(editingIndex == index ? "active" : "")" @key="entry.OccurrenceId">
+                            <button class="transport-card @(editingIndex == index ? "selected" : "")" @onclick="() => Edit(index)"><strong>@(index + 1). @entry.Transport.Name</strong><span>@Label(entry.Transport.Code)</span><span>@entry.Destination.Name</span><span>@Label(entry.Destination.Type)</span><small>Travel time not supplied</small></button>
+                            @if (i < selections.Count - 1) { <small class="transfer-time">Transfer time not supplied</small> }
+                            <button class="chain-remove secondary" @onclick="() => RemoveAsync(index)" disabled="@busy" aria-label="@($"Remove entry {index + 1}")">Remove</button>
+                        </li>
+                    }
+                </ol>
+                @if (selections.Count == 0) { <p>No transport selected yet.</p> }
+                <button class="secondary" @onclick="NewEntry" disabled="@busy">+ Add transport</button>
+                <small>Select an entry to change it. Journey times require a future route contract.</small>
+            </aside>
+            <section class="transport-panel" aria-labelledby="mode-heading">
+                <h2 id="mode-heading">Choose transport</h2>
+                <form @onsubmit="LoadAsync" @onsubmit:preventDefault>
+                    <label for="transport-query">Search saved entries<input id="transport-query" @bind="transportQuery" /></label>
+                    <label for="transport-code">Mode<select id="transport-code" @bind="code"><option value="">All modes</option>@foreach (var mode in Modes) { <option value="@mode">@Label(mode)</option> }</select></label>
+                    <button type="submit" class="secondary" disabled="@busy">Search transport</button>
+                </form>
+                @if (busy) { <p role="status">Loading saved records…</p> }
+                @if (!busy && transports.Count == 0) { <p role="status">No transport found. Clear filters and search again.</p> }
+                @foreach (var item in transports)
+                {
+                    <button class="transport-card @(selectedTransport?.TransportModeId == item.TransportModeId ? "selected" : "")" disabled="@busy" aria-pressed="@(selectedTransport?.TransportModeId == item.TransportModeId)" @onclick="() => SelectTransportAsync(item.TransportModeId)"><strong>@item.Name</strong><span>@Label(item.Code)</span><span>@item.Description</span></button>
+                }
+                @if (selectedTransport is not null) { <article class="transport-card selected"><h3>@selectedTransport.Name</h3><p>@Label(selectedTransport.Code)</p><p>@(selectedTransport.Description ?? "No description supplied.")</p><small>Saved transport details; no journey timetable.</small></article> }
+                @if (canWrite)
+                {
+                    <details><summary>Create transport entry</summary><form class="transport-create" @onsubmit="CreateTransportAsync" @onsubmit:preventDefault><fieldset disabled="@busy">
+                        <label for="new-transport-name">Name *<input id="new-transport-name" aria-describedby="new-transport-name-error" @bind="transportName" required /></label><TransportFieldError Errors="fieldErrors" Field="name" Id="new-transport-name-error" />
+                        <label for="new-transport-code">Mode *<select id="new-transport-code" aria-describedby="new-transport-code-error" @bind="newCode">@foreach (var mode in Modes) { <option value="@mode">@Label(mode)</option> }</select></label><TransportFieldError Errors="fieldErrors" Field="code" Id="new-transport-code-error" />
+                        <label for="new-transport-description">Description<textarea id="new-transport-description" aria-describedby="new-transport-description-error" @bind="description"></textarea></label><TransportFieldError Errors="fieldErrors" Field="description" Id="new-transport-description-error" /><button type="submit" class="secondary">Save transport entry</button>
+                    </fieldset></form></details>
+                }
+            </section>
+            <section class="transport-panel" aria-labelledby="destination-heading">
+                <h2 id="destination-heading">Choose destination</h2>
+                <form @onsubmit="LoadAsync" @onsubmit:preventDefault>
+                    <label for="point-query">Location name<input id="point-query" @bind="pointQuery" /></label>
+                    <label for="point-type">Location type<select id="point-type" @bind="type"><option value="">All types</option>@foreach (var kind in Types) { <option value="@kind">@Label(kind)</option> }</select></label>
+                    <button type="submit" class="secondary" disabled="@busy">Search locations</button>
+                </form>
+                <div class="actions"><button class="secondary" aria-pressed="@(!showMap)" @onclick="() => showMap = false">Saved list</button><button class="secondary" aria-pressed="@showMap" @onclick="() => showMap = true">Choose on map</button></div>
+                @if (showMap)
+                {
+                    <DestinationMap Points="points" SelectedId="selectedPoint?.RoutePointId" Selected="SelectPointAsync" />
+                }
+                else
+                {
+                    @foreach (var point in points)
+                    {
+                        <button class="transport-card @(selectedPoint?.RoutePointId == point.RoutePointId ? "selected" : "")" disabled="@busy" aria-pressed="@(selectedPoint?.RoutePointId == point.RoutePointId)" @onclick="() => SelectPointAsync(point.RoutePointId)"><strong>@point.Name</strong><span>@Label(point.Type)</span><span>@point.Address</span></button>
+                    }
+                }
+                @if (!busy && points.Count == 0) { <p role="status">No locations found. Clear filters and search again.</p> }
+                @if (selectedPoint is not null) { <article class="transport-card selected"><h3>@selectedPoint.Name</h3><p>@Label(selectedPoint.Type)</p><p>@selectedPoint.Address</p><p>@selectedPoint.Lat, @selectedPoint.Lon</p><small>Reusable location; no timetable is attached.</small></article> }
+                @if (canWrite)
+                {
+                    <details><summary>Create destination location</summary><form class="point-create" @onsubmit="CreatePointAsync" @onsubmit:preventDefault><fieldset disabled="@busy">
+                        <label for="new-point-name">Name *<input id="new-point-name" aria-describedby="new-point-name-error" @bind="pointName" required /></label><TransportFieldError Errors="fieldErrors" Field="name" Id="new-point-name-error" />
+                        <label for="new-point-type">Type *<select id="new-point-type" aria-describedby="new-point-type-error" @bind="newType">@foreach (var kind in Types) { <option value="@kind">@Label(kind)</option> }</select></label><TransportFieldError Errors="fieldErrors" Field="type" Id="new-point-type-error" />
+                        <label for="new-point-address">Address<input id="new-point-address" aria-describedby="new-point-address-error" @bind="address" /></label><TransportFieldError Errors="fieldErrors" Field="address" Id="new-point-address-error" />
+                        <label for="new-point-lat">Latitude *<input id="new-point-lat" aria-describedby="new-point-lat-error" @bind="lat" inputmode="decimal" required /></label><TransportFieldError Errors="fieldErrors" Field="lat" Id="new-point-lat-error" />
+                        <label for="new-point-lon">Longitude *<input id="new-point-lon" aria-describedby="new-point-lon-error" @bind="lon" inputmode="decimal" required /></label><TransportFieldError Errors="fieldErrors" Field="lon" Id="new-point-lon-error" />
+                        <label for="new-point-source">Source public ID (optional)<input id="new-point-source" aria-describedby="new-point-source-error" @bind="sourceId" /></label><TransportFieldError Errors="fieldErrors" Field="sourceId" Id="new-point-source-error" />
+                        <small>Saving creates a catalogue location before it can be added to your draft.</small><button type="submit" class="secondary">Save destination location</button>
+                    </fieldset></form></details>
+                }
+                else { <small>Read-only catalogue. Creating locations requires catalogue write permission.</small> }
+                <button class="transport-add" disabled="@(busy || selectedTransport is null || selectedPoint is null)" @onclick="AddAsync">@(editingIndex is null ? "Add to itinerary" : "Update draft entry")</button>
+            </section>
+        </div>
+    }
+</section>

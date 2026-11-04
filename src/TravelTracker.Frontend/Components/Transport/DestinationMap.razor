@@ -1,0 +1,28 @@
+@using System.Globalization
+@using TravelTracker.Frontend.Api.Transport
+
+<section class="destination-map" aria-label="Saved locations on a coordinate map">
+    <p>Choose a saved location marker. This coordinate map shows the filtered catalogue, without street tiles or address lookup.</p>
+    <svg viewBox="0 0 640 360" role="group" aria-label="Saved destination location markers">
+        <rect width="640" height="360" fill="#f0eadf" />
+        @for (var x = 0; x <= 640; x += 80) { <line x1="@x" y1="0" x2="@x" y2="360" stroke="#ccd3c9" /> }
+        @for (var y = 0; y <= 360; y += 60) { <line x1="0" y1="@y" x2="640" y2="@y" stroke="#ccd3c9" /> }
+        @foreach (var point in Points)
+        {
+            <g role="button" tabindex="0" aria-label="@($"Choose {point.Name}")" aria-pressed="@(point.RoutePointId == SelectedId)" @onclick="() => Selected.InvokeAsync(point.RoutePointId)" @onkeydown="e => KeyAsync(e, point.RoutePointId)">
+                <circle cx="@X(point)" cy="@Y(point)" r="13" fill="@(point.RoutePointId == SelectedId ? "#ffcbbe" : "#3e4f3d")" stroke="white" stroke-width="3" />
+                <title>@point.Name (@point.Lat, @point.Lon)</title>
+            </g>
+        }
+    </svg>
+    <small>North ↑ · Fitted to saved location coordinates. Use the list for overlapping markers.</small>
+</section>
+
+@code {
+    [Parameter] public IReadOnlyList<RoutePointDto> Points { get; set; } = [];
+    [Parameter] public Guid? SelectedId { get; set; }
+    [Parameter] public EventCallback<Guid> Selected { get; set; }
+    string X(RoutePointDto p) => (40m + 560m * (p.Lon - Points.Min(v => v.Lon)) / Math.Max(.01m, Points.Max(v => v.Lon) - Points.Min(v => v.Lon))).ToString(CultureInfo.InvariantCulture);
+    string Y(RoutePointDto p) => (320m - 280m * (p.Lat - Points.Min(v => v.Lat)) / Math.Max(.01m, Points.Max(v => v.Lat) - Points.Min(v => v.Lat))).ToString(CultureInfo.InvariantCulture);
+    Task KeyAsync(KeyboardEventArgs e, Guid id) => e.Key is "Enter" or " " ? Selected.InvokeAsync(id) : Task.CompletedTask;
+}

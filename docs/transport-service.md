@@ -27,4 +27,8 @@ Internal bigint keys are application-issued, never exposed in HTTP, and rebuilt 
 
 Run `dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"`. For migrations, constraints, failed-write emptiness and host restart persistence, set `TRAVELTRACKER_TEST_POSTGRES` to an isolated PostgreSQL instance with CREATEDB, then run with `--filter "Category=PostgreSQL"`. Each relational test creates and drops only its randomly named disposable database. PostgreSQL tests fail when configuration is absent; they never fall back to InMemory.
 
-Frontend Transport selection UI is tracked by #44; this issue preserves the client URL/detail DTO but does not claim that future journey complete.
+## Frontend selection (#44)
+
+The Blazor **New Trip** page uses this service's authenticated collection, detail and creation routes through a dedicated frontend `TransportClient`. It supports name/mode/type filters, saved details, authorized creation forms, and an ordered editable draft chain. The destination coordinate map selects saved location markers; it does not provide street tiles, geocoding or arbitrary map-pin creation. Manual-coordinate creation remains available to write-capable sessions. A location enters the chain only after it has a saved public ID.
+
+The frontend exposes an ordered `SelectionChanged` callback with public transport and destination DTO snapshots for the future trip editor. No trip or scheduled journey is saved. Catalogue records do not provide travel/transfer durations; the UI states that these are not supplied. See [implementation and verification](issue-44-implementation.md).

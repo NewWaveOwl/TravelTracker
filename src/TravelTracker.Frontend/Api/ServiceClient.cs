@@ -13,7 +13,7 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
 {
     static readonly TimeSpan Timeout = TimeSpan.FromSeconds(8);
     static readonly HashSet<string> WritableFields = new(StringComparer.OrdinalIgnoreCase)
-    { "name", "address", "lat", "lon", "estimatedVisitMinutes", "rating", "description", "visibility" };
+    { "name", "address", "lat", "lon", "estimatedVisitMinutes", "rating", "description", "visibility", "code", "type", "sourceId" };
 
     /**
      * Reads a public JSON contract.

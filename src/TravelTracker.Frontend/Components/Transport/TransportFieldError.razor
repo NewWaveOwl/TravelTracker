@@ -1,0 +1,10 @@
+@if (Errors.TryGetValue(Field, out var messages) && messages.Length > 0)
+{
+    <small id="@Id" class="field-error" role="alert">@string.Join(" ", messages)</small>
+}
+
+@code {
+    [Parameter] public IReadOnlyDictionary<string, string[]> Errors { get; set; } = new Dictionary<string, string[]>();
+    [Parameter] public string Field { get; set; } = "";
+    [Parameter] public string Id { get; set; } = "";
+}
