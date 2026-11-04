@@ -4,13 +4,15 @@
 
 Bearer validation belongs to the API, not Domain. The authenticated identity is the validated `(iss, sub)` pair; mapping it to a public User UUID and enforcing account standing remain future Users work. See [authentication boundaries](authentication.md).
 
+Attractions now owns its model and identity primitives in `TravelTracker.Attractions.Domain`, independently of the remaining shared Domain. Ownership is the validated issuer/subject pair; shared/private visibility is server-enforced. The HTTP DTO omits owner and internal key fields. Invariants validate names, coordinate/rating ranges and nonnegative visit duration without EF or HTTP dependencies. See [the independent service contract](attractions-service.md).
+
 ## Existing entities
 
 | Entity | Existing fields | Owner / integration addition |
 | --- | --- | --- |
 | [User](../src/TravelTracker.Domain/Models/User.cs) | UserId (`EntityId<User>`), Username, Email, Address?, Role, Status, CreatedAt, UpdatedAt? | Christel; unchanged |
 | [Accomodation](../src/TravelTracker.Domain/Models/Accomodation.cs) | Id (`EntityId<Accomodation>`), Name, Address | Christel; unchanged, original spelling retained |
-| [Attraction](../src/TravelTracker.Domain/Models/Attraction.cs) | AttractionId (`EntityId<Attraction>`), Name, Address, Latitude, Longitude, EstimatedVisitMinutes | Artiom; adds optional Description and Rating |
+| [Attraction](../src/TravelTracker.Attractions.Domain/Models/Attraction.cs) | AttractionId (`EntityId<Attraction>`), Name, Address, Latitude, Longitude, EstimatedVisitMinutes | Artiom; adds optional Description and Rating |
 | [TransportMode](../src/TravelTracker.Domain/Models/TransportMode.cs) | TransportModeId (`EntityId<TransportMode>`), Code, DisplayName | Artiom; adds optional Description |
 
 [UserRole](../src/TravelTracker.Domain/Models/UserRole.cs): User = 0, Administrator = 1.

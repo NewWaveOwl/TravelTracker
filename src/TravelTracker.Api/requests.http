@@ -1,43 +1,9 @@
-@base = http://localhost:5104
-# Set accessToken locally to a provider-issued token; never commit a real token.
+@base = http://localhost:5105
+# Set accessToken locally; never commit real tokens.
 @accessToken = REPLACE_LOCALLY
 
 ### Health
 GET {{base}}/health
-
-### Known seeded attraction
-GET {{base}}/api/v1/attractions/11111111-1111-1111-1111-111111111111
-Authorization: Bearer {{accessToken}}
-
-### List attractions (ordered) and search by name substring
-GET {{base}}/api/v1/attractions
-Authorization: Bearer {{accessToken}}
-GET {{base}}/api/v1/attractions?name=museum
-Authorization: Bearer {{accessToken}}
-
-### Create an attraction; GET the returned Location to retrieve it
-POST {{base}}/api/v1/attractions
-Authorization: Bearer {{accessToken}}
-Content-Type: application/json
-
-{
-  "name": "New Museum",
-  "description": "A manually entered attraction",
-  "rating": 4,
-  "address": "Montreal",
-  "lat": 45.5,
-  "lon": -73.57,
-  "estimatedVisitMinutes": 60
-}
-
-### Patch an attraction (partial fields allowed). Malformed GUID -> 400, unknown valid GUID -> 404
-PATCH {{base}}/api/v1/attractions/11111111-1111-1111-1111-111111111111
-Authorization: Bearer {{accessToken}}
-Content-Type: application/json
-
-{
-  "name": "Renamed Museum"
-}
 
 ### Known seeded transport entry
 GET {{base}}/api/v1/transport-modes/00000000-0000-0000-0000-000000000101

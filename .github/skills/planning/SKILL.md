@@ -7,6 +7,8 @@ description: Plan TravelTracker features and decide what to build next, groundin
 
 The ground truth is `docs/`, then the code. Not memory, not the README's aspirations, not old plans.
 
+Database decision 3 is resolved: the owner selected PostgreSQL with EF Core/Npgsql on 2026-10-28. Plan PostgreSQL migrations and isolated PostgreSQL persistence verification; do not reopen provider selection or propose SQLite as the project's storage. Keep the selected technology distinct from the current in-memory implementation, and preserve the remaining ownership/identity decisions as open until actually resolved. See [Data](../../../docs/data.md) and [contracts](../../../docs/milestone-3-contracts.md).
+
 ## 1. Establish ground truth
 
 1. Read, in this order: `docs/design.md` (purpose, releases M1-M3, trip rules, capabilities), `docs/domain.md` (entities, identifiers, planned trip rules), `docs/api.md` (current contract), `docs/data.md`, `docs/trip-points-and-routes.md`, then `README.md` and `CONTRIBUTING.md`.

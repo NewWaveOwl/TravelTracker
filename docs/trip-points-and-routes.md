@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-TravelTracker.Api is the only web host; Data owns repositories and Domain owns models. Attractions, Transport entries and Route Points expose POST/GET by ID on port 5104 with seeded process-lifetime memory. HTTP DTOs preserve name/lat/lon aliases. Trips/Settings declarations supply types for existing interfaces without implementing those features.
+Attractions now owns an independent Api/Data/Domain service on 5104 with PostgreSQL and private/shared access. Transport entries and Route Points remain in TravelTracker.Api on 5105 with in-memory stores. HTTP DTOs preserve name/lat/lon aliases. Trip/TripLeg domain rules exist, but trip/settings HTTP and persistence features remain unfinished. See [independent Attractions startup and access rules](attractions-service.md).
 
 [Domain](domain.md), [API](api.md) and [Data](data.md) describe current models and contracts. The relationships and timing rules below are future product design.
 

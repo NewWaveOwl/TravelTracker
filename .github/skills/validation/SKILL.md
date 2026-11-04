@@ -12,10 +12,12 @@ This checklist runs before a change is committed, pushed or called done. Test de
 ```powershell
 dotnet restore TravelTracker.slnx
 dotnet build TravelTracker.slnx --configuration Release --no-restore
-dotnet test TravelTracker.Tests.slnx --configuration Release
+dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"
+# With TRAVELTRACKER_TEST_POSTGRES configured (CREATEDB):
+dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category=PostgreSQL"
 ```
 
-`TravelTracker.Tests.slnx` is what CI runs (`.github/workflows/ci.yml`), so it must pass. Read the output, not just the exit code:
+`TravelTracker.Tests.slnx` is what CI runs (`.github/workflows/ci.yml`), with separate application and PostgreSQL filters; both must pass. Report each group separately. Ordinary application/domain/HTTP tests use EF InMemory and run without PostgreSQL. Missing PostgreSQL blocks only the marked relational group and must be reported, never silently skipped. Read the output, not just the exit code:
 
 - Tests were actually discovered and executed. Zero tests is not a pass.
 - Report total, passed, failed and skipped counts as printed.
@@ -38,6 +40,8 @@ Run `git status` and `git diff origin/<PR-base>...HEAD` (plus uncommitted change
 - **No generated files** (`bin/`, `obj/`, `TestResults/`, coverage output) or unrelated formatting churn.
 
 ## 3. Docs sync
+
+For persistence changes, verify that provider configuration, migrations and relational test evidence target the selected PostgreSQL database with Npgsql. Database decision 3 is resolved; EF InMemory is approved for application/domain/HTTP tests, but cannot stand in for PostgreSQL constraints, migrations, locking, rollback or restart checks. The relational group is explicitly marked `Category=PostgreSQL`; its tests fail without the required connection. SQLite is not the relational test provider. Keep credentials and local connection overrides out of staged files. Do not claim that the current in-memory host already uses PostgreSQL solely because the technology decision is documented.
 
 If the contract, capabilities or limitations changed, `docs/api.md`, `docs/domain.md`, `docs/data.md` and the README tables must say the same as the code. Docs are the ground truth for planning, so a stale doc is a defect.
 

@@ -18,7 +18,7 @@ Six logical services, each owning its own data, plus one independent frontend. E
 | Settings | James | User preferences | Empty `UserSettings` declaration; interface only |
 | Frontend | Open decision | Traveller-facing client using public HTTP DTOs only | Not started |
 
-Current runnable state: one shared host (`TravelTracker.Api`, port 5104) hosts Attractions, Transport and Route Points with in-memory seeded data. The six-service split is the target, not the current runtime.
+Current runnable state: `TravelTracker.Attractions.Api` independently owns Attractions on port 5104 with PostgreSQL and the approved private/shared access rules. `TravelTracker.Api` retains Transport/Route Points on 5105 with in-memory stores. Both use `TravelTracker.Security` bearer infrastructure. Remaining service extraction is future work. See [Attractions service](attractions-service.md).
 
 Issue #15 (attraction management and name search, open) has residual scope only: its list and PATCH behaviour is on master through #53 and #54. #56 (repeated `name` query parameters, open) remains.
 
@@ -32,7 +32,7 @@ Issue #15 (attraction management and name search, open) has residual scope only:
 | Trip legs | `ITripRepository.ReplaceLegsAsync` and `docs/data.md` note | `Trips` table stores one leg on the row | Resolved by James: a `TripLegs` table with ordered rows. A trip stores one departure and one destination. Each leg stores only a `destination`; its departure is implied (the trip's departure for the first leg, the previous leg's destination for the rest). The last leg must end at the trip's destination. A broken connection is an impossible invariant: with implied departures no stored state can describe a gap, so reordering reshapes the chain and only time clashes are highlighted (`design.md` updated to match). Schema change is future work. |
 | Trip user identity | `docs/api.md` `GET /trips?userId=` | Design section 3 privacy and ownership rules | Conflict. Resolved by James: `GET /trips` lists the caller's own trips; the owner comes from the bearer subject, not a query parameter. |
 | Trip and settings wire IDs | `docs/api.md` says the Trips/Settings wire format still needs agreement | `docs/domain.md` uses `Guid` public IDs with internal `Id64` keys | Open decision 5. Repositories currently take public `Guid`. |
-| SQL schema | `src/Database/schema.sql` is PostgreSQL-style DDL (`text`, `uuid`, enums) | No EF Core provider is chosen | Not evidence of a provider decision. Open decision 3. |
+| SQL schema / database provider | `src/Database/schema.sql` is PostgreSQL-style DDL (`text`, `uuid`, enums) | Owner explicitly selected PostgreSQL on 2026-10-28 | Decision 3 resolved: PostgreSQL with EF Core's Npgsql provider. The old schema still does not prove implemented persistence or applied migrations. |
 | Frontend stack | Issue #27 offers React Native or an ASP.NET Core client | Design section 7 describes screens only | Open decision 1. |
 
 ## 3. Project boundaries
@@ -65,7 +65,7 @@ Layer rules every reviewer checks:
 - Storage: app-issued sequential `Id64` keys (`bigint` in `schema.sql`), with no database identity or sequence.
 - Current strategy (`EntityIdGenerator`): one in-process counter shared across entity types. On the first call it reads the highest stored key, then increments in memory. No counter is persisted; it is rebuilt from data on restart. Gaps after a crash are harmless.
 - Limit: this assumes one backend instance. Two instances would issue duplicate keys. Before scaling out, switch to a node-aware scheme (snowflake or similar).
-- Migration: when a SQL provider is chosen, seed the counter from the table maximum at startup, as the in-memory generator already does. The provider choice is open decision 3.
+- Migration: for the selected PostgreSQL provider, seed the app-issued counter from the table maximum at startup, as the in-memory generator already does. Preserve the documented single-instance limitation; provider selection does not authorize replacing app-issued IDs with database identities or sequences.
 
 ## 5. HTTP contract conventions
 
@@ -128,20 +128,22 @@ Ticket import, nearby suggestions and free-time summary (M3 features in design s
 - Dependency calls use timeouts and return `503` with a clear message. The form keeps the user's input in the client; the server stores nothing partial.
 - Admin status changes and trip deletes leave audit or cleanup records; cleanup progress is visible to administrators (design section 3).
 
-## 9. Open decisions
+## 9. Decisions and remaining open items
 
-Each needs an owner choice recorded here before the dependent issue starts.
+Unresolved items need an owner choice recorded here before the dependent work starts. Resolved entries remain numbered for existing references.
 
 1. **Frontend stack.** React Native or an ASP.NET Core client. Blocks #32 and #33.
 2. **OIDC provider.** Which identity provider issues the tokens, and its issuer and audience values. Blocks #33, #37 and deployed-provider verification of #34. The #34 representative resource-server pattern is implemented with configurable settings and real bearer-validation tests; no provider-specific compatibility is claimed.
-3. **EF Core database provider.** Blocks #35, #36 and the persistence parts of #41. `schema.sql` is PostgreSQL-style DDL; that is not a provider decision. Requirement (James): the code must not couple to one provider; it should work on effectively any provider EF Core supports. Provider-specific features (native enums, native uuid types) are avoided unless a later decision accepts them.
+3. **EF Core database provider — resolved 2026-10-28.** The repository owner explicitly selected **PostgreSQL**, using `Npgsql.EntityFrameworkCore.PostgreSQL` for EF Core. Database selection no longer blocks #35, #36 or the persistence parts of #41; their other prerequisites remain. Keep Domain/application rules independent of the provider and isolate PostgreSQL configuration/mappings in persistence. Preserve the earlier intent of minimizing provider coupling in Domain/application code; PostgreSQL is the concrete implementation and verification target, and support for other providers must not be claimed without implementation and tests. Review provider-specific model choices and migrations deliberately rather than treating the historical SQL schema as an applied migration. Relational persistence verification must run against PostgreSQL. Server version, deployment and connection secrets are separate configuration concerns, not decided here.
 4. **Trip and scheduled-route boundary.** Option A or B above, and the trip leg ID type. Blocks #39, #40 and #41.
 5. **Trips and Settings wire IDs.** Public `Guid` only, or a different identifier for these services. Blocks #40 and #42.
-6. **Catalogue ownership.** Who can write shared attractions and accommodations, given the design's admin rules.
+6. **Catalogue ownership — Attractions resolved 2026-10-28.** Owner approved creator-private/admin-shared Attractions. Omitted creation visibility is private; shared creation/editing requires a live Users administrator role. Other people's private records appear absent, even to administrators. Banned users read only their own private records; deactivated/deleted users are denied. Accommodations implementation remains its owner's work. See the [Users consumer integration boundary](attractions-service.md); its upstream implementation is not claimed here.
 7. **Scope names and deactivated-user response.** Confirm the proposed names in section 6 and whether deactivated users get `401` or `403`.
 8. **Account standing model.** Replace `UserStatus` with a nullable `SpecialStatus` (null for normal users, `Deactivated` or `Banned` otherwise), as proposed by James in section 6. Needs Christel's approval because she owns Users.
 
 ## 10. Approval record
+
+Database-specific owner decision: PostgreSQL, confirmed in chat on 2026-10-28. This records that decision only; it does not imply all-member approval of the entire draft contract or resolve its other open items.
 
 | Member | Role | Approved version | Date | Notes |
 | --- | --- | --- | --- | --- |
