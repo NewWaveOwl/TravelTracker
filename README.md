@@ -153,3 +153,13 @@ Milestone 2 planning, AI evidence, reviews, validation and reflections are maint
 - [Development flow](https://github.com/NewWaveOwl/TravelTracker/tree/milestone_2_AI_and_development_resource/devlopmet_flow)
 
 Repository guidance is available in the [coding skill](.github/skills/code/SKILL.md) and [testing skill](.github/skills/testing/SKILL.md).
+
+## Attraction workspace (#43)
+
+Open `/attractions` in the Blazor frontend. Search visible attractions by name, view saved details, create private attractions and edit permitted records using the independent secured service. Results retain the server's name ordering and display as two cards per row on wide screens.
+
+Configure the frontend's Auth0 application and API grant with `catalogue.read catalogue.write` for write-capable users, and set `Auth0:Scope` to `openid profile email catalogue.read catalogue.write`. Sign in again after changing grants. Read-only sessions can browse without a write form; the API still enforces live account standing, ownership and write permissions.
+
+**Choose on map** opens the supplied Montreal screenshot as a static preview with editable latitude/longitude. Use applies a validated coordinate draft; Cancel leaves the form location intact. Live OpenStreetMap tiles, address lookup and pin placement are future integration work. The optional visit duration ± field calculates a planning range but is explicitly not saved by the existing API.
+
+See [implementation and verification](docs/issue-43-implementation.md).

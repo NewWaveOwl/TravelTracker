@@ -4,41 +4,46 @@ using TravelTracker.Frontend.Auth;
 namespace TravelTracker.Frontend.Api;
 
 /**
- * Sends the signed-in user's access token only to a named, configured service.
- *
- * @param authentication Supplies the current user, re-read after every await so a sign-out wins races.
- * @param directory Resolves and validates the destination URL.
- * @param client Performs the bounded request.
- * @param timeProvider The clock used to decide whether the token has expired.
- * @param logger Receives expired and rejected sessions, never token values.
- * @param sessions Checks and revokes the shared server session across cookies and circuits.
+ * Sends a session token only to a named, configured service and rejects late successes after sign-out.
+ * @param authentication Supplies the current user.
+ * @param directory Validates destination URLs.
+ * @param client Performs bounded HTTP calls.
+ * @param timeProvider Checks access-token expiry.
+ * @param logger Records rejected sessions without token values.
+ * @param sessions Checks shared server-session revocation.
  */
 public sealed class ProtectedClient(AuthenticationStateProvider authentication, ServiceDirectory directory, ServiceClient client, TimeProvider timeProvider, ILogger<ProtectedClient> logger, SessionRegistry sessions)
 {
     /**
-     * Reads a protected JSON resource.
-     *
-     * @param service The configured service name.
-     * @param path A relative versioned API path.
-     * @param cancellationToken Cancels the request when the view closes.
-     * @return The parsed response; throws ApiError with Permission and 401 for a missing, expired or rejected session, and 403 for a missing permission.
+     * Reads a protected public HTTP contract.
+     * @param service Configured service name.
+     * @param path Versioned relative API path.
+     * @param cancellationToken View cancellation.
+     * @return Parsed response, or ApiError for rejected requests or sessions.
      */
-    public async Task<T?> GetJsonAsync<T>(string service, string path, CancellationToken cancellationToken = default)
+    public Task<T?> GetJsonAsync<T>(string service, string path, CancellationToken cancellationToken = default) =>
+        SendJsonAsync<T>(service, HttpMethod.Get, path, null, cancellationToken);
+
+    /**
+     * Sends a protected public contract while preserving session revocation across awaits.
+     * @param service Configured service name.
+     * @param method GET, POST or PATCH.
+     * @param path Versioned relative API path.
+     * @param body Public request fields.
+     * @param cancellationToken View cancellation.
+     * @return Parsed response; 401 revokes only the session that made the request.
+     */
+    public async Task<T?> SendJsonAsync<T>(string service, HttpMethod method, string path, object? body, CancellationToken cancellationToken = default)
     {
         var url = directory.ProtectedUrlFor(service, path);
         var user = (await authentication.GetAuthenticationStateAsync()).User;
         var sessionId = SessionRegistry.IdFor(user);
         var token = sessions.IsActive(user) ? AccessTokenClaims.ActiveToken(user, timeProvider.GetUtcNow()) : null;
-        if (token is null)
-            throw SignedOut();
+        if (token is null) throw SignedOut();
         T? result;
-        try
-        {
-            result = await client.GetJsonAsync<T>(url, cancellationToken, token);
-        }
+        try { result = await client.SendJsonAsync<T>(method, url, body, cancellationToken, token); }
         catch (ApiError error) when (error.Status == 401)
         {
-            // Revoke the session that sent this request, never a later replacement sign-in.
             sessions.Revoke(sessionId);
             logger.LogWarning("{Service} rejected the access token", service);
             throw new ApiError(FailureKind.Permission, "Your session was rejected. Sign in again.", 401);
@@ -48,9 +53,8 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
             throw new ApiError(FailureKind.Permission, "You do not have permission for this action.", 403);
         }
         cancellationToken.ThrowIfCancellationRequested();
-        // a sign-out while the request was in flight must not let a late success through
-        var currentUser = (await authentication.GetAuthenticationStateAsync()).User;
-        if (!sessions.IsActive(user) || !sessions.IsActive(currentUser) || SessionRegistry.IdFor(currentUser) != sessionId)
+        var current = (await authentication.GetAuthenticationStateAsync()).User;
+        if (!sessions.IsActive(user) || !sessions.IsActive(current) || SessionRegistry.IdFor(current) != sessionId)
             throw SignedOut();
         return result;
     }

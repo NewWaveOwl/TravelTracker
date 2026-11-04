@@ -6,6 +6,7 @@
     <nav class="primary-navigation" aria-label="Main navigation">
         <a aria-current="@CurrentWhenAt("new-trip")" href="new-trip">New Trip</a>
         <a aria-current="@CurrentWhenAt("history")" href="history">History</a>
+        <a aria-current="@CurrentWhenAt("attractions")" href="attractions">Attractions</a>
     </nav>
     <a class="icon" href="account" aria-label="Your account"><img src="assets/account.svg" alt="" /></a>
     <button class="icon" aria-label="Menu" aria-expanded="@menuOpen.ToString().ToLowerInvariant()" aria-controls="menu" @onclick="() => menuOpen = !menuOpen"><img src="assets/menu.svg" alt="" /></button>
@@ -14,6 +15,7 @@
         <nav id="menu" class="menu" aria-label="More navigation">
             <a class="mobile-navigation-link" aria-current="@CurrentWhenAt("new-trip")" href="new-trip">New Trip</a>
             <a class="mobile-navigation-link" aria-current="@CurrentWhenAt("history")" href="history">History</a>
+            <a class="mobile-navigation-link" aria-current="@CurrentWhenAt("attractions")" href="attractions">Attractions</a>
             <a href="settings">Settings</a>
             <a href="services">Service status</a>
         </nav>

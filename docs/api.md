@@ -86,3 +86,9 @@ Attraction list/name search and attraction PATCH are implemented (see the route 
 For future Trips integration, a trip point is an ordered occurrence of a reusable route point. A scheduled route connects route points using a transport entry; a trip leg selects that journey. Dates and boarding/stop timings belong to the scheduled route and occurrences, rather than the transport catalogue POST. See [trip points, transport and routes](trip-points-and-routes.md).
 
 Attractions failure handling: missing validated identity returns 401; forbidden operations 403; application validation and PostgreSQL integrity constraints 400; unique, serialization, deadlock and optimistic concurrency conflicts 409; transient storage outages 503. Unexpected storage/programming failures remain 500. Cancellation without client disconnection returns 408; disconnected requests receive no problem body. All failure details are safe and omit provider/identity/credential data. See [Attractions operations](attractions-service.md).
+
+### Frontend attraction editing (#43)
+
+The Blazor `/attractions` view consumes these public HTTP DTOs and sends the current user's bearer token to the configured Attractions service only. Search uses one percent-encoded literal `name` parameter. Create sends only writable fields and uses the service's private visibility default. Edit sends only changed fields, with explicit null clearing rating or description. Saved details come from a confirmed response; result-refresh failures are reported separately. Unconfirmed writes are never automatically retried.
+
+The frontend's optional duration ± field is a local preview and has no HTTP or persistence field. The map is the user-supplied static placeholder; choosing a location currently means confirming manually entered coordinates. No endpoint or database change is included in #43.

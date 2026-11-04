@@ -109,3 +109,9 @@ Live checklist after registration:
 Outside this verification: production deployment, long-duration session behavior, provider key rotation and the separate Users/Attractions integration.
 
 References: [ASP.NET Core OpenID Connect](https://learn.microsoft.com/aspnet/core/security/authentication/configure-oidc), [Auth0 regular web application quickstart](https://auth0.com/docs/quickstart/webapp/aspnet-core).
+
+## Attraction write grants (#43)
+
+For users intended to create/edit attractions, authorize `catalogue.write` in the API's user-delegated application access and user role/grant. Configure `Auth0:Scope` as `openid profile email catalogue.read catalogue.write`; the default remains read-only. Restart and sign in again to obtain the new grant. The frontend stores scope returned by the trusted token endpoint as server-owned session metadata (when OAuth omits scope, requested scopes apply). ID-token claims cannot impersonate this metadata. It controls UI availability only; no access token is browser-decoded, and Attractions remains authoritative for scope, ownership and live Users standing. Older sessions without granted-scope metadata remain read-only until a new sign-in.
+
+Protected attraction name searches allow exactly one encoded name query on the collection route. Token destination validation, no redirects/cookies, request time bounds, session revocation and rejection of late results after sign-out also apply to POST/PATCH. A 403 never claims success and retains form input. Unconfirmed writes are not retried automatically because a network failure may occur after the service committed the record.

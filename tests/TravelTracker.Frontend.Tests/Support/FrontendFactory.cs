@@ -107,6 +107,12 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
         {
             app.Use(async (context, continuation) =>
             {
+                if (context.Request.Path == "/test/granted-scope")
+                {
+                    var signedIn = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    await context.Response.WriteAsync(string.Join(" ", signedIn.Principal?.FindAll(TravelTracker.Frontend.Auth.AccessTokenClaims.GrantedScope).Select(c => c.Value) ?? []));
+                    return;
+                }
                 if (context.Request.Path != ProtectedReadPath)
                 {
                     await continuation();
