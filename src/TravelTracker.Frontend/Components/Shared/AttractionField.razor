@@ -1,0 +1,24 @@
+<label for="@Id">
+    @Label
+    <input id="@Id" value="@Value" @oninput="Changed" inputmode="@InputMode" aria-invalid="@(Error is null ? null : "true")" aria-describedby="@(Error is null ? null : $"{Id}-error")" />
+</label>
+@if (Error is not null)
+{
+    <small id="@(Id + "-error")" class="field-error">@Error</small>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? InputMode { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    /**
+     * Keeps raw values in the draft, including invalid input until the user corrects it.
+     * @param args The latest input value.
+     * @return Completion of the parent draft update.
+     */
+    Task Changed(ChangeEventArgs args) => ValueChanged.InvokeAsync(args.Value?.ToString() ?? "");
+}

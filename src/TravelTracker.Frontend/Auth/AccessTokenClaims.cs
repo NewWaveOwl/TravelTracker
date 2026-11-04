@@ -7,6 +7,7 @@ public static class AccessTokenClaims
 {
     public const string Token = "traveltracker:access_token";
     public const string ExpiresAt = "traveltracker:access_token_expires_at";
+    public const string GrantedScope = "traveltracker:granted_scope";
 
     /**
      * Reads the access token from a signed-in user.

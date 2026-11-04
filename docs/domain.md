@@ -2,7 +2,9 @@
 
 [TravelTracker.Domain](../src/TravelTracker.Domain) owns the business models used by the API and Data projects. Existing names, property types and identifiers are preserved.
 
-Bearer validation belongs to the API, not Domain. The authenticated identity is the validated `(iss, sub)` pair; mapping it to a public User UUID and enforcing account standing remain future Users work. See [authentication boundaries](authentication.md).
+Bearer validation belongs to the API, not Domain. The authenticated identity is the validated `(iss, sub)` pair. The independent Users service now maps that identity to a public UUIDv7 account and enforces live standing; the original shared `User` model below remains unchanged. See [authentication boundaries](authentication.md) and [Users setup](first-administrator-setup.md).
+
+`TravelTracker.Users.Domain` owns `UserAccount`: public ID, validated issuer/subject, verified email, server-owned `traveller`/`administrator` role, `active`/`banned`/`deactivated` standing and creation time. Ordinary provisioning always creates an active traveller. First-administrator authorization and later role-change authorization are coordinated by the Users API with transactional persistence checks; the domain model does not trust token role claims or profile request fields.
 
 Attractions now owns its model and identity primitives in `TravelTracker.Attractions.Domain`, independently of the remaining shared Domain. Ownership is the validated issuer/subject pair; shared/private visibility is server-enforced. The HTTP DTO omits owner and internal key fields. Invariants validate names, coordinate/rating ranges and nonnegative visit duration without EF or HTTP dependencies. See [the independent service contract](attractions-service.md).
 

@@ -29,7 +29,9 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
      */
     public string ProtectedUrlFor(string service, string path)
     {
-        if (!ProtectedPath().IsMatch(path))
+        var parts = path.Split('?', 2);
+        if (!ProtectedPath().IsMatch(parts[0]) ||
+            (parts.Length == 2 && (service != "Attractions" || parts[0] != "/api/v1/attractions" || !NameQuery().IsMatch(parts[1]))))
             throw new ApiError(FailureKind.Unexpected, "Unsupported API path.");
         if (!urls.TryGetValue(service, out var url) || !Uri.TryCreate(url, UriKind.Absolute, out var baseUri))
             throw new ApiError(FailureKind.Unexpected, "Invalid service configuration.");
@@ -42,4 +44,7 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
 
     [GeneratedRegex("^/api/v1/[a-z0-9/-]+$", RegexOptions.IgnoreCase)]
     private static partial Regex ProtectedPath();
+
+    [GeneratedRegex("^name=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})*$")]
+    private static partial Regex NameQuery();
 }

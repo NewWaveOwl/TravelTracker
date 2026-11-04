@@ -28,6 +28,10 @@ public sealed class FakeAuth0(string clientId) : HttpMessageHandler
 
     public string AccessToken { get; set; } = "access-token-1";
 
+    public string? GrantedScope { get; set; }
+
+    public string? SpoofedGrantedScope { get; set; }
+
     public int ExpiresInSeconds { get; set; } = 3600;
 
     public string? IdTokenNonceOverride { get; set; }
@@ -92,13 +96,14 @@ public sealed class FakeAuth0(string clientId) : HttpMessageHandler
         using var unpublished = RSA.Create(2048);
         var idToken = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
             IdTokenIssuer, IdTokenAudience ?? clientId,
-            [new Claim("sub", "auth0|traveller-1"), new Claim("nonce", IdTokenNonceOverride ?? Nonce ?? ""), new Claim("iat", new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)],
+            new[] { new Claim("sub", "auth0|traveller-1"), new Claim("nonce", IdTokenNonceOverride ?? Nonce ?? ""), new Claim("iat", new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64) }
+                .Concat(SpoofedGrantedScope is null ? [] : new[] { new Claim(TravelTracker.Frontend.Auth.AccessTokenClaims.GrantedScope, SpoofedGrantedScope) }),
             now.AddMinutes(-1), now.Add(IdTokenLifetime),
             new SigningCredentials(new RsaSecurityKey(SignWithUnpublishedKey ? unpublished : signingKey) { KeyId = "fake" }, SecurityAlgorithms.RsaSha256)));
-        return new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = JsonContent.Create(OmitAccessToken ? new { id_token = idToken, token_type = "Bearer", expires_in = ExpiresInSeconds } : (object)new { access_token = AccessToken, id_token = idToken, token_type = "Bearer", expires_in = ExpiresInSeconds }),
-        };
+        var response = new Dictionary<string, object?> { ["id_token"] = idToken, ["token_type"] = "Bearer", ["expires_in"] = ExpiresInSeconds };
+        if (!OmitAccessToken) response["access_token"] = AccessToken;
+        if (GrantedScope is not null) response["scope"] = GrantedScope;
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(response) };
     }
 
     static Task<HttpResponseMessage> Json(object body) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(body) });
