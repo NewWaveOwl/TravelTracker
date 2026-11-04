@@ -12,13 +12,13 @@ Six logical services, each owning its own data, plus one independent frontend. E
 | --- | --- | --- | --- |
 | Users | Christel | Sign-in, profiles, roles, account status, admin audit | Domain model and internal repository only; no endpoints |
 | Accommodations | Christel | Lodging places | Domain model and internal repository only; no endpoints |
-| Transport | Artiom | Transport entries, typed route points, later scheduled routes | Implemented: POST and GET by ID for transport entries and route points |
+| Transport | Artiom | Transport entries, typed route points, later scheduled routes | Implemented: independent PostgreSQL host, POST, detail and filtered collection selection for transport entries and route points |
 | Attractions | Artiom | Attraction places | Implemented: GET list with name filter, GET by ID, POST, PATCH |
 | Trips | James | Itineraries, history, map data, time rules | Empty `Trip` and `TripLeg` declarations; interfaces only |
 | Settings | James | User preferences | Empty `UserSettings` declaration; interface only |
 | Frontend | Blazor Web App, interactive Server mode (owner decision, 2026-11-03, replacing the earlier same-day React choice) | Traveller-facing client using public HTTP DTOs only | Independent `src/TravelTracker.Frontend` shell, shared form/status displays and anonymous HTTP health checks; feature integration remains separate |
 
-Current runnable state: `TravelTracker.Attractions.Api` independently owns Attractions on port 5104 with PostgreSQL and the approved private/shared access rules. `TravelTracker.Api` retains Transport/Route Points on 5105 with in-memory stores. `TravelTracker.Users.Api` now independently owns verified account provisioning, permanent first-administrator setup, live standing, administrator user listing and audited role changes over HTTPS on port 5101, with its own Domain/Data projects and PostgreSQL database. These hosts use `TravelTracker.Security` bearer infrastructure. The Blazor frontend consumes public HTTP DTOs, provides attraction search/editing and exposes Administrator Panel to active administrators. The table above retains its historical master baseline; see [Users contracts and evidence](first-administrator-setup.md) and [Attractions service](attractions-service.md) for implemented follow-ups. Full profile/status management and remaining service extraction are future work.
+Current runnable state: `TravelTracker.Attractions.Api` independently owns Attractions on port 5104 with PostgreSQL and the approved private/shared access rules. `TravelTracker.Transport.Api` owns Transport/Route Points on 5105 with PostgreSQL. `TravelTracker.Users.Api` now independently owns verified account provisioning, permanent first-administrator setup, live standing, administrator user listing and audited role changes over HTTPS on port 5101, with its own Domain/Data projects and PostgreSQL database. These hosts use `TravelTracker.Security` bearer infrastructure. The Blazor frontend consumes public HTTP DTOs, provides attraction search/editing and exposes Administrator Panel to active administrators. The table above retains its historical master baseline; see [Users contracts and evidence](first-administrator-setup.md) , [Transport service](transport-service.md) and [Attractions service](attractions-service.md) for implemented follow-ups. Full profile/status management and remaining service extraction are future work.
 
 Issue #15 (attraction management and name search, open) has residual scope only: its list and PATCH behaviour is on master through #53 and #54. #56 (repeated `name` query parameters, open) remains.
 
@@ -41,8 +41,9 @@ Current (implemented):
 
 - `TravelTracker.Domain`: models and identifier types. No EF Core, no web references. Verified in `TravelTracker.Domain.csproj`.
 - `TravelTracker.Data`: repositories, seed data and `EntityIdGenerator`. References Domain only. `InternalsVisibleTo` exposes `Id64` to Data.
-- `TravelTracker.Api`: controllers, request/response contracts, services and composition in `Program.cs`. References Data and Domain. Services coordinate workflows; controllers map to public DTOs.
-- `TravelTracker.Api.Tests`: HTTP and identity tests.
+- `TravelTracker.Transport.Api/Data/Domain`: independent Transport/Route Points boundary with PostgreSQL persistence and shared bearer security. See [startup and selection](transport-service.md).
+- `TravelTracker.Api`: library of remaining unimplemented service interfaces; no runnable catalogue endpoints.
+- `TravelTracker.Transport.Api.Tests`: Transport HTTP, bearer, selection and PostgreSQL tests. `TravelTracker.Api.Tests` retains shared Trip/identity tests.
 
 Proposed for the six-service target (approval needed):
 
