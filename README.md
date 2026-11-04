@@ -32,7 +32,7 @@ The following features are not yet available through the running application:
 - Scheduled journeys, departure and arrival times, and stop timing.
 - Collection listing, PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
 - Persistent database storage for the remaining service hosts.
-- Complete traveller-facing feature screens (the React navigation and HTTP foundation is in `frontend/`).
+- Complete traveller-facing feature screens (the Blazor navigation and HTTP foundation is in `src/TravelTracker.Frontend`).
 
 User and accommodation models and repository contracts exist. Trip/TripLeg domain rules are implemented, but their HTTP/persistence features remain unfinished. UserSettings and TripMapPoint remain placeholders.
 
@@ -63,7 +63,7 @@ The historical SQL schema in `src/Database/schema.sql` is not applied automatica
 
 ## Getting started
 
-The independent React client lives in [frontend](frontend/README.md). With Node 22.12+ installed, run `npm ci` and `npm run dev` from that folder. It provides the Figma-based shell, shared form/status displays and public service health checks; trip saving and sign-in remain separate features.
+The independent Blazor Web App lives in [src/TravelTracker.Frontend](src/TravelTracker.Frontend). Run `dotnet run --project src/TravelTracker.Frontend --launch-profile http` and open http://localhost:5100. It runs in interactive Server mode and calls the services over HTTP from the server, so no browser CORS or proxy setup is needed; service URLs live under `Services` in its `appsettings.json` (Attractions 5104, Transport 5105). It provides the Figma-based shell, shared form/status displays and public service health checks; trip saving and sign-in remain separate features. Its tests are in `tests/TravelTracker.Frontend.Tests`.
 
 Install the **.NET 10 SDK**, then clone the repository:
 

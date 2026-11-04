@@ -7,7 +7,7 @@ Date: 2026-11-03
 
 ## Current-state correction after PR review
 
-The trials below are historical evidence from the earlier layout, not validation of the current agent permissions. React and `frontend/` are now implemented, Attractions has independent projects, and bearer infrastructure lives in `TravelTracker.Security`. The frontend refusal below is no longer the expected positive result. Updated definitions receive path and test-ownership checks; no new interactive agent trials or application test runs are claimed.
+The trials below are historical evidence from the earlier layout, not validation of the current agent permissions. The Blazor frontend (`src/TravelTracker.Frontend`, which replaced an earlier React `frontend/`) is now implemented, Attractions has independent projects, and bearer infrastructure lives in `TravelTracker.Security`. The frontend refusal below is no longer the expected positive result. Updated definitions receive path and test-ownership checks; no new interactive agent trials or application test runs are claimed.
 
 ## Purpose
 
