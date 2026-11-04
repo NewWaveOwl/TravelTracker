@@ -26,7 +26,7 @@ TravelTracker currently provides the catalogue and location foundation for futur
 
 The following features are not yet available through the running application:
 
-- User registration, interactive sign-in, account standing and account management.
+- Completed live identity-provider verification, account standing and account management. The frontend has Auth0 sign-in integration pending tenant configuration and live verification; see [setup](docs/frontend-auth0.md).
 - Accommodation management as a separate resource.
 - Trips, ordered itinerary legs, history, settings and map views.
 - Scheduled journeys, departure and arrival times, and stop timing.
@@ -40,6 +40,7 @@ A route point describes a reusable location. A transport entry describes a trans
 
 ## Technology and structure
 
+- Auth0 for hosted sign-in and logout, using OpenID Connect authorization-code flow with PKCE in React. The APIs validate bearer access tokens. See [Auth0 setup and verification](docs/frontend-auth0.md).
 - .NET 10 and ASP.NET Core.
 - Swagger/OpenAPI through Swashbuckle.
 - PostgreSQL persistence for Attractions; in-memory repositories for Transport/Route Points.
@@ -134,6 +135,7 @@ Tests create isolated application hosts automatically. PostgreSQL suites require
 
 ## Documentation
 
+- [Auth0 sign-in, application registration and verification](docs/frontend-auth0.md)
 - [Product design and roadmap](docs/design.md)
 - [API contracts](docs/api.md)
 - [Domain models](docs/domain.md)

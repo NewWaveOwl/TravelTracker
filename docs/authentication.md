@@ -1,5 +1,9 @@
 # API bearer authentication (#34)
 
+**Selected identity provider: Auth0** (owner decision, 2026-11-03). The React frontend uses the official Auth0 SDK for hosted sign-in, authorization-code flow with PKCE, access-token acquisition and logout. Each API remains a resource server: it validates Auth0-issued access tokens against its configured issuer, audience and scopes. See [Auth0 application/API registration, local configuration and live verification](frontend-auth0.md).
+
+Auth0 handles credentials and authentication; the Users service remains responsible for TravelTracker profiles, roles and account standing. Provider selection does not replace those checks. Local tenant/client settings are configured, but live sign-in and protected-call acceptance are still pending the application's API access grant and end-to-end verification. No client secret is used by the browser.
+
 The existing `TravelTracker.Api` is the representative resource server. It validates access tokens with ASP.NET Core's real JWT bearer handler. It does not issue tokens or implement sign-in. Other service issues must adopt this pattern and independently verify their endpoints.
 
 ## Configuration and startup

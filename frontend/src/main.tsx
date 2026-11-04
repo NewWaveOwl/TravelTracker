@@ -5,5 +5,6 @@ import '@fontsource/atkinson-hyperlegible';
 import '@fontsource/konkhmer-sleokchher';
 import App from './App';
 import './styles.css';
+import SessionProvider from './auth/SessionProvider';
 
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
+createRoot(document.getElementById('root')!).render(<StrictMode><SessionProvider><App /></SessionProvider></StrictMode>);

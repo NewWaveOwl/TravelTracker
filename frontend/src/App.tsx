@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Feedback from './components/Feedback';
 import HealthCheck from './components/HealthCheck';
 import TripForm from './components/TripForm';
+import Account from './components/Account';
 
 const titles: Record<string, string> = { '/': 'Welcome to TravelTracker', '/new-trip': 'New Trip', '/history': 'History', '/settings': 'Settings', '/account': 'Your account', '/services': 'Service status' };
 
@@ -26,7 +27,7 @@ export default function App() {
     : path === '/new-trip' ? <><p>Add the details below. Fields marked * are required.</p><TripForm /></>
     : path === '/history' ? <><p>View and manage your saved trips.</p><Feedback kind="empty">Trip history will appear here when the Trips service is connected.</Feedback></>
     : path === '/services' ? <HealthCheck />
-    : path === '/account' ? <Feedback kind="permission">Sign-in will be connected in the identity integration feature.</Feedback>
+    : path === '/account' ? <Account />
     : path === '/settings' ? <Feedback kind="empty">Your preferences will be available when the Settings service is connected.</Feedback>
     : <Feedback kind="empty"><a href="#/">Back to start</a></Feedback>}
   </main></>;
