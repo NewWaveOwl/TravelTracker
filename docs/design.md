@@ -48,6 +48,8 @@ The planned backend has six logical services. Each is intended to own its data a
 
 ## 3. Accounts and access
 
+TravelTracker uses **Auth0** for hosted authentication (owner decision, 2026-11-03). The Blazor application signs users in through Auth0 with authorization-code flow and PKCE, and sends access tokens to the service APIs. Auth0 handles login credentials; TravelTracker's Users service owns application profiles, roles and account standing. This introduces an external dependency for interactive sign-in; the earlier no-outside-service roadmap goal does not describe the selected authentication setup. See [setup and current verification status](frontend-auth0.md).
+
 Every account is a traveller or an administrator, and is active, banned or deactivated.
 
 | Who | Can do |
