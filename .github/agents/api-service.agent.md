@@ -17,24 +17,30 @@ The dependency direction is Api → Data → Domain.
 
 ## Allowed production paths
 
-- `src/TravelTracker.Api/**`
+- `src/TravelTracker.Api/**` (Transport and Route Points)
+- `src/TravelTracker.Attractions.Api/**` (Attractions HTTP contracts, access checks and application services)
+- `src/TravelTracker.Security/**` (shared bearer infrastructure; verify both consuming hosts)
 
 ## Test-file policy
 
 The API agent may edit only these existing HTTP behavior test files:
 
-- `tests/TravelTracker.Api.Tests/AttractionTests.cs`
 - `tests/TravelTracker.Api.Tests/AuthenticationTests.cs`
 - `tests/TravelTracker.Api.Tests/HealthTests.cs`
 - `tests/TravelTracker.Api.Tests/RoutePointTests.cs`
 - `tests/TravelTracker.Api.Tests/TransportModeTests.cs`
+- `tests/TravelTracker.Attractions.Api.Tests/AttractionTests.cs`
+- `tests/TravelTracker.Attractions.Api.Tests/AuthenticationTests.cs`
+- `tests/TravelTracker.Attractions.Api.Tests/FailureBoundaryTests.cs`
+- `tests/TravelTracker.Attractions.Api.Tests/PrivacyPersistenceTests.cs`
+- `tests/TravelTracker.Attractions.Api.Tests/ReviewRegressionTests.cs`
 
-Behavior changes require tests for public success and failure behavior. Do not edit `tests/TravelTracker.Api.Tests/EntityIdGeneratorTests.cs`; it belongs to `data-persistence`. Shared helpers under `tests/TravelTracker.Api.Tests/Support/**` are excluded unless an approved task names the exact file. No test file is owned by more than one agent.
+Behavior changes require tests for public success and failure behavior. Do not edit `tests/TravelTracker.Api.Tests/EntityIdGeneratorTests.cs`; it belongs to `data-persistence`. Shared helpers under either test project's `Support/**` are excluded unless an approved task names the exact file. No test file is owned by more than one agent.
 
 ## Responsibilities
 
 - Define HTTP request and response DTOs, thin controllers or endpoints, application services, and workflow orchestration.
-- Own API bearer-authentication configuration and scope policies, including their regression coverage in `AuthenticationTests.cs`.
+- Own host authentication composition and shared bearer-authentication configuration and scope policies in `TravelTracker.Security`, including regression coverage in both hosts' `AuthenticationTests.cs`.
 - Keep controllers thin: bind HTTP input, call application services, and map results to public responses. Put request validation and orchestration in services; keep domain rules in Domain.
 - Group GET-by-ID and POST per resource in the existing controller, service and repository. Do not split actions into per-action partial files.
 - Document relevant HTTP outcomes, including `200`, `201`, `400`, and `404`, plus other statuses when relevant to the contract. Creation returns `201 Created` with a useful `Location` header.
@@ -45,7 +51,7 @@ Behavior changes require tests for public success and failure behavior. Do not e
 
 ## Prohibited changes
 
-- Do not edit `src/TravelTracker.Data/**`, `src/TravelTracker.Domain/**`, frontend paths, solution files, skills, or copilot instructions.
+- Do not edit `src/TravelTracker.Data/**`, `src/TravelTracker.Attractions.Data/**`, `src/TravelTracker.Domain/**`, `src/TravelTracker.Attractions.Domain/**`, frontend paths, solution files, skills, or copilot instructions.
 - Do not perform direct database access or put persistence types in controllers or HTTP contracts.
 - Do not expose `Id64` or any internal key in a DTO, response, or log.
 - Do not duplicate domain rules in the API beyond request validation.

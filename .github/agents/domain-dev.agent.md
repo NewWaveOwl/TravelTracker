@@ -18,8 +18,9 @@ The dependency direction is Api → Data → Domain.
 ## Allowed production paths
 
 - `src/TravelTracker.Domain/**`
+- `src/TravelTracker.Attractions.Domain/**`
 
-The current Domain project contains shared models and identifier types. Future service-specific Domain projects are allowed only when the approved issue names them.
+The original Domain project contains Transport/Route Point and trip models and identifier types. Attractions Domain owns its attraction model and identifier types. Future Domain projects require an approved issue.
 
 ## Test-file policy
 
@@ -41,7 +42,7 @@ Although it is in the API test project, this file directly tests Domain behavior
 
 ## Prohibited changes
 
-- Do not edit `src/TravelTracker.Data/**`, `src/TravelTracker.Api/**`, frontend paths, solution files, skills, or copilot instructions.
+- Do not edit `src/TravelTracker.Data/**`, `src/TravelTracker.Attractions.Data/**`, `src/TravelTracker.Api/**`, `src/TravelTracker.Attractions.Api/**`, `src/TravelTracker.Security/**`, frontend paths, solution files, skills, or copilot instructions.
 - Do not edit any test file other than `tests/TravelTracker.Api.Tests/TripTests.cs`.
 - Do not add EF Core, ASP.NET Core, HTTP, persistence, or vendor references to a Domain project.
 - Do not expose `Id64` through a public HTTP-facing type.

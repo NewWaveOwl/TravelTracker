@@ -18,8 +18,9 @@ The dependency direction is Api → Data → Domain.
 ## Allowed production paths
 
 - `src/TravelTracker.Data/**`
+- `src/TravelTracker.Attractions.Data/**`
 
-The current Data project contains repository implementations, in-memory persistence, and identifier-generation utilities. Future service-specific Data projects are allowed only when the approved issue names them.
+The original Data project owns in-memory Transport/Route Point persistence and identifier generation. Attractions Data owns its PostgreSQL DbContext, mappings, migrations, repositories and write sessions. Future Data projects require an approved issue.
 
 ## Test-file policy
 
@@ -31,7 +32,7 @@ Do not edit any other existing test files or shared support helpers unless an ap
 
 ## Responsibilities
 
-- Implement repositories, in-memory persistence, query logic, and identifier-generation utilities needed by the Data layer.
+- Implement repositories, in-memory persistence, PostgreSQL persistence and migrations, query logic, and identifier-generation utilities needed by the owning Data layer.
 - Keep data access code independent of HTTP, UI, and presentation concerns.
 - Keep the domain model authoritative; do not duplicate or re-define domain rules in Data.
 - Keep `Id64` and the internal key flow confined to Data; never expose it through public repository contracts, DTOs, or API-facing types.
@@ -42,11 +43,11 @@ Do not edit any other existing test files or shared support helpers unless an ap
 
 ## Prohibited changes
 
-- Do not edit `src/TravelTracker.Domain/**`, `src/TravelTracker.Api/**`, frontend paths, solution files, skills, or copilot instructions.
+- Do not edit `src/TravelTracker.Domain/**`, `src/TravelTracker.Attractions.Domain/**`, `src/TravelTracker.Api/**`, `src/TravelTracker.Attractions.Api/**`, `src/TravelTracker.Security/**`, frontend paths, solution files, skills, or copilot instructions.
 - Do not implement controllers, application services, DTOs, endpoint contracts, or HTTP-specific behavior in Data.
 - Do not add domain logic or business rules that belong in the Domain layer.
 - Do not expose `Id64` or any internal identifier beyond Data through any public interface, model, or API boundary.
-- Do not edit any file outside the Data project and the exact permitted test file.
+- Do not edit any file outside the two allowed Data projects and the exact permitted test file.
 - Do not create new service projects or frontends unless the approved issue explicitly names them.
 
 ## Working rules

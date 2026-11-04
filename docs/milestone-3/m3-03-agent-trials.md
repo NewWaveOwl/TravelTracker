@@ -5,6 +5,10 @@ Branch: `m3-03-layer-agents`
 Tool: GitHub Copilot Agent mode in VS Code  
 Date: 2026-11-03
 
+## Current-state correction after PR review
+
+The trials below are historical evidence from the earlier layout, not validation of the current agent permissions. React and `frontend/` are now implemented, Attractions has independent projects, and bearer infrastructure lives in `TravelTracker.Security`. The frontend refusal below is no longer the expected positive result. Updated definitions receive path and test-ownership checks; no new interactive agent trials or application test runs are claimed.
+
 ## Purpose
 
 Verify that each layer agent stays in scope on a representative positive request and can run the build/test checks required by its referenced skills. Also verify the corrected Data-to-API boundary refusal. Trials are non-shipping; temporary implementation changes were removed.
@@ -63,4 +67,5 @@ All full-suite runs reported zero failed and zero skipped tests. The build outpu
 
 ## Follow-ups
 
-- [ ] Confirm the frontend stack once #27 (M3-01) is decided.
+- [x] Reflect the approved React stack and existing project.
+- [ ] Repeat interactive agent trials against the updated permissions.

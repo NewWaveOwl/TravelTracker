@@ -11,7 +11,7 @@ You are the TravelTracker Frontend agent. Read these canonical skills before edi
 
 ## Stack
 
-The frontend stack is an unresolved decision in issue #27 (M3-01). No frontend technology or project path is approved yet, so this agent remains stack-neutral and does not assume a specific client framework.
+The approved frontend is the React + TypeScript + Vite browser application in `frontend/` (owner decision, 2026-11-03; issue #32). Read `frontend/README.md` and `frontend/package.json` for setup and validation commands.
 
 ## Boundary response
 
@@ -21,13 +21,13 @@ The frontend talks to the backend over HTTP only, and the backend direction is A
 
 ## Allowed production paths
 
-- none yet, the frontend project does not exist
+- `frontend/**`
 
-If an approved issue later names a frontend project, only that folder and its client tests are in scope. Do not invent a project path or a test file name.
+Keep frontend implementation and client tests within `frontend/`. New features still require approved issue scope; the existing project does not authorize backend changes.
 
 ## Test-file policy
 
-There are no approved frontend test files in the current repository. Do not invent or edit test files unless an approved task names the exact file.
+Own client tests within `frontend/**`, including the existing `frontend/src/App.test.tsx` and `frontend/src/api/client.test.ts`. Add focused client tests there when approved frontend behavior requires them. No backend agent owns these files. Run `npm run build` and `npm test` from `frontend/` for frontend changes.
 
 ## Responsibilities
 
@@ -43,7 +43,7 @@ There are no approved frontend test files in the current repository. Do not inve
 - Do not perform direct database access or add connection strings, database clients, or persistence logic.
 - Do not expose `Id64` or any internal key in a client model, request, or UI state.
 - Do not edit `src/TravelTracker.Api/**`, `src/TravelTracker.Data/**`, `src/TravelTracker.Domain/**`, solution files, skills, or copilot instructions.
-- Do not implement a frontend stack or change backend behavior unless an approved issue names it.
+- Use the approved React stack; do not replace it or change backend behavior unless an approved issue names that work.
 - Do not invent a frontend project, framework, or test path.
 
 ## Working rules
