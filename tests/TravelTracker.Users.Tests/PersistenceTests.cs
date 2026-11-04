@@ -1,8 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Npgsql;
 using TravelTracker.Users.Data;
-using TravelTracker.Users.Data.Repositories;
+using TravelTracker.Users.Tests.Support;
 
 namespace TravelTracker.Users.Tests;
 
@@ -16,7 +14,7 @@ public sealed class PersistenceTests
     [Fact]
     public async Task MigrationAndRestartPreserveTheFirstAdministratorAndAudit()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var instant = DateTimeOffset.Parse("2026-11-04T12:34:56.1234567Z");
         var first = await database.Repository(new FixedClock(instant)).BootstrapAsync(Issuer, "account-one", Email, default);
         Assert.NotNull(first);
@@ -38,7 +36,7 @@ public sealed class PersistenceTests
     [Fact]
     public async Task ConcurrentHostsPermitOnlyOneBootstrapIdentity()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var attempts = await Task.WhenAll(
             database.Repository().BootstrapAsync(Issuer, "account-one", Email, default),
             database.Repository().BootstrapAsync(Issuer, "account-two", Email, default));
@@ -52,7 +50,7 @@ public sealed class PersistenceTests
     [Fact]
     public async Task DemotingTheOriginalAccountNeverReopensOrReElevatesBootstrap()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
         var first = await repository.BootstrapAsync(Issuer, "account-one", Email, default);
         await using (var context = database.Context())
@@ -68,7 +66,7 @@ public sealed class PersistenceTests
     [Fact]
     public async Task RemovingTheOriginalAccountDoesNotReopenBootstrap()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
         var first = await repository.BootstrapAsync(Issuer, "account-one", Email, default);
         await using (var context = database.Context())
@@ -84,7 +82,7 @@ public sealed class PersistenceTests
     [Fact]
     public async Task FailedAuditWriteRollsBackTheAccountAndBootstrapMarkerTogether()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         await using (var context = database.Context())
             await context.Database.ExecuteSqlRawAsync("ALTER TABLE \"AdministratorAudit\" ADD CONSTRAINT reject_test_audit CHECK (false)");
         await Assert.ThrowsAsync<DbUpdateException>(() => database.Repository().BootstrapAsync(Issuer, "account-one", Email, default));
@@ -107,44 +105,5 @@ public sealed class PersistenceTests
     sealed class FixedClock(DateTimeOffset instant) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => instant;
-    }
-
-    /** Owns one uniquely named disposable test database, never a deployment database. */
-    sealed class Database(string administrativeConnection, string name, string connection) : IAsyncDisposable
-    {
-        public UsersDbContext Context() => new(new DbContextOptionsBuilder<UsersDbContext>().UseNpgsql(connection).Options);
-        public EfUserRepository Repository(TimeProvider? clock = null) => new(new PooledDbContextFactory<UsersDbContext>(new DbContextOptionsBuilder<UsersDbContext>().UseNpgsql(connection).Options), clock);
-
-        /**
-         * Creates and migrates an isolated PostgreSQL database using an explicitly supplied test connection.
-         * @return The disposable test database.
-         */
-        public static async Task<Database> CreateAsync()
-        {
-            var administrativeConnection = Environment.GetEnvironmentVariable("TRAVELTRACKER_TEST_POSTGRES") ?? throw new InvalidOperationException("Set TRAVELTRACKER_TEST_POSTGRES to an isolated PostgreSQL instance with CREATEDB permission.");
-            var name = "traveltracker_users_test_" + Guid.NewGuid().ToString("N");
-            await using var administrative = new NpgsqlConnection(administrativeConnection);
-            await administrative.OpenAsync();
-            await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", administrative);
-            await create.ExecuteNonQueryAsync();
-            var connection = new NpgsqlConnectionStringBuilder(administrativeConnection) { Database = name, Pooling = false }.ConnectionString;
-            var database = new Database(administrativeConnection, name, connection);
-            try
-            {
-                await using var context = database.Context();
-                await context.Database.MigrateAsync();
-                return database;
-            }
-            catch { await database.DisposeAsync(); throw; }
-        }
-
-        /** Drops only the generated test database after its contexts have been disposed. */
-        public async ValueTask DisposeAsync()
-        {
-            await using var administrative = new NpgsqlConnection(administrativeConnection);
-            await administrative.OpenAsync();
-            await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)", administrative);
-            await drop.ExecuteNonQueryAsync();
-        }
     }
 }

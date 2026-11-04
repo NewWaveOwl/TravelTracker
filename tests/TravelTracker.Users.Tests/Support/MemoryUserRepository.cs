@@ -3,7 +3,7 @@ using TravelTracker.Users.Domain.Models;
 
 namespace TravelTracker.Users.Tests.Support;
 
-/** Sequential test-only repository; real PostgreSQL locking/durability is verified separately. */
+/** Test account fixture with scripted administration outcomes; real policy and persistence are verified against PostgreSQL. */
 public sealed class MemoryUserRepository : IUserRepository
 {
     readonly Dictionary<Guid, UserAccount> accounts = [];
@@ -11,13 +11,16 @@ public sealed class MemoryUserRepository : IUserRepository
     public UserAccount? Account => bootstrapAccount is { } id ? accounts.GetValueOrDefault(id) : accounts.Values.FirstOrDefault();
     public int BootstrapCalls { get; private set; }
     public int ReadCalls { get; private set; }
-    public int RoleChanges { get; private set; }
+    public IReadOnlyList<UserAccount>? AdministratorListResult { get; set; }
+    public UserRoleChangeResult RoleChangeResult { get; set; } = new("forbidden", null);
+    public (string Issuer, string Subject)? AdministratorListRequest { get; private set; }
+    public (string Issuer, string Subject, Guid TargetId, string Role, string ExpectedRole, string Reason)? RoleChangeRequest { get; private set; }
+    public int RoleChangeCalls { get; private set; }
 
     /** Changes only the test account's standing to exercise the API's live read boundary. */
     public void Deactivate() => SetStatus(Account!.UserId, "deactivated");
 
     public void SetStatus(Guid id, string status) => accounts[id] = accounts[id] with { Status = status };
-    public void Seed(UserAccount account) => accounts[account.UserId] = account;
 
     public Task<UserAccount?> FindAsync(string issuer, string subject, CancellationToken cancellationToken)
     {
@@ -46,21 +49,16 @@ public sealed class MemoryUserRepository : IUserRepository
         return account;
     }
 
-    public Task<IReadOnlyList<UserAccount>?> ListForAdministratorAsync(string issuer, string subject, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<UserAccount>?>(ActiveAdministrator(issuer, subject) ? accounts.Values.OrderBy(a => a.Email, StringComparer.OrdinalIgnoreCase).ToList() : null);
+    public Task<IReadOnlyList<UserAccount>?> ListForAdministratorAsync(string issuer, string subject, CancellationToken cancellationToken)
+    {
+        AdministratorListRequest = (issuer, subject);
+        return Task.FromResult(AdministratorListResult);
+    }
 
     public Task<UserRoleChangeResult> ChangeRoleAsync(string actorIssuer, string actorSubject, Guid targetId, string role, string expectedRole, string reason, CancellationToken cancellationToken)
     {
-        UserRoleChangeResult Result(string code, UserAccount? account = null) => new(code, account);
-        if (!ActiveAdministrator(actorIssuer, actorSubject)) return Task.FromResult(Result("forbidden"));
-        if (!accounts.TryGetValue(targetId, out var target)) return Task.FromResult(Result("notfound"));
-        if (role is not ("administrator" or "traveller") || expectedRole is not ("administrator" or "traveller") || string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 500 || role == "administrator" && target.Status != "active") return Task.FromResult(Result("invalid"));
-        if (target.Role != expectedRole || role == target.Role) return Task.FromResult(Result("conflict"));
-        if (target.Role == "administrator" && target.Status == "active" && role == "traveller" && accounts.Values.Count(a => a.Role == "administrator" && a.Status == "active") == 1) return Task.FromResult(Result("last-administrator"));
-        var updated = target with { Role = role };
-        accounts[targetId] = updated; RoleChanges++;
-        return Task.FromResult(Result("changed", updated));
+        RoleChangeRequest = (actorIssuer, actorSubject, targetId, role, expectedRole, reason);
+        RoleChangeCalls++;
+        return Task.FromResult(RoleChangeResult);
     }
-
-    bool ActiveAdministrator(string issuer, string subject) => accounts.Values.Any(a => a.Issuer == issuer && a.Subject == subject && a.Role == "administrator" && a.Status == "active");
 }

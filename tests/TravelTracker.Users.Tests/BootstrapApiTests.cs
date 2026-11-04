@@ -128,18 +128,6 @@ public sealed class BootstrapApiTests
     }
 
     [Fact]
-    public async Task VerifiedFirstSignInCreatesOnlyAnOrdinaryTraveller()
-    {
-        using var app = new UsersApiFactory(); using var client = app.Browser(app.Token());
-        var response = await client.GetAsync("/api/v1/users/me");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var profile = await response.Content.ReadFromJsonAsync<UserProfileResponse>();
-        Assert.Equal("traveller", profile!.Role);
-        Assert.Equal("active", profile.Status);
-        Assert.Equal(0, app.Repository.BootstrapCalls);
-    }
-
-    [Fact]
     public async Task DeactivatedAccountCannotReadItsProfile()
     {
         using var app = new UsersApiFactory(); using var client = app.Browser(app.Token());

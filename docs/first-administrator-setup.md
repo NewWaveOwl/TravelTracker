@@ -57,3 +57,9 @@ Live check: the signed-in administrator opened `/administrator`, the **All users
 ### Live attraction write access
 
 With explicit owner approval, the Auth0 API's missing `catalogue.write` permission was defined and added to the frontend's user-delegated grant. The frontend requests `openid profile email catalogue.read catalogue.write` through local user-secrets. A fresh hosted sign-in and consent displayed **Create attraction**; opening it displayed the editable form, coordinate picker entry point and duration controls. This verifies granted-scope UI availability, not a saved live attraction: no sample attraction was submitted. Administrator status and OAuth catalogue permissions remain separate checks.
+
+### Test duplication cleanup
+
+The PostgreSQL tests share one per-test database lifecycle helper. The overlapping first-sign-in test is consolidated into the stronger spoofed-role/repeated-sign-in scenario, preserving its active-status and no-bootstrap assertions. HTTP role tests use configured repository results to verify status mapping and forwarding of the validated actor and reviewed request; their fake no longer reimplements role policy. Actual authorization, last-administrator, stale-role and audit guarantees remain covered by the production repository's PostgreSQL tests.
+
+After cleanup, the solution build has **0 warnings, 0 errors**. **479 ordinary tests and 22 PostgreSQL tests passed, 0 failed, 0 skipped** (501 total: API 89, Attractions 184, frontend 159, Users 69). The count falls from 503 through consolidation of overlapping HTTP/provisioning scenarios; all 15 Users PostgreSQL cases remain. Test/helper code is 79 lines smaller. Restore, Release build and both filtered test groups used `-p:UseAppHost=false -p:OutputPath=bin/Pr75Validation/` for build/test outputs, preserving the running website.

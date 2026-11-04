@@ -1,9 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Npgsql;
 using TravelTracker.Users.Data;
-using TravelTracker.Users.Data.Repositories;
-using TravelTracker.Users.Domain.Models;
+using TravelTracker.Users.Tests.Support;
 
 namespace TravelTracker.Users.Tests;
 
@@ -17,7 +14,7 @@ public sealed class RolePersistenceTests
     [Fact]
     public async Task AdministratorListsPersistedAccountsAndPromotionRecordsActorAndReason()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
         var admin = await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
         var target = await repository.GetOrCreateTravellerAsync(Issuer, "traveller", "traveller@example.test", default);
@@ -40,7 +37,7 @@ public sealed class RolePersistenceTests
     [Fact]
     public async Task LastActiveAdministratorCannotDemoteItself()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
         var admin = await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
         var result = await repository.ChangeRoleAsync(Issuer, "admin", admin!.UserId, "traveller", "administrator", "Requested role removal", default);
@@ -53,7 +50,7 @@ public sealed class RolePersistenceTests
     [Fact]
     public async Task ConcurrentSelfDemotionsLeaveOneActiveAdministrator()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var first = await database.Repository().BootstrapAsync(Issuer, "first", AdminEmail, default);
         var second = await database.Repository().GetOrCreateTravellerAsync(Issuer, "second", "second@example.test", default);
         Assert.Equal("changed", (await database.Repository().ChangeRoleAsync(Issuer, "first", second.UserId, "administrator", "traveller", "Appoint second administrator", default)).Code);
@@ -69,7 +66,7 @@ public sealed class RolePersistenceTests
     [Fact]
     public async Task DemotedActorImmediatelyLosesListingAndRoleChangeAuthority()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
         var first = await repository.BootstrapAsync(Issuer, "first", AdminEmail, default);
         var second = await repository.GetOrCreateTravellerAsync(Issuer, "second", "second@example.test", default);
@@ -82,7 +79,7 @@ public sealed class RolePersistenceTests
     [Fact]
     public async Task StaleExpectedRoleOrSameRoleCreatesNoWriteOrAudit()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
         await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
         var traveller = await repository.GetOrCreateTravellerAsync(Issuer, "traveller", "traveller@example.test", default);
@@ -96,7 +93,7 @@ public sealed class RolePersistenceTests
     [Fact]
     public async Task InactiveAccountsCannotBePromotedOrActAsAdministrators()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
         var admin = await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
         var traveller = await repository.GetOrCreateTravellerAsync(Issuer, "traveller", "traveller@example.test", default);
@@ -112,7 +109,7 @@ public sealed class RolePersistenceTests
     [Fact]
     public async Task RepeatedProvisioningDoesNotOverwriteRoleEmailOrStanding()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
         var admin = await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
         var existing = await repository.GetOrCreateTravellerAsync(Issuer, "admin", "changed@example.test", default);
@@ -130,7 +127,7 @@ public sealed class RolePersistenceTests
     [Fact]
     public async Task AuditFailureRollsBackRoleMutation()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
         await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
         var traveller = await repository.GetOrCreateTravellerAsync(Issuer, "traveller", "traveller@example.test", default);
@@ -147,7 +144,7 @@ public sealed class RolePersistenceTests
     [InlineData("administrator", "traveller", "   ")]
     public async Task InvalidTransitionsLeaveTheAccountUnchanged(string role, string expectedRole, string reason)
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
         await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
         var traveller = await repository.GetOrCreateTravellerAsync(Issuer, "traveller", "traveller@example.test", default);
@@ -165,39 +162,5 @@ public sealed class RolePersistenceTests
         public string NewRole { get; set; } = "";
         public string Reason { get; set; } = "";
         public string Action { get; set; } = "";
-    }
-
-    /** Owns one uniquely named disposable test database. */
-    sealed class Database(string administrativeConnection, string name, string connection) : IAsyncDisposable
-    {
-        public UsersDbContext Context() => new(new DbContextOptionsBuilder<UsersDbContext>().UseNpgsql(connection).Options);
-        public EfUserRepository Repository() => new(new PooledDbContextFactory<UsersDbContext>(new DbContextOptionsBuilder<UsersDbContext>().UseNpgsql(connection).Options));
-
-        /**
-         * Creates and migrates one isolated PostgreSQL database.
-         * @return Database to dispose after the scenario.
-         */
-        public static async Task<Database> CreateAsync()
-        {
-            var administrativeConnection = Environment.GetEnvironmentVariable("TRAVELTRACKER_TEST_POSTGRES") ?? throw new InvalidOperationException("Set TRAVELTRACKER_TEST_POSTGRES to an isolated PostgreSQL instance with CREATEDB permission.");
-            var name = "traveltracker_roles_test_" + Guid.NewGuid().ToString("N");
-            await using var administrative = new NpgsqlConnection(administrativeConnection);
-            await administrative.OpenAsync();
-            await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", administrative);
-            await create.ExecuteNonQueryAsync();
-            var connection = new NpgsqlConnectionStringBuilder(administrativeConnection) { Database = name, Pooling = false }.ConnectionString;
-            var database = new Database(administrativeConnection, name, connection);
-            try { await using var context = database.Context(); await context.Database.MigrateAsync(); return database; }
-            catch { await database.DisposeAsync(); throw; }
-        }
-
-        /** Drops only this generated test database after its contexts are disposed. */
-        public async ValueTask DisposeAsync()
-        {
-            await using var administrative = new NpgsqlConnection(administrativeConnection);
-            await administrative.OpenAsync();
-            await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)", administrative);
-            await drop.ExecuteNonQueryAsync();
-        }
     }
 }
