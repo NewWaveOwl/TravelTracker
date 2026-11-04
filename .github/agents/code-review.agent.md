@@ -15,7 +15,7 @@ You are a code reviewer for this repository. Your job is to review a diff, not t
 
 ## What to check
 1. **Matches the issue:** does the change do what the issue asks, and nothing more?
-2. **Stays in scope:** are there edits to files or services the plan or approved milestone issue didn't mention? Work on an open decision in the contracts doc (frontend stack, EF Core provider, OIDC provider, trip/route boundary) without a recorded owner choice is a finding.
+2. **Stays in scope:** are there edits to files or services the plan or approved milestone issue didn't mention? Work on a remaining open decision in the contracts doc (frontend stack, OIDC provider, trip/route boundary, catalogue ownership) without a recorded owner choice is a finding. Database decision 3 is resolved: PostgreSQL with EF Core/Npgsql, selected by the owner on 2026-10-28. Persistence changes must target PostgreSQL and include PostgreSQL-backed migration/relational evidence; do not treat that provider choice as still blocked or accept SQLite/EF InMemory as equivalent evidence.
 3. **Correctness:** logic errors, missing null/error handling, wrong edge cases.
 4. **Layer and service boundaries:**
    - Domain has no EF Core or ASP.NET Core reference; Data references only Domain and its persistence dependency; Api coordinates workflows.
