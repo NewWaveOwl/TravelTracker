@@ -32,7 +32,7 @@ The following features are not yet available through the running application:
 - Scheduled journeys, departure and arrival times, and stop timing.
 - Collection listing, PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
 - Persistent database storage for the remaining service hosts.
-- A traveller-facing frontend.
+- Complete traveller-facing feature screens (the React navigation and HTTP foundation is in `frontend/`).
 
 User and accommodation models and repository contracts exist. Trip/TripLeg domain rules are implemented, but their HTTP/persistence features remain unfinished. UserSettings and TripMapPoint remain placeholders.
 
@@ -62,6 +62,8 @@ A route point describes a reusable location. A transport entry describes a trans
 The historical SQL schema in `src/Database/schema.sql` is not applied automatically. Attractions uses its committed EF migrations; other hosts still have no database persistence.
 
 ## Getting started
+
+The independent React client lives in [frontend](frontend/README.md). With Node 22.12+ installed, run `npm ci` and `npm run dev` from that folder. It provides the Figma-based shell, shared form/status displays and public service health checks; trip saving and sign-in remain separate features.
 
 Install the **.NET 10 SDK**, then clone the repository:
 

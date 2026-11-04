@@ -16,7 +16,7 @@ Six logical services, each owning its own data, plus one independent frontend. E
 | Attractions | Artiom | Attraction places | Implemented: GET list with name filter, GET by ID, POST, PATCH |
 | Trips | James | Itineraries, history, map data, time rules | Empty `Trip` and `TripLeg` declarations; interfaces only |
 | Settings | James | User preferences | Empty `UserSettings` declaration; interface only |
-| Frontend | Open decision | Traveller-facing client using public HTTP DTOs only | Not started |
+| Frontend | React (owner decision, 2026-11-03) | Traveller-facing client using public HTTP DTOs only | Independent `frontend/` shell, shared form/status displays and anonymous HTTP health checks; feature integration remains separate |
 
 Current runnable state: `TravelTracker.Attractions.Api` independently owns Attractions on port 5104 with PostgreSQL and the approved private/shared access rules. `TravelTracker.Api` retains Transport/Route Points on 5105 with in-memory stores. Both use `TravelTracker.Security` bearer infrastructure. Remaining service extraction is future work. See [Attractions service](attractions-service.md).
 
@@ -132,7 +132,7 @@ Ticket import, nearby suggestions and free-time summary (M3 features in design s
 
 Unresolved items need an owner choice recorded here before the dependent work starts. Resolved entries remain numbered for existing references.
 
-1. **Frontend stack.** React Native or an ASP.NET Core client. Blocks #32 and #33.
+1. **Frontend stack resolved.** React browser application in top-level `frontend/` (owner instruction, 2026-11-03). Identity integration remains #33.
 2. **OIDC provider.** Which identity provider issues the tokens, and its issuer and audience values. Blocks #33, #37 and deployed-provider verification of #34. The #34 representative resource-server pattern is implemented with configurable settings and real bearer-validation tests; no provider-specific compatibility is claimed.
 3. **EF Core database provider — resolved 2026-10-28.** The repository owner explicitly selected **PostgreSQL**, using `Npgsql.EntityFrameworkCore.PostgreSQL` for EF Core. Database selection no longer blocks #35, #36 or the persistence parts of #41; their other prerequisites remain. Keep Domain/application rules independent of the provider and isolate PostgreSQL configuration/mappings in persistence. Preserve the earlier intent of minimizing provider coupling in Domain/application code; PostgreSQL is the concrete implementation and verification target, and support for other providers must not be claimed without implementation and tests. Review provider-specific model choices and migrations deliberately rather than treating the historical SQL schema as an applied migration. Relational persistence verification must run against PostgreSQL. Server version, deployment and connection secrets are separate configuration concerns, not decided here.
 4. **Trip and scheduled-route boundary.** Option A or B above, and the trip leg ID type. Blocks #39, #40 and #41.
