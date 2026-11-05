@@ -399,7 +399,13 @@ public sealed class TransportWorkspaceTests : BunitContext
         page.Find(".point-create").Submit();
         page.WaitForAssertion(() => Assert.Contains("Saved station", page.Find("#choose-departure").TextContent));
         Assert.Contains("Choose destination", page.Find("#choose-destination").TextContent);
-        page.Find("#new-point-name").Change("New destination"); page.Find(".point-create").Submit();
+        Assert.Equal("", page.Find("#new-point-name").GetAttribute("value"));
+        Assert.Equal("", page.Find("#new-point-lat").GetAttribute("value"));
+        Assert.Equal("", page.Find("#new-point-lon").GetAttribute("value"));
+        page.Find("#new-point-name").Change("New destination");
+        page.Find("#new-point-lat").Change("43.7");
+        page.Find("#new-point-lon").Change("-79.4");
+        page.Find(".point-create").Submit();
         page.WaitForAssertion(() => Assert.Contains("New destination", page.Find("#choose-destination").TextContent));
         page.Find(".transport-add").Click();
         page.WaitForAssertion(() => Assert.Single(draft));

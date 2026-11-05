@@ -139,18 +139,40 @@ public partial class TransportWorkspace : IDisposable
     void NewEntry() { if (busy) return; editingIndex = null; selectedTransport = null; selectedPoint = null; selectedDeparture = selections.LastOrDefault()?.Destination; choosingDeparture = selectedDeparture is null; ResetTiming(); error = status = null; }
     async Task RemoveAsync(int index) { if (busy) return; selections.RemoveAt(index); NewEntry(); await SelectionChanged.InvokeAsync(selections.ToArray()); }
 
+    /**
+     * Saves a catalogue entry and selects it after the current request confirms creation.
+     * @return Completion of the save attempt.
+     */
     async Task CreateTransportAsync()
     {
         if (!canWrite || busy) return;
-        if (string.IsNullOrWhiteSpace(transportName) || !Modes.Contains(newCode)) { error = "Enter a transport name and supported mode."; return; }
+        if (string.IsNullOrWhiteSpace(transportName) || !Modes.Contains(newCode))
+        {
+            error = "Enter a transport name and supported mode.";
+            return;
+        }
         await RunAsync(async token =>
         {
-            var saved = await Client.CreateTransportAsync(new() { ["name"] = transportName.Trim(), ["code"] = newCode, ["description"] = description }, token);
-            selectedTransport = saved; showMap = true; transports = new[] { saved }.Concat(transports.Where(v => v.TransportModeId != saved.TransportModeId)).ToArray();
+            var saved = await Client.CreateTransportAsync(new()
+            {
+                ["name"] = transportName.Trim(),
+                ["code"] = newCode,
+                ["description"] = description,
+            }, token);
+            token.ThrowIfCancellationRequested();
+            selectedTransport = saved;
+            showMap = true;
+            transports = new[] { saved }.Concat(transports.Where(v => v.TransportModeId != saved.TransportModeId)).ToArray();
+            transportName = description = "";
+            newCode = "car";
             status = "Transport entry saved.";
         });
     }
 
+    /**
+     * Saves a route point and applies it to the endpoint chosen before the request.
+     * @return Completion of the save attempt.
+     */
     async Task CreatePointAsync()
     {
         if (!canWrite || busy) return;
@@ -159,12 +181,27 @@ public partial class TransportWorkspace : IDisposable
             !decimal.TryParse(lat, NumberStyles.Float, CultureInfo.InvariantCulture, out var latitude) || latitude is < -90 or > 90 ||
             !decimal.TryParse(lon, NumberStyles.Float, CultureInfo.InvariantCulture, out var longitude) || longitude is < -180 or > 180 ||
             (!string.IsNullOrWhiteSpace(sourceId) && !Guid.TryParse(sourceId, out _)))
-        { error = "Enter a name, supported location type, valid latitude (−90 to 90), longitude (−180 to 180) and optional source UUID."; return; }
+        {
+            error = "Enter a name, supported location type, valid latitude (−90 to 90), longitude (−180 to 180) and optional source UUID.";
+            return;
+        }
         await RunAsync(async token =>
         {
-            var saved = await Client.CreatePointAsync(new() { ["name"] = pointName.Trim(), ["type"] = newType, ["address"] = address, ["lat"] = latitude, ["lon"] = longitude, ["sourceId"] = string.IsNullOrWhiteSpace(sourceId) ? null : Guid.Parse(sourceId) }, token);
-            ApplyPoint(saved, departure); points = new[] { saved }.Concat(points.Where(v => v.RoutePointId != saved.RoutePointId)).ToArray();
+            var saved = await Client.CreatePointAsync(new()
+            {
+                ["name"] = pointName.Trim(),
+                ["type"] = newType,
+                ["address"] = address,
+                ["lat"] = latitude,
+                ["lon"] = longitude,
+                ["sourceId"] = string.IsNullOrWhiteSpace(sourceId) ? null : Guid.Parse(sourceId),
+            }, token);
+            token.ThrowIfCancellationRequested();
+            ApplyPoint(saved, departure);
+            points = new[] { saved }.Concat(points.Where(v => v.RoutePointId != saved.RoutePointId)).ToArray();
             if (mapReference.Count == 0) mapReference = points;
+            pointName = address = lat = lon = sourceId = "";
+            newType = "attraction";
             status = "Location saved.";
         });
     }
