@@ -41,6 +41,7 @@ public partial class AttractionsProgram
         builder.Services.AddScoped<IAttractionService, AttractionService>();
         builder.Services.AddScoped<CallerContext>();
         builder.Services.AddHttpClient<UsersAccessClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
+            .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         var app = builder.Build();
         app.UseAttractionExceptionHandling();

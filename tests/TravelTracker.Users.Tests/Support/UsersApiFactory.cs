@@ -9,8 +9,12 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using TravelTracker.Users.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
@@ -21,18 +25,22 @@ using TravelTracker.Users.Domain.Models;
 
 namespace TravelTracker.Users.Tests.Support;
 
-/** Test-only Users host with production JWT validation, deterministic userinfo and no external database. */
+/** Test-only Users host with production JWT validation, deterministic userinfo and optional isolated PostgreSQL. */
 public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
 {
     public const string Issuer = "https://issuer.example.test/";
     public const string Audience = "traveltracker-tests";
     public const string Secret = "test-bootstrap-credential-at-least-32-characters";
     public const string ServiceToken = "test-independent-service-credential-at-least-32";
+    public const string ServiceSubject = "attractions-service";
     public const string Email = "initial-admin@example.test";
     readonly RSA key = RSA.Create(2048);
     public MemoryUserRepository Repository { get; } = new();
     public UserInfoHandler Identity { get; } = new();
+    public UsersLogCapture Logs { get; } = new();
     public string ConfiguredSecret { get; set; } = Secret;
+    public string? ProfileDatabaseConnection { get; init; }
+    public IInterceptor? ProfileSaveInterceptor { get; init; }
 
     /**
      * Starts the actual middleware with an isolated signing key and HTTP dependencies.
@@ -41,9 +49,10 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.ConfigureLogging(logging => logging.AddProvider(Logs));
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["ConnectionStrings:Users"] = "Host=unused.test;Database=unused",
+            ["ConnectionStrings:Users"] = ProfileDatabaseConnection ?? "Host=unused.test;Database=unused",
             ["Authentication:Bearer:Authority"] = Issuer,
             ["Authentication:Bearer:Issuer"] = Issuer,
             ["Authentication:Bearer:Audience"] = Audience,
@@ -52,11 +61,21 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
             ["Bootstrap:Issuer"] = Issuer,
             ["Bootstrap:Secret"] = ConfiguredSecret,
             ["UsersAccess:ServiceToken"] = ServiceToken,
+            ["UsersAccess:AllowedServiceSubjects:0"] = ServiceSubject,
         }));
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IUserRepository>();
             services.AddSingleton<IUserRepository>(Repository);
+            if (ProfileDatabaseConnection is null)
+            {
+                services.RemoveAll<TravelTracker.Users.Data.Repositories.Profile.IUserRepository>();
+                services.AddSingleton<TravelTracker.Users.Data.Repositories.Profile.IUserRepository>(Repository);
+            }
+            else if (ProfileSaveInterceptor is { } interceptor)
+            {
+                services.ConfigureDbContext<UsersDbContext>(options => options.AddInterceptors(interceptor));
+            }
             services.AddHttpClient<VerifiedIdentityClient>().ConfigurePrimaryHttpMessageHandler(() => Identity);
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
@@ -75,7 +94,7 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
      * @param scope Granted scope.
      * @return Signed test-only bearer token.
      */
-    public string Token(string? failure = null, string subject = "admin-subject", string scope = "catalogue.read", string? role = null)
+    public string Token(string? failure = null, string subject = "admin-subject", string scope = "catalogue.read users.read", string? role = null)
     {
         using var other = RSA.Create(2048);
         var now = DateTime.UtcNow;

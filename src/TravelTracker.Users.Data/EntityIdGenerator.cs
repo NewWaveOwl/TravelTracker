@@ -3,40 +3,20 @@ using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Data;
 
-/**
- * Issues persistence keys above the highest key already stored by the single Users writer.
- */
+/** Issues internal keys from the current database while the caller holds the provisioning lock. */
 internal sealed class EntityIdGenerator
 {
-    private static readonly SemaphoreSlim InitializationGate = new(1, 1);
-    private static long lastId;
-    private static bool initialized;
+    internal const long ProvisioningLock = 0x5454555345520001;
 
     /**
-     * Allocates the next internal key after initializing from persisted accounts once per process.
-     * @param db The Users context used to read the persisted high-water mark.
-     * @param cancellationToken Cancels initialization.
+     * Allocates the next app-owned internal key from the persisted high-water mark.
+     * @param db A context whose transaction holds the Users provisioning lock.
+     * @param cancellationToken Cancels the lookup.
      * @return The next Data-only entity key.
      */
     public async ValueTask<Id64> NextAsync(UsersDbContext db, CancellationToken cancellationToken)
     {
-        if (!Volatile.Read(ref initialized))
-        {
-            await InitializationGate.WaitAsync(cancellationToken);
-            try
-            {
-                if (!initialized)
-                {
-                    lastId = await db.Accounts.Select(record => (long?)record.Id).MaxAsync(cancellationToken) ?? 0;
-                    Volatile.Write(ref initialized, true);
-                }
-            }
-            finally
-            {
-                InitializationGate.Release();
-            }
-        }
-
-        return new Id64(Interlocked.Increment(ref lastId));
+        var lastId = await db.Accounts.Select(record => (long?)record.Id).MaxAsync(cancellationToken) ?? 0;
+        return new Id64(checked(lastId + 1));
     }
 }

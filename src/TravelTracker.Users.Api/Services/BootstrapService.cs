@@ -38,7 +38,7 @@ public sealed class BootstrapService(IConfiguration configuration, VerifiedIdent
             ? Results.Problem(statusCode: 409, title: "First-administrator setup has already been completed.")
             : Results.Ok(new UserProfileResponse(
                 account.PublicId,
-                account.Email,
+                account.VerifiedEmail,
                 account.Role == UserRole.User ? "traveller" : "administrator",
                 account.Status.ToString().ToLowerInvariant()));
     }

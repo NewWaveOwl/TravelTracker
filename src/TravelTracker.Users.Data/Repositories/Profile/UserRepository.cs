@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using TravelTracker.Users.Data.Entities;
 using TravelTracker.Users.Domain.Models;
 using TravelTracker.Users.Domain.Types;
@@ -56,6 +57,14 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
             cancellationToken);
         if (existing is not null) return ToAccount(existing);
 
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
+        existing = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(
+            item => item.Issuer == identity.Issuer && item.Subject == identity.Subject,
+            cancellationToken);
+        if (existing is not null) return ToAccount(existing);
+
         var account = UserAccount.CreateTraveller(identity, Utc(createdAt));
         var record = new UserRecord
         {
@@ -70,39 +79,55 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
         };
         db.Accounts.Add(record);
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToAccount(record);
     }
 
     /**
-     * Saves only profile fields and advances the persisted optimistic concurrency token.
-     * @param publicId The account's public UUID.
-     * @param username The replacement username, or null when unset.
-     * @param email The replacement email, or null when unset.
-     * @param address The replacement address, or null when unset.
+     * Saves only supplied profile fields for an active owner and advances the concurrency token.
+     * @param identity The validated owner identity.
+     * @param username The replacement username, or null to preserve it.
+     * @param email The replacement email, or null to preserve it.
+     * @param address The replacement address, or null to clear it when supplied.
+     * @param addressSpecified Whether the address field was supplied.
      * @param updatedAt The application time for this update.
      * @param cancellationToken Cancels the read or save.
-     * @return The saved account or null when absent.
+     * @return Saved profile, unchanged inactive account, or null when absent.
      * @throws DbUpdateConcurrencyException when another writer changed the record after it was loaded.
      */
     public async Task<UserAccount?> UpdateProfileAsync(
-        Guid publicId,
+        ProviderIdentity identity,
         string? username,
         string? email,
         string? address,
+        bool addressSpecified,
         DateTimeOffset updatedAt,
         CancellationToken cancellationToken)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        var record = await db.Accounts.SingleOrDefaultAsync(item => item.PublicId == publicId, cancellationToken);
+        var record = await db.Accounts.SingleOrDefaultAsync(
+            item => item.Issuer == identity.Issuer && item.Subject == identity.Subject, cancellationToken);
         if (record is null) return null;
+        if (record.Status != "active") return ToAccount(record);
 
-        record.Username = username;
-        record.NormalizedUsername = username?.ToUpperInvariant();
-        record.Email = email;
-        record.Address = address;
+        if (username is not null)
+        {
+            record.Username = username;
+            record.NormalizedUsername = username.ToUpperInvariant();
+        }
+        if (email is not null) record.Email = email;
+        if (addressSpecified) record.Address = address;
         record.UpdatedAt = Utc(updatedAt);
         record.ConcurrencyToken = Guid.NewGuid();
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_UserAccounts_NormalizedUsername" })
+        {
+            throw new UserProfileUsernameConflictException();
+        }
         return ToAccount(record);
     }
 
@@ -121,7 +146,7 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
             record.Username,
             record.Email,
             record.Address,
-            record.UpdatedAt);
+            record.UpdatedAt) { VerifiedEmail = record.VerifiedEmail };
 
     /**
      * Converts a persisted role code to its domain value.

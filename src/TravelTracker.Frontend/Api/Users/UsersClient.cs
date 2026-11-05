@@ -14,9 +14,9 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
      * @param cancellationToken Cancels the consuming view.
      * @return A profile, or null until that identity has a Users account.
      */
-    public async Task<UserProfile?> GetMeAsync(CancellationToken cancellationToken = default)
+    public async Task<SelfUserProfile?> GetMeAsync(CancellationToken cancellationToken = default)
     {
-        try { return await client.GetJsonAsync<UserProfile>("Users", "/api/v1/users/me", cancellationToken); }
+        try { return await client.GetJsonAsync<SelfUserProfile>("Users", "/api/v1/users/me", cancellationToken); }
         catch (ApiError failure) when (failure.Status == 404) { return null; }
     }
 

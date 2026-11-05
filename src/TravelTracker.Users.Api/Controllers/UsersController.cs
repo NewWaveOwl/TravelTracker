@@ -1,49 +1,151 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TravelTracker.Api.Authentication;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Api.Services;
-using TravelTracker.Users.Data.Repositories;
 using TravelTracker.Users.Domain.Models;
+using TravelTracker.Users.Domain.Types;
+using TravelTracker.Users.Data.Repositories.Profile;
+using IUserRepository = TravelTracker.Users.Data.Repositories.IUserRepository;
+using ProfileRepository = TravelTracker.Users.Data.Repositories.Profile.IUserRepository;
 
 namespace TravelTracker.Users.Api.Controllers;
 
 /**
  * Exposes public account contracts, a one-time bootstrap action and a credential-protected service lookup.
  * @param repository Current service-owned account store.
+ * @param profiles Persists self-service profiles and resolves public account identifiers.
  * @param bootstrap Verifies and performs first-admin setup.
  * @param configuration Operator-owned service credential.
  */
 [ApiController]
 [Route("api/v1/users")]
-public sealed class UsersController(IUserRepository repository, BootstrapService bootstrap, VerifiedIdentityClient identities, IConfiguration configuration) : ControllerBase
+public sealed class UsersController(IUserRepository repository, ProfileRepository profiles, BootstrapService bootstrap, IConfiguration configuration) : ControllerBase
 {
     /**
-     * Reads the signed-in account, provisioning only an ordinary traveller after provider email verification.
-     * @return Public profile, or a safe identity/standing failure.
+     * Reads or provisions the account belonging to the validated provider identity.
+     * @return The caller's profile or an authentication or standing failure.
      */
     [HttpGet("me")]
-    [Authorize(Policy = ScopePolicies.CatalogueRead)]
+    [Authorize(Policy = "users.read")]
     public async Task<IResult> Me()
     {
         if (!Request.IsHttps) return Results.Problem(statusCode: 400, title: "Account access requires HTTPS.");
-        var issuer = User.FindFirstValue("iss"); var subject = User.FindFirstValue("sub");
-        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject)) return Results.Unauthorized();
-        var account = await repository.FindAsync(issuer, subject, HttpContext.RequestAborted);
-        if (account is null)
-        {
-            var email = await identities.EmailAsync(issuer, subject, AccessToken(), HttpContext.RequestAborted);
-            if (email is null) return Results.Forbid();
-            account = await repository.GetOrCreateTravellerAsync(issuer, subject, email, HttpContext.RequestAborted);
-        }
-        if (account?.Status == UserStatus.Deactivated) return Results.Forbid();
-        return account is null ? Results.NotFound() : Results.Ok(new UserProfileResponse(
-            account.PublicId,
-            account.Email,
-            account.Role == UserRole.User ? "traveller" : "administrator",
-            account.Status.ToString().ToLowerInvariant()));
+        if (CurrentIdentity() is not { } identity) return Results.Unauthorized();
+
+        var account = await profiles.GetOrCreateAsync(identity, DateTimeOffset.UtcNow, HttpContext.RequestAborted);
+        return account.Status == UserStatus.Deactivated ? Results.Forbid() : Results.Ok(SelfProfile(account));
     }
+
+    /**
+     * Updates only the authenticated active account's explicitly supplied profile fields.
+     * @param request The profile changes.
+     * @return The persisted profile or a validation, standing or concurrency failure.
+     */
+    [HttpPatch("me")]
+    [Authorize(Policy = "users.write")]
+    public async Task<IResult> UpdateMe(UpdateUserProfileRequest request)
+    {
+        if (!Request.IsHttps) return Results.Problem(statusCode: 400, title: "Account access requires HTTPS.");
+        if (CurrentIdentity() is not { } identity) return Results.Unauthorized();
+
+        var cancellationToken = HttpContext.RequestAborted;
+        var account = await profiles.FindByProviderIdentityAsync(identity, cancellationToken);
+        if (account?.Status != UserStatus.Active) return Results.Forbid();
+
+        var username = request.Username?.Trim();
+        var email = request.Email?.Trim();
+        var address = request.Address?.Trim();
+        var candidate = account with
+        {
+            Username = request.HasUsername ? username : account.Username,
+            Email = request.HasEmail ? email : account.Email,
+            Address = request.HasAddress ? address : account.Address
+        };
+        var errors = candidate.Validate();
+        if (!request.HasUsername && !request.HasEmail && !request.HasAddress)
+            errors["profile"] = ["Supply at least one editable field."];
+        if (request.HasUsername && username is null)
+            errors["username"] = ["Username cannot be null."];
+        if (request.HasEmail && email is null)
+            errors["email"] = ["Email cannot be null."];
+        if (errors.Count != 0) return Results.ValidationProblem(errors);
+
+        try
+        {
+            var updated = await profiles.UpdateProfileAsync(identity, username, email, address,
+                request.HasAddress, DateTimeOffset.UtcNow, cancellationToken);
+            return updated?.Status == UserStatus.Active ? Results.Ok(SelfProfile(updated)) : Results.Forbid();
+        }
+        catch (UserProfileUsernameConflictException)
+        {
+            return Results.Problem(statusCode: 409, title: "That username is already in use.",
+                extensions: new Dictionary<string, object?> { ["code"] = "username_conflict" });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Problem(statusCode: 409, title: "The profile changed. Reload it before trying again.",
+                extensions: new Dictionary<string, object?> { ["code"] = "profile_concurrency_conflict" });
+        }
+    }
+
+    /**
+     * Looks up current account standing for an authorized backend.
+     * @param userId The server-issued public account identifier.
+     * @return Minimal account standing or 404 when the account does not exist.
+     */
+    [HttpGet("/internal/users/{userId:guid}/access")]
+    [Authorize(Policy = "users.access")]
+    public async Task<IResult> AccessById(Guid userId)
+    {
+        if (!Request.IsHttps) return Results.Problem(statusCode: 400, title: "Account lookup requires HTTPS.");
+        var account = await profiles.FindByPublicIdAsync(userId, HttpContext.RequestAborted);
+        return account is null ? Results.NotFound() : Results.Ok(new UserAccessResponse(
+            account.PublicId, account.Status.ToString().ToLowerInvariant(), RoleCode(account)));
+    }
+
+    /**
+     * Resolves a backend-validated identity to a public ID without provisioning an account.
+     * @param request The validated issuer and subject supplied by the authorized backend.
+     * @return The existing public ID or 404.
+     */
+    [HttpPost("/internal/users/identity")]
+    [Authorize(Policy = "users.access")]
+    public async Task<IResult> ResolveIdentity(AccessRequest request)
+    {
+        if (!Request.IsHttps) return Results.Problem(statusCode: 400, title: "Account lookup requires HTTPS.");
+        if (string.IsNullOrWhiteSpace(request.Issuer) || string.IsNullOrWhiteSpace(request.Subject)) return Results.BadRequest();
+        var identity = new ProviderIdentity(request.Issuer, request.Subject);
+        var account = await profiles.FindByProviderIdentityAsync(identity, HttpContext.RequestAborted);
+        return account is null ? Results.NotFound() : Results.Ok(new { userId = account.PublicId });
+    }
+
+    /**
+     * Reads the provider identity supplied by bearer validation.
+     * @return The validated identity, or null when a claim is missing.
+     */
+    private ProviderIdentity? CurrentIdentity()
+    {
+        var issuer = User.FindFirstValue("iss");
+        var subject = User.FindFirstValue("sub");
+        return string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject)
+            ? null : new ProviderIdentity(issuer, subject);
+    }
+
+    /**
+     * Maps the private self-service profile for its account holder.
+     * @param account The caller's account.
+     * @return Editable fields and public account metadata.
+     */
+    private static SelfProfileResponse SelfProfile(UserAccount account) =>
+        new(account.PublicId, account.Username, account.Email, account.Address,
+            RoleCode(account), account.Status.ToString().ToLowerInvariant(), account.CreatedAt, account.UpdatedAt);
+
+    private static string RoleCode(UserAccount account) =>
+        account.Role == UserRole.User ? "traveller" : "administrator";
+
 
     /**
      * Lists registered application accounts only after live administrator authorization in the Users store.
@@ -60,7 +162,7 @@ public sealed class UsersController(IUserRepository repository, BootstrapService
         return accounts is null ? Results.Forbid() : Results.Ok(accounts.Select(account =>
             new UserProfileResponse(
                 account.PublicId,
-                account.Email,
+                account.VerifiedEmail,
                 account.Role == UserRole.User ? "traveller" : "administrator",
                 account.Status.ToString().ToLowerInvariant())).ToList());
     }
@@ -84,7 +186,7 @@ public sealed class UsersController(IUserRepository repository, BootstrapService
         {
             "changed" when result.Account is { } account => Results.Ok(new UserProfileResponse(
                 account.PublicId,
-                account.Email,
+                account.VerifiedEmail,
                 account.Role == UserRole.User ? "traveller" : "administrator",
                 account.Status.ToString().ToLowerInvariant())),
             "forbidden" => Results.Forbid(),
@@ -135,10 +237,4 @@ public sealed class UsersController(IUserRepository repository, BootstrapService
     [HttpGet("/health")]
     [AllowAnonymous]
     public IResult Health() => Results.Ok(new { status = "ok", service = "Users" });
-
-    string AccessToken()
-    {
-        var authorization = Request.Headers.Authorization.ToString();
-        return authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? authorization[7..] : "";
-    }
 }

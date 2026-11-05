@@ -34,21 +34,23 @@ public interface IUserRepository
     Task<UserAccount> GetOrCreateAsync(ProviderIdentity identity, DateTimeOffset createdAt, CancellationToken cancellationToken);
 
     /**
-     * Replaces the editable profile fields without changing server-owned account state.
-     * @param publicId The account's public UUID.
-     * @param username The replacement username, or null when no username is set.
-     * @param email The replacement email, or null when no email is set.
-     * @param address The replacement address, or null when no address is set.
+     * Updates supplied profile fields on an active account without changing server-owned state.
+     * @param identity The validated owner identity.
+     * @param username The replacement username, or null to preserve it.
+     * @param email The replacement email, or null to preserve it.
+     * @param address The replacement address, or null to clear it when supplied.
+     * @param addressSpecified Whether the address field was supplied.
      * @param updatedAt The application time for this update.
      * @param cancellationToken Cancels the read or save.
-     * @return The saved account or null when it does not exist.
+     * @return Saved profile, unchanged inactive account, or null when absent.
      * @throws DbUpdateConcurrencyException when a concurrent update changed the loaded record.
      */
     Task<UserAccount?> UpdateProfileAsync(
-        Guid publicId,
+        ProviderIdentity identity,
         string? username,
         string? email,
         string? address,
+        bool addressSpecified,
         DateTimeOffset updatedAt,
         CancellationToken cancellationToken);
 }

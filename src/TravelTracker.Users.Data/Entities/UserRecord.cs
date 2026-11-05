@@ -16,6 +16,7 @@ internal sealed class UserRecord
     public string? Username { get; set; }
     public string? NormalizedUsername { get; set; }
     public string? Email { get; set; }
+    public string? VerifiedEmail { get; set; }
     public string? Address { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }

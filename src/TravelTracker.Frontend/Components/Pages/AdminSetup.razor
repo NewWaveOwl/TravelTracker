@@ -18,9 +18,9 @@ else if (!signedIn)
 {
     <Feedback Kind="FeedbackKind.Permission" Title="Sign in first"><a href="account">Sign in with the selected account</a>, then return here.</Feedback>
 }
-else if (profile?.Role == "administrator" && profile.Status == "active")
+else if (isAdministrator)
 {
-    <Feedback Kind="FeedbackKind.Success" Title="Administrator access confirmed">@profile.Email is an administrator.</Feedback>
+    <Feedback Kind="FeedbackKind.Success" Title="Administrator access confirmed">Your account is an administrator.</Feedback>
     <a class="button" href="attractions">Open attractions</a>
 }
 else
@@ -46,7 +46,7 @@ else
 @code {
     bool signedIn, loading = true, busy, disposed, focusError;
     string? error;
-    UserProfile? profile;
+    bool isAdministrator;
     ElementReference errorSummary;
     readonly CancellationTokenSource closed = new();
 
@@ -67,7 +67,7 @@ else
         {
             var user = (await Authentication.GetAuthenticationStateAsync()).User;
             signedIn = user.Identity?.IsAuthenticated == true && Sessions.IsActive(user) && AccessTokenClaims.ActiveToken(user, Clock.GetUtcNow()) is not null;
-            profile = signedIn ? await Users.GetMeAsync(closed.Token) : null;
+            isAdministrator = signedIn && await Users.GetMeAsync(closed.Token) is { Role: "administrator", Status: "active" };
         }
         catch (ApiError failure) { error = failure.Message; }
         catch (OperationCanceledException) when (closed.IsCancellationRequested) { }
@@ -84,8 +84,9 @@ else
         busy = true; error = null;
         try
         {
-            profile = await Users.BootstrapAsync(closed.Token);
-            if (profile.Role != "administrator" || profile.Status != "active") error = "Administrator access was not granted.";
+            var profile = await Users.BootstrapAsync(closed.Token);
+            isAdministrator = profile is { Role: "administrator", Status: "active" };
+            if (!isAdministrator) error = "Administrator access was not granted.";
         }
         catch (ApiError failure) { error = failure.Status == 403 ? "This verified account is not allowed to perform first-administrator setup." : failure.Message; }
         catch (OperationCanceledException) when (closed.IsCancellationRequested) { }
@@ -94,7 +95,7 @@ else
 
     void Changed(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
     {
-        profile = null; error = null; loading = true;
+        isAdministrator = false; error = null; loading = true;
         await LoadAsync();
         if (!disposed) StateHasChanged();
     });

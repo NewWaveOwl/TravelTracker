@@ -42,13 +42,15 @@ public sealed class UserRepositoryPostgreSqlTests
             var existing = await repository.FindByProviderIdentityAsync(identity, CancellationToken.None);
             Assert.NotNull(existing);
             savedPublicId = existing.PublicId;
-            Assert.Equal("legacy@example.test", existing.Email);
+            Assert.Equal("legacy@example.test", existing.VerifiedEmail);
+            Assert.Null(existing.Email);
 
             var updated = await repository.UpdateProfileAsync(
-                existing.PublicId,
+                identity,
                 "Legacy.User",
                 "legacy@example.test",
                 "1 Main Street",
+                true,
                 CreatedAt.AddHours(1),
                 CancellationToken.None);
             Assert.NotNull(updated);
@@ -62,6 +64,7 @@ public sealed class UserRepositoryPostgreSqlTests
         Assert.NotNull(persisted);
         Assert.Equal("Legacy.User", persisted.Username);
         Assert.Equal("legacy@example.test", persisted.Email);
+        Assert.Equal("legacy@example.test", persisted.VerifiedEmail);
         Assert.Equal("1 Main Street", persisted.Address);
         Assert.Equal(CreatedAt.AddHours(1), persisted.UpdatedAt);
 
@@ -94,9 +97,9 @@ public sealed class UserRepositoryPostgreSqlTests
         Assert.Null(first.Email);
         Assert.Null(third.Username);
 
-        await repository.UpdateProfileAsync(first.PublicId, "Alice", null, null, CreatedAt.AddMinutes(1), CancellationToken.None);
-        await Assert.ThrowsAsync<DbUpdateException>(() =>
-            repository.UpdateProfileAsync(second.PublicId, "alice", null, null, CreatedAt.AddMinutes(2), CancellationToken.None));
+        await repository.UpdateProfileAsync(firstIdentity, "Alice", null, null, false, CreatedAt.AddMinutes(1), CancellationToken.None);
+        await Assert.ThrowsAsync<UserProfileUsernameConflictException>(() =>
+            repository.UpdateProfileAsync(secondIdentity, "alice", null, null, false, CreatedAt.AddMinutes(2), CancellationToken.None));
 
         await using var context = await factory.CreateDbContextAsync();
         var indexes = context.Model.FindEntityType("TravelTracker.Users.Data.Entities.UserRecord")!.GetIndexes();
@@ -141,6 +144,23 @@ public sealed class UserRepositoryPostgreSqlTests
     }
 
     [Fact]
+    public async Task ConcurrentFirstRequests_ReturnTheSamePersistedAccount()
+    {
+        await using var database = new PostgresTestDatabase();
+        var factory = CreateFactory(database.ConnectionString);
+        await MigrateAsync(factory);
+        var identity = new ProviderIdentity("https://issuer.example/", "first-sign-in");
+
+        var accounts = await Task.WhenAll(
+            new UserRepository(factory).GetOrCreateAsync(identity, CreatedAt, CancellationToken.None),
+            new UserRepository(factory).GetOrCreateAsync(identity, CreatedAt, CancellationToken.None));
+
+        Assert.Equal(accounts[0].PublicId, accounts[1].PublicId);
+        var persisted = await new UserRepository(factory).FindByProviderIdentityAsync(identity, CancellationToken.None);
+        Assert.Equal(accounts[0], persisted);
+    }
+
+    [Fact]
     public async Task ConcurrentProfileUpdates_RejectTheStaleWrite()
     {
         await using var database = new PostgresTestDatabase();
@@ -164,17 +184,19 @@ public sealed class UserRepositoryPostgreSqlTests
 
         var attempts = await Task.WhenAll(
             CaptureConcurrencyAsync(() => concurrentRepository.UpdateProfileAsync(
-                account.PublicId,
+                account.ProviderIdentity,
                 null,
                 "winner@example.test",
                 null,
+                false,
                 CreatedAt.AddMinutes(1),
                 CancellationToken.None)),
             CaptureConcurrencyAsync(() => concurrentRepository.UpdateProfileAsync(
-                account.PublicId,
+                account.ProviderIdentity,
                 null,
                 null,
                 "2 Main Street",
+                true,
                 CreatedAt.AddMinutes(1),
                 CancellationToken.None)));
 
@@ -220,7 +242,7 @@ public sealed class UserRepositoryPostgreSqlTests
                  "Username", "NormalizedUsername", "Address", "UpdatedAt", "ConcurrencyToken")
             VALUES
                 ({id}, {publicId}, {issuer}, {subject}, {email}, {role}, {status}, {CreatedAt},
-                 {null}, {null}, {null}, {null}, {Guid.CreateVersion7()})
+                 NULL, NULL, NULL, NULL, {Guid.CreateVersion7()})
             """);
 
     /**
@@ -258,7 +280,7 @@ public sealed class UserRepositoryPostgreSqlTests
             CancellationToken cancellationToken = default)
         {
             if (Interlocked.Increment(ref arrivals) == participants) release.TrySetResult(true);
-            await release.Task.WaitAsync(cancellationToken);
+            await release.Task.WaitAsync(TimeSpan.FromSeconds(15), cancellationToken);
             return result;
         }
     }

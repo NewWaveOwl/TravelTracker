@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+using System.Net.Mail;
 using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Domain.Models;
@@ -8,14 +8,13 @@ namespace TravelTracker.Users.Domain.Models;
  */
 public sealed record UserAccount
 {
-    private static readonly EmailAddressAttribute EmailAddressValidator = new();
-
     public Guid PublicId { get; init; }
     public ProviderIdentity ProviderIdentity { get; init; }
     public UserRole Role { get; init; }
     public UserStatus Status { get; init; }
     public string? Username { get; init; }
     public string? Email { get; init; }
+    public string? VerifiedEmail { get; init; }
     public string? Address { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? UpdatedAt { get; init; }
@@ -164,7 +163,8 @@ public sealed record UserAccount
             addError("email", "Email must be trimmed.");
         }
 
-        if (!EmailAddressValidator.IsValid(email))
+        if (!MailAddress.TryCreate(email, out var parsed) ||
+            !string.Equals(parsed.Address, email, StringComparison.Ordinal))
         {
             addError("email", "Email must be a valid email address.");
         }
@@ -180,6 +180,11 @@ public sealed record UserAccount
         if (string.IsNullOrWhiteSpace(address))
         {
             addError("address", "Address must not be blank.");
+        }
+
+        if (address.Contains('\0'))
+        {
+            addError("address", "Address cannot contain a NUL character.");
         }
 
         if (address.Length > 500)

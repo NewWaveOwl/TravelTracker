@@ -131,6 +131,9 @@ namespace TravelTracker.Users.Data.Migrations
                     b.Property<string>("Username")
                         .HasColumnType("text");
 
+                    b.Property<string>("VerifiedEmail")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedUsername")

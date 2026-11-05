@@ -26,7 +26,7 @@ public sealed class AdminAccessState(UsersClient users, AuthenticationStateProvi
      * @param cancellationToken Cancels a closed navigation or panel request.
      * @return The live profile, or null for an inactive or superseded session.
      */
-    public async Task<UserProfile?> RefreshAsync(CancellationToken cancellationToken = default)
+    public async Task<SelfUserProfile?> RefreshAsync(CancellationToken cancellationToken = default)
     {
         if (!subscribed) { authentication.AuthenticationStateChanged += AuthenticationChanged; subscribed = true; }
         var currentVersion = version;

@@ -15,7 +15,8 @@ public partial class AdministratorPanel : IDisposable
     [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
 
     IReadOnlyList<UserProfile> users = [];
-    UserProfile? me, target;
+    SelfUserProfile? me;
+    UserProfile? target;
     bool loading = true, allowed, busy, disposed, focusError, focusConfirmation;
     int generation;
     string reason = "";
@@ -45,7 +46,7 @@ public partial class AdministratorPanel : IDisposable
     {
         if (busy) return;
         var (current, version) = StartRequest();
-        loading = true; allowed = false; users = []; me = target = null; error = null; reason = "";
+        loading = true; allowed = false; users = []; me = null; target = null; error = null; reason = "";
         try
         {
             var profile = await Access.RefreshAsync(current.Token);
@@ -59,6 +60,13 @@ public partial class AdministratorPanel : IDisposable
         catch (ApiError failure) { if (Current(version)) ShowFailure(failure); }
         finally { if (Current(version)) loading = false; }
     }
+
+    /**
+     * Labels accounts even when sign-in has not established a verified email.
+     * @param user The account returned by the administrator API.
+     * @return Its verified email or public ID.
+     */
+    static string AccountLabel(UserProfile user) => user.Email ?? user.UserId.ToString();
 
     bool LastActiveAdministrator(UserProfile user) => user is { Role: "administrator", Status: "active" } && users.Count(u => u is { Role: "administrator", Status: "active" }) <= 1;
     static bool InactiveTraveller(UserProfile user) => user.Role != "administrator" && user.Status != "active";
@@ -112,12 +120,12 @@ public partial class AdministratorPanel : IDisposable
     void ShowFailure(ApiError failure)
     {
         error = failure.Message; ErrorTitle = failure.Status == 409 ? "The role or administrator count changed" : "Unable to complete the request"; focusError = true;
-        if (failure.Status is 401 or 403) { allowed = false; users = []; me = target = null; reason = ""; Access.Clear(); }
+        if (failure.Status is 401 or 403) { allowed = false; users = []; me = null; target = null; reason = ""; Access.Clear(); }
     }
 
     void AuthenticationChanged(Task<AuthenticationState> pending) => _ = InvokeAsync(async () =>
     {
-        CancelRequest(); users = []; target = me = null; allowed = false; reason = ""; status = error = null; busy = false; focusConfirmation = focusError = false;
+        CancelRequest(); users = []; target = null; me = null; allowed = false; reason = ""; status = error = null; busy = false; focusConfirmation = focusError = false;
         StateHasChanged();
         await LoadAsync();
         if (!disposed) StateHasChanged();
@@ -128,5 +136,5 @@ public partial class AdministratorPanel : IDisposable
     void CancelRequest() { generation++; request?.Cancel(); request?.Dispose(); request = null; }
 
     /** Cancels closed-panel requests and removes account-change notifications. */
-    public void Dispose() { disposed = true; Authentication.AuthenticationStateChanged -= AuthenticationChanged; CancelRequest(); users = []; target = me = null; }
+    public void Dispose() { disposed = true; Authentication.AuthenticationStateChanged -= AuthenticationChanged; CancelRequest(); users = []; target = null; me = null; }
 }

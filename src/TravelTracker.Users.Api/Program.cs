@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
+using System.Security.Claims;
 using TravelTracker.Api.Authentication;
 using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Data;
@@ -19,11 +22,23 @@ public partial class UsersProgram
         var builder = WebApplication.CreateBuilder(args);
         builder.Services.AddControllers();
         builder.Services.AddApiBearerAuthentication(builder.Configuration);
+        builder.Services.AddOptions<AuthorizationOptions>().Configure<IOptions<BearerSettings>>((options, settings) =>
+        {
+            foreach (var scope in new[] { "users.read", "users.write", "users.access" })
+                options.AddPolicy(scope, policy => policy.RequireAuthenticatedUser().RequireAssertion(context =>
+                    ScopePolicies.HasScope(context.User, settings.Value.ScopeClaimType, scope) &&
+                    (scope != "users.access" || builder.Configuration.GetSection("UsersAccess:AllowedServiceSubjects")
+                        .GetChildren().Any(entry => !string.IsNullOrWhiteSpace(entry.Value) &&
+                            string.Equals(entry.Value, context.User.FindFirstValue("sub"), StringComparison.Ordinal)))));
+        });
         builder.Services.AddDbContextFactory<UsersDbContext>(options => options.UseNpgsql(
             builder.Configuration.GetConnectionString("Users") ?? throw new InvalidOperationException("ConnectionStrings:Users is required.")));
         builder.Services.AddScoped<IUserRepository, EfUserRepository>();
+        builder.Services.AddScoped<TravelTracker.Users.Data.Repositories.Profile.IUserRepository,
+            TravelTracker.Users.Data.Repositories.Profile.UserRepository>();
         builder.Services.AddScoped<BootstrapService>();
         builder.Services.AddHttpClient<VerifiedIdentityClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
+            .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         var app = builder.Build();
         if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
