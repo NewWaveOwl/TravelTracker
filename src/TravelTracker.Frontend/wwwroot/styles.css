@@ -100,3 +100,8 @@ main:has(.transport-workspace){max-width:1920px;padding:32px 60px 64px;color:var
 
 /* The tracker rail carries travel duration; transfers stay below each card. */
 .transport-chain{padding-left:44px}.transport-chain li{padding-bottom:24px}.transport-chain li:before{left:-24px}.transport-chain .rail-travel-time{position:absolute;left:-45px;top:40px;writing-mode:vertical-rl;transform:rotate(180deg);font-size:14px;line-height:18px;white-space:nowrap;background:var(--forest);padding:4px 0}.transport-chain .transport-card{gap:6px;padding:16px!important}.transport-chain .transport-card strong{font-size:22px}.transport-chain .transfer-time{font-size:17px;line-height:24px;margin:12px 0 0}.chain-edit-toolbar{display:flex}.chain-edit-toolbar .chain-remove{margin:0;font-size:17px;width:100%}
+
+/* Saved transport selection reveals the retained destination draft. */
+.transport-columns{overflow-x:clip}.destination-panel{opacity:0;transform:translateX(28px);visibility:hidden;pointer-events:none;transition:opacity 300ms cubic-bezier(.22,1,.36,1),transform 300ms cubic-bezier(.22,1,.36,1),visibility 0s linear 300ms}.destination-panel.is-open{opacity:1;transform:translateX(0);visibility:visible;pointer-events:auto;transition-delay:0s}
+@media(max-width:1250px){.destination-panel:not(.is-open){max-height:0;overflow:hidden;padding-block:0}.destination-panel{transform:translateY(20px)}.destination-panel.is-open{transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.destination-panel,.destination-panel.is-open{transition:none;transform:none}}

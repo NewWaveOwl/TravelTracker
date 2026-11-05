@@ -54,7 +54,7 @@
                     </fieldset></form></details>
                 }
             </section>
-            <section class="transport-panel" aria-labelledby="destination-heading">
+            <section class="transport-panel destination-panel @(selectedTransport is not null ? "is-open" : "")" aria-labelledby="destination-heading" aria-hidden="@(selectedTransport is null ? "true" : "false")" inert="@(selectedTransport is null ? "" : null)">
                 <h2 id="destination-heading">Choose destination</h2>
                 <form @onsubmit="LoadAsync" @onsubmit:preventDefault>
                     <label for="point-query">Location name<input id="point-query" @bind="pointQuery" /></label>

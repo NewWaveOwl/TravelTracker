@@ -78,6 +78,7 @@ public sealed class TransportWorkspaceTests : BunitContext
         }));
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
+        page.FindAll("button.transport-card").First().Click();
         page.Find("#new-point-name").Change("Pending location"); page.Find("#new-point-lat").Change("45"); page.Find("#new-point-lon").Change("-73");
         page.Find(".point-create").Submit();
         page.WaitForAssertion(() => Assert.Contains("permission", page.Find("[role=alert]").TextContent));
@@ -92,6 +93,7 @@ public sealed class TransportWorkspaceTests : BunitContext
         Configure(new StubHandler((request, _) => { if (request.Method == HttpMethod.Post) posts++; return Task.FromResult(Read(request)); }));
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
+        page.FindAll("button.transport-card").First().Click();
         page.Find("#new-point-name").Change("Draft"); page.Find("#new-point-lat").Change("91"); page.Find("#new-point-lon").Change("0"); page.Find(".point-create").Submit();
         Assert.Contains("valid latitude", page.Find("[role=alert]").TextContent); Assert.Equal(0, posts);
         Assert.Equal("91", page.Find("#new-point-lat").GetAttribute("value"));
@@ -122,6 +124,7 @@ public sealed class TransportWorkspaceTests : BunitContext
         }));
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
+        page.FindAll("button.transport-card").First().Click();
         page.Find("#new-point-name").Change("Saved station"); page.Find("#new-point-lat").Change("43.6"); page.Find("#new-point-lon").Change("-79.3"); page.Find(".point-create").Submit();
         page.WaitForAssertion(() => Assert.Contains("Destination location saved.", page.Markup));
         Assert.NotNull(fields); Assert.DoesNotContain("routePointId", fields.Keys); Assert.DoesNotContain("departure", fields.Keys);
@@ -171,6 +174,7 @@ public sealed class TransportWorkspaceTests : BunitContext
             : Read(request))));
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
+        page.FindAll("button.transport-card").First().Click();
         page.Find("#new-point-name").Change("Point"); page.Find("#new-point-lat").Change("0"); page.Find("#new-point-lon").Change("0"); page.Find(".point-create").Submit();
         page.WaitForAssertion(() => Assert.Equal("Source identifier is invalid.", page.Find("#new-point-source-error").TextContent));
         Assert.Equal("new-point-source-error", page.Find("#new-point-source").GetAttribute("aria-describedby"));
@@ -239,6 +243,7 @@ public sealed class TransportWorkspaceTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
         Assert.Equal(7, page.FindAll("#transport-code option").Count);
         Assert.Equal(4, page.FindAll("#point-type option").Count);
+        page.FindAll("button.transport-card").First().Click();
         page.Find("#transport-query").Change("rail & ferry"); page.Find("#transport-code").Change("bike");
         page.Find("#point-query").Change("museum/park"); page.Find("#point-type").Change("attraction");
         page.FindAll(".transport-columns > section")[0].QuerySelector("form")!.Submit();
@@ -273,5 +278,28 @@ public sealed class TransportWorkspaceTests : BunitContext
         page.Find(".transport-chain button.transport-card").Click();
         page.Find(".chain-remove").Click(); page.WaitForAssertion(() => Assert.Empty(draft));
         Assert.Empty(page.FindAll(".transport-chain li"));
+    }
+
+    [Fact]
+    public void DestinationControlsRevealAfterSelectionAndRetainDraftWhenHiddenAgain()
+    {
+        Configure(new StubHandler((request, _) => Task.FromResult(Read(request))));
+        var page = Render<TransportWorkspace>();
+        page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
+        Assert.True(page.Find(".destination-panel").HasAttribute("inert"));
+        Assert.Equal("true", page.Find(".destination-panel").GetAttribute("aria-hidden"));
+        page.FindAll("button.transport-card").First().Click();
+        Assert.False(page.Find(".destination-panel").HasAttribute("inert"));
+        Assert.Equal("false", page.Find(".destination-panel").GetAttribute("aria-hidden"));
+        page.Find("#new-point-name").Change("Pending location");
+        page.Find(".transport-chain + p + button").Click();
+        Assert.True(page.Find(".destination-panel").HasAttribute("inert"));
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+        Assert.Equal("Pending location", page.Find("#new-point-name").GetAttribute("value"));
+        page.FindAll(".transport-columns > section")[1].QuerySelector("button.transport-card")!.Click();
+        page.Find(".transport-add").Click();
+        Assert.True(page.Find(".destination-panel").HasAttribute("inert"));
+        page.Find(".transport-chain button.transport-card").Click();
+        Assert.False(page.Find(".destination-panel").HasAttribute("inert"));
     }
 }

@@ -6,6 +6,10 @@ The subsequent screenshot refinement places compact vertical travel labels besid
 
 After this refinement, the full Release build again passed with zero warnings/errors and all 505 application tests passed, including all 172 frontend tests. The edit/remove regression now verifies that removal appears after selecting an entry. No persistence behavior changed; the earlier 27-test relational verification remains applicable.
 
+Selecting a saved transport reveals the destination/map panel with a 300 ms slide and fade. The panel keeps its draft controls mounted while closed, but is hidden from assistive technology and made inert until a transport is selected. New-entry/reset hides it again; selecting an existing chain entry opens it for editing. Narrow screens use a short vertical reveal, and reduced-motion preferences disable the transition.
+
+Animation validation: the full Release build passed with zero warnings/errors; 506 application tests passed, including 173 frontend tests. One new interaction test verifies initial hidden/inert state, transport-triggered reveal, retained inputs through close/reopen, and reopening an existing draft entry. No persistence behavior changed.
+
 ## Behavior and boundaries
 
 - `TransportClient` reads filtered saved transport/location collections and saved detail records through `ProtectedClient`. Supported modes are Car, Bus, Train, Walking (`pedestrian`), Bike and Plane. Locations retain their accommodation, attraction or transport-stop type and public GUID.
