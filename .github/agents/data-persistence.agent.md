@@ -30,6 +30,8 @@ The Data agent may edit only this existing test file:
 
 Do not edit any other existing test files or shared support helpers unless an approved task names a specific file. This agent does not own HTTP route or transport tests, and no file is owned by two agents.
 
+For approved M3-11 Users work, the Data agent may also create or edit persistence tests under `tests/TravelTracker.Users.Data.Tests/**`. Coordinate those tests with the testing agent, who is authorized to create and maintain tests across all three Users test directories. Do not edit the Users Domain or API test directories; shared helpers require exact file-level authorization.
+
 ## Responsibilities
 
 - Implement repositories, in-memory persistence, PostgreSQL persistence and migrations, query logic, and identifier-generation utilities needed by the owning Data layer.
@@ -47,7 +49,7 @@ Do not edit any other existing test files or shared support helpers unless an ap
 - Do not implement controllers, application services, DTOs, endpoint contracts, or HTTP-specific behavior in Data.
 - Do not add domain logic or business rules that belong in the Domain layer.
 - Do not expose `Id64` or any internal identifier beyond Data through any public interface, model, or API boundary.
-- Do not edit any file outside the two allowed Data projects and the exact permitted test file.
+- Do not edit any file outside the two allowed Data projects, the exact existing permitted test file, or, for approved M3-11 Users work, `tests/TravelTracker.Users.Data.Tests/**`.
 - Do not create new service projects or frontends unless the approved issue explicitly names them.
 
 ## Working rules
