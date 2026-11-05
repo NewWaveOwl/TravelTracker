@@ -22,26 +22,42 @@ public sealed class DependencyBoundaryTests
     }
 
     /**
-     * Checks that Domain has no project or package references.
+     * Checks that every Domain project has no project or package references.
+     * @param project Domain project folder name under src.
      */
-    [Fact]
-    public void Domain_HasNoReferences()
+    [Theory]
+    [InlineData("TravelTracker.Domain")]
+    [InlineData("TravelTracker.Attractions.Domain")]
+    public void Domain_HasNoReferences(string project)
     {
-        var document = LoadProject("TravelTracker.Domain");
+        var document = LoadProject(project);
         Assert.Empty(document.Descendants("ProjectReference"));
         Assert.Empty(document.Descendants("PackageReference"));
     }
 
     /**
-     * Checks that Data uses the plain SDK and only references Domain.
+     * Checks that every Data project uses the plain SDK and only references its own Domain.
+     * @param project Data project folder name under src.
+     * @param domain The only project it may reference.
      */
-    [Fact]
-    public void Data_IsNotWebAndOnlyReferencesDomain()
+    [Theory]
+    [InlineData("TravelTracker.Data", "TravelTracker.Domain")]
+    [InlineData("TravelTracker.Attractions.Data", "TravelTracker.Attractions.Domain")]
+    public void Data_IsNotWebAndOnlyReferencesDomain(string project, string domain)
     {
-        var document = LoadProject("TravelTracker.Data");
+        var document = LoadProject(project);
         Assert.DoesNotContain("Web", document.Root!.Attribute("Sdk")!.Value);
         var references = document.Descendants("ProjectReference").Select(reference => (string)reference.Attribute("Include")!).ToList();
         Assert.Single(references);
-        Assert.Contains("TravelTracker.Domain", references[0]);
+        Assert.EndsWith(domain + ".csproj", references[0]);
+    }
+
+    /**
+     * Checks that the frontend talks to services over HTTP only, with no project references at all.
+     */
+    [Fact]
+    public void Frontend_HasNoProjectReferences()
+    {
+        Assert.Empty(LoadProject("TravelTracker.Frontend").Descendants("ProjectReference"));
     }
 }
