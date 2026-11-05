@@ -1,28 +1,46 @@
 @using System.Globalization
 @using TravelTracker.Frontend.Api.Transport
 
-<section class="destination-map" aria-label="Saved locations on a coordinate map">
-    <p>Choose a saved location marker. This coordinate map shows the filtered catalogue, without street tiles or address lookup.</p>
-    <svg viewBox="0 0 640 360" role="group" aria-label="Saved destination location markers">
-        <rect width="640" height="360" fill="#f0eadf" />
-        @for (var x = 0; x <= 640; x += 80) { <line x1="@x" y1="0" x2="@x" y2="360" stroke="#ccd3c9" /> }
-        @for (var y = 0; y <= 360; y += 60) { <line x1="0" y1="@y" x2="640" y2="@y" stroke="#ccd3c9" /> }
-        @foreach (var point in Points)
+<section class="destination-map" aria-label="Saved locations on a schematic map">
+    <p>Map preview · Marker positions are illustrative. Choose a saved location marker.</p>
+    <svg viewBox="0 0 640 302" role="group" aria-label="Saved route location markers">
+        @{
+            var markers = Points.Concat(new[] { Departure, Destination }.OfType<RoutePointDto>()).DistinctBy(p => p.RoutePointId).ToArray();
+            var bounds = ReferencePoints.Count > 0 ? ReferencePoints : markers;
+            var minLon = bounds.Count > 0 ? bounds.Min(p => p.Lon) : 0m;
+            var maxLon = bounds.Count > 0 ? bounds.Max(p => p.Lon) : 0m;
+            var minLat = bounds.Count > 0 ? bounds.Min(p => p.Lat) : 0m;
+            var maxLat = bounds.Count > 0 ? bounds.Max(p => p.Lat) : 0m;
+        }
+        <rect width="640" height="302" fill="#f0eadf" />
+        <image href="assets/attractions-map-placeholder.png" width="640" height="302" preserveAspectRatio="xMidYMid meet" aria-hidden="true" />
+        @foreach (var point in markers)
         {
-            <g role="button" tabindex="0" aria-label="@($"Choose {point.Name}")" aria-pressed="@(point.RoutePointId == SelectedId)" @onclick="() => Selected.InvokeAsync(point.RoutePointId)" @onkeydown="e => KeyAsync(e, point.RoutePointId)">
-                <circle cx="@X(point)" cy="@Y(point)" r="13" fill="@(point.RoutePointId == SelectedId ? "#ffcbbe" : "#3e4f3d")" stroke="white" stroke-width="3" />
+            var x = (40m + 560m * Position(point.Lon, minLon, maxLon)).ToString(CultureInfo.InvariantCulture);
+            var y = (262m - 222m * Position(point.Lat, minLat, maxLat)).ToString(CultureInfo.InvariantCulture);
+            var isDeparture = point.RoutePointId == Departure?.RoutePointId;
+            var isDestination = point.RoutePointId == Destination?.RoutePointId;
+            var endpoint = isDeparture && isDestination ? " (departure and destination)" : isDeparture ? " (departure)" : isDestination ? " (destination)" : "";
+            <g @key="point.RoutePointId" role="button" tabindex="0" aria-label="@($"Choose {point.Name}{endpoint}")" aria-pressed="@(point.RoutePointId == SelectedId)" @onclick="() => Selected.InvokeAsync(point.RoutePointId)" @onkeydown="e => KeyAsync(e, point.RoutePointId)">
+                <circle cx="@x" cy="@y" r="13" fill="@(isDeparture || isDestination ? "#ffcbbe" : "#3e4f3d")" stroke="white" stroke-width="3" />
+                @if (isDeparture || isDestination)
+                {
+                    <g aria-hidden="true"><text x="@x" y="@y" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#3e4f3d">@(isDeparture && isDestination ? "1/2" : isDeparture ? "1" : "2")</text></g>
+                }
                 <title>@point.Name (@point.Lat, @point.Lon)</title>
             </g>
         }
     </svg>
-    <small>North ↑ · Fitted to saved location coordinates. Use the list for overlapping markers.</small>
+    <small>1 Departure · 2 Destination. Use the saved list if markers overlap.</small>
 </section>
 
 @code {
     [Parameter] public IReadOnlyList<RoutePointDto> Points { get; set; } = [];
+    [Parameter] public IReadOnlyList<RoutePointDto> ReferencePoints { get; set; } = [];
+    [Parameter] public RoutePointDto? Departure { get; set; }
+    [Parameter] public RoutePointDto? Destination { get; set; }
     [Parameter] public Guid? SelectedId { get; set; }
     [Parameter] public EventCallback<Guid> Selected { get; set; }
-    string X(RoutePointDto p) => (40m + 560m * (p.Lon - Points.Min(v => v.Lon)) / Math.Max(.01m, Points.Max(v => v.Lon) - Points.Min(v => v.Lon))).ToString(CultureInfo.InvariantCulture);
-    string Y(RoutePointDto p) => (320m - 280m * (p.Lat - Points.Min(v => v.Lat)) / Math.Max(.01m, Points.Max(v => v.Lat) - Points.Min(v => v.Lat))).ToString(CultureInfo.InvariantCulture);
+    static decimal Position(decimal value, decimal min, decimal max) => Math.Clamp((value - min) / Math.Max(.01m, max - min), 0m, 1m);
     Task KeyAsync(KeyboardEventArgs e, Guid id) => e.Key is "Enter" or " " ? Selected.InvokeAsync(id) : Task.CompletedTask;
 }

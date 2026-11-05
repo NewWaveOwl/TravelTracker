@@ -63,7 +63,7 @@
                 <div class="actions"><button class="secondary" aria-pressed="@(!showMap)" @onclick="() => showMap = false">Saved list</button><button class="secondary" aria-pressed="@showMap" @onclick="() => showMap = true">Choose on map</button></div>
                 @if (showMap)
                 {
-                    <DestinationMap Points="points" SelectedId="@(choosingDeparture ? selectedDeparture?.RoutePointId : selectedPoint?.RoutePointId)" Selected="SelectPointAsync" />
+                    <DestinationMap Points="points" ReferencePoints="mapReference" Departure="selectedDeparture" Destination="selectedPoint" SelectedId="@(choosingDeparture ? selectedDeparture?.RoutePointId : selectedPoint?.RoutePointId)" Selected="SelectPointAsync" />
                 }
                 else
                 {

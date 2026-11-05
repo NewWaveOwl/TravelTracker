@@ -21,6 +21,7 @@ public partial class TransportWorkspace : IDisposable
     static readonly string[] Types = ["accommodation", "attraction", "transport_stop"];
     IReadOnlyList<TransportDto> transports = [];
     IReadOnlyList<RoutePointDto> points = [];
+    IReadOnlyList<RoutePointDto> mapReference = [];
     readonly List<TransportSelection> selections = [];
     TransportDto? selectedTransport;
     RoutePointDto? selectedPoint;
@@ -53,7 +54,7 @@ public partial class TransportWorkspace : IDisposable
     void AuthenticationChanged(Task<AuthenticationState> task) => _ = InvokeAsync(async () =>
     {
         operation?.Cancel(); busy = false;
-        selections.Clear(); transports = []; points = []; selectedPoint = selectedDeparture = null; selectedTransport = null; choosingDeparture = true;
+        selections.Clear(); transports = []; points = []; mapReference = []; selectedPoint = selectedDeparture = null; selectedTransport = null; choosingDeparture = true;
         transportName = description = pointName = address = lat = lon = sourceId = pointQuery = type = string.Empty;
         fieldErrors = new Dictionary<string, string[]>();
         ResetTiming();
@@ -78,9 +79,12 @@ public partial class TransportWorkspace : IDisposable
      */
     async Task LoadAsync() => await RunAsync(async token =>
     {
+        var query = pointQuery;
+        var pointType = type;
         var modes = await Client.SearchTransportAsync("", "", token);
-        var locations = await Client.SearchPointsAsync(pointQuery, type, token);
+        var locations = await Client.SearchPointsAsync(query, pointType, token);
         transports = modes; points = locations;
+        if (mapReference.Count == 0) mapReference = locations;
     });
 
     async Task SelectTransportAsync(Guid id) => await RunAsync(async token =>
@@ -160,6 +164,7 @@ public partial class TransportWorkspace : IDisposable
         {
             var saved = await Client.CreatePointAsync(new() { ["name"] = pointName.Trim(), ["type"] = newType, ["address"] = address, ["lat"] = latitude, ["lon"] = longitude, ["sourceId"] = string.IsNullOrWhiteSpace(sourceId) ? null : Guid.Parse(sourceId) }, token);
             ApplyPoint(saved, departure); points = new[] { saved }.Concat(points.Where(v => v.RoutePointId != saved.RoutePointId)).ToArray();
+            if (mapReference.Count == 0) mapReference = points;
             status = "Location saved.";
         });
     }
@@ -179,7 +184,7 @@ public partial class TransportWorkspace : IDisposable
             error = failure.Status switch { 404 => "This saved transport or location is no longer available. Refresh the catalogue.", 400 or 422 => "Check the transport or location form fields. Your entries are retained.", _ => failure.Message };
             if (failure.Status == 401)
             {
-                signedIn = false; canWrite = false; selections.Clear(); transports = []; points = []; selectedTransport = null; selectedPoint = selectedDeparture = null; choosingDeparture = true;
+                signedIn = false; canWrite = false; selections.Clear(); transports = []; points = []; mapReference = []; selectedTransport = null; selectedPoint = selectedDeparture = null; choosingDeparture = true;
                 transportName = description = pointName = address = lat = lon = sourceId = pointQuery = type = string.Empty;
                 ResetTiming();
                 await SelectionChanged.InvokeAsync(selections.ToArray());

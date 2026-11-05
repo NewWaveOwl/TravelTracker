@@ -316,14 +316,23 @@ public sealed class TransportWorkspaceTests : BunitContext
         Assert.False(page.Find(".destination-panel").HasAttribute("inert"));
     }
 
-    [Fact]
-    public void DirectTransportOpensMapAndRequiresBothSavedEndpointsBeforePublishing()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DirectTransportOpensMapAndRequiresBothSavedEndpointsBeforePublishing(bool initiallyEmpty)
     {
         var museum = new RoutePointDto(Guid.Parse("00000000-0000-0000-0000-000000000144"), "attraction", "Saved museum", "2 Museum Road", 43.7m, -79.4m, null);
+        var outlier = museum with { RoutePointId = Guid.NewGuid(), Name = "Outlier", Lat = 46m, Lon = -81m };
+        var requests = 0;
         Configure(new StubHandler((request, _) =>
         {
+            requests++;
             var path = request.RequestUri!.AbsolutePath;
-            if (path.EndsWith("route-points", StringComparison.Ordinal)) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new[] { Station, museum }) });
+            if (path.EndsWith("route-points", StringComparison.Ordinal) &&
+                (request.RequestUri.Query.Contains("name=missing", StringComparison.Ordinal) ||
+                 initiallyEmpty && request.RequestUri.Query.StartsWith("?name=&", StringComparison.Ordinal)))
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<RoutePointDto>()) });
+            if (path.EndsWith("route-points", StringComparison.Ordinal)) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new[] { Station, museum, outlier }) });
             if (path.EndsWith(museum.RoutePointId.ToString(), StringComparison.Ordinal)) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(museum) });
             return Task.FromResult(Read(request));
         }), false);
@@ -333,11 +342,31 @@ public sealed class TransportWorkspaceTests : BunitContext
         Assert.Empty(page.FindAll("#transport-query, #transport-code"));
         Assert.DoesNotContain(page.FindAll("button"), b => b.TextContent == "Search transport");
         page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
-        Assert.Equal(2, page.FindAll("svg g[role=button]").Count);
+        if (initiallyEmpty)
+        {
+            Assert.Empty(page.FindAll("svg g[role=button]"));
+            page.Find("#point-query").Change("saved");
+            page.Find(".destination-panel form").Submit();
+        }
+        Assert.Equal(3, page.FindAll("svg g[role=button]").Count);
         Assert.False(page.Find(".destination-panel").HasAttribute("inert"));
         page.Find("#choose-destination").Click(); page.FindAll("svg g[role=button]")[1].Click();
         Assert.True(page.Find(".transport-add").HasAttribute("disabled"));
         page.Find("#choose-departure").Click(); page.FindAll("svg g[role=button]")[0].Click();
+        Assert.Equal("assets/attractions-map-placeholder.png", page.Find(".destination-map image").GetAttribute("href"));
+        var beforeToggle = requests;
+        page.FindAll("button").Single(b => b.TextContent == "Choose on map").Click();
+        page.FindAll("button").Single(b => b.TextContent == "Choose on map").Click();
+        page.FindAll("button").Single(b => b.TextContent == "Saved list").Click();
+        page.FindAll("button").Single(b => b.TextContent == "Choose on map").Click();
+        Assert.Equal(beforeToggle, requests);
+        var positions = page.FindAll("svg g[role=button] circle").Take(2).Select(c => (c.GetAttribute("cx"), c.GetAttribute("cy"))).ToArray();
+        page.Find("#point-query").Change("missing");
+        page.Find(".destination-panel form").Submit();
+        page.WaitForAssertion(() => Assert.Contains("No locations found", page.Markup));
+        Assert.Equal(positions, page.FindAll("svg g[role=button] circle").Select(c => (c.GetAttribute("cx"), c.GetAttribute("cy"))).ToArray());
+        Assert.Contains("departure", page.FindAll("svg g[role=button]")[0].GetAttribute("aria-label"));
+        Assert.Contains("destination", page.FindAll("svg g[role=button]")[1].GetAttribute("aria-label"));
         page.Find(".transport-add").Click();
         page.WaitForAssertion(() => Assert.Single(draft));
         Assert.Equal(Station.RoutePointId, draft[0].Departure.RoutePointId);
