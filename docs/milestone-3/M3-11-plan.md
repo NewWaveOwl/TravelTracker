@@ -81,6 +81,8 @@ No Users admin or provider-login route is added. The internal access lookup is e
 
 ## File-by-File Plan
 
+(Note: Solution file wiring is done by the developer, not by a layer agent.)
+
 ### Domain
 
 - `src/TravelTracker.Users.Domain/TravelTracker.Users.Domain.csproj`: new service-owned Domain project with no EF Core or ASP.NET Core dependencies.

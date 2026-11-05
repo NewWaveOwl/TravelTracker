@@ -84,21 +84,34 @@ namespace TravelTracker.Users.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("TravelTracker.Users.Data.Entities.UserRow", b =>
+            modelBuilder.Entity("TravelTracker.Users.Data.Entities.UserRecord", b =>
                 {
-                    b.Property<Guid>("UserId")
+                    b.Property<long>("Id")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Address")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Email")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("Issuer")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("NormalizedUsername")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("UserId");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -112,14 +125,30 @@ namespace TravelTracker.Users.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.HasKey("UserId");
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Username")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedUsername")
+                        .IsUnique()
+                        .HasDatabaseName("IX_UserAccounts_NormalizedUsername")
+                        .HasFilter("\"NormalizedUsername\" IS NOT NULL");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_UserAccounts_PublicId");
 
                     b.HasIndex("Issuer", "Subject")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_UserAccounts_Issuer_Subject");
 
                     b.ToTable("UserAccounts", null, t =>
                         {
-                            t.HasCheckConstraint("CK_UserAccounts_Email", "length(btrim(\"Email\")) > 0");
+                            t.HasCheckConstraint("CK_UserAccounts_Email", "\"Email\" IS NULL OR length(btrim(\"Email\")) > 0");
 
                             t.HasCheckConstraint("CK_UserAccounts_Identity", "length(btrim(\"Issuer\")) > 0 AND length(btrim(\"Subject\")) > 0");
 

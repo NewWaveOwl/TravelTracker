@@ -5,6 +5,7 @@ using TravelTracker.Api.Authentication;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Data.Repositories;
+using TravelTracker.Users.Domain.Models;
 
 namespace TravelTracker.Users.Api.Controllers;
 
@@ -36,8 +37,12 @@ public sealed class UsersController(IUserRepository repository, BootstrapService
             if (email is null) return Results.Forbid();
             account = await repository.GetOrCreateTravellerAsync(issuer, subject, email, HttpContext.RequestAborted);
         }
-        if (account?.Status == "deactivated") return Results.Forbid();
-        return account is null ? Results.NotFound() : Results.Ok(new UserProfileResponse(account.UserId, account.Email, account.Role, account.Status));
+        if (account?.Status == UserStatus.Deactivated) return Results.Forbid();
+        return account is null ? Results.NotFound() : Results.Ok(new UserProfileResponse(
+            account.PublicId,
+            account.Email,
+            account.Role == UserRole.User ? "traveller" : "administrator",
+            account.Status.ToString().ToLowerInvariant()));
     }
 
     /**
@@ -53,7 +58,11 @@ public sealed class UsersController(IUserRepository repository, BootstrapService
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject)) return Results.Unauthorized();
         var accounts = await repository.ListForAdministratorAsync(issuer, subject, HttpContext.RequestAborted);
         return accounts is null ? Results.Forbid() : Results.Ok(accounts.Select(account =>
-            new UserProfileResponse(account.UserId, account.Email, account.Role, account.Status)).ToList());
+            new UserProfileResponse(
+                account.PublicId,
+                account.Email,
+                account.Role == UserRole.User ? "traveller" : "administrator",
+                account.Status.ToString().ToLowerInvariant())).ToList());
     }
 
     /**
@@ -73,7 +82,11 @@ public sealed class UsersController(IUserRepository repository, BootstrapService
         var result = await repository.ChangeRoleAsync(issuer, subject, id, request.Role, request.ExpectedRole, request.Reason, HttpContext.RequestAborted);
         return result.Code switch
         {
-            "changed" when result.Account is { } account => Results.Ok(new UserProfileResponse(account.UserId, account.Email, account.Role, account.Status)),
+            "changed" when result.Account is { } account => Results.Ok(new UserProfileResponse(
+                account.PublicId,
+                account.Email,
+                account.Role == UserRole.User ? "traveller" : "administrator",
+                account.Status.ToString().ToLowerInvariant())),
             "forbidden" => Results.Forbid(),
             "notfound" => Results.NotFound(),
             "conflict" => Results.Problem(statusCode: 409, title: "The account role changed. Refresh the user list before trying again."),
@@ -113,7 +126,9 @@ public sealed class UsersController(IUserRepository repository, BootstrapService
             !SecretVerifier.Matches(configuration["UsersAccess:ServiceToken"], authorization.ToString()[7..])) return Results.Unauthorized();
         if (string.IsNullOrWhiteSpace(request.Issuer) || string.IsNullOrWhiteSpace(request.Subject)) return Results.BadRequest();
         var account = await repository.FindAsync(request.Issuer, request.Subject, HttpContext.RequestAborted);
-        return Results.Ok(account is null ? new AccessResponse("deactivated", "traveller") : new AccessResponse(account.Status, account.Role));
+        return Results.Ok(account is null ? new AccessResponse("deactivated", "traveller") : new AccessResponse(
+            account.Status.ToString().ToLowerInvariant(),
+            account.Role == UserRole.User ? "traveller" : "administrator"));
     }
 
     /** Returns liveness only; it does not assert provider or PostgreSQL readiness. */
