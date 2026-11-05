@@ -42,9 +42,9 @@ jobs:
       - name: Application and domain tests (EF InMemory, no PostgreSQL connection)
         env:
           TRAVELTRACKER_TEST_POSTGRES: ""
-        run: dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --filter "Category!=PostgreSQL" --logger "trx;LogFileName=application.trx" --results-directory test-results
+        run: dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --filter "Category!=PostgreSQL" --logger "trx;LogFilePrefix=application" --results-directory test-results
       - name: PostgreSQL relational tests
-        run: dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --filter "Category=PostgreSQL" --logger "trx;LogFileName=postgresql.trx" --results-directory test-results
+        run: dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --filter "Category=PostgreSQL" --logger "trx;LogFilePrefix=postgresql" --results-directory test-results
       # publish results even when tests fail so reviewers can inspect them
       - uses: actions/upload-artifact@v4
         if: always()
