@@ -19,6 +19,7 @@ The dependency direction is Api → Data → Domain.
 
 - `src/TravelTracker.Domain/**`
 - `src/TravelTracker.Attractions.Domain/**`
+- `src/TravelTracker.Users.Domain/**`
 
 The original Domain project contains Transport/Route Point and trip models and identifier types. Attractions Domain owns its attraction model and identifier types. Future Domain projects require an approved issue.
 
@@ -30,7 +31,12 @@ The Domain agent may edit only this existing test file for pure Domain rules:
 
 Although it is in the API test project, this file directly tests Domain behavior without HTTP or storage. Do not edit other existing test files or shared helpers unless an approved task names the exact file.
 
-For approved M3-11 Users work, the Domain agent may also create or edit pure Domain tests under `tests/TravelTracker.Users.Domain.Tests/**`. Coordinate those tests with the testing agent, who is authorized to create and maintain tests across all three Users test directories. Do not edit the Users Data or API test directories; shared helpers require exact file-level authorization.
+For approved M3-11 Users work, the Domain agent may also create or edit these files:
+
+- `tests/TravelTracker.Users.Domain.Tests/TravelTracker.Users.Domain.Tests.csproj`
+- `tests/TravelTracker.Users.Domain.Tests/UserAccountTests.cs`
+
+Coordinate those tests with the testing agent, who is authorized to create and maintain tests across all three Users test directories. Do not edit the Users Data or API test directories; shared helpers require exact file-level authorization.
 
 ## Responsibilities
 
@@ -44,8 +50,8 @@ For approved M3-11 Users work, the Domain agent may also create or edit pure Dom
 
 ## Prohibited changes
 
-- Do not edit `src/TravelTracker.Data/**`, `src/TravelTracker.Attractions.Data/**`, `src/TravelTracker.Api/**`, `src/TravelTracker.Attractions.Api/**`, `src/TravelTracker.Security/**`, frontend paths, solution files, skills, or copilot instructions.
-- Do not edit any test file other than `tests/TravelTracker.Api.Tests/TripTests.cs` or, for approved M3-11 Users work, files under `tests/TravelTracker.Users.Domain.Tests/**`.
+- Do not edit `src/TravelTracker.Data/**`, `src/TravelTracker.Attractions.Data/**`, `src/TravelTracker.Users.Data/**`, `src/TravelTracker.Api/**`, `src/TravelTracker.Attractions.Api/**`, `src/TravelTracker.Users.Api/**`, `src/TravelTracker.Security/**`, frontend paths, solution files, skills, or copilot instructions.
+- Do not edit any test file or Users test-project file other than `tests/TravelTracker.Api.Tests/TripTests.cs` or, for approved M3-11 Users work, `tests/TravelTracker.Users.Domain.Tests/TravelTracker.Users.Domain.Tests.csproj` and `tests/TravelTracker.Users.Domain.Tests/UserAccountTests.cs`.
 - Do not add EF Core, ASP.NET Core, HTTP, persistence, or vendor references to a Domain project.
 - Do not expose `Id64` through a public HTTP-facing type.
 - Do not implement repositories, controllers, application services, DTO mappings, or frontend clients.
