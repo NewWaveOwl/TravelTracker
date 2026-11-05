@@ -89,8 +89,17 @@ namespace TravelTracker.Users.Data.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -119,6 +128,10 @@ namespace TravelTracker.Users.Data.Migrations
 
                     b.ToTable("UserAccounts", null, t =>
                         {
+                            t.HasCheckConstraint("CK_UserAccounts_Address", "\"Address\" IS NULL OR length(\"Address\") <= 200");
+
+                            t.HasCheckConstraint("CK_UserAccounts_DisplayName", "length(btrim(\"DisplayName\")) BETWEEN 1 AND 60");
+
                             t.HasCheckConstraint("CK_UserAccounts_Email", "length(btrim(\"Email\")) > 0");
 
                             t.HasCheckConstraint("CK_UserAccounts_Identity", "length(btrim(\"Issuer\")) > 0 AND length(btrim(\"Subject\")) > 0");

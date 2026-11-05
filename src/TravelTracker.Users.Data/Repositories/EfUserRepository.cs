@@ -54,7 +54,7 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
         if (row is null)
         {
             row = new UserRow { UserId = candidate.UserId, Issuer = candidate.Issuer, Subject = candidate.Subject, Email = candidate.Email,
-                Role = candidate.Role, Status = candidate.Status, CreatedAt = candidate.CreatedAt };
+                Role = candidate.Role, Status = candidate.Status, CreatedAt = candidate.CreatedAt, DisplayName = candidate.DisplayName };
             db.Accounts.Add(row);
         }
         else
@@ -86,7 +86,7 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
         var saved = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Issuer == issuer && x.Subject == subject, cancellationToken);
         if (saved is not null) return Account(saved);
         var row = new UserRow { UserId = candidate.UserId, Issuer = candidate.Issuer, Subject = candidate.Subject, Email = candidate.Email,
-            Role = candidate.Role, Status = candidate.Status, CreatedAt = candidate.CreatedAt };
+            Role = candidate.Role, Status = candidate.Status, CreatedAt = candidate.CreatedAt, DisplayName = candidate.DisplayName };
         db.Accounts.Add(row);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -151,6 +151,26 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
         return new("changed", Account(target));
     }
 
+    /**
+     * Updates only the two profile columns in one conditional statement, so a status change cannot race the check.
+     * @param issuer Validated actor issuer.
+     * @param subject Validated actor subject.
+     * @param displayName Requested display name, validated again here.
+     * @param address Requested address, validated again here; blank clears it.
+     * @param cancellationToken Request cancellation.
+     * @return updated with the saved account, notfound, forbidden (banned or deactivated) or invalid; nothing changes unless updated.
+     */
+    public async Task<UserProfileUpdateResult> UpdateProfileAsync(string issuer, string subject, string? displayName, string? address, CancellationToken cancellationToken)
+    {
+        if (!UserAccount.TryNormalizeProfile(displayName, address, out var name, out var place, out _)) return new("invalid", null);
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var changed = await db.Accounts.Where(x => x.Issuer == issuer && x.Subject == subject && x.Status == "active")
+            .ExecuteUpdateAsync(set => set.SetProperty(x => x.DisplayName, name).SetProperty(x => x.Address, place), cancellationToken);
+        var row = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Issuer == issuer && x.Subject == subject, cancellationToken);
+        if (row is null) return new("notfound", null);
+        return changed == 1 ? new("updated", Account(row)) : new("forbidden", null);
+    }
+
     DateTimeOffset PersistedNow()
     {
         var now = (timeProvider ?? TimeProvider.System).GetUtcNow().ToUniversalTime();
@@ -158,5 +178,5 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
         return new DateTimeOffset(now.Ticks - now.Ticks % 10, TimeSpan.Zero);
     }
 
-    static UserAccount Account(UserRow row) => new(row.UserId, row.Issuer, row.Subject, row.Email, row.Role, row.Status, row.CreatedAt);
+    static UserAccount Account(UserRow row) => new(row.UserId, row.Issuer, row.Subject, row.Email, row.Role, row.Status, row.CreatedAt, row.DisplayName, row.Address);
 }

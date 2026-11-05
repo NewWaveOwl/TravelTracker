@@ -26,6 +26,8 @@ public sealed class UsersDbContext(DbContextOptions<UsersDbContext> options) : D
                 table.HasCheckConstraint("CK_UserAccounts_Identity", "length(btrim(\"Issuer\")) > 0 AND length(btrim(\"Subject\")) > 0");
                 table.HasCheckConstraint("CK_UserAccounts_Email", "length(btrim(\"Email\")) > 0");
                 table.HasCheckConstraint("CK_UserAccounts_Role", "\"Role\" IN ('traveller', 'administrator')");
+                table.HasCheckConstraint("CK_UserAccounts_DisplayName", "length(btrim(\"DisplayName\")) BETWEEN 1 AND 60");
+                table.HasCheckConstraint("CK_UserAccounts_Address", "\"Address\" IS NULL OR length(\"Address\") <= 200");
                 table.HasCheckConstraint("CK_UserAccounts_Status", "\"Status\" IN ('active', 'banned', 'deactivated')");
             });
             row.HasKey(x => x.UserId);
@@ -35,6 +37,8 @@ public sealed class UsersDbContext(DbContextOptions<UsersDbContext> options) : D
             row.Property(x => x.Email).IsRequired();
             row.Property(x => x.Role).IsRequired();
             row.Property(x => x.Status).IsRequired();
+            row.Property(x => x.DisplayName).IsRequired().HasMaxLength(60);
+            row.Property(x => x.Address).HasMaxLength(200);
             row.HasIndex(x => new { x.Issuer, x.Subject }).IsUnique();
         });
         modelBuilder.Entity<BootstrapRow>(row =>

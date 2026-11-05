@@ -75,7 +75,7 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
      * @param scope Granted scope.
      * @return Signed test-only bearer token.
      */
-    public string Token(string? failure = null, string subject = "admin-subject", string scope = "catalogue.read", string? role = null)
+    public string Token(string? failure = null, string subject = "admin-subject", string scope = "catalogue.read users.read users.write", string? role = null)
     {
         using var other = RSA.Create(2048);
         var now = DateTime.UtcNow;

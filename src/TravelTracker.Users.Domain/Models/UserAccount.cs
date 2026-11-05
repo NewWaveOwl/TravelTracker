@@ -9,6 +9,8 @@ namespace TravelTracker.Users.Domain.Models;
  * @param Role The server-assigned traveller or administrator role.
  * @param Status The server-assigned active, banned or deactivated standing.
  * @param CreatedAt The account creation time supplied by the application clock.
+ * @param DisplayName Owner-editable name shown in the UI; defaults to the email's local part.
+ * @param Address Optional owner-editable free text; never used for identity.
  */
 public sealed record UserAccount
 {
@@ -19,8 +21,13 @@ public sealed record UserAccount
     public string Role { get; init; }
     public string Status { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
+    public string DisplayName { get; init; }
+    public string? Address { get; init; }
 
-    public UserAccount(Guid UserId, string Issuer, string Subject, string Email, string Role, string Status, DateTimeOffset CreatedAt)
+    public const int DisplayNameMaxLength = 60;
+    public const int AddressMaxLength = 200;
+
+    public UserAccount(Guid UserId, string Issuer, string Subject, string Email, string Role, string Status, DateTimeOffset CreatedAt, string? DisplayName = null, string? Address = null)
     {
         if (UserId == Guid.Empty) throw new ArgumentException("A public account identifier is required.", nameof(UserId));
         ArgumentException.ThrowIfNullOrWhiteSpace(Issuer);
@@ -35,6 +42,43 @@ public sealed record UserAccount
         this.Role = Role;
         this.Status = Status;
         this.CreatedAt = CreatedAt;
+        if (!TryNormalizeProfile(DisplayName ?? DefaultDisplayName(Email), Address, out var name, out var place, out _))
+            throw new ArgumentException("Invalid profile fields.", nameof(DisplayName));
+        this.DisplayName = name;
+        this.Address = place;
+    }
+
+    /**
+     * Derives the initial display name so every account has one without asking the provider for a profile.
+     * @param email The verified email.
+     * @return The email's local part cut to the display name limit, or "Traveller" when that is empty.
+     */
+    public static string DefaultDisplayName(string email)
+    {
+        var local = email.Split('@')[0].Trim();
+        local = local.Length > DisplayNameMaxLength ? local[..DisplayNameMaxLength] : local;
+        return local.Any(char.IsControl) || local.Length == 0 ? "Traveller" : local;
+    }
+
+    /**
+     * Validates and normalizes the owner-editable profile fields in one place for the API and the domain.
+     * @param displayName Requested name; trimmed, 1 to 60 characters, no control characters.
+     * @param address Requested address; trimmed, blank becomes null, at most 200 characters, newlines allowed.
+     * @param name The normalized display name when valid.
+     * @param place The normalized address (null when cleared) when valid.
+     * @param errors Field name to messages when invalid.
+     * @return Whether both fields are valid.
+     */
+    public static bool TryNormalizeProfile(string? displayName, string? address, out string name, out string? place, out Dictionary<string, string[]> errors)
+    {
+        errors = [];
+        name = displayName?.Trim() ?? "";
+        place = string.IsNullOrWhiteSpace(address) ? null : address.Trim();
+        if (name.Length is 0 or > DisplayNameMaxLength || name.Any(char.IsControl))
+            errors["displayName"] = [$"Enter a display name of 1 to {DisplayNameMaxLength} characters without control characters."];
+        if (place is not null && (place.Length > AddressMaxLength || place.Any(c => char.IsControl(c) && c != '\n')))
+            errors["address"] = [$"Enter an address of at most {AddressMaxLength} characters without control characters."];
+        return errors.Count == 0;
     }
 
     /**

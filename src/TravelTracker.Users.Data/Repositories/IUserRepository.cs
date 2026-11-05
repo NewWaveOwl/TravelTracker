@@ -55,4 +55,15 @@ public interface IUserRepository
      * @return A categorized outcome, with the saved account only for a successful change.
      */
     Task<UserRoleChangeResult> ChangeRoleAsync(string actorIssuer, string actorSubject, Guid targetId, string role, string expectedRole, string reason, CancellationToken cancellationToken);
+
+    /**
+     * Replaces the caller's own display name and address when the account is active.
+     * @param issuer Validated actor issuer.
+     * @param subject Validated actor subject.
+     * @param displayName Requested display name.
+     * @param address Requested address, or blank to clear it.
+     * @param cancellationToken Request cancellation.
+     * @return A categorized outcome; the saved account only when updated.
+     */
+    Task<UserProfileUpdateResult> UpdateProfileAsync(string issuer, string subject, string? displayName, string? address, CancellationToken cancellationToken);
 }

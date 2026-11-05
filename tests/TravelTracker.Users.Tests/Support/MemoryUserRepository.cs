@@ -16,6 +16,8 @@ public sealed class MemoryUserRepository : IUserRepository
     public (string Issuer, string Subject)? AdministratorListRequest { get; private set; }
     public (string Issuer, string Subject, Guid TargetId, string Role, string ExpectedRole, string Reason)? RoleChangeRequest { get; private set; }
     public int RoleChangeCalls { get; private set; }
+    public int ProfileUpdateCalls { get; private set; }
+    public (string Issuer, string Subject)? ProfileUpdateActor { get; private set; }
 
     /** Changes only the test account's standing to exercise the API's live read boundary. */
     public void Deactivate() => SetStatus(Account!.UserId, "deactivated");
@@ -60,5 +62,16 @@ public sealed class MemoryUserRepository : IUserRepository
         RoleChangeRequest = (actorIssuer, actorSubject, targetId, role, expectedRole, reason);
         RoleChangeCalls++;
         return Task.FromResult(RoleChangeResult);
+    }
+
+    public Task<UserProfileUpdateResult> UpdateProfileAsync(string issuer, string subject, string? displayName, string? address, CancellationToken cancellationToken)
+    {
+        ProfileUpdateCalls++;
+        ProfileUpdateActor = (issuer, subject);
+        var account = accounts.Values.SingleOrDefault(a => a.Issuer == issuer && a.Subject == subject);
+        if (account is null) return Task.FromResult(new UserProfileUpdateResult("notfound", null));
+        if (account.Status != "active") return Task.FromResult(new UserProfileUpdateResult("forbidden", null));
+        if (!UserAccount.TryNormalizeProfile(displayName, address, out var name, out var place, out _)) return Task.FromResult(new UserProfileUpdateResult("invalid", null));
+        return Task.FromResult(new UserProfileUpdateResult("updated", accounts[account.UserId] = account with { DisplayName = name, Address = place }));
     }
 }

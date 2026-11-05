@@ -50,4 +50,26 @@ public sealed class DomainTests
     [Fact]
     public void RestoredAccountsRequireAPublicIdentifier() =>
         Assert.Throws<ArgumentException>(() => new UserAccount(Guid.Empty, "https://identity.example/", "subject-1", "admin@example.test", "administrator", "active", Created));
+
+    [Theory]
+    [InlineData("pat@example.test", "pat")]
+    [InlineData("@example.test", "Traveller")]
+    public void DefaultDisplayNameIsTheEmailLocalPart(string email, string expected) =>
+        Assert.Equal(expected, UserAccount.CreateTraveller("https://identity.example/", "s", email, Created).DisplayName);
+
+    [Fact]
+    public void DefaultDisplayNameIsCutToTheLimit() =>
+        Assert.Equal(60, UserAccount.CreateTraveller("https://identity.example/", "s", new string('a', 90) + "@example.test", Created).DisplayName.Length);
+
+    [Theory]
+    [InlineData("Pat", "Pat", null, true)]
+    [InlineData("  Pat  ", "Pat", "  ", true)]
+    [InlineData("", "", null, false)]
+    [InlineData("a\nb", "a\nb", null, false)]
+    public void ProfileNormalizationTrimsAndValidates(string displayName, string expectedName, string? address, bool valid)
+    {
+        Assert.Equal(valid, UserAccount.TryNormalizeProfile(displayName, address, out var name, out var place, out var errors));
+        Assert.Equal(valid, errors.Count == 0);
+        if (valid) { Assert.Equal(expectedName.Trim(), name); Assert.Null(place); }
+    }
 }

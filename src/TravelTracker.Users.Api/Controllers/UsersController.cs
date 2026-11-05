@@ -5,6 +5,7 @@ using TravelTracker.Api.Authentication;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Data.Repositories;
+using TravelTracker.Users.Domain.Models;
 
 namespace TravelTracker.Users.Api.Controllers;
 
@@ -23,7 +24,7 @@ public sealed class UsersController(IUserRepository repository, BootstrapService
      * @return Public profile, or a safe identity/standing failure.
      */
     [HttpGet("me")]
-    [Authorize(Policy = ScopePolicies.CatalogueRead)]
+    [Authorize(Policy = ScopePolicies.UsersRead)]
     public async Task<IResult> Me()
     {
         if (!Request.IsHttps) return Results.Problem(statusCode: 400, title: "Account access requires HTTPS.");
@@ -37,8 +38,34 @@ public sealed class UsersController(IUserRepository repository, BootstrapService
             account = await repository.GetOrCreateTravellerAsync(issuer, subject, email, HttpContext.RequestAborted);
         }
         if (account?.Status == "deactivated") return Results.Forbid();
-        return account is null ? Results.NotFound() : Results.Ok(new UserProfileResponse(account.UserId, account.Email, account.Role, account.Status));
+        return account is null ? Results.NotFound() : Results.Ok(Own(account));
     }
+
+    /**
+     * Replaces the caller's own display name and address; identity comes only from the validated token.
+     * @param request Whitelisted profile fields; unknown properties are rejected before this runs.
+     * @return Saved profile, or 400 for invalid input, 403 for banned or deactivated accounts, 404 for no account.
+     */
+    [HttpPut("me")]
+    [Authorize(Policy = ScopePolicies.UsersWrite)]
+    public async Task<IResult> UpdateMe(UpdateProfileRequest request)
+    {
+        if (!Request.IsHttps) return Results.Problem(statusCode: 400, title: "Account access requires HTTPS.");
+        var issuer = User.FindFirstValue("iss"); var subject = User.FindFirstValue("sub");
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject)) return Results.Unauthorized();
+        if (!UserAccount.TryNormalizeProfile(request.DisplayName, request.Address, out _, out _, out var errors)) return Results.ValidationProblem(errors);
+        var result = await repository.UpdateProfileAsync(issuer, subject, request.DisplayName, request.Address, HttpContext.RequestAborted);
+        return result.Code switch
+        {
+            "updated" when result.Account is { } account => Results.Ok(Own(account)),
+            "forbidden" => Results.Forbid(),
+            "notfound" => Results.NotFound(),
+            "invalid" => Results.Problem(statusCode: 400, title: "The profile is not valid."),
+            _ => Results.Problem(statusCode: 503, title: "The profile update could not be confirmed.")
+        };
+    }
+
+    static OwnProfileResponse Own(UserAccount account) => new(account.UserId, account.Email, account.DisplayName, account.Address, account.Role, account.Status);
 
     /**
      * Lists registered application accounts only after live administrator authorization in the Users store.

@@ -10,4 +10,6 @@ internal sealed class UserRow
     public string Role { get; set; } = "traveller";
     public string Status { get; set; } = "active";
     public DateTimeOffset CreatedAt { get; set; }
+    public string DisplayName { get; set; } = "";
+    public string? Address { get; set; }
 }
