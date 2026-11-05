@@ -17,15 +17,19 @@
                     {
                         var index = i; var entry = selections[index];
                         <li class="@(editingIndex == index ? "active" : "")" @key="entry.OccurrenceId">
-                            <button class="transport-card @(editingIndex == index ? "selected" : "")" @onclick="() => Edit(index)"><strong>@(index + 1). @entry.Transport.Name</strong><span>@Label(entry.Transport.Code)</span><span>@entry.Destination.Name</span><span>@Label(entry.Destination.Type)</span><small>Travel time not supplied</small></button>
-                            @if (i < selections.Count - 1) { <small class="transfer-time">Transfer time not supplied</small> }
-                            <button class="chain-remove secondary" @onclick="() => RemoveAsync(index)" disabled="@busy" aria-label="@($"Remove entry {index + 1}")">Remove</button>
+                            <button class="transport-card @(editingIndex == index ? "selected" : "")" @onclick="() => Edit(index)"><strong>@((index + 1).ToString("D2")) @entry.Transport.Name</strong><span>@entry.Destination.Name</span><span>@Label(entry.Destination.Type)@(editingIndex == index ? " · editing" : "")</span>@if (i == selections.Count - 1) { <small>Travel time not supplied</small> }</button>
+                            @if (i < selections.Count - 1) { <small class="rail-travel-time"><span aria-hidden="true">Travel: —</span><span class="visually-hidden">Travel time not supplied</span></small><small class="transfer-time">Transfer time not supplied</small> }
                         </li>
                     }
                 </ol>
                 @if (selections.Count == 0) { <p>No transport selected yet.</p> }
                 <button class="secondary" @onclick="NewEntry" disabled="@busy">+ Add transport</button>
-                <small>Select an entry to change it. Journey times require a future route contract.</small>
+                @if (editingIndex is { } currentEntry)
+                {
+                    <div class="chain-edit-toolbar" role="group" aria-label="Selected transport entry actions"><button class="chain-remove secondary" @onclick="() => RemoveAsync(currentEntry)" disabled="@busy" aria-label="@($"Remove entry {currentEntry + 1}")">Remove selected entry</button></div>
+                }
+                <small>Select an entry to review or change it.</small>
+                <small>Total duration not supplied. Journey times require a future route contract.</small>
             </aside>
             <section class="transport-panel" aria-labelledby="mode-heading">
                 <h2 id="mode-heading">Choose transport</h2>

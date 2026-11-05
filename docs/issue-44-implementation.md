@@ -2,6 +2,10 @@
 
 The owner-selected [Version 1 design](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=119-1028) is implemented in the interactive Server Blazor New Trip page. Existing Aldrich/Atkinson typography and cream background are retained; green panels, pale-red active cards and a circle/line tracker follow the reviewed concept.
 
+The subsequent screenshot refinement places compact vertical travel labels beside the left connector, leaves transfer labels below each preceding card, numbers occurrences with two digits, and shows the removal action only while an entry is selected for editing. The active occurrence retains its pale-red card/circle. Unknown travel, transfer and total duration remain explicitly unavailable rather than using the screenshot's illustrative numbers.
+
+After this refinement, the full Release build again passed with zero warnings/errors and all 505 application tests passed, including all 172 frontend tests. The edit/remove regression now verifies that removal appears after selecting an entry. No persistence behavior changed; the earlier 27-test relational verification remains applicable.
+
 ## Behavior and boundaries
 
 - `TransportClient` reads filtered saved transport/location collections and saved detail records through `ProtectedClient`. Supported modes are Car, Bus, Train, Walking (`pedestrian`), Bike and Plane. Locations retain their accommodation, attraction or transport-stop type and public GUID.

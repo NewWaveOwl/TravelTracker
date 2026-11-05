@@ -269,6 +269,8 @@ public sealed class TransportWorkspaceTests : BunitContext
         page.Find(".transport-add").Click();
         page.WaitForAssertion(() => Assert.Equal(bus.TransportModeId, draft.Single().Transport.TransportModeId));
         Assert.Equal(Station.RoutePointId, draft[0].Destination.RoutePointId);
+        Assert.Empty(page.FindAll(".chain-remove"));
+        page.Find(".transport-chain button.transport-card").Click();
         page.Find(".chain-remove").Click(); page.WaitForAssertion(() => Assert.Empty(draft));
         Assert.Empty(page.FindAll(".transport-chain li"));
     }
