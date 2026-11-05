@@ -253,8 +253,8 @@ public sealed class AccommodationHttpTests
     public async Task UsersUnavailable_FailsProtectedOperationClosed()
     {
         using var factory = new ApiFactory();
-        factory.Users!.Unavailable = true;
         using var client = factory.CreateClientFor("alice", "catalogue.read");
+        factory.Users!.Unavailable = true;
 
         using var response = await client.GetAsync("/api/v1/accommodations");
 

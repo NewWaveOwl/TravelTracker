@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi;
 using TravelTracker.Api.Authentication;
 using TravelTracker.Accommodations.Api.Access;
@@ -21,6 +22,21 @@ public partial class AccommodationsProgram
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.Services.AddControllers();
+        builder.Services.Configure<ApiBehaviorOptions>(options =>
+        {
+            options.InvalidModelStateResponseFactory = context =>
+            {
+                var errors = context.ModelState
+                    .Where(entry => entry.Value?.Errors.Count > 0)
+                    .ToDictionary(
+                        entry => System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(entry.Key),
+                        entry => entry.Value!.Errors.Select(error => error.ErrorMessage).ToArray());
+                return new BadRequestObjectResult(new ValidationProblemDetails(errors)
+                {
+                    Status = StatusCodes.Status400BadRequest
+                });
+            };
+        });
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddApiBearerAuthentication(builder.Configuration);
         builder.Services.AddSwaggerGen(options =>

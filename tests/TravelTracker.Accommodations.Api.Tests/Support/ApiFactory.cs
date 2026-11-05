@@ -52,7 +52,8 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Accommoda
             new RsaSecurityKey(failure == "signature" ? otherKey : signingKey) { KeyId = "accommodations-test-key" },
             SecurityAlgorithms.RsaSha256);
         var expires = failure == "expired" ? now.AddMinutes(-5) : now.AddMinutes(10);
-        var token = new JwtSecurityToken(issuer, audience, claims, now.AddMinutes(-1), expires, credentials);
+        var notBefore = failure == "expired" ? now.AddMinutes(-10) : now.AddMinutes(-1);
+        var token = new JwtSecurityToken(issuer, audience, claims, notBefore, expires, credentials);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
