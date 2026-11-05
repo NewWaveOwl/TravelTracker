@@ -1,3 +1,93 @@
 :root{font-family:'Atkinson Hyperlegible',sans-serif;color:#000;background:#f0eadf;font-size:28px;--forest:#3e4f3d;--primary:#436046;--error:#b3261e;--border:#ccd3c9}*{box-sizing:border-box}body{margin:0}a{color:inherit}header{height:120px;background:var(--forest);color:white;display:flex;align-items:center;padding:13px 26px;gap:30px;position:relative}.brand{font:40px 'Aldrich',sans-serif;display:flex;align-items:center;text-decoration:none;gap:0;margin-right:auto}.brand img{width:94px;height:94px}nav{display:flex;gap:55px}nav a{text-decoration:none;font-size:32px;line-height:42px;padding:12px 0}nav a[aria-current]{box-shadow:0 4px white}.icon{background:transparent;border:0;padding:0;display:flex;align-items:center;justify-content:center;width:72px;min-height:72px}.icon img{max-width:100%}.mobile-navigation-link{display:none}.menu{position:absolute;right:26px;top:100%;background:var(--forest);padding:20px;z-index:2;flex-direction:column;gap:12px}main{max-width:1104px;margin:0 auto;padding:32px 0 80px}h1,h2{font-family:'Aldrich',sans-serif;font-weight:400}h1{font-size:64px;line-height:83px;margin:3.5px 0 23.5px}h2{font-size:40px;line-height:52px;margin:0}p{line-height:36px;margin:0 0 20px}.intro{padding:48px 32px;display:flex;align-items:flex-start;flex-direction:column;gap:24px}.intro p{margin:0}.returning{padding:32px}.button,button{background:var(--primary);color:white;border:0;border-radius:5px;padding:12px 24px;font:28px/36px 'Aldrich',sans-serif;cursor:pointer;text-decoration:none;display:inline-flex;justify-content:center;align-items:center;min-height:60px}.large{width:480px;max-width:100%;height:100px;font:32px/51px 'Konkhmer Sleokchher',sans-serif}.secondary{background:white;color:var(--forest)}:focus-visible{outline:4px solid #a65b16;outline-offset:5px}h1:focus{outline:none}.skip{position:absolute;left:20px;top:-100px;z-index:4;padding:12px;background:white}.skip:focus{top:10px}.form-panel{padding:32px;display:flex;flex-direction:column;align-items:flex-start;gap:24px}label{display:flex;flex-direction:column;gap:8px;max-width:100%}input,select{font:24px/31px 'Atkinson Hyperlegible',sans-serif;min-height:56px;padding:12px 24px;border:1px solid var(--border);background:white;width:720px;max-width:100%}small{font-size:20px;line-height:26px}.actions{display:flex;gap:16px}.feedback{padding:56px 32px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:24px;margin-top:20px}.feedback p{margin:0}.feedback.error{background:#fce8e6;border:2px solid var(--error);color:var(--error)}@media(max-width:1200px){main{margin:0 32px}.brand{font-size:28px}.brand img{width:70px;height:70px}header{gap:20px}nav{gap:24px}nav a{font-size:24px}h1{font-size:48px;line-height:1.3}}@media(max-width:700px){:root{font-size:20px}header{height:100px;padding:12px;gap:8px;flex-wrap:nowrap}.brand{font-size:clamp(16px,4.5vw,20px);min-width:0}.brand img{width:48px;height:48px}.primary-navigation{display:none}.menu .mobile-navigation-link{display:block}nav a{font-size:20px}.icon{width:40px;min-height:48px;flex-shrink:0}.icon img{max-height:40px}main{margin:0 20px;padding-top:24px}h1{font-size:36px}h2{font-size:28px;line-height:1.4}p{line-height:1.5}.intro,.form-panel{padding:24px 0}.feedback{padding:32px 16px}.button,button{font-size:20px}.menu{right:12px;min-width:min(240px,calc(100vw - 24px));max-width:calc(100vw - 24px)}.large{font-size:24px;height:80px}}
 
 main:focus{outline:none}.feedback{width:100%}.feedback>p{max-width:740px}.feedback>small{font-size:20px;line-height:26px}
+
+/* Attraction workspace uses the existing V4 typography and palette. */
+main:has(.attractions-page) { max-width: 1920px; padding: 32px 120px 64px; color: var(--forest); }
+.attractions-page { --surface: #fff; --peach: #ffcbbe; --muted: #586557; font-size: 20px; line-height: 1.3; }
+.attractions-page p { font-size: 20px; line-height: 26px; margin: 0; }
+.attractions-page h1 { font-size: 40px; line-height: 52px; margin: 8px 0; }
+.attractions-page h2 { font-size: 28px; line-height: 36px; }
+.attractions-page h3 { font: 24px/1.3 'Aldrich', sans-serif; margin: 0; overflow-wrap: anywhere; }
+.attractions-heading { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
+.attractions-heading small { color: var(--muted); }
+.attraction-columns { display: grid; grid-template-columns: minmax(0, 800fr) minmax(0, 856fr); gap: 24px; align-items: start; }
+.attraction-catalogue { display: flex; flex-direction: column; gap: 16px; padding: 24px; background: var(--forest); color: white; }
+.attraction-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: end; }
+.attractions-page label { font-size: 20px; width: 100%; }
+.attractions-page input, .attractions-page textarea { width: 100%; font: 20px/26px 'Atkinson Hyperlegible', sans-serif; border: 1px solid var(--border); padding: 10px 16px; min-height: 48px; color: #000; background: white; border-radius: 0; }
+.attractions-page textarea { min-height: 80px; resize: vertical; }
+.attraction-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.attraction-card { padding: 24px; background: white; color: var(--forest); display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0; }
+.attraction-card p { color: var(--muted); overflow-wrap: anywhere; }
+.attraction-card .secondary { margin-top: auto; padding-left: 0; padding-right: 0; text-align: left; }
+.attraction-card.selected { background: var(--peach); }
+.attraction-card.selected .secondary { padding-left: 24px; padding-right: 24px; }
+.attraction-editor { background: white; padding: 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.attraction-editor form, .attraction-editor fieldset { display: flex; flex-direction: column; gap: 16px; }
+.attraction-editor fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.attraction-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.attraction-field-row > div { min-width: 0; }
+.attraction-field-row.visit-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.attraction-map-action { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.attraction-map-action small, .duration-preview, #optional-fields-help { color: var(--muted); }
+.attractions-page .actions { flex-wrap: wrap; }
+.attractions-page button:disabled { opacity: .6; cursor: default; }
+.attractions-page input[aria-invalid=true] { border: 2px solid var(--error); }
+.attractions-page .field-error { color: var(--error); display: block; }
+.attraction-error { background: #fce8e6; border: 2px solid var(--error); padding: 24px; color: var(--error); margin-bottom: 24px; }
+.attraction-error p { margin: 12px 0; }
+.attraction-status { padding: 16px 24px; background: #e2eadc; margin-bottom: 24px !important; }
+.attraction-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 24px; font-size: 24px; margin: 0; }
+.attraction-facts dd { margin: 0; overflow-wrap: anywhere; }
+.location-picker { display: flex; flex-direction: column; gap: 24px; }
+.location-picker h1 { margin: 0; }
+.location-columns { display: grid; grid-template-columns: minmax(0, 1048fr) minmax(0, 608fr); gap: 24px; align-items: start; }
+.map-preview { width: 100%; aspect-ratio: 1048 / 490; overflow: hidden; background: #f7f7f2; margin-bottom: 16px; }
+.map-preview img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.selected-location { background: white; display: flex; flex-direction: column; align-items: stretch; gap: 24px; padding: 24px; }
+.selected-location .secondary { align-self: start; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media(max-width: 1500px) {
+    main:has(.attractions-page) { padding: 32px 48px 64px; margin: 0; }
+    .attractions-page button { font-size: 22px; line-height: 30px; padding: 10px 16px; }
+    .attraction-card { padding: 16px; }
+    .attractions-page h3 { font-size: 22px; }
+}
+@media(max-width: 1100px) {
+    main:has(.attractions-page) { padding: 24px; }
+    .attraction-columns, .location-columns { grid-template-columns: minmax(0, 1fr); }
+    .attractions-heading { align-items: flex-start; flex-wrap: wrap; }
+    .attraction-field-row.visit-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media(max-width: 600px) {
+    main:has(.attractions-page) { padding: 24px 16px 48px; }
+    .attractions-page h1 { font-size: 30px; line-height: 1.3; }
+    .attraction-grid, .attraction-field-row, .attraction-field-row.visit-fields { grid-template-columns: minmax(0, 1fr); }
+    .attraction-catalogue, .attraction-editor { padding: 16px; }
+    .attraction-search { grid-template-columns: minmax(0, 1fr); }
+    .attraction-search button { justify-self: start; }
+    .attractions-page .actions { flex-direction: column; align-items: stretch; }
+    .attraction-facts { font-size: 20px; }
+}
+
+/* Administrator controls share the established forest, sand and accessible typography. */
+.administrator-panel { display:flex; flex-direction:column; gap:24px; }
+.administrator-panel p { margin:0; }
+.administrator-panel h1 { margin:0; }
+.admin-tabs { border-bottom:2px solid var(--border); gap:24px; }
+.admin-tabs a[aria-current] { color:var(--forest); box-shadow:0 4px var(--forest); }
+.admin-confirmation { display:flex; flex-direction:column; gap:20px; padding:24px; background:#fff; border:2px solid var(--forest); }
+.admin-confirmation textarea { width:100%; min-height:120px; resize:vertical; font:24px/31px 'Atkinson Hyperlegible',sans-serif; padding:12px 16px; border:1px solid var(--border); }
+.admin-error { background:#fce8e6; color:var(--error); border:2px solid var(--error); padding:24px; }
+.admin-error p { margin:16px 0; }
+.admin-status { background:#e2eadc; padding:16px 24px; color:var(--forest); }
+.admin-table-scroll { max-width:100%; overflow-x:auto; }
+.admin-users-table { width:100%; border-collapse:collapse; margin-top:24px; background:#fff; font-size:22px; text-align:left; }
+.admin-users-table th,.admin-users-table td { padding:16px; border-bottom:1px solid var(--border); vertical-align:top; }
+.admin-users-table thead { background:var(--forest); color:#fff; }
+.admin-users-table tbody th { font-weight:400; overflow-wrap:anywhere; }
+.admin-users-table button { font-size:20px; line-height:26px; min-height:48px; padding:10px 12px; }
+.admin-users-table small { display:block; max-width:260px; margin-top:8px; }
+.administrator-panel button:disabled { opacity:.6; cursor:default; }
+@media(max-width:700px) { .administrator-panel { gap:20px; } .admin-confirmation { padding:16px; } .admin-confirmation .actions { flex-direction:column; } .admin-users-table { font-size:18px; min-width:640px; } .admin-users-table th,.admin-users-table td { padding:12px; } }

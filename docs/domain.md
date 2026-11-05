@@ -2,7 +2,9 @@
 
 [TravelTracker.Domain](../src/TravelTracker.Domain) owns the business models used by the API and Data projects. Existing names, property types and identifiers are preserved.
 
-Bearer validation belongs to the API, not Domain. The authenticated identity is the validated `(iss, sub)` pair; mapping it to a public User UUID and enforcing account standing remain future Users work. See [authentication boundaries](authentication.md).
+Bearer validation belongs to the API, not Domain. The authenticated identity is the validated `(iss, sub)` pair. The independent Users service now maps that identity to a public UUIDv7 account and enforces live standing; the original shared `User` model below remains unchanged. See [authentication boundaries](authentication.md) and [Users setup](first-administrator-setup.md).
+
+`TravelTracker.Users.Domain` owns `UserAccount`: public ID, validated issuer/subject, verified email, server-owned `traveller`/`administrator` role, `active`/`banned`/`deactivated` standing and creation time. Ordinary provisioning always creates an active traveller. First-administrator authorization and later role-change authorization are coordinated by the Users API with transactional persistence checks; the domain model does not trust token role claims or profile request fields.
 
 Attractions now owns its model and identity primitives in `TravelTracker.Attractions.Domain`, independently of the remaining shared Domain. Ownership is the validated issuer/subject pair; shared/private visibility is server-enforced. The HTTP DTO omits owner and internal key fields. Invariants validate names, coordinate/rating ranges and nonnegative visit duration without EF or HTTP dependencies. See [the independent service contract](attractions-service.md).
 
@@ -29,7 +31,7 @@ User defaults to User role, Active status and the current UTC creation time.
 
 ## HTTP representations
 
-The Api [response DTOs](../src/TravelTracker.Api/Contracts) preserve the agreed JSON contract. AttractionRecord maps the original Latitude/Longitude to lat/lon; TransportModeRecord maps DisplayName to name; RoutePointRecord similarly maps coordinates. These DTOs describe HTTP responses, while storage/services use the Domain entities. Existing model property names are retained.
+The Api [response DTOs](../src/TravelTracker.Transport.Api/Contracts) preserve the agreed JSON contract. AttractionRecord maps the original Latitude/Longitude to lat/lon; TransportModeRecord maps DisplayName to name; RoutePointRecord similarly maps coordinates. These DTOs describe HTTP responses, while storage/services use the Domain entities. Existing model property names are retained.
 
 ## Unfinished feature types
 
@@ -46,4 +48,6 @@ The Api [response DTOs](../src/TravelTracker.Api/Contracts) preserve the agreed 
 - Supported transport codes are car, bus, train, pedestrian, bike and plane.
 - Trips retain location/transport snapshots and enforce ownership/privacy and account status.
 
-The [trip-point/transport/route design](trip-points-and-routes.md) distinguishes reusable locations/entries from scheduled journeys and ordered trip occurrences. These trip/schedule rules are future work; current endpoints are POST and GET by ID for the three catalogue resources.
+The [trip-point/transport/route design](trip-points-and-routes.md) distinguishes reusable locations/entries from scheduled journeys and ordered trip occurrences. These trip/schedule rules are future work; Transport and Route Points expose create/detail/collection selection; Attractions also supports PATCH.
+
+Transport owns dedicated service domain models and identity types in `src/TravelTracker.Transport.Domain`; the historical shared RoutePoint is retained for existing Trip snapshots and does not cross the new service HTTP boundary.

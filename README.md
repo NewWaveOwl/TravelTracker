@@ -2,15 +2,15 @@
 
 TravelTracker is a .NET 10 backend for a travel-planning application. The project aims to bring journeys, accommodation stays and attraction visits together in one itinerary, with trip history and a map view.
 
-**Attractions now runs independently on port 5104 with PostgreSQL persistence and creator-private/admin-shared access.** Transport entries and Route Points remain in `TravelTracker.Api` on port 5105 with in-memory storage. Both hosts provide Development Swagger. Full itinerary planning and the traveller-facing interface remain under development.
+**Attractions now runs independently on port 5104 with PostgreSQL persistence and creator-private/admin-shared access.** Transport entries and Route Points run in `TravelTracker.Transport.Api` on port 5105 with PostgreSQL storage. Both hosts provide Development Swagger. Full itinerary planning and the traveller-facing interface remain under development.
 
 ## Current capabilities
 
 | Area | Current functionality |
 | --- | --- |
 | Attractions | Create, list (with case-insensitive name search), retrieve and partially update attractions with a name, address, coordinates, estimated visit duration, optional description and optional rating. |
-| Transport entries | Create and retrieve named transport entries using `car`, `bus`, `train`, `pedestrian`, `bike` or `plane`. |
-| Route points | Create and retrieve reusable locations of type `accommodation`, `attraction` or `transport_stop`. |
+| Transport entries | Create, list and retrieve named transport entries using `car`, `bus`, `train`, `pedestrian`, `bike` or `plane`. |
+| Route points | Create, list and retrieve reusable locations of type `accommodation`, `attraction` or `transport_stop`. |
 | Validation | Validate required fields, supported codes and types, coordinate ranges, ratings and visit duration. |
 | API authentication | Validate bearer tokens and require separate catalogue read/write permissions. Health remains anonymous. |
 | API exploration | Use one Swagger page to inspect and execute all implemented endpoints. |
@@ -18,7 +18,7 @@ TravelTracker is a .NET 10 backend for a travel-planning application. The projec
 
 New records receive public UUIDv7 identifiers. The identity system separates public identifiers from internal numeric keys.
 
-Attractions records survive restarts in its service-owned PostgreSQL database. Transport/Route Point changes remain in memory and reset on restart. Protected requests need a validated access token; Attractions also requires a configured live Users access endpoint. See [independent Attractions startup, privacy rules and PostgreSQL testing](docs/attractions-service.md). Automated application tests use isolated EF InMemory stores, signing keys and Users HTTP stubs; relational tests use disposable PostgreSQL databases.
+Attractions records survive restarts in its service-owned PostgreSQL database. Transport entries and Route Points survive restarts in their service-owned PostgreSQL database. See [Transport startup and selection](docs/transport-service.md). Protected requests need a validated access token; Attractions also requires a configured live Users access endpoint. See [independent Attractions startup, privacy rules and PostgreSQL testing](docs/attractions-service.md). Automated application tests use isolated EF InMemory stores, signing keys and Users HTTP stubs; relational tests use disposable PostgreSQL databases.
 
 ## Project status
 
@@ -26,11 +26,11 @@ TravelTracker currently provides the catalogue and location foundation for futur
 
 The following features are not yet available through the running application:
 
-- Application account standing and account management. Auth0 sign-in is wired into the Blazor app; see [setup and verification status](docs/frontend-auth0.md).
+- Full account profile editing and status management. Verified account provisioning, live standing, first-administrator setup and administrator role management are available through the independent Users service; see [setup](docs/first-administrator-setup.md).
 - Accommodation management as a separate resource.
 - Trips, ordered itinerary legs, history, settings and map views.
 - Scheduled journeys, departure and arrival times, and stop timing.
-- Collection listing, PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
+- PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
 - Persistent database storage for the remaining service hosts.
 - Complete traveller-facing feature screens (the Blazor navigation and HTTP foundation is in `src/TravelTracker.Frontend`).
 
@@ -43,8 +43,8 @@ A route point describes a reusable location. A transport entry describes a trans
 - Auth0 for hosted sign-in and logout, using the ASP.NET Core OpenID Connect handler with authorization-code flow and PKCE in the Blazor server. The APIs validate bearer access tokens. See [Auth0 setup and verification](docs/frontend-auth0.md).
 - .NET 10 and ASP.NET Core.
 - Swagger/OpenAPI through Swashbuckle.
-- PostgreSQL persistence for Attractions; in-memory repositories for Transport/Route Points.
-- PostgreSQL through EF Core/Npgsql (owner decision, 2026-10-28), implemented for Attractions; other service persistence remains separate work.
+- Independent PostgreSQL persistence for Attractions, Users and Transport/Route Points.
+- PostgreSQL through EF Core/Npgsql (owner decision, 2026-10-28), implemented for Attractions, Users and Transport; other service persistence remains separate work.
 - xUnit and ASP.NET Core test hosts.
 - GitHub Actions for pull-request testing.
 
@@ -54,13 +54,21 @@ A route point describes a reusable location. A transport entry describes a trans
 | `src/TravelTracker.Attractions.Data` | PostgreSQL context, migrations, repositories and application-issued identities. |
 | `src/TravelTracker.Attractions.Domain` | Attraction model, identifiers and invariants without web/EF dependencies. |
 | `src/TravelTracker.Security` | Shared bearer validation and OpenAPI security infrastructure. |
-| `src/TravelTracker.Api` | Remaining Transport/Route Points startup, controllers and services. |
+| `src/TravelTracker.Users.Api` | Independent HTTPS account provisioning, bootstrap, administrator role management and service access contracts. |
+| `src/TravelTracker.Users.Data` | Service-owned PostgreSQL accounts, migrations, transactional role changes and administrator audit. |
+| `src/TravelTracker.Users.Domain` | Account identity, role and standing model without web/EF dependencies. |
+| `src/TravelTracker.Transport.Api` | Independent Transport/Route Points HTTP operations and startup on 5105. |
+| `src/TravelTracker.Transport.Data` | Transport-owned PostgreSQL context, migrations and repositories. |
+| `src/TravelTracker.Transport.Domain` | Transport entities and identity types. |
+| `src/TravelTracker.Api` | Unimplemented service interfaces (library, no web host). |
 | `src/TravelTracker.Data` | Repositories, sample data and identity generation. |
 | `src/TravelTracker.Domain` | Shared models and identifier types. |
-| `tests/TravelTracker.Api.Tests` | Remaining host, shared authentication, trip-domain and identity tests. |
+| `tests/TravelTracker.Api.Tests` | Shared trip-domain and historical identity tests. |
+| `tests/TravelTracker.Transport.Api.Tests` | Independent Transport HTTP, signed bearer, selection and PostgreSQL tests. |
 | `tests/TravelTracker.Attractions.Api.Tests` | Attraction HTTP, PostgreSQL durability/privacy and real-bearer integration tests. |
+| `tests/TravelTracker.Users.Tests` | Account domain, real-bearer HTTP and PostgreSQL bootstrap/role/audit tests. |
 
-The historical SQL schema in `src/Database/schema.sql` is not applied automatically. Attractions uses its committed EF migrations; other hosts still have no database persistence.
+The historical SQL schema in `src/Database/schema.sql` is not applied automatically. Attractions, Transport and Users use their committed EF migrations and separate service-owned databases.
 
 ## Getting started
 
@@ -117,7 +125,7 @@ In Swagger, select **Authorize** and enter an access token for this API. Reads r
 
 Successful creation returns `201 Created`, the saved record and a `Location` header. Use the returned identifier to retrieve the record. Unknown identifiers return `404 Not Found`; invalid request input returns `400 Bad Request`.
 
-See the [API documentation](docs/api.md) and [HTTP examples](src/TravelTracker.Api/requests.http) for request bodies and response details.
+See the [API documentation](docs/api.md) and [HTTP examples](src/TravelTracker.Transport.Api/requests.http) for request bodies and response details.
 
 ## Testing
 
@@ -153,3 +161,25 @@ Milestone 2 planning, AI evidence, reviews, validation and reflections are maint
 - [Development flow](https://github.com/NewWaveOwl/TravelTracker/tree/milestone_2_AI_and_development_resource/devlopmet_flow)
 
 Repository guidance is available in the [coding skill](.github/skills/code/SKILL.md) and [testing skill](.github/skills/testing/SKILL.md).
+
+## Attraction workspace (#43)
+
+Open `/attractions` in the Blazor frontend. Search visible attractions by name, view saved details, create private attractions and edit permitted records using the independent secured service. Results retain the server's name ordering and display as two cards per row on wide screens.
+
+Configure the frontend's Auth0 application and API grant with `catalogue.read catalogue.write` for write-capable users, and set `Auth0:Scope` to `openid profile email catalogue.read catalogue.write`. Sign in again after changing grants. Read-only sessions can browse without a write form; the API still enforces live account standing, ownership and write permissions.
+
+**Choose on map** opens the supplied Montreal screenshot as a static preview with editable latitude/longitude. Use applies a validated coordinate draft; Cancel leaves the form location intact. Live OpenStreetMap tiles, address lookup and pin placement are future integration work. The optional visit duration ± field calculates a planning range but is explicitly not saved by the existing API.
+
+See [implementation and verification](docs/issue-43-implementation.md).
+
+## First administrator setup
+
+The independent Users service now supplies the one-time, verified-identity administrator setup, current account profile and live Attractions access lookup. See [first administrator setup](docs/first-administrator-setup.md) for configuration, HTTPS, PostgreSQL, verification and scope limits. The administrator user-management extension below adds listing, role changes and verified traveller provisioning; full profile/status management remains separate.
+
+## Administrator user management
+
+An active Users-service administrator can open **Administrator Panel → All users** from the burger menu or account page. The list shows registered TravelTracker accounts, their email, role and standing. Promote/demote requires an explicit confirmation and a written audit reason; the server refuses stale requests, inactive promotions and removal of the last active administrator. Changes are persisted with an actor/target/before/after/reason audit in the same PostgreSQL transaction. These application roles do not grant Auth0 catalogue scopes or access to private trips.
+
+First authenticated profile access verifies an unregistered sign-in through the configured provider and creates an ordinary traveller account. Token role claims and request fields cannot select the initial role. Auth0 directory accounts that have never registered with TravelTracker do not appear automatically.
+
+For Transport startup, set `ConnectionStrings__Transport`, apply migrations and optionally enable stable examples before running the service. See [Transport startup and selection](docs/transport-service.md).

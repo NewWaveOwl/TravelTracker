@@ -1,0 +1,104 @@
+@page "/admin-setup"
+@implements IDisposable
+@using Microsoft.AspNetCore.Components.Authorization
+@using TravelTracker.Frontend.Api.Users
+@using TravelTracker.Frontend.Auth
+@inject UsersClient Users
+@inject AuthenticationStateProvider Authentication
+@inject SessionRegistry Sessions
+@inject TimeProvider Clock
+
+<PageHeading Title="First administrator setup" />
+<p>Complete the one-time setup using the verified account selected by the website owner.</p>
+@if (loading)
+{
+    <Feedback Kind="FeedbackKind.Loading">Checking your account…</Feedback>
+}
+else if (!signedIn)
+{
+    <Feedback Kind="FeedbackKind.Permission" Title="Sign in first"><a href="account">Sign in with the selected account</a>, then return here.</Feedback>
+}
+else if (profile?.Role == "administrator" && profile.Status == "active")
+{
+    <Feedback Kind="FeedbackKind.Success" Title="Administrator access confirmed">@profile.Email is an administrator.</Feedback>
+    <a class="button" href="attractions">Open attractions</a>
+}
+else
+{
+    @if (error is not null)
+    {
+        <section role="alert" tabindex="-1" @ref="errorSummary" class="feedback error"><h2>Setup was not completed</h2><p>@error</p></section>
+    }
+    @if (Users.SetupEnabled)
+    {
+        <section class="form-panel">
+            <h2>Set up the first administrator</h2>
+            <p>The Users service verifies your account’s email before assigning the role. This works only once, before an administrator has been initialized.</p>
+            <button disabled="@busy" @onclick="CompleteAsync">@(busy ? "Verifying account…" : "Make this account administrator")</button>
+        </section>
+    }
+    else
+    {
+        <Feedback Kind="FeedbackKind.Unavailable">First-administrator setup is disabled. Ask the website owner to configure it.</Feedback>
+    }
+}
+
+@code {
+    bool signedIn, loading = true, busy, disposed, focusError;
+    string? error;
+    UserProfile? profile;
+    ElementReference errorSummary;
+    readonly CancellationTokenSource closed = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Authentication.AuthenticationStateChanged += Changed;
+        await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusError) { focusError = false; await errorSummary.FocusAsync(); }
+    }
+
+    async Task LoadAsync()
+    {
+        try
+        {
+            var user = (await Authentication.GetAuthenticationStateAsync()).User;
+            signedIn = user.Identity?.IsAuthenticated == true && Sessions.IsActive(user) && AccessTokenClaims.ActiveToken(user, Clock.GetUtcNow()) is not null;
+            profile = signedIn ? await Users.GetMeAsync(closed.Token) : null;
+        }
+        catch (ApiError failure) { error = failure.Message; }
+        catch (OperationCanceledException) when (closed.IsCancellationRequested) { }
+        finally { loading = false; }
+    }
+
+    /**
+     * Shows success only for a confirmed active administrator response.
+     * @return Completion of the guarded one-time setup.
+     */
+    async Task CompleteAsync()
+    {
+        if (busy || !signedIn) return;
+        busy = true; error = null;
+        try
+        {
+            profile = await Users.BootstrapAsync(closed.Token);
+            if (profile.Role != "administrator" || profile.Status != "active") error = "Administrator access was not granted.";
+        }
+        catch (ApiError failure) { error = failure.Status == 403 ? "This verified account is not allowed to perform first-administrator setup." : failure.Message; }
+        catch (OperationCanceledException) when (closed.IsCancellationRequested) { }
+        finally { busy = false; focusError = error is not null; }
+    }
+
+    void Changed(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
+    {
+        profile = null; error = null; loading = true;
+        await LoadAsync();
+        if (!disposed) StateHasChanged();
+    });
+
+    /** Prevents closed views from retaining authenticated role data. */
+    public void Dispose() { disposed = true; Authentication.AuthenticationStateChanged -= Changed; closed.Cancel(); closed.Dispose(); }
+}

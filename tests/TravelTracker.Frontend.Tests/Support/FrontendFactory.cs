@@ -28,6 +28,7 @@ namespace TravelTracker.Frontend.Tests.Support;
 public sealed partial class FrontendFactory(bool signInConfigured = true, string? clientSecret = null, string? keyDirectory = null, SessionRegistry? sessionRegistry = null) : WebApplicationFactory<Program>
 {
     public const string ProtectedReadPath = "/test/protected-read";
+    public const string RequestedScope = "openid profile email catalogue.read";
 
     public FakeAuth0 Auth0 { get; } = new("test-client");
 
@@ -45,6 +46,8 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
             builder.UseSetting("Auth0:Domain", "tenant.example.test");
             builder.UseSetting("Auth0:ClientId", "test-client");
             builder.UseSetting("Auth0:Audience", "traveltracker-api");
+            // Fake-tenant grants must never inherit the operator's local requested permissions.
+            builder.UseSetting("Auth0:Scope", RequestedScope);
             if (clientSecret is not null)
                 builder.UseSetting("Auth0:ClientSecret", clientSecret);
         }
@@ -107,6 +110,12 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
         {
             app.Use(async (context, continuation) =>
             {
+                if (context.Request.Path == "/test/granted-scope")
+                {
+                    var signedIn = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    await context.Response.WriteAsync(string.Join(" ", signedIn.Principal?.FindAll(TravelTracker.Frontend.Auth.AccessTokenClaims.GrantedScope).Select(c => c.Value) ?? []));
+                    return;
+                }
                 if (context.Request.Path != ProtectedReadPath)
                 {
                     await continuation();

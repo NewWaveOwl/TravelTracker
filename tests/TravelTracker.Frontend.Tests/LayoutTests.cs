@@ -16,6 +16,14 @@ public sealed class LayoutTests : BunitContext
         Services.AddSingleton(new ServiceDirectory(new Dictionary<string, string> { ["Attractions"] = "http://attractions" }));
         Services.AddSingleton(new ServiceClient(new HttpClient(StubHandler.Status(503)), NullLogger<ServiceClient>.Instance));
         Services.AddLogging();
+        var sessions = new TravelTracker.Frontend.Auth.SessionRegistry(TimeProvider.System);
+        Services.AddSingleton(sessions);
+        Services.AddSingleton<TimeProvider>(TimeProvider.System);
+        Services.AddSingleton<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(new SwitchableAuthentication(sessions));
+        Services.AddScoped<ProtectedClient>();
+        Services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        Services.AddScoped<TravelTracker.Frontend.Api.Users.UsersClient>();
+        Services.AddScoped<TravelTracker.Frontend.Services.AdminAccessState>();
     }
 
     [Fact]

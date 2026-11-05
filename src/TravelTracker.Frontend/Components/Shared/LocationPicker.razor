@@ -1,0 +1,65 @@
+@using System.Globalization
+
+<section class="location-picker" aria-labelledby="location-heading">
+    <small>CHOOSE LOCATION / ATTRACTION</small>
+    <h1 id="location-heading" tabindex="-1" @ref="heading">Put your attraction on the map</h1>
+    <p>This map is a placeholder. Enter coordinates to choose a location; live map selection will be available later.</p>
+    <div class="location-columns">
+        <div>
+            <div class="map-preview">
+                <img src="assets/attractions-map-placeholder.png" alt="Static map preview of Montreal's Little Burgundy and Pointe-Saint-Charles neighbourhoods. This image does not provide interactive location selection." />
+            </div>
+            <small>Static map preview. Address search, pin placement and zoom are not connected yet.</small>
+        </div>
+        <form class="selected-location" @onsubmit="UseAsync" @onsubmit:preventDefault>
+            <h2>Selected location</h2>
+            <h3>@Name</h3>
+            <p>@Address</p>
+            @if (error is not null)
+            {
+                <p class="field-error" role="alert">@error</p>
+            }
+            <AttractionField Id="map-lat" Label="Latitude * (−90 to 90)" @bind-Value="latitude" InputMode="decimal" />
+            <AttractionField Id="map-lon" Label="Longitude * (−180 to 180)" @bind-Value="longitude" InputMode="decimal" />
+            <p>Use this location to fill the attraction’s coordinates. Your other form entries stay as entered.</p>
+            <button type="submit">Use this location</button>
+            <button type="button" class="secondary" @onclick="Cancel">Cancel</button>
+        </form>
+    </div>
+</section>
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string Address { get; set; } = "";
+    [Parameter] public string Latitude { get; set; } = "";
+    [Parameter] public string Longitude { get; set; } = "";
+    [Parameter] public EventCallback<(string Lat, string Lon)> UseLocation { get; set; }
+    [Parameter] public EventCallback Cancel { get; set; }
+
+    string latitude = "";
+    string longitude = "";
+    string? error;
+    ElementReference heading;
+
+    protected override void OnInitialized() { latitude = Latitude; longitude = Longitude; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await heading.FocusAsync();
+    }
+
+    /**
+     * Applies a validated coordinate draft only after explicit confirmation.
+     * @return Completion of the parent update, or a retained picker with validation feedback.
+     */
+    async Task UseAsync()
+    {
+        if (!decimal.TryParse(latitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var lat) || lat is < -90 or > 90 ||
+            !decimal.TryParse(longitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var lon) || lon is < -180 or > 180)
+        {
+            error = "Enter latitude from −90 to 90 and longitude from −180 to 180.";
+            return;
+        }
+        await UseLocation.InvokeAsync((latitude, longitude));
+    }
+}

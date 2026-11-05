@@ -4,14 +4,14 @@ HTTP contracts for the shared scaffold and the implemented combined API.
 
 ## Current state
 
-Attractions has dedicated [Api](../src/TravelTracker.Attractions.Api), [Data](../src/TravelTracker.Attractions.Data) and [Domain](../src/TravelTracker.Attractions.Domain) projects and runs on 5104 with PostgreSQL. [TravelTracker.Api](../src/TravelTracker.Api) retains Transport/Route Points on 5105. Both use shared bearer infrastructure; Attractions also applies the approved privacy/live-standing rules. See the [service contract and startup guide](attractions-service.md).
+Attractions has dedicated [Api](../src/TravelTracker.Attractions.Api), [Data](../src/TravelTracker.Attractions.Data) and [Domain](../src/TravelTracker.Attractions.Domain) projects and runs on 5104 with PostgreSQL. [TravelTracker.Transport.Api](../src/TravelTracker.Transport.Api) owns Transport/Route Points on 5105. Both use shared bearer infrastructure; Attractions also applies the approved privacy/live-standing rules. See the [service contract and startup guide](attractions-service.md).
 
 ## Existing service interfaces
 
 | Preserved interface | Wraps | Declared methods |
 |---|---|---|
 | [IAttractionService](../src/TravelTracker.Attractions.Api/Services/IAttractionService.cs) | `Attraction` | `GetAllAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync` |
-| [ITransportModeService](../src/TravelTracker.Api/Services/ITransportModeService.cs) | `TransportMode` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `CreateAsync`, `UpdateAsync` |
+| [ITransportModeService](../src/TravelTracker.Transport.Api/Services/ITransportModeService.cs) | `TransportMode` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `CreateAsync`, `UpdateAsync` |
 | [ISettingsService](../src/TravelTracker.Api/Services/ISettingsService.cs) | `UserSettings` (empty type declaration) | `GetOrCreateAsync`, `UpdateAsync` |
 | [ITripService](../src/TravelTracker.Api/Services/ITripService.cs) | `Trip`, `TripLeg` (empty type declarations) | `GetHistoryAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
 | [ITripMapService](../src/TravelTracker.Api/Services/ITripMapService.cs) | `TripMapPoint` (empty type declaration) | `GetMapPointsAsync` |
@@ -48,7 +48,7 @@ Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: J
 
 All resource operations now require a validated bearer access token and their exact catalogue scope: GET uses `catalogue.read`; POST and PATCH use `catalogue.write`. `/health` is explicitly anonymous. Authentication failures return `401` with a Bearer challenge; missing permissions return `403` before input validation. Read and write permissions are independent. Both fallback authorization (no attribute) and bare `[Authorize]` default to `catalogue.read`; mutations must still declare their write policy. See [configuration, identity rules and the complete policy map](authentication.md). This implements resource-server authentication, not sign-in or Users account-standing/ownership checks.
 
-Attractions runs at http://localhost:5104 with its own Swagger document and `GET /health` returning `status: ok`, `service: Attractions`. Transport/Route Points remain at http://localhost:5105 with `service: TravelTracker`. Health is anonymous. Development Swagger is enabled per host. Attraction response fields remain compatible; creation adds optional `visibility` (`private` by default, `shared` only for administrators). See [privacy, account-standing and Users-dependency failures](attractions-service.md).
+Attractions runs at http://localhost:5104 with its own Swagger document and `GET /health` returning `status: ok`, `service: Attractions`. Transport/Route Points remain at http://localhost:5105 with `service: TravelTracker.Transport`. Health is anonymous. Development Swagger is enabled per host. Attraction response fields remain compatible; creation adds optional `visibility` (`private` by default, `shared` only for administrators). See [privacy, account-standing and Users-dependency failures](attractions-service.md).
 
 | Method and route | Service | Result |
 | --- | --- | --- |
@@ -56,8 +56,10 @@ Attractions runs at http://localhost:5104 with its own Swagger document and `GET
 | GET /api/v1/attractions/{id} | Attractions | 200 attraction details; malformed GUID -> 400; unknown valid GUID -> 404 |
 | POST /api/v1/attractions | Attractions | 201, saved attraction and details Location; unknown JSON properties rejected (400) |
 | PATCH /api/v1/attractions/{id} | Attractions | 200 updated attraction; malformed GUID/invalid JSON/invalid fields -> 400; unknown valid GUID -> 404 |
+| GET /api/v1/transport-modes | Transport | Saved selection, optional code/name filters |
 | GET /api/v1/transport-modes/{id} | Transport | Saved transport entry, or 404 |
 | POST /api/v1/transport-modes | Transport | 201, saved entry and details Location |
+| GET /api/v1/route-points | Transport | Saved selection, optional type/name filters |
 | GET /api/v1/route-points/{id} | Transport | Saved route point, or 404 |
 | POST /api/v1/route-points | Transport | 201, saved point and details Location |
 
@@ -73,16 +75,36 @@ Collection GET trims a single `name` query value and matches a literal, ordinal 
 
 Response: transportModeId, code, name, description. POST requires a nonblank name and one exact lowercase code: car, bus, train, pedestrian, bike or plane. Description is optional. Names are trimmed; multiple entries may share a code. ITransportModeService manages entries without journey dates.
 
-The Api controllers use the original asynchronous ITransportModeService and IAttractionService with their Domain entities; their Data implementations use the original repository interfaces. The new [IRoutePointService](../src/TravelTracker.Api/Services/IRoutePointService.cs) follows the same layer boundary. Response DTOs map DisplayName to name and Latitude/Longitude to lat/lon. Existing interface methods for collection/update/delete remain available internally, but no additional HTTP operations are exposed.
+The Api controllers use the original asynchronous ITransportModeService and IAttractionService with their Domain entities; their Data implementations use the original repository interfaces. The new [IRoutePointService](../src/TravelTracker.Transport.Api/Services/IRoutePointService.cs) follows the same layer boundary. Response DTOs map DisplayName to name and Latitude/Longitude to lat/lon. Existing interface methods for collection/update/delete remain available internally, and Transport exposes collection selection in addition to detail/create.
 
 ### Route point fields
 
 Response: routePointId, type, name, address, lat, lon, sourceId. POST requires an exact lowercase type (accommodation, attraction or transport_stop), nonblank name and valid coordinates. Address defaults to empty and cannot be explicitly null. Optional sourceId is unverified GUID metadata; the API does not contact another service. A point is a reusable location, not a scheduled journey.
 
-Attractions owns its durable PostgreSQL store, scoped context/repository and application rules. Optional examples seed an empty store only; restarting retains records. Transport/Route Points retain their process-lifetime memory. Each resource keeps cohesive controller/service/repository responsibilities. PostgreSQL row-locking transactions protect attraction PATCH validation and atomic updates.
+Attractions owns its durable PostgreSQL store, scoped context/repository and application rules. Optional examples seed an empty store only; restarting retains records. Transport/Route Points use their own scoped PostgreSQL context and repositories. Each resource keeps cohesive controller/service/repository responsibilities. PostgreSQL row-locking transactions protect attraction PATCH validation and atomic updates.
 
-Attraction list/name search and attraction PATCH are implemented (see the route table). Transport collection listing, route-point collection/PATCH/DELETE, scheduled transport routes, stops and timing calculations remain future work. The contract for the six-service target is in [milestone 3 contracts](milestone-3-contracts.md). [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md), [Attractions HTTP examples](../src/TravelTracker.Attractions.Api/requests.http).
+Attraction list/name search and attraction PATCH are implemented (see the route table). Transport and route-point PATCH/DELETE, scheduled transport routes, stops and timing calculations remain future work. The contract for the six-service target is in [milestone 3 contracts](milestone-3-contracts.md). [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md), [Attractions HTTP examples](../src/TravelTracker.Attractions.Api/requests.http).
 
 For future Trips integration, a trip point is an ordered occurrence of a reusable route point. A scheduled route connects route points using a transport entry; a trip leg selects that journey. Dates and boarding/stop timings belong to the scheduled route and occurrences, rather than the transport catalogue POST. See [trip points, transport and routes](trip-points-and-routes.md).
 
 Attractions failure handling: missing validated identity returns 401; forbidden operations 403; application validation and PostgreSQL integrity constraints 400; unique, serialization, deadlock and optimistic concurrency conflicts 409; transient storage outages 503. Unexpected storage/programming failures remain 500. Cancellation without client disconnection returns 408; disconnected requests receive no problem body. All failure details are safe and omit provider/identity/credential data. See [Attractions operations](attractions-service.md).
+
+### Frontend attraction editing (#43)
+
+The Blazor `/attractions` view consumes these public HTTP DTOs and sends the current user's bearer token to the configured Attractions service only. Search uses one percent-encoded literal `name` parameter. Create sends only writable fields and uses the service's private visibility default. Edit sends only changed fields, with explicit null clearing rating or description. Saved details come from a confirmed response; result-refresh failures are reported separately. Unconfirmed writes are never automatically retried.
+
+The frontend's optional duration ± field is a local preview and has no HTTP or persistence field. The map is the user-supplied static placeholder; choosing a location currently means confirming manually entered coordinates. No endpoint or database change is included in #43.
+
+## Users first-administrator contracts
+
+The owner-approved Users service runs independently in `TravelTracker.Users.Api` over HTTPS (local port 5101), using its own PostgreSQL database. `GET /api/v1/users/me` requires `catalogue.read` and returns the caller's public userId/email/role/status. An unknown identity is provisioned only as an active traveller after provider userinfo confirms the validated subject and verified email; failed verification is forbidden. Deactivated accounts receive 403. `POST /api/v1/users/bootstrap-first-administrator` additionally requires a server-owned setup credential, an allowed verified provider email bound to the same validated subject, and a never-consumed bootstrap record. It accepts no client-selected identity/role fields and returns a confirmed public profile, or safe 400/401/403/404/409/503 failures. Exact identity replay may return the current role but never re-elevates it.
+
+`POST /api/v1/users/access` uses a separate high-entropy service Bearer credential over HTTPS, rather than the caller's access token, to return live status/role for the existing Attractions consumer. Unknown identities return deactivated/traveller. The endpoint never creates an account. `/health` is anonymous liveness only. See [first-admin setup](first-administrator-setup.md); full profile CRUD and status-management endpoints remain unimplemented; administrator listing and role changes are documented below.
+
+### Administrator account listing and role changes
+
+`GET /api/v1/users` and `PATCH /api/v1/users/{publicId}/role` require HTTPS, a validated read-session bearer token and a live active-administrator account in Users. A token role claim alone never grants access. Listing returns public profile DTOs only. Role PATCH accepts only `role`, `expectedRole`, and `reason`; unknown fields are rejected. Valid roles are `traveller` and `administrator`; the trimmed reason must contain1–500 characters. The service returns200 only for a committed change,400 for invalid input/inactive promotion,403 for a nonactive/nonadministrator actor,404 for a missing target,409 for stale/no-op roles or last-active-admin demotion, and safe503 for unavailable storage. Rejected changes do not write an audit entry or mutate the role.
+
+Every role mutation shares the one-time-bootstrap transaction lock, so two concurrent demotions cannot remove the last active administrator. Successful changes atomically persist the actor, target, previous role, new role, reason and time. Self-demotion immediately removes server authority for further administration. First verified profile access can provision only a traveller; it preserves existing roles and standing. See [setup and administrator operations](first-administrator-setup.md).
+
+Transport now runs independently with PostgreSQL on 5105. See [selection filters, startup, policies and persistence](transport-service.md).

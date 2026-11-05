@@ -81,12 +81,14 @@ public static class AuthExtensions
                     var expiresAt = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow().AddSeconds(int.TryParse(context.TokenEndpointResponse?.ExpiresIn, out var seconds) ? seconds : 0);
                     var identity = (ClaimsIdentity)context.Principal!.Identity!;
                     // Provider claims cannot choose server-owned token or session metadata.
-                    foreach (var claim in context.Principal.FindAll(AccessTokenClaims.Token).Concat(context.Principal.FindAll(AccessTokenClaims.ExpiresAt)).Concat(context.Principal.FindAll(SessionRegistry.SessionIdClaim)).ToArray())
+                    foreach (var claim in context.Principal.FindAll(AccessTokenClaims.Token).Concat(context.Principal.FindAll(AccessTokenClaims.ExpiresAt)).Concat(context.Principal.FindAll(AccessTokenClaims.GrantedScope)).Concat(context.Principal.FindAll(SessionRegistry.SessionIdClaim)).ToArray())
                         ((ClaimsIdentity)claim.Subject!).RemoveClaim(claim);
                     identity.AddClaims(
                     [
                         new Claim(AccessTokenClaims.Token, token),
                         new Claim(AccessTokenClaims.ExpiresAt, expiresAt.ToUnixTimeSeconds().ToString()),
+                        // OAuth permits scope omission when the granted scopes equal those requested.
+                        new Claim(AccessTokenClaims.GrantedScope, context.TokenEndpointResponse?.Scope ?? settings.Scope),
                     ]);
                     // the session ends when the access token does; there is no silent renewal
                     context.Properties!.ExpiresUtc = expiresAt;
