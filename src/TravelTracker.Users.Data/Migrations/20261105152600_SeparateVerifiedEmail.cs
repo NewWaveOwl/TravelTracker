@@ -28,11 +28,22 @@ namespace TravelTracker.Users.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // the older schema reads Email as the provider-verified address, so it may only ever come from VerifiedEmail;
+            // a contact email edited or entered after the upgrade is dropped here instead of being promoted into that column
+            migrationBuilder.Sql("""UPDATE "UserAccounts" SET "Email" = "VerifiedEmail";""");
+
+            // the older schema also requires an email on every account; refuse (this migration's transaction rolls back,
+            // nothing is lost) rather than invent one or copy an unverified contact email
             migrationBuilder.Sql(
                 """
-                UPDATE "UserAccounts"
-                SET "Email" = "VerifiedEmail"
-                WHERE "Email" IS NULL AND "VerifiedEmail" IS NOT NULL;
+                DO $$
+                DECLARE missing integer;
+                BEGIN
+                    SELECT count(*) INTO missing FROM "UserAccounts" WHERE "Email" IS NULL;
+                    IF missing > 0 THEN
+                        RAISE EXCEPTION 'Cannot roll back: % account(s) have no provider-verified email, which the previous schema requires. Contact emails are not verified and are not copied.', missing;
+                    END IF;
+                END $$;
                 """);
 
             migrationBuilder.DropColumn(
