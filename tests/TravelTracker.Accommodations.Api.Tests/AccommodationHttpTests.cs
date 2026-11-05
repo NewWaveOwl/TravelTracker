@@ -27,7 +27,7 @@ public sealed class AccommodationHttpTests
     public async Task Create_Returns201LocationAndPublicDtoWithPrivateDefault()
     {
         using var factory = new ApiFactory();
-        using var client = factory.CreateClientFor("alice", "catalogue.write");
+        using var client = factory.CreateClientFor("alice", "catalogue.write catalogue.read");
 
         using var response = await client.PostAsJsonAsync("/api/v1/accommodations", new
         {
