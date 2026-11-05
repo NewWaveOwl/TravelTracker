@@ -33,7 +33,9 @@ internal sealed class UserRecordConfiguration : IEntityTypeConfiguration<UserRec
         builder.Property(record => record.Issuer).IsRequired();
         builder.Property(record => record.Subject).IsRequired();
         builder.Property(record => record.Role).IsRequired();
-        builder.Property(record => record.Status).IsRequired();
+        // standing is part of the write check, so a profile save can't land on an account whose status changed after it was loaded,
+        // even if the writer that changed the status forgot to advance ConcurrencyToken
+        builder.Property(record => record.Status).IsRequired().IsConcurrencyToken();
         builder.Property(record => record.ConcurrencyToken).IsConcurrencyToken().IsRequired();
         builder.HasIndex(record => record.PublicId).IsUnique().HasDatabaseName("IX_UserAccounts_PublicId");
         builder.HasIndex(record => record.NormalizedUsername)

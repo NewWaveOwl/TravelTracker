@@ -10,7 +10,7 @@ using TravelTracker.Users.Domain.Types;
 namespace TravelTracker.Users.Data.Tests;
 
 [Trait("Category", "PostgreSQL")]
-public sealed class UserRepositoryPostgreSqlTests
+public sealed partial class UserRepositoryPostgreSqlTests
 {
     static readonly DateTimeOffset CreatedAt = new(2026, 11, 5, 12, 0, 0, TimeSpan.Zero);
 
