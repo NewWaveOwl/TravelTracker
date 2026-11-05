@@ -63,3 +63,28 @@ With explicit owner approval, the Auth0 API's missing `catalogue.write` permissi
 The PostgreSQL tests share one per-test database lifecycle helper. The overlapping first-sign-in test is consolidated into the stronger spoofed-role/repeated-sign-in scenario, preserving its active-status and no-bootstrap assertions. HTTP role tests use configured repository results to verify status mapping and forwarding of the validated actor and reviewed request; their fake no longer reimplements role policy. Actual authorization, last-administrator, stale-role and audit guarantees remain covered by the production repository's PostgreSQL tests.
 
 After cleanup, the solution build has **0 warnings, 0 errors**. **479 ordinary tests and 22 PostgreSQL tests passed, 0 failed, 0 skipped** (501 total: API 89, Attractions 184, frontend 159, Users 69). The count falls from 503 through consolidation of overlapping HTTP/provisioning scenarios; all 15 Users PostgreSQL cases remain. Test/helper code is 79 lines smaller. Restore, Release build and both filtered test groups used `-p:UseAppHost=false -p:OutputPath=bin/Pr75Validation/` for build/test outputs, preserving the running website.
+
+## Own profile (M3-11, #37)
+
+`GET /api/v1/users/me` (scope `users.read`) and `PUT /api/v1/users/me` (scope `users.write`) read and replace the caller's own profile. Identity is only the validated token `(iss, sub)` pair mapped to the local account; there is no ID in the route, and request headers or body values never choose the account.
+
+| Field | Rules |
+| --- | --- |
+| `displayName` | Required. Trimmed, 1 to 60 characters, no control characters. New accounts start with the email's local part (cut to 60, or `Traveller` if empty). Not unique and never used for identity. |
+| `address` | Optional free text. Trimmed, at most 200 characters, newlines allowed, other control characters rejected. Blank or whitespace clears it (`null`). Personal data: returned only by `/me`, never in the administrator list, never logged. |
+
+`PUT` body is exactly `{ "displayName": "...", "address": "..." | null }`. Any other property (`userId`, `email`, `role`, `status`, `issuer`, `subject`) is rejected with `400`. Success returns `200` with `{ userId, email, displayName, address, role, status }`.
+
+| Outcome | Status |
+| --- | --- |
+| No/invalid token | `401` |
+| Missing scope, banned (write only), or deactivated | `403` |
+| Invalid or unknown fields | `400`, profile unchanged |
+| No local account (a `PUT` never provisions; `GET /me` does) | `404` |
+| Store unavailable | `503` |
+
+Standing: active accounts read and update; banned accounts read but cannot update; deactivated accounts can do neither. The update is one conditional SQL statement (`WHERE Status = 'active'`), so a standing change cannot race the check. Migration `UserProfileFields` adds the columns and backfills `DisplayName` for existing rows.
+
+Scope policies in this service: `GET /me` uses `users.read`, `PUT /me` uses `users.write`; the administrator list, role change and bootstrap still use `catalogue.read` plus live administrator standing, and `/health` and the service-token `access` lookup stay anonymous at the bearer layer. Moving the administrator endpoints to `users.admin` is deferred. Auth0 setup: define `users.read` and `users.write` on the API and grant `users.read` (and `users.write` when profile editing ships) to the frontend application. The frontend now requests `users.read` by default. Profile editing UI belongs to M3-19.
+
+Tests: `OwnProfileApiTests` (scope matrix, spoofing, standing, validation), `ProfilePersistenceTests` (PostgreSQL, restart persistence, standing, isolation) and `DomainTests`.
