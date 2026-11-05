@@ -20,24 +20,31 @@ public sealed class UsersAccessClient(HttpClient http, IConfiguration configurat
      */
     public async Task<UserAccessRecord?> ResolveAsync(string issuer, string subject, CancellationToken cancellationToken)
     {
-        if (!Uri.TryCreate(configuration["Users:AccessEndpoint"], UriKind.Absolute, out var endpoint) ||
+        var internalBase = configuration["Users:InternalBaseUrl"];
+        var useScopedLookup = !string.IsNullOrWhiteSpace(internalBase);
+        if (!Uri.TryCreate(useScopedLookup ? internalBase : configuration["Users:AccessEndpoint"], UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme != Uri.UriSchemeHttps)
         {
             logger.LogError("Users access configuration is invalid: an absolute HTTPS endpoint is required.");
             return null;
         }
-        if (string.IsNullOrWhiteSpace(configuration["Users:ServiceAccessToken"]))
+        var credential = configuration["Users:ServiceAccessToken"];
+        if (string.IsNullOrWhiteSpace(credential))
         {
             logger.LogError("Users access configuration is invalid: a service credential is required.");
             return null;
         }
         try
         {
+            var authorization = new AuthenticationHeaderValue("Bearer", credential);
+            if (useScopedLookup)
+                return await ResolveByPublicIdAsync(endpoint, issuer, subject, authorization, cancellationToken);
+
             using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
             {
                 Content = JsonContent.Create(new { issuer, subject })
             };
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", configuration["Users:ServiceAccessToken"]);
+            request.Headers.Authorization = authorization;
             using var response = await http.SendAsync(request, cancellationToken);
             if (response.StatusCode != HttpStatusCode.OK)
             {
@@ -67,4 +74,53 @@ public sealed class UsersAccessClient(HttpClient http, IConfiguration configurat
             return null;
         }
     }
+
+    /**
+     * Resolves the validated identity over the trusted backchannel and then checks current standing by ID.
+     * @param endpoint The configured Users HTTPS origin.
+     * @param issuer The validated caller issuer.
+     * @param subject The validated caller subject.
+     * @param authorization The authorized backend service credential.
+     * @param cancellationToken Cancels both lookups.
+     * @return Account standing, or null when a dependency error prevents a decision.
+     */
+    private async Task<UserAccessRecord?> ResolveByPublicIdAsync(Uri endpoint, string issuer, string subject,
+        AuthenticationHeaderValue authorization, CancellationToken cancellationToken)
+    {
+        using var resolve = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, "/internal/users/identity"))
+        {
+            Content = JsonContent.Create(new { issuer, subject })
+        };
+        resolve.Headers.Authorization = authorization;
+        using var identity = await http.SendAsync(resolve, cancellationToken);
+        if (identity.StatusCode == HttpStatusCode.NotFound) return new UserAccessRecord("deactivated", "traveller");
+        if (identity.StatusCode != HttpStatusCode.OK)
+        {
+            logger.LogWarning("Users identity lookup returned HTTP {StatusCode}.", (int)identity.StatusCode);
+            return null;
+        }
+
+        var resolved = await identity.Content.ReadFromJsonAsync<ResolvedUserId>(cancellationToken);
+        if (resolved is null || resolved.UserId == Guid.Empty) return null;
+
+        using var lookup = new HttpRequestMessage(HttpMethod.Get, new Uri(endpoint, $"/internal/users/{resolved.UserId:D}/access"));
+        lookup.Headers.Authorization = authorization;
+        using var response = await http.SendAsync(lookup, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound) return new UserAccessRecord("deactivated", "traveller");
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            logger.LogWarning("Users standing lookup returned HTTP {StatusCode}.", (int)response.StatusCode);
+            return null;
+        }
+
+        var access = await response.Content.ReadFromJsonAsync<ResolvedUserAccess>(cancellationToken);
+        return access?.UserId == resolved.UserId &&
+            access.Status is "active" or "banned" or "deactivated" &&
+            access.Role is "traveller" or "administrator"
+            ? new UserAccessRecord(access.Status, access.Role)
+            : null;
+    }
+
+    private sealed record ResolvedUserId(Guid UserId);
+    private sealed record ResolvedUserAccess(Guid UserId, string Status, string Role);
 }

@@ -4,7 +4,7 @@ Owner explicitly approved implementing a one-time first-administrator setup afte
 
 The account is identified by its validated Auth0 issuer/subject. Bootstrap additionally requires an operator-owned secret, configured target verified email, live Auth0 userinfo with matching subject, and a previously unused durable bootstrap record. The target address and credentials live in local configuration, not source. PostgreSQL owns user roles and bootstrap audit state. A global transactional lock prevents concurrent first-admin claims. Completing bootstrap never provides a general self-promotion route.
 
-Routes: Users health, authenticated current-user read and first-admin POST, plus a service-token-protected access lookup for the existing Attractions consumer contract. Full profile CRUD and status-management remain separate; the role-management extension is documented below. Service endpoints use HTTPS. Missing identity, configuration, verification or dependencies fail closed.
+Routes: Users health, authenticated current-user read and first-admin POST, plus a service-token-protected access lookup for the existing Attractions consumer contract. Self-profile reads and edits are documented in [Users contracts](api.md#users-contracts). The role-management extension is documented below. Service endpoints use HTTPS. Missing identity, configuration, verification or dependencies fail closed.
 
 The frontend shows a one-time setup page and current role; bootstrap credentials stay on the server. Authentication continues through the existing OIDC session and the Users API validates the access token independently. API permission grants and Users administrator status remain distinct.
 
@@ -16,9 +16,9 @@ The Users host runs at `https://localhost:5101`; use a trusted localhost develop
 
 Configure the frontend user-secrets with `Services:Users=https://localhost:5101` and `AdminBootstrap:Secret` matching the operator secret. Open `/admin-setup`, sign in as the selected verified account, then choose **Make this account administrator**. The frontend sends the credential only to the configured HTTPS bootstrap path and never renders it. Read the confirmed role from `/api/v1/users/me`; do not infer success from a clicked button. Once completed, remove/disable the bootstrap secrets. The durable marker prevents reuse even if the administrator is later demoted or deleted.
 
-For Attractions, set its existing `Users:AccessEndpoint` to `https://localhost:5101/api/v1/users/access` and `Users:ServiceAccessToken` to the separate access credential. Unknown identities resolve as deactivated/traveller and cannot access protected Attractions operations until verified profile access provisions an account. Both the API's `catalogue.write` grant and appropriate live Users standing/ownership are still required for writes; becoming an application administrator does not change Auth0 grants.
+For Attractions, set its existing `Users:AccessEndpoint` to `https://localhost:5101/api/v1/users/access` and `Users:ServiceAccessToken` to the separate access credential. Unknown identities resolve as deactivated/traveller and cannot access protected Attractions operations until their first authenticated profile read provisions an account. Both the API's `catalogue.write` grant and appropriate live Users standing/ownership are still required for writes; becoming an application administrator does not change Auth0 grants.
 
-The initial bootstrap slice provided first-admin setup, current-account standing and the Attractions access contract. The follow-up below adds administrator user listing and role changes; full profile CRUD and status management remain separate. Local account data is durable PostgreSQL data outside git.
+The initial bootstrap slice provided first-admin setup, current-account standing and the Attractions access contract. The follow-up below adds administrator user listing and role changes; account status management remains separate. Local account data is durable PostgreSQL data outside git.
 
 ## Review and test evidence
 

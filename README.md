@@ -26,7 +26,7 @@ TravelTracker currently provides the catalogue and location foundation for futur
 
 The following features are not yet available through the running application:
 
-- Full account profile editing and status management. Verified account provisioning, live standing, first-administrator setup and administrator role management are available through the independent Users service; see [setup](docs/first-administrator-setup.md).
+- Account status management and a frontend profile editor. The independent Users service supports first-sign-in provisioning, self-profile reads and updates over HTTP, live standing, verified first-administrator setup and administrator role management. See [Users contracts](docs/api.md#users-contracts).
 - Accommodation management as a separate resource.
 - Trips, ordered itinerary legs, history, settings and map views.
 - Scheduled journeys, departure and arrival times, and stop timing.
@@ -177,7 +177,7 @@ See [implementation and verification](docs/issue-43-implementation.md).
 
 ## First administrator setup
 
-The independent Users service now supplies the one-time, verified-identity administrator setup, current account profile and live Attractions access lookup. See [first administrator setup](docs/first-administrator-setup.md) for configuration, HTTPS, PostgreSQL, verification and scope limits. The administrator user-management extension below adds listing, role changes and verified traveller provisioning; full profile/status management remains separate.
+The independent Users service now supplies the one-time, verified-identity administrator setup, current account profile and live Attractions access lookup. See [first administrator setup](docs/first-administrator-setup.md) for configuration, HTTPS, PostgreSQL, verification and scope limits. The API also supports editing the signed-in account profile. Ordinary sign-in provisions an active traveller with blank profile fields.
 
 ## Administrator user management
 

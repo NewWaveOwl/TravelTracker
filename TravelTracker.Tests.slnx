@@ -20,6 +20,8 @@
     <Project Path="tests/TravelTracker.Api.Tests/TravelTracker.Api.Tests.csproj" />
     <Project Path="tests/TravelTracker.Transport.Api.Tests/TravelTracker.Transport.Api.Tests.csproj" />
     <Project Path="tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj" />
+    <Project Path="tests/TravelTracker.Users.Data.Tests/TravelTracker.Users.Data.Tests.csproj" />
+    <Project Path="tests/TravelTracker.Users.Domain.Tests/TravelTracker.Users.Domain.Tests.csproj" />
     <Project Path="tests/TravelTracker.Users.Tests/TravelTracker.Users.Tests.csproj" />
   </Folder>
 </Solution>

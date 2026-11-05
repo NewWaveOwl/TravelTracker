@@ -20,8 +20,9 @@ namespace TravelTracker.Frontend.Tests;
 /** Fake validated identities test live Users authorization responses and UI behavior, not bearer validation. */
 public sealed class UserAdministrationTests : BunitContext
 {
+    const string TravellerEmail = "traveller@example.test";
     static readonly UserProfile Administrator = new(Guid.Parse("00000000-0000-0000-0000-000000000001"), "admin@example.test", "administrator", "active");
-    static readonly UserProfile Traveller = new(Guid.Parse("00000000-0000-0000-0000-000000000002"), "traveller@example.test", "traveller", "active");
+    static readonly UserProfile Traveller = new(Guid.Parse("00000000-0000-0000-0000-000000000002"), TravellerEmail, "traveller", "active");
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
     PublishingAuthentication notifier = default!;
 
@@ -50,6 +51,8 @@ public sealed class UserAdministrationTests : BunitContext
 
     static HttpResponseMessage Json<T>(T body, HttpStatusCode status = HttpStatusCode.OK) => new(status) { Content = JsonContent.Create(body) };
 
+    static HttpResponseMessage Self(UserProfile user) => Json(new { publicId = user.UserId, user.Role, user.Status });
+
     [Theory]
     [InlineData("traveller", "active")]
     [InlineData("administrator", "banned")]
@@ -59,12 +62,12 @@ public sealed class UserAdministrationTests : BunitContext
         Configure(new StubHandler((request, _) =>
         {
             if (request.RequestUri!.AbsolutePath != "/api/v1/users/me") listCalls++;
-            return Task.FromResult(Json(Traveller with { Role = role, Status = standing }));
+            return Task.FromResult(Self(Traveller with { Role = role, Status = standing }));
         }));
         var panel = Render<AdministratorPanel>();
         panel.WaitForAssertion(() => Assert.Contains("Administrator access required", panel.Markup));
         Assert.Equal(0, listCalls);
-        Assert.DoesNotContain(Traveller.Email, panel.Markup);
+        Assert.DoesNotContain(TravellerEmail, panel.Markup);
         Assert.Empty(panel.FindAll("table"));
         Assert.Empty(panel.FindAll("form"));
     }
@@ -72,10 +75,12 @@ public sealed class UserAdministrationTests : BunitContext
     [Fact]
     public void UsesTheServiceListAndDisablesDemotionOfTheLastActiveAdministrator()
     {
-        Configure(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Json(Administrator) : Json(new[] { Administrator, Traveller }))));
+        Configure(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(Administrator) : Json(new[] { Administrator, Traveller with { Email = null } }))));
         var panel = Render<AdministratorPanel>();
         panel.WaitForAssertion(() => Assert.Equal(2, panel.FindAll("tbody tr").Count));
         Assert.Equal("All users", panel.Find(".admin-tabs a").TextContent);
+        Assert.Contains("(you)", panel.Find("tbody tr:first-child th").TextContent);
+        Assert.Equal(Traveller.UserId.ToString(), panel.Find("tbody tr:last-child th").TextContent.Trim());
         Assert.True(panel.Find("tbody tr:first-child button").HasAttribute("disabled"));
         Assert.False(panel.Find("tbody tr:last-child button").HasAttribute("disabled"));
         Assert.Contains("registered with TravelTracker", panel.Markup);
@@ -95,7 +100,7 @@ public sealed class UserAdministrationTests : BunitContext
                 currentTraveller = Traveller with { Role = "administrator" };
                 return Json(currentTraveller);
             }
-            if (request.RequestUri!.AbsolutePath.EndsWith("/me")) return Json(Administrator);
+            if (request.RequestUri!.AbsolutePath.EndsWith("/me")) return Self(Administrator);
             listReads++;
             return Json(new[] { Administrator, currentTraveller });
         }));
@@ -123,7 +128,7 @@ public sealed class UserAdministrationTests : BunitContext
     {
         Configure(new StubHandler((request, _) => Task.FromResult(request.Method == HttpMethod.Patch
             ? new HttpResponseMessage((HttpStatusCode)failure)
-            : request.RequestUri!.AbsolutePath.EndsWith("/me") ? Json(Administrator) : Json(new[] { Administrator, Traveller }))));
+            : request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(Administrator) : Json(new[] { Administrator, Traveller }))));
         var panel = Render<AdministratorPanel>();
         panel.WaitForAssertion(() => Assert.Equal(2, panel.FindAll("tbody tr").Count));
         panel.Find("tbody tr:last-child button").Click();
@@ -143,7 +148,7 @@ public sealed class UserAdministrationTests : BunitContext
         Configure(new StubHandler((request, _) =>
         {
             if (request.Method == HttpMethod.Patch) { me = Administrator with { Role = "traveller" }; return Task.FromResult(Json(me)); }
-            return Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Json(me) : Json(new[] { Administrator, otherAdmin }));
+            return Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(me) : Json(new[] { Administrator, otherAdmin }));
         }));
         var navigation = Render<AdminNavigation>();
         navigation.WaitForAssertion(() => Assert.Single(navigation.FindAll("a[href=administrator]")));
@@ -154,7 +159,7 @@ public sealed class UserAdministrationTests : BunitContext
         await panel.Find(".admin-confirmation").SubmitAsync();
         panel.WaitForAssertion(() => Assert.Contains("no longer has access", panel.Markup));
         Assert.Empty(panel.FindAll("table"));
-        Assert.DoesNotContain(otherAdmin.Email, panel.Markup);
+        Assert.DoesNotContain(TravellerEmail, panel.Markup);
         navigation.WaitForAssertion(() => Assert.Empty(navigation.FindAll("a")));
     }
 
@@ -163,12 +168,12 @@ public sealed class UserAdministrationTests : BunitContext
     {
         var olderReply = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         var reads = 0;
-        Configure(new StubHandler((_, _) => Interlocked.Increment(ref reads) == 1 ? olderReply.Task : Task.FromResult(Json(Administrator with { Role = "traveller" }))));
+        Configure(new StubHandler((_, _) => Interlocked.Increment(ref reads) == 1 ? olderReply.Task : Task.FromResult(Self(Administrator with { Role = "traveller" }))));
         var state = Services.GetRequiredService<AdminAccessState>();
         var older = state.RefreshAsync();
         await state.RefreshAsync();
         Assert.False(state.IsAdministrator);
-        olderReply.SetResult(Json(Administrator));
+        olderReply.SetResult(Self(Administrator));
         await older;
         Assert.False(state.IsAdministrator);
     }
@@ -176,7 +181,7 @@ public sealed class UserAdministrationTests : BunitContext
     [Fact]
     public async Task SignOutImmediatelyClearsPrivateRowsAndConfirmation()
     {
-        var auth = Configure(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Json(Administrator) : Json(new[] { Administrator, Traveller }))));
+        var auth = Configure(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(Administrator) : Json(new[] { Administrator, Traveller }))));
         var panel = Render<AdministratorPanel>();
         panel.WaitForAssertion(() => Assert.Equal(2, panel.FindAll("tbody tr").Count));
         panel.Find("tbody tr:last-child button").Click();
@@ -184,7 +189,7 @@ public sealed class UserAdministrationTests : BunitContext
         await panel.InvokeAsync(auth.SignOut);
         panel.WaitForAssertion(() => Assert.Empty(panel.FindAll("table")));
         Assert.Empty(panel.FindAll("form"));
-        Assert.DoesNotContain(Traveller.Email, panel.Markup);
+        Assert.DoesNotContain(TravellerEmail, panel.Markup);
         Assert.DoesNotContain("A private reason", panel.Markup);
     }
 
@@ -194,7 +199,7 @@ public sealed class UserAdministrationTests : BunitContext
         var pendingProfile = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         var reads = 0;
         var auth = Configure(new StubHandler((request, _) => request.RequestUri!.AbsolutePath.EndsWith("/me")
-            ? Interlocked.Increment(ref reads) == 1 ? Task.FromResult(Json(Administrator)) : pendingProfile.Task
+            ? Interlocked.Increment(ref reads) == 1 ? Task.FromResult(Self(Administrator)) : pendingProfile.Task
             : Task.FromResult(Json(new[] { Administrator, Traveller }))));
         var panel = Render<AdministratorPanel>();
         panel.WaitForAssertion(() => Assert.Equal(2, panel.FindAll("tbody tr").Count));
@@ -209,8 +214,8 @@ public sealed class UserAdministrationTests : BunitContext
         Assert.False(pendingProfile.Task.IsCompleted);
         Assert.Empty(panel.FindAll("table"));
         Assert.Empty(panel.FindAll("form"));
-        Assert.DoesNotContain(Traveller.Email, panel.Markup);
-        pendingProfile.SetResult(Json(Traveller));
+        Assert.DoesNotContain(TravellerEmail, panel.Markup);
+        pendingProfile.SetResult(Self(Traveller));
         panel.WaitForAssertion(() => Assert.Contains("Administrator access required", panel.Markup));
     }
 
@@ -222,7 +227,7 @@ public sealed class UserAdministrationTests : BunitContext
         Configure(new StubHandler((request, _) =>
         {
             if (request.Method == HttpMethod.Patch) { Interlocked.Increment(ref writes); return pendingChange.Task; }
-            return Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Json(Administrator) : Json(new[] { Administrator, Traveller }));
+            return Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(Administrator) : Json(new[] { Administrator, Traveller }));
         }));
         var panel = Render<AdministratorPanel>();
         panel.WaitForAssertion(() => Assert.Equal(2, panel.FindAll("tbody tr").Count));
@@ -243,7 +248,7 @@ public sealed class UserAdministrationTests : BunitContext
     public void ServerPermissionFailureClearsPrivateUsersAndRoleControls()
     {
         Configure(new StubHandler((request, _) => Task.FromResult(request.Method == HttpMethod.Patch ? new HttpResponseMessage(HttpStatusCode.Forbidden)
-            : request.RequestUri!.AbsolutePath.EndsWith("/me") ? Json(Administrator) : Json(new[] { Administrator, Traveller }))));
+            : request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(Administrator) : Json(new[] { Administrator, Traveller }))));
         var panel = Render<AdministratorPanel>();
         panel.WaitForAssertion(() => Assert.Equal(2, panel.FindAll("tbody tr").Count));
         panel.Find("tbody tr:last-child button").Click();
@@ -252,7 +257,7 @@ public sealed class UserAdministrationTests : BunitContext
         panel.WaitForAssertion(() => Assert.Contains("Administrator access required", panel.Markup));
         Assert.Empty(panel.FindAll("table"));
         Assert.Empty(panel.FindAll("form"));
-        Assert.DoesNotContain(Traveller.Email, panel.Markup);
+        Assert.DoesNotContain(TravellerEmail, panel.Markup);
         Assert.False(Services.GetRequiredService<AdminAccessState>().IsAdministrator);
     }
 

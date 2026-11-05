@@ -110,8 +110,8 @@ public sealed class BootstrapApiTests
         Assert.Equal("administrator", profile!.Role); Assert.Equal("active", profile.Status);
         Assert.Equal(new Uri(UsersApiFactory.Issuer + "userinfo"), app.Identity.Destination);
         Assert.Equal("Bearer " + token, app.Identity.Authorization);
-        var read = await client.GetFromJsonAsync<UserProfileResponse>("/api/v1/users/me");
-        Assert.Equal(profile, read);
+        var read = await client.GetFromJsonAsync<SelfProfileResponse>("/api/v1/users/me");
+        Assert.Equal(profile.UserId, read!.PublicId); Assert.Equal(profile.Role, read.Role); Assert.Null(read.Email);
         var json = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("subject", json); Assert.DoesNotContain("issuer", json); Assert.DoesNotContain(UsersApiFactory.Secret, json);
         Assert.Equal(profile, await (await Provision(client)).Content.ReadFromJsonAsync<UserProfileResponse>());
@@ -124,7 +124,7 @@ public sealed class BootstrapApiTests
         app.Identity.Subject = "other-subject";
         using var other = app.Browser(app.Token(subject: "other-subject"));
         Assert.Equal(HttpStatusCode.Conflict, (await Provision(other)).StatusCode);
-        Assert.Equal("admin-subject", app.Repository.Account!.Subject);
+        Assert.Equal("admin-subject", app.Repository.Account!.ProviderIdentity.Subject);
     }
 
     [Fact]

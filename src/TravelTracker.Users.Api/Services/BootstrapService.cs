@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Data.Repositories;
+using TravelTracker.Users.Domain.Models;
 
 namespace TravelTracker.Users.Api.Services;
 
@@ -35,6 +36,10 @@ public sealed class BootstrapService(IConfiguration configuration, VerifiedIdent
         var account = await repository.BootstrapAsync(issuer, subject, email, cancellationToken);
         return account is null
             ? Results.Problem(statusCode: 409, title: "First-administrator setup has already been completed.")
-            : Results.Ok(new UserProfileResponse(account.UserId, account.Email, account.Role, account.Status));
+            : Results.Ok(new UserProfileResponse(
+                account.PublicId,
+                account.VerifiedEmail,
+                account.Role == UserRole.User ? "traveller" : "administrator",
+                account.Status.ToString().ToLowerInvariant()));
     }
 }

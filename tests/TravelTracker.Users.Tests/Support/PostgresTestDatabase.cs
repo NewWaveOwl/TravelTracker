@@ -9,6 +9,7 @@ namespace TravelTracker.Users.Tests.Support;
 /** Owns one migrated, uniquely named disposable PostgreSQL database per test. */
 internal sealed class PostgresTestDatabase(string administrativeConnection, string name, string connection) : IAsyncDisposable
 {
+    public string ConnectionString => connection;
     public UsersDbContext Context() => new(new DbContextOptionsBuilder<UsersDbContext>().UseNpgsql(connection).Options);
     public EfUserRepository Repository(TimeProvider? clock = null) => new(new PooledDbContextFactory<UsersDbContext>(new DbContextOptionsBuilder<UsersDbContext>().UseNpgsql(connection).Options), clock);
 

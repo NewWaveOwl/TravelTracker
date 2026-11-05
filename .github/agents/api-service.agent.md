@@ -19,6 +19,7 @@ The dependency direction is Api → Data → Domain.
 
 - `src/TravelTracker.Api/**` (Transport and Route Points)
 - `src/TravelTracker.Attractions.Api/**` (Attractions HTTP contracts, access checks and application services)
+- `src/TravelTracker.Users.Api/**`
 - `src/TravelTracker.Security/**` (shared bearer infrastructure; verify both consuming hosts)
 
 ## Test-file policy
@@ -35,7 +36,18 @@ The API agent may edit only these existing HTTP behavior test files:
 - `tests/TravelTracker.Attractions.Api.Tests/PrivacyPersistenceTests.cs`
 - `tests/TravelTracker.Attractions.Api.Tests/ReviewRegressionTests.cs`
 
-Behavior changes require tests for public success and failure behavior. Do not edit `tests/TravelTracker.Api.Tests/EntityIdGeneratorTests.cs`; it belongs to `data-persistence`. Shared helpers under either test project's `Support/**` are excluded unless an approved task names the exact file. No test file is owned by more than one agent.
+For approved M3-11 Users work, the API agent may also create or edit these files:
+
+- `tests/TravelTracker.Users.Api.Tests/TravelTracker.Users.Api.Tests.csproj`
+- `tests/TravelTracker.Users.Api.Tests/UserProfileTests.cs`
+- `tests/TravelTracker.Users.Api.Tests/AuthenticationTests.cs`
+- `tests/TravelTracker.Users.Api.Tests/InternalUserAccessTests.cs`
+- `tests/TravelTracker.Users.Api.Tests/StorageFailureTests.cs`
+- `tests/TravelTracker.Users.Api.Tests/UserProfilePostgreSqlTests.cs`
+
+Coordinate those tests with the testing agent, who is authorized to create and maintain tests across all three Users test directories. Do not edit the Users Domain or Data test directories.
+
+Behavior changes require tests for public success and failure behavior. Do not edit `tests/TravelTracker.Api.Tests/EntityIdGeneratorTests.cs`; it belongs to `data-persistence`. Shared helpers under any test project's `Support/**` are excluded unless an approved task names the exact file. No test file is owned by more than one agent outside the explicit M3-11 Users test coordination exception.
 
 ## Responsibilities
 
@@ -51,11 +63,11 @@ Behavior changes require tests for public success and failure behavior. Do not e
 
 ## Prohibited changes
 
-- Do not edit `src/TravelTracker.Data/**`, `src/TravelTracker.Attractions.Data/**`, `src/TravelTracker.Domain/**`, `src/TravelTracker.Attractions.Domain/**`, frontend paths, solution files, skills, or copilot instructions.
+- Do not edit `src/TravelTracker.Data/**`, `src/TravelTracker.Attractions.Data/**`, `src/TravelTracker.Users.Data/**`, `src/TravelTracker.Domain/**`, `src/TravelTracker.Attractions.Domain/**`, `src/TravelTracker.Users.Domain/**`, frontend paths, solution files, skills, or copilot instructions.
 - Do not perform direct database access or put persistence types in controllers or HTTP contracts.
 - Do not expose `Id64` or any internal key in a DTO, response, or log.
 - Do not duplicate domain rules in the API beyond request validation.
-- Do not edit tests outside the exact API test-file list or shared helpers not named by an approved task.
+- Do not edit tests outside the exact API test-file list or, for approved M3-11 Users work, the files listed above. Shared helpers require exact file-level authorization.
 - Do not create new service projects or frontend code unless an approved issue explicitly names them.
 
 ## Working rules
