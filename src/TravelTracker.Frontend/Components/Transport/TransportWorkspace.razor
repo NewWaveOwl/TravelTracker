@@ -7,7 +7,7 @@
     @if (!signedIn) { <p role="status"><a href="/account">Sign in</a> to choose saved transport.</p> }
     else
     {
-        @if (error is not null) { <div class="transport-error" role="alert"><p>@error</p><button class="secondary" @onclick="LoadAsync" disabled="@busy">Retry catalogue</button></div> }
+        @if (error is not null) { <div class="transport-error" role="alert"><p>@error</p>@if (travelError is null && changeError is null) { <button class="secondary" @onclick="LoadAsync" disabled="@busy">Retry catalogue</button> }</div> }
         @if (status is not null) { <p role="status">@status</p> }
         <div class="transport-columns" aria-busy="@busy.ToString().ToLowerInvariant()">
             <aside class="transport-panel" aria-label="Selected transport chain">
@@ -17,8 +17,8 @@
                     {
                         var index = i; var entry = selections[index];
                         <li class="@(editingIndex == index ? "active" : "")" @key="entry.OccurrenceId">
-                            <button class="transport-card @(editingIndex == index ? "selected" : "")" @onclick="() => Edit(index)"><strong>@((index + 1).ToString("D2")) @entry.Transport.Name</strong><span>@entry.Departure.Name → @entry.Destination.Name</span><span>@Label(entry.Destination.Type)@(editingIndex == index ? " · editing" : "")</span>@if (i == selections.Count - 1) { <small>Travel time not supplied</small> }</button>
-                            @if (i < selections.Count - 1) { <small class="rail-travel-time"><span aria-hidden="true">Travel: —</span><span class="visually-hidden">Travel time not supplied</span></small><small class="transfer-time">Transfer time not supplied</small> }
+                            <button class="transport-card @(editingIndex == index ? "selected" : "")" @onclick="() => Edit(index)"><strong>@((index + 1).ToString("D2")) @entry.Transport.Name</strong><span>@entry.Departure.Name → @entry.Destination.Name</span><span>@Label(entry.Destination.Type)@(editingIndex == index ? " · editing" : "")</span>@if (i == selections.Count - 1) { <small>@(entry.TravelMinutes is { } minutes ? $"Travel ≈ {minutes} min" : "Travel time not supplied")</small> }</button>
+                            @if (i < selections.Count - 1) { <small class="rail-travel-time"><span aria-hidden="true">@(entry.TravelMinutes is { } travel ? $"Travel ≈ {travel} min" : "Travel: —")</span><span class="visually-hidden">@(entry.TravelMinutes is { } supplied ? $"User-entered travel time {supplied} minutes" : "Travel time not supplied")</span></small><small class="transfer-time">@(entry.ChangeMinutes is { } change ? $"Change ≈ {change} min" : "Transfer time not supplied")</small> }
                         </li>
                     }
                 </ol>
@@ -29,7 +29,7 @@
                     <div class="chain-edit-toolbar" role="group" aria-label="Selected transport entry actions"><button class="chain-remove secondary" @onclick="() => RemoveAsync(currentEntry)" disabled="@busy" aria-label="@($"Remove entry {currentEntry + 1}")">Remove selected entry</button></div>
                 }
                 <small>Select an entry to review or change it.</small>
-                <small>Total duration not supplied. Journey times require a future route contract.</small>
+                <small class="planning-total" role="status">@TotalTiming()</small><small>Times are your planning estimates, not a saved timetable.</small>
             </aside>
             <section class="transport-panel" aria-labelledby="mode-heading">
                 <h2 id="mode-heading">Choose transport</h2>
@@ -73,7 +73,6 @@
                     }
                 }
                 @if (!busy && points.Count == 0) { <p role="status">No locations found. Clear filters and search again.</p> }
-                @if ((choosingDeparture ? selectedDeparture : selectedPoint) is { } activePoint) { <article class="transport-card selected"><h3>@activePoint.Name</h3><p>@Label(activePoint.Type)</p><p>@activePoint.Address</p><p>@activePoint.Lat, @activePoint.Lon</p><small>Reusable location; no timetable is attached.</small></article> }
                 @if (canWrite)
                 {
                     <details><summary>Create @(choosingDeparture ? "departure" : "destination") location</summary><form class="point-create" @onsubmit="CreatePointAsync" @onsubmit:preventDefault><fieldset disabled="@busy">
@@ -87,7 +86,19 @@
                     </fieldset></form></details>
                 }
                 else { <small>Read-only catalogue. Creating locations requires catalogue write permission.</small> }
-                <button class="transport-add" disabled="@(busy || selectedTransport is null || selectedDeparture is null || selectedPoint is null)" @onclick="AddAsync">@(editingIndex is null ? "Add to itinerary" : "Update draft entry")</button>
+                <section class="selected-route-review" aria-labelledby="route-review-heading">
+                    <small>SELECTED ROUTE / REVIEW</small><h3 id="route-review-heading">Review your selection</h3>
+                    <dl><dt>Transport</dt><dd>@(selectedTransport?.Name ?? "Not selected")</dd><dt>From</dt><dd>@(selectedDeparture?.Name ?? "Choose a departure")</dd><dt>To</dt><dd>@(selectedPoint?.Name ?? "Choose a destination")</dd></dl>
+                    <small>Reusable location; no timetable is attached.</small>
+                    <fieldset disabled="@busy" class="planning-time-fields">
+                        <label for="route-travel-minutes">Travel time (min)<input id="route-travel-minutes" @bind="travelMinutes" inputmode="numeric" aria-invalid="@(travelError is null ? null : "true")" aria-describedby="route-travel-error planning-time-help" /></label>
+                        @if (travelError is not null) { <small id="route-travel-error" class="field-error" role="alert">@travelError</small> }
+                        <label for="route-change-minutes">Change after this transport (min)<input id="route-change-minutes" @bind="changeMinutes" inputmode="numeric" aria-invalid="@(changeError is null ? null : "true")" aria-describedby="route-change-error planning-time-help" /></label>
+                        @if (changeError is not null) { <small id="route-change-error" class="field-error" role="alert">@changeError</small> }
+                        <small id="planning-time-help">Optional whole minutes, zero or more. These are your approximate planning values. Change time is the transfer after this transport, counted only when another entry follows. Blank means unknown.</small>
+                    </fieldset>
+                    <button class="transport-add" disabled="@(busy || selectedTransport is null || selectedDeparture is null || selectedPoint is null)" @onclick="AddAsync">@(editingIndex is null ? "Add to itinerary" : "Update draft entry")</button>
+                </section>
             </section>
         </div>
     }

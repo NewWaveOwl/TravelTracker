@@ -106,3 +106,6 @@ main:has(.transport-workspace){max-width:1920px;padding:32px 60px 64px;color:var
 @media(max-width:1250px){.destination-panel:not(.is-open){max-height:0;overflow:hidden;padding-block:0}.destination-panel{transform:translateY(20px)}.destination-panel.is-open{transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){.destination-panel,.destination-panel.is-open{transition:none;transform:none}}
 .endpoint-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.endpoint-choices .transport-card{min-width:0}.endpoint-choices .transport-card strong{font-size:20px}
+
+/* Route output is separated from catalogue browsing and creation controls. */
+.selected-route-review{margin-top:18px;padding:24px;border-top:5px solid #ffcbbe;border-radius:12px;background:#f0eadf;color:var(--forest);display:flex;flex-direction:column;gap:18px;box-shadow:0 -12px 0 0 #3e4f3d}.selected-route-review dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px 16px;margin:0}.selected-route-review dt{font-weight:bold}.selected-route-review dd{margin:0;overflow-wrap:anywhere}.selected-route-review .planning-time-fields{border-top:1px solid var(--border);padding-top:18px}.selected-route-review .transport-add{width:100%}.selected-route-review .field-error{color:#b3261e}.selected-route-review>small:first-child{letter-spacing:.04em;font-size:16px}

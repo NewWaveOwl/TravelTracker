@@ -6,4 +6,6 @@ namespace TravelTracker.Frontend.Features.Transport;
 public sealed record TransportSelection(TransportDto Transport, RoutePointDto Departure, RoutePointDto Destination)
 {
     public Guid OccurrenceId { get; init; } = Guid.NewGuid();
+    public int? TravelMinutes { get; init; }
+    public int? ChangeMinutes { get; init; }
 }

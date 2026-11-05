@@ -18,13 +18,15 @@ The local Transport service was not listening at the frontend's configured port.
 
 ## Behavior and boundaries
 
+The owner-requested output separation and timing controls are now implemented: a cream review panel with a peach divider separates selected-route output and planning-minute inputs from the location catalogue and creation controls. `TravelMinutes` and `ChangeMinutes` are nullable draft-only values with no fabricated defaults. Changes are counted after their transport and only when a following draft entry exists. Editing preserves occurrence identity and restores entered minutes. Validation rejects negative, fractional, nonnumeric and overflowing inputs before any HTTP call; failed confirmation retains both timing fields. Totals use a wide integer and explicitly label incomplete values.
+
 - `TransportClient` loads saved transport entries and filtered location collections plus saved detail records through `ProtectedClient`. Supported modes are Car, Bus, Train, Walking (`pedestrian`), Bike and Plane. Transport cards are directly selectable without searching or filtering first. Locations retain their accommodation, attraction or transport-stop type and public GUID.
 - Selecting transport opens the map by default, with separate departure and destination choices. Both saved endpoint IDs are required and re-read, together with the transport ID, before adding a draft occurrence. Later occurrences can prefill departure from the preceding destination while keeping that choice editable.
 - The left-hand ordered chain supports adding, selecting, changing and removing draft occurrences and shows both endpoints. The page receives transport/departure/destination DTO snapshots through `TransportWorkspace.SelectionChanged`; it does not call an unfinished Trips endpoint.
 - **Choose on map** displays filtered saved locations on a fitted coordinate map. Markers can be selected by mouse or keyboard. The saved list is an alternative for overlapping markers. Street tiles, address lookup, arbitrary pin placement and drag/zoom are not implemented.
 - Write-capable sessions can create named transport entries and locations with validated coordinates and optional source metadata. A map location is never treated as saved merely because coordinates exist; the server must return a saved public ID.
 - Loading, no results, validation, forbidden actions, unavailable services and network failures receive feedback. Forms and choices are retained for same-session failures; account changes clear session-specific state. Failed writes do not add an itinerary entry.
-- Travel/transfer durations are explicitly not supplied. The Figma sample durations were illustrative and are not rendered as genuine estimates. There is no timetable, routing engine or trip persistence in this feature.
+- A visibly separate selected-route summary shows the current transport and endpoints, followed by optional travel and change-after-this-transport minutes. These are explicit traveller-entered draft planning estimates. Blank values remain unknown, and change minutes only enter the overall total when another entry follows. They are restored during editing and excluded from catalogue HTTP payloads. Figma sample durations are never used as defaults. There is no timetable, routing engine or trip persistence in this feature.
 
 ## Verification
 
@@ -36,13 +38,13 @@ Final validation on 2026-11-04:
 | --- | --- |
 | `dotnet restore TravelTracker.slnx --force` | Passed; package metadata refreshed successfully |
 | `dotnet build TravelTracker.slnx --configuration Release --no-restore` | Passed; 0 warnings, 0 errors |
-| `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL"` | 505 passed, 0 failed, 0 skipped: 8 shared/API, 177 Attractions, 172 frontend, 94 Transport, 54 Users |
+| `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL"` | 516 passed, 0 failed, 0 skipped: 8 shared/API, 177 Attractions, 183 frontend, 94 Transport, 54 Users |
 | `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category=PostgreSQL"` with the dedicated local test instance | 27 passed, 0 failed, 0 skipped: 7 Attractions, 5 Transport, 15 Users |
-| Focused `TransportWorkspaceTests` | 13 passed, covering saved IDs/map selection, failed/forbidden saves, field validation, encoded filters, empty/unavailable results, repeated occurrences, edit/remove callbacks, rejected tokens and sign-out during confirmation |
+| Focused `TransportWorkspaceTests` | 24 passed, covering saved IDs/direct selection/map, explicit From/To, failed/forbidden saves, field and timing validation, location filters, empty/unavailable results, repeated occurrences, edit/remove callbacks, timing retention/restoration/totals, rejected tokens and sign-out during confirmation |
 | `git diff --check` | Passed |
 | Independent read-only review | No remaining Critical, High, Medium or Low findings; see [review](issue-44-review.md) |
 
-The ordinary suite increases from 492 to 505 without removing baseline tests. Initial restricted restore produced NuGet metadata connectivity warnings; the refreshed final restore/build has no warnings. PostgreSQL tests use isolated randomly named databases on a dedicated task-local cluster, which is stopped after verification.
+The ordinary suite increases from 492 to 516 without removing baseline tests. The latest full Release build passed with zero warnings/errors. Initial restricted restore produced NuGet metadata connectivity warnings; the refreshed restore/build has no warnings. The earlier PostgreSQL verification used isolated randomly named databases; subsequent changes affect only the frontend and its documentation/tests, so that unchanged persistence group was not rerun for the timing UI.
 
 Runtime smoke check: the frontend started on an isolated local port; `/new-trip` returned HTTP 200 with the itinerary heading, sign-in prompt and retained trip form. An unknown route returned HTTP 404. Authenticated component/HTTP behavior uses isolated test handlers and fake validated sessions; this is not a new claim of live Auth0 end-to-end or backend bearer verification.
 

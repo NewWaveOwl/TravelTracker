@@ -30,6 +30,8 @@ public partial class TransportWorkspace : IDisposable
     string transportName = "", description = "", newCode = "car";
     string pointName = "", address = "", lat = "", lon = "", sourceId = "", newType = "attraction";
     string? error, status;
+    string travelMinutes = "", changeMinutes = "";
+    string? travelError, changeError;
     bool signedIn, canWrite, busy, showMap, disposed;
     int? editingIndex;
     readonly CancellationTokenSource lifetime = new();
@@ -54,6 +56,7 @@ public partial class TransportWorkspace : IDisposable
         selections.Clear(); transports = []; points = []; selectedPoint = selectedDeparture = null; selectedTransport = null; choosingDeparture = true;
         transportName = description = pointName = address = lat = lon = sourceId = pointQuery = type = string.Empty;
         fieldErrors = new Dictionary<string, string[]>();
+        ResetTiming();
         editingIndex = null; error = status = null;
         await UpdateAccessAsync(await task);
         await SelectionChanged.InvokeAsync(selections.ToArray());
@@ -108,23 +111,28 @@ public partial class TransportWorkspace : IDisposable
     async Task AddAsync()
     {
         if (selectedTransport is null || selectedDeparture is null || selectedPoint is null) return;
+        travelError = ParseMinutes(travelMinutes, out var travel) ? null : "Enter a whole number of travel minutes, zero or more, or leave blank.";
+        changeError = ParseMinutes(changeMinutes, out var change) ? null : "Enter a whole number of change minutes, zero or more, or leave blank.";
+        if (travelError is not null || changeError is not null) { error = "Check your planning times. Your draft is retained."; return; }
         var transportId = selectedTransport.TransportModeId; var departureId = selectedDeparture.RoutePointId; var pointId = selectedPoint.RoutePointId;
+        var occurrence = editingIndex is { } current ? selections[current].OccurrenceId : Guid.NewGuid();
         await RunAsync(async token =>
         {
             var transport = await Client.GetTransportAsync(transportId, token);
             var departure = await Client.GetPointAsync(departureId, token);
             var destination = await Client.GetPointAsync(pointId, token);
             token.ThrowIfCancellationRequested();
-            var entry = new TransportSelection(transport, departure, destination);
+            var entry = new TransportSelection(transport, departure, destination) { OccurrenceId = occurrence, TravelMinutes = travel, ChangeMinutes = change };
             if (editingIndex is { } index) selections[index] = entry; else selections.Add(entry);
             editingIndex = null; selectedTransport = null; selectedPoint = null; selectedDeparture = selections.LastOrDefault()?.Destination; choosingDeparture = selectedDeparture is null;
+            ResetTiming();
             await SelectionChanged.InvokeAsync(selections.ToArray());
             status = "Draft updated. Trip saving is not connected yet.";
         });
     }
 
-    void Edit(int index) { if (busy) return; editingIndex = index; selectedTransport = selections[index].Transport; selectedDeparture = selections[index].Departure; selectedPoint = selections[index].Destination; choosingDeparture = false; showMap = true; }
-    void NewEntry() { if (busy) return; editingIndex = null; selectedTransport = null; selectedPoint = null; selectedDeparture = selections.LastOrDefault()?.Destination; choosingDeparture = selectedDeparture is null; }
+    void Edit(int index) { if (busy) return; editingIndex = index; selectedTransport = selections[index].Transport; selectedDeparture = selections[index].Departure; selectedPoint = selections[index].Destination; travelMinutes = selections[index].TravelMinutes?.ToString(CultureInfo.InvariantCulture) ?? ""; changeMinutes = selections[index].ChangeMinutes?.ToString(CultureInfo.InvariantCulture) ?? ""; travelError = changeError = null; error = status = null; choosingDeparture = false; showMap = true; }
+    void NewEntry() { if (busy) return; editingIndex = null; selectedTransport = null; selectedPoint = null; selectedDeparture = selections.LastOrDefault()?.Destination; choosingDeparture = selectedDeparture is null; ResetTiming(); error = status = null; }
     async Task RemoveAsync(int index) { if (busy) return; selections.RemoveAt(index); NewEntry(); await SelectionChanged.InvokeAsync(selections.ToArray()); }
 
     async Task CreateTransportAsync()
@@ -173,6 +181,7 @@ public partial class TransportWorkspace : IDisposable
             {
                 signedIn = false; canWrite = false; selections.Clear(); transports = []; points = []; selectedTransport = null; selectedPoint = selectedDeparture = null; choosingDeparture = true;
                 transportName = description = pointName = address = lat = lon = sourceId = pointQuery = type = string.Empty;
+                ResetTiming();
                 await SelectionChanged.InvokeAsync(selections.ToArray());
             }
         }
@@ -180,6 +189,26 @@ public partial class TransportWorkspace : IDisposable
     }
 
     static string Label(string value) => value switch { "pedestrian" => "Walking", "transport_stop" => "Transport stop", "accommodation" => "Accommodation", "attraction" => "Attraction", "car" => "Car", "bus" => "Bus", "train" => "Train", "bike" => "Bike", "plane" => "Plane", _ => value };
+
+    void ResetTiming() { travelMinutes = changeMinutes = ""; travelError = changeError = null; }
+
+    static bool ParseMinutes(string text, out int? minutes)
+    {
+        minutes = null;
+        if (string.IsNullOrWhiteSpace(text)) return true;
+        if (!int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var value)) return false;
+        minutes = value;
+        return true;
+    }
+
+    string TotalTiming()
+    {
+        if (selections.Count == 0) return "Total duration not supplied.";
+        var values = selections.Select(s => s.TravelMinutes).Concat(selections.Take(selections.Count - 1).Select(s => s.ChangeMinutes)).ToArray();
+        if (values.All(v => v is null)) return "Total duration not supplied.";
+        var total = values.Sum(v => (long)(v ?? 0));
+        return values.Any(v => v is null) ? $"Known time: {total} min · incomplete; some planning times are missing." : $"Total planning time: {total} min.";
+    }
 
     public void Dispose() { disposed = true; Authentication.AuthenticationStateChanged -= AuthenticationChanged; operation?.Cancel(); lifetime.Cancel(); lifetime.Dispose(); }
 }

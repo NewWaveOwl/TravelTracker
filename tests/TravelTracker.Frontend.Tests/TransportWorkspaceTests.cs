@@ -378,4 +378,96 @@ public sealed class TransportWorkspaceTests : BunitContext
         Assert.Equal(destination.RoutePointId, draft[0].Destination.RoutePointId);
         Assert.Equal(2, posts);
     }
+
+    [Theory]
+    [InlineData("-1", "")]
+    [InlineData("", "-1")]
+    [InlineData("1.5", "")]
+    [InlineData("", "abc")]
+    [InlineData("2147483648", "")]
+    public void InvalidPlanningMinutesRetainInputsAndNeverReadOrWrite(string travel, string change)
+    {
+        var requests = 0;
+        Configure(new StubHandler((request, _) => { requests++; return Task.FromResult(Read(request)); }), false);
+        IReadOnlyList<TransportSelection> draft = [];
+        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
+        page.Find("#route-travel-minutes").Change(travel); page.Find("#route-change-minutes").Change(change);
+        var before = requests;
+        page.Find(".transport-add").Click();
+        Assert.Contains("Check your planning times", page.Find(".transport-error").TextContent);
+        Assert.Equal(before, requests); Assert.Empty(draft);
+        Assert.Equal(travel, page.Find("#route-travel-minutes").GetAttribute("value"));
+        Assert.Equal(change, page.Find("#route-change-minutes").GetAttribute("value"));
+    }
+
+    [Fact]
+    public void ReviewTimingsRoundTripThroughEditAndTotalsExcludeLastChange()
+    {
+        var authentication = Configure(new StubHandler((request, _) => Task.FromResult(Read(request))), false);
+        IReadOnlyList<TransportSelection> draft = [];
+        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
+        var review = page.Find("section[aria-labelledby=route-review-heading]");
+        Assert.Contains("Saved train", review.TextContent); Assert.Contains("From", review.TextContent); Assert.Contains("To", review.TextContent);
+        Assert.Empty(review.QuerySelectorAll(".point-create"));
+        page.Find("#route-travel-minutes").Change("35"); page.Find("#route-change-minutes").Change("8"); page.Find(".transport-add").Click();
+        page.WaitForAssertion(() => Assert.Single(draft));
+        Assert.Equal(35, draft[0].TravelMinutes); Assert.Equal(8, draft[0].ChangeMinutes);
+        var occurrence = draft[0].OccurrenceId;
+        Assert.Contains("Total planning time: 35 min", page.Find(".planning-total").TextContent);
+        Assert.Equal("", page.Find("#route-travel-minutes").GetAttribute("value"));
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
+        page.Find("#route-change-minutes").Change("99"); page.Find(".transport-add").Click();
+        page.WaitForAssertion(() => Assert.Equal(2, draft.Count));
+        Assert.Contains("Known time: 43 min", page.Find(".planning-total").TextContent); Assert.Contains("incomplete", page.Find(".planning-total").TextContent);
+        page.FindAll(".transport-chain button.transport-card")[1].Click();
+        Assert.Equal("99", page.Find("#route-change-minutes").GetAttribute("value"));
+        page.Find("#route-travel-minutes").Change("5"); page.Find(".transport-add").Click();
+        Assert.Contains("Total planning time: 48 min", page.Find(".planning-total").TextContent);
+        Assert.Contains("Change ≈ 8 min", page.Find(".transport-chain").TextContent);
+        page.FindAll(".transport-chain button.transport-card")[0].Click();
+        Assert.Equal("35", page.Find("#route-travel-minutes").GetAttribute("value"));
+        page.Find(".transport-add").Click(); Assert.Equal(occurrence, draft[0].OccurrenceId);
+        page.FindAll(".transport-chain button.transport-card")[0].Click();
+        page.FindAll("button").Single(b => b.TextContent == "+ Add transport").Click();
+        Assert.Equal("", page.Find("#route-travel-minutes").GetAttribute("value")); Assert.Equal("", page.Find("#route-change-minutes").GetAttribute("value"));
+        authentication.SignOut(); page.WaitForAssertion(() => Assert.Empty(draft));
+        Assert.Empty(page.FindAll("#route-travel-minutes"));
+    }
+
+    [Fact]
+    public void ZeroMinutesAreValidAndLargeTotalsDoNotOverflow()
+    {
+        Configure(new StubHandler((request, _) => Task.FromResult(Read(request))), false);
+        IReadOnlyList<TransportSelection> draft = [];
+        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
+        for (var i = 0; i < 2; i++)
+        {
+            page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
+            page.Find("#route-travel-minutes").Change("2147483647"); page.Find("#route-change-minutes").Change(i == 0 ? "2147483647" : "0"); page.Find(".transport-add").Click();
+        }
+        Assert.Equal(0, draft[1].ChangeMinutes);
+        Assert.Contains("6442450941 min", page.Find(".planning-total").TextContent);
+    }
+
+    [Fact]
+    public void FailedConfirmationKeepsPlanningTimesUntilRetrySucceeds()
+    {
+        var fail = false;
+        Configure(new StubHandler((request, _) => Task.FromResult(fail ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : Read(request))), false);
+        IReadOnlyList<TransportSelection> draft = [];
+        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
+        page.Find("#route-travel-minutes").Change("0"); page.Find("#route-change-minutes").Change("3");
+        fail = true; page.Find(".transport-add").Click();
+        page.WaitForAssertion(() => Assert.Contains("unavailable", page.Find(".transport-error").TextContent));
+        Assert.Empty(draft); Assert.Equal("0", page.Find("#route-travel-minutes").GetAttribute("value")); Assert.Equal("3", page.Find("#route-change-minutes").GetAttribute("value"));
+        fail = false; page.Find(".transport-add").Click();
+        page.WaitForAssertion(() => Assert.Single(draft)); Assert.Equal(0, draft[0].TravelMinutes); Assert.Equal(3, draft[0].ChangeMinutes);
+    }
 }
