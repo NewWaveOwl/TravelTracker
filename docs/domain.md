@@ -8,6 +8,8 @@ Bearer validation belongs to the API, not Domain. The authenticated identity is 
 
 Attractions now owns its model and identity primitives in `TravelTracker.Attractions.Domain`, independently of the remaining shared Domain. Ownership is the validated issuer/subject pair; shared/private visibility is server-enforced. The HTTP DTO omits owner and internal key fields. Invariants validate names, coordinate/rating ranges and nonnegative visit duration without EF or HTTP dependencies. See [the independent service contract](attractions-service.md).
 
+`TravelTracker.Accommodations.Domain` owns the independent `Accommodation` model. It carries a public UUIDv7, name, address, decimal latitude/longitude, server-assigned validated issuer/subject owner, and private/shared flag. Pure invariants reject an empty ID, missing owner, blank name, null address and out-of-range coordinates. The legacy shared `Accomodation` remains unchanged; the independent service does not reuse it.
+
 ## Existing entities
 
 | Entity | Existing fields | Owner / integration addition |

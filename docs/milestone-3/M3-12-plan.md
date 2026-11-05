@@ -2,13 +2,13 @@
 
 Issue: [#38, M3-12](https://github.com/NewWaveOwl/TravelTracker/issues/38)
 Dependencies: [#27, M3-01](https://github.com/NewWaveOwl/TravelTracker/issues/27), [#34, M3-08](https://github.com/NewWaveOwl/TravelTracker/issues/34)
-Status: research complete; awaiting developer approval before production changes.
+Status: implementation is present; validation is partial. Plan approved by the developer on 2026-11-05.
 
 ## Goal
 
 Create an independently runnable Accommodations service with its own Domain, Data, and Api projects. Persist accommodation records in PostgreSQL and provide authenticated creation, collection search, and detail operations with location validation and private/shared visibility.
 
-This plan is for a separate branch based on the latest `milestone_3` line, which contains the listed prerequisites. It must not depend on the unmerged M3-11 feature branch. Recheck the repository and dependencies when implementation starts.
+This plan is for the separate `accomodation-services` branch based on `milestone_3`. The current branch includes PR #80 (M3-11 Users) and its listed prerequisite merges. Recheck the repository and dependencies when implementation starts.
 
 ## Ground truth reviewed
 
@@ -25,7 +25,7 @@ This plan is for a separate branch based on the latest `milestone_3` line, which
 - A record has a server-generated public GUID, validated owner `(issuer, subject)`, name, address, latitude, longitude, and visibility. Keep owner identity out of public request/response DTOs.
 - Trim and require a nonblank name; require latitude in `[-90, 90]` and longitude in `[-180, 180]`. Address defaults to an empty string when omitted and rejects explicit null, following the current location DTO convention. Invalid values produce field-keyed validation errors and are never persisted.
 - Omitted visibility defaults to private. The creator can find their own private records. Other users cannot find a private record in collection search or detail (return 404). Shared records are discoverable to authorized active catalogue readers. Only an administrator may create or change a record to shared; a traveller may create private records. Owners may edit their own private records. For shared-record edits, follow the Attractions implementation's explicit administrator/owner rule after confirming its current code during implementation.
-- Active users may read; banned users may read their own private records and shared records but may not create or change records. Deactivated/missing users are denied. Use live Users access checks for standing and administrator role where the Attractions integration requires them; fail closed if that required dependency is unavailable.
+- Active users may read shared records and their own private records; banned users may read only their own private records and cannot create or change records. Deactivated/missing users are denied. This follows the implemented catalogue standing rules in [Attractions](../attractions-service.md). Use live Users access checks for standing and administrator role; fail closed if that required dependency is unavailable.
 - Every protected route declares its policy explicitly: `catalogue.read` for collection/detail, `catalogue.write` for create, and anonymous `[AllowAnonymous]` for `GET /health`. A valid bearer without the necessary scope gets 403; absent/invalid bearer gets 401.
 - Keep this issue to create/search/detail. PATCH/archive are product design concepts but are not in the M3-12 engineering tasks and are excluded unless the issue owner explicitly expands scope. No delete endpoint.
 - Treat a route point of type `accommodation` as a location snapshot only; it does not create or replace an accommodation catalogue record.
@@ -48,8 +48,7 @@ Proposed public response: `accommodationId`, `name`, `address`, `lat`, `lon`, `v
 ### New production files
 
 - `src/TravelTracker.Accommodations.Domain/TravelTracker.Accommodations.Domain.csproj` — standalone Domain project with no EF, HTTP, or other service dependency.
-- `src/TravelTracker.Accommodations.Domain/Models/Accommodation.cs` — immutable/service-owned record with owner identity, coordinates, visibility, public ID, and pure field validation.
-- `src/TravelTracker.Accommodations.Domain/Types/AccommodationId.cs` (or a project-local ID value type matching the current Attractions conventions) — public ID boundary without exposing database keys.
+- `src/TravelTracker.Accommodations.Domain/Models/Accommodation.cs` — service-owned model with owner identity, coordinates, visibility, public ID, and pure field validation. The public UUIDv7 is the ID; there is no internal key.
 - `src/TravelTracker.Accommodations.Data/TravelTracker.Accommodations.Data.csproj` — references only the Accommodations Domain and approved EF Core/Npgsql packages.
 - `src/TravelTracker.Accommodations.Data/AccommodationsDbContext.cs` — service-scoped EF context and migration assembly configuration.
 - `src/TravelTracker.Accommodations.Data/Entities/AccommodationRow.cs` — persistence row with unique public ID and owner/visibility fields.
@@ -90,6 +89,15 @@ Proposed public response: `accommodationId`, `name`, `address`, `lat`, `lon`, `v
 
 ## Acceptance and validation evidence
 
+### Implementation checkpoint (2026-11-05)
+
+- Domain, Data and Api projects are implemented, independently composed, and included in both repository solution files. The API listens on local port 5106.
+- `dotnet build TravelTracker.slnx --configuration Release --no-restore -m:1 /p:UseSharedCompilation=false` succeeded with 0 warnings and 0 errors.
+- The test agent's Accommodations Domain test run passed 10/10. A later repeat after the machine interruption timed out at testhost startup. The Data test project compiled and discovered four PostgreSQL tests, but all stopped at setup because `TRAVELTRACKER_TEST_POSTGRES` is not configured.
+- The API test project compiled with 0 warnings and 0 errors. Its test host did not connect within the 90-second runner timeout, matching the pre-change baseline host timeout; no HTTP test counts were produced.
+- The independent API host started, and anonymous `GET /health` returned `{"status":"ok","service":"Accommodations"}`. Protected calls and live Users tenant credentials were not verified locally.
+- Read-only review found no code defect; it recorded one Medium validation finding for the unavailable PostgreSQL and API-host test evidence.
+
 - Build the independently runnable Accommodations API and the solution with zero warnings/errors.
 - Apply the initial migration to PostgreSQL and prove created records remain after disposing/recreating the host/context.
 - Prove invalid name/coordinates yield field errors and no row is written.
@@ -107,4 +115,4 @@ Proposed public response: `accommodationId`, `name`, `address`, `lat`, `lon`, `v
 
 ## Approval gate
 
-This is a proposed plan only. Do not create or modify production files until the developer approves this file-by-file plan and any policy/scope choices above.
+The developer approved this file-by-file plan on 2026-11-05. Implementation follows the plan and recorded product rules above; any material scope change requires a separate review.

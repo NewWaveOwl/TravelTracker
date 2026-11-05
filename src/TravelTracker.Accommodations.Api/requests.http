@@ -1,0 +1,26 @@
+@base = http://localhost:5106
+@token = replace-with-an-access-token
+@id = replace-with-a-public-accommodation-guid
+
+### Public liveness check
+GET {{base}}/health
+
+### Create a private accommodation
+POST {{base}}/api/v1/accommodations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Example lodging",
+  "address": "1 Main Street",
+  "lat": 45.5019,
+  "lon": -73.5674
+}
+
+### Search visible accommodations
+GET {{base}}/api/v1/accommodations?name=lodging
+Authorization: Bearer {{token}}
+
+### Read a visible accommodation
+GET {{base}}/api/v1/accommodations/{{id}}
+Authorization: Bearer {{token}}
