@@ -31,7 +31,7 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
     {
         var parts = path.Split('?', 2);
         if (!ProtectedPath().IsMatch(parts[0]) ||
-            (parts.Length == 2 && (service != "Attractions" || parts[0] != "/api/v1/attractions" || !NameQuery().IsMatch(parts[1]))))
+            (parts.Length == 2 && !AllowedQuery(service, parts[0], parts[1])))
             throw new ApiError(FailureKind.Unexpected, "Unsupported API path.");
         if (!urls.TryGetValue(service, out var url) || !Uri.TryCreate(url, UriKind.Absolute, out var baseUri))
             throw new ApiError(FailureKind.Unexpected, "Invalid service configuration.");
@@ -47,4 +47,14 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
 
     [GeneratedRegex("^name=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})*$")]
     private static partial Regex NameQuery();
+
+    static bool AllowedQuery(string service, string path, string query) =>
+        service == "Attractions" && path == "/api/v1/attractions" && NameQuery().IsMatch(query) ||
+        service == "Transport" && (path == "/api/v1/transport-modes" && TransportQuery().IsMatch(query) || path == "/api/v1/route-points" && PointQuery().IsMatch(query));
+
+    [GeneratedRegex("^name=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})*&code=(?:car|bus|train|pedestrian|bike|plane)?$")]
+    private static partial Regex TransportQuery();
+
+    [GeneratedRegex("^name=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})*&type=(?:accommodation|attraction|transport_stop)?$")]
+    private static partial Regex PointQuery();
 }

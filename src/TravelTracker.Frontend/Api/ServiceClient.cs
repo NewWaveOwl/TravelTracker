@@ -13,7 +13,7 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
 {
     static readonly TimeSpan Timeout = TimeSpan.FromSeconds(8);
     static readonly HashSet<string> WritableFields = new(StringComparer.OrdinalIgnoreCase)
-    { "name", "address", "lat", "lon", "estimatedVisitMinutes", "rating", "description", "visibility" };
+    { "name", "address", "lat", "lon", "estimatedVisitMinutes", "rating", "description", "visibility", "code", "type", "sourceId" };
 
     /**
      * Reads a public JSON contract.
@@ -100,9 +100,9 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
 
     static string MessageFor(int status) => status switch
     {
-        400 or 422 => "Check the highlighted attraction fields and try again.",
-        404 => "This attraction is no longer available. Refresh the catalogue.",
-        409 or 412 => "This attraction changed while you were editing. Review the latest record before saving again.",
+        400 or 422 => "Check the submitted details and try again.",
+        404 => "This record is no longer available. Refresh the catalogue.",
+        409 or 412 => "This record changed while you were editing. Review the latest version before saving again.",
         >= 500 => "The requested service is unavailable. Your entries are retained; try again shortly.",
         _ => "The request could not be completed.",
     };
