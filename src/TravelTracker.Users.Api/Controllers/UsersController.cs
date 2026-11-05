@@ -1,13 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TravelTracker.Api.Authentication;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Domain.Models;
 using TravelTracker.Users.Domain.Types;
-using TravelTracker.Users.Data.Repositories.Profile;
 using IUserRepository = TravelTracker.Users.Data.Repositories.IUserRepository;
 using ProfileRepository = TravelTracker.Users.Data.Repositories.Profile.IUserRepository;
 
@@ -16,13 +14,15 @@ namespace TravelTracker.Users.Api.Controllers;
 /**
  * Exposes public account contracts, a one-time bootstrap action and a credential-protected service lookup.
  * @param repository Current service-owned account store.
- * @param profiles Persists self-service profiles and resolves public account identifiers.
+ * @param profiles Resolves accounts for the internal access contract.
+ * @param userProfiles Coordinates self-service profile operations.
  * @param bootstrap Verifies and performs first-admin setup.
  * @param configuration Operator-owned service credential.
  */
 [ApiController]
 [Route("api/v1/users")]
-public sealed class UsersController(IUserRepository repository, ProfileRepository profiles, BootstrapService bootstrap, IConfiguration configuration) : ControllerBase
+public sealed class UsersController(IUserRepository repository, ProfileRepository profiles, UserProfileService userProfiles,
+    BootstrapService bootstrap, IConfiguration configuration) : ControllerBase
 {
     /**
      * Reads or provisions the account belonging to the validated provider identity.
@@ -35,8 +35,8 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
         if (!Request.IsHttps) return Results.Problem(statusCode: 400, title: "Account access requires HTTPS.");
         if (CurrentIdentity() is not { } identity) return Results.Unauthorized();
 
-        var account = await profiles.GetOrCreateAsync(identity, DateTimeOffset.UtcNow, HttpContext.RequestAborted);
-        return account.Status == UserStatus.Deactivated ? Results.Forbid() : Results.Ok(SelfProfile(account));
+        var result = await userProfiles.ReadOwnProfileAsync(identity, HttpContext.RequestAborted);
+        return MapProfileResult(result);
     }
 
     /**
@@ -51,44 +51,8 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
         if (!Request.IsHttps) return Results.Problem(statusCode: 400, title: "Account access requires HTTPS.");
         if (CurrentIdentity() is not { } identity) return Results.Unauthorized();
 
-        var cancellationToken = HttpContext.RequestAborted;
-        var account = await profiles.FindByProviderIdentityAsync(identity, cancellationToken);
-        if (account?.Status != UserStatus.Active) return Results.Forbid();
-
-        var username = request.Username?.Trim();
-        var email = request.Email?.Trim();
-        var address = request.Address?.Trim();
-        var candidate = account with
-        {
-            Username = request.HasUsername ? username : account.Username,
-            Email = request.HasEmail ? email : account.Email,
-            Address = request.HasAddress ? address : account.Address
-        };
-        var errors = candidate.Validate();
-        if (!request.HasUsername && !request.HasEmail && !request.HasAddress)
-            errors["profile"] = ["Supply at least one editable field."];
-        if (request.HasUsername && username is null)
-            errors["username"] = ["Username cannot be null."];
-        if (request.HasEmail && email is null)
-            errors["email"] = ["Email cannot be null."];
-        if (errors.Count != 0) return Results.ValidationProblem(errors);
-
-        try
-        {
-            var updated = await profiles.UpdateProfileAsync(identity, username, email, address,
-                request.HasAddress, DateTimeOffset.UtcNow, cancellationToken);
-            return updated?.Status == UserStatus.Active ? Results.Ok(SelfProfile(updated)) : Results.Forbid();
-        }
-        catch (UserProfileUsernameConflictException)
-        {
-            return Results.Problem(statusCode: 409, title: "That username is already in use.",
-                extensions: new Dictionary<string, object?> { ["code"] = "username_conflict" });
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Results.Problem(statusCode: 409, title: "The profile changed. Reload it before trying again.",
-                extensions: new Dictionary<string, object?> { ["code"] = "profile_concurrency_conflict" });
-        }
+        var result = await userProfiles.UpdateOwnProfileAsync(identity, request, HttpContext.RequestAborted);
+        return MapProfileResult(result);
     }
 
     /**
@@ -142,6 +106,23 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
     private static SelfProfileResponse SelfProfile(UserAccount account) =>
         new(account.PublicId, account.Username, account.Email, account.Address,
             RoleCode(account), account.Status.ToString().ToLowerInvariant(), account.CreatedAt, account.UpdatedAt);
+
+    /**
+     * Maps an application outcome to its existing self-profile HTTP response.
+     * @param result The profile service outcome.
+     * @return The corresponding public HTTP response.
+     */
+    private static IResult MapProfileResult(UserProfileResult result) => result.Kind switch
+    {
+        UserProfileResultKind.Success when result.Account is { } account => Results.Ok(SelfProfile(account)),
+        UserProfileResultKind.Forbidden => Results.Forbid(),
+        UserProfileResultKind.ValidationFailure when result.ValidationErrors is { } errors => Results.ValidationProblem(errors),
+        UserProfileResultKind.UsernameConflict => Results.Problem(statusCode: 409, title: "That username is already in use.",
+            extensions: new Dictionary<string, object?> { ["code"] = "username_conflict" }),
+        UserProfileResultKind.ConcurrencyConflict => Results.Problem(statusCode: 409, title: "The profile changed. Reload it before trying again.",
+            extensions: new Dictionary<string, object?> { ["code"] = "profile_concurrency_conflict" }),
+        _ => Results.Problem(statusCode: 503, title: "Account profile operation could not be confirmed.")
+    };
 
     private static string RoleCode(UserAccount account) =>
         account.Role == UserRole.User ? "traveller" : "administrator";

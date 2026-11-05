@@ -36,6 +36,7 @@ public partial class UsersProgram
         builder.Services.AddScoped<IUserRepository, EfUserRepository>();
         builder.Services.AddScoped<TravelTracker.Users.Data.Repositories.Profile.IUserRepository,
             TravelTracker.Users.Data.Repositories.Profile.UserRepository>();
+        builder.Services.AddScoped<UserProfileService>();
         builder.Services.AddScoped<BootstrapService>();
         builder.Services.AddHttpClient<VerifiedIdentityClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
             .RemoveAllLoggers()

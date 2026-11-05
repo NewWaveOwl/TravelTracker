@@ -110,7 +110,7 @@ The self-profile response includes `publicId`, `username`, `email`, `address`, `
 
 `POST /api/v1/users/bootstrap-first-administrator` requires `catalogue.read`, the setup credential, an allowed verified provider email bound to the validated subject, and a never-consumed bootstrap record. It accepts no client-selected identity or role fields. A replay for the same identity may return the current role without re-elevating the account.
 
-`POST /api/v1/users/access` uses a separate high-entropy service Bearer credential over HTTPS, rather than the caller's access token, to return live status/role for the existing Attractions consumer. Unknown identities return deactivated/traveller. The endpoint never creates an account. `/health` is anonymous liveness only. See [first-admin setup](first-administrator-setup.md); full profile CRUD and status-management endpoints remain unimplemented; administrator listing and role changes are documented below.
+`POST /api/v1/users/access` uses a separate high-entropy service Bearer credential over HTTPS, rather than the caller's access token, to return live status/role for the legacy Attractions consumer. Unknown identities return deactivated/traveller. The endpoint never creates an account. `/health` is anonymous liveness only. See [first-admin setup](first-administrator-setup.md). The self-profile GET/PATCH routes above are implemented; general cross-account profile CRUD, account status changes, and account deletion are not. Administrator listing and role changes are documented below.
 
 ### Administrator account listing and role changes
 

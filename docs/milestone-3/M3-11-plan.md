@@ -2,7 +2,7 @@
 
 Issue: [#37, M3-11](https://github.com/NewWaveOwl/TravelTracker/issues/37)
 Dependencies: [#27, M3-01](https://github.com/NewWaveOwl/TravelTracker/issues/27), [#34, M3-08](https://github.com/NewWaveOwl/TravelTracker/issues/34)
-Status: approved for planning; implementation requires its own approval.
+Status: implementation is present; acceptance verification is incomplete.
 
 ## Owner decisions recorded
 
@@ -14,17 +14,27 @@ The following five decisions were provided on 2026-11-04 and are no longer open:
 4. **Attractions access lookup:** include `GET /internal/users/{userId}/access`, protected by a service access token with `users.access`. Restrict this permission to authorized backend services; frontend tokens must not receive it. Attractions denies access when the user is missing or deactivated, or when the lookup fails.
 5. **Test ownership:** the testing agent may create and maintain Users tests. Each layer agent may edit tests for its own layer. The exact Users test directories are recorded in the applicable agent instructions before implementation.
 
-One integration contract issue remains to resolve with #35 before wiring Attractions: its current consumer contract sends validated `(iss, sub)` to a POST lookup, while the approved Users route is keyed by `userId`. The backend must establish a trusted mapping from the validated identity to the public Users ID without accepting a client-supplied ID as authoritative. Update the Attractions consumer contract and tests as part of coordinating M3-11 with #35.
+The identity-to-public-ID integration is present in the current checkout: Attractions POSTs its validated `(iss, sub)` to the Users internal identity resolver, then uses the returned public ID for the access lookup. The Users guide and Attractions client describe this flow. Verify its authorization and fail-closed behavior in the applicable test suite before marking the acceptance evidence complete.
 
 ## Ground Truth
 
 This plan follows [design.md](../design.md), [domain.md](../domain.md), [api.md](../api.md), [data.md](../data.md), [milestone-3-contracts.md](../milestone-3-contracts.md), [authentication.md](../authentication.md), and the current [layer-agent ownership rules](../../.github/agents/).
 
-The current `User` domain model and internal repository interface exist, but there is no Users API or durable Users service. The six-service architecture proposes an independent Domain/Data/Api set per service, with API-to-Data-to-Domain dependency direction and no cross-service database reads.
+The independent Users Domain/Data/Api projects, PostgreSQL persistence, profile endpoints, internal access endpoints, and associated tests now exist. The six-service architecture uses API-to-Data-to-Domain dependency direction, and each service owns its database.
 
 The existing shared `TravelTracker.Domain.Models.User` and internal `TravelTracker.Data.Repositories.IUserRepository` stay unchanged for the current scaffold. M3-11 does not reuse, move, or delete them. The Users service owns new `UserAccount` and `IUserRepository` types in its own projects. Retiring the shared model or repository requires a separate cleanup after confirming that no remaining consumers depend on them.
 
 Baseline build verification on 2026-11-04: `dotnet build TravelTracker.slnx --configuration Release` succeeded with 0 warnings and 0 errors on the current checkout.
+
+### Current implementation checkpoint (2026-11-05)
+
+- **Domain — present:** `src/TravelTracker.Users.Domain/Models/UserAccount.cs`, `UserRole.cs`, `UserStatus.cs`, `Types/ProviderIdentity.cs`, and Users-owned identifier types. `TravelTracker.Users.Domain` has no EF Core or ASP.NET Core dependency. Domain tests are in `tests/TravelTracker.Users.Domain.Tests/`.
+- **Data — present:** `src/TravelTracker.Users.Data/UsersDbContext.cs`, `Entities/UserRecord.cs`, `Configurations/UserRecordConfiguration.cs`, profile repositories under `Repositories/Profile/`, the account/administrator repository, and committed PostgreSQL migrations. Data references Users.Domain and EF Core/Npgsql. Relational tests are in `tests/TravelTracker.Users.Data.Tests/`.
+- **API — present:** independent host in `src/TravelTracker.Users.Api/`, with `GET`/`PATCH /api/v1/users/me`, `GET /internal/users/{userId}/access`, `POST /internal/users/identity`, health, and additional bootstrap/administrator operations. `Program.cs` configures bearer validation, named Users policies, PostgreSQL, and host composition. Self-profile orchestration and validation live in `Services/UserProfileService.cs`; `UsersController` maps service outcomes to the existing HTTP responses.
+- **API tests — present:** HTTP and signed-bearer Users tests currently live in `tests/TravelTracker.Users.Tests/`, not the originally proposed `tests/TravelTracker.Users.Api.Tests/` directory. The test-project path should be treated as an implementation difference, not as a missing API project.
+- **Attractions contract — reconciled in code/docs:** `src/TravelTracker.Attractions.Api/Access/UsersAccessClient.cs` resolves the validated identity, then looks up standing by the returned public user ID. `docs/attractions-service.md` describes the same two-request flow.
+- **Verification evidence:** `dotnet build src/TravelTracker.Users.Api/TravelTracker.Users.Api.csproj --configuration Release --no-restore --verbosity minimal --maxcpucount:1` succeeded with 0 warnings and 0 errors after the service extraction. `dotnet test TravelTracker.Tests.slnx --configuration Release --no-restore --filter "Category!=PostgreSQL" --verbosity minimal --maxcpucount:1` passed 547 cases with 0 failures and 0 skipped. The Data test project has only PostgreSQL cases, so that filter matched none there. The first restricted-run test attempt could not connect to testhost; rerunning outside that restriction completed successfully. A PostgreSQL test connection was not configured, so relational tests remain unverified. `git diff --check` passed.
+- **Changes made in this review:** extracted self-profile orchestration/validation from the controller into the API service, registered it in DI, corrected the stale profile-status text in `docs/api.md`, and updated this plan to show current implementation and remaining verification.
 
 ### Service decisions
 
@@ -51,9 +61,7 @@ Admin account search, admin status-change routes, audit workflows, account delet
 
 The internal access lookup is in scope. `GET /internal/users/{userId}/access` accepts the public Users UUID, requires a valid service access token and the exact `users.access` permission, and is restricted to configured/authorized backend service clients. Never grant `users.access` to the frontend OIDC client or accept client-submitted owner identity as proof of authorization. Return only `userId` (the same public UUID), `status` (`active`, `banned`, or `deactivated`), and `role` (`traveller` or `administrator`), with no profile fields, provider identity, or internal key. Return `200` for an existing account, including deactivated accounts so the consumer can deny access based on standing; return `404` for an unknown public ID. Invalid/missing token returns `401`; an authenticated caller lacking `users.access` or not on the authorized service-client allowlist gets `403`; unavailable required storage returns `503`. No account is provisioned or reactivated by this endpoint.
 
-The existing Attractions consumer contract at [attractions-service.md](../attractions-service.md) instead specifies POST by issuer/subject and a response without userId. Reconcile that client contract and its tests with this approved route and response before claiming the cross-service lookup is integrated. Attractions currently has only the validated `(iss, sub)` pair for the caller; it must obtain or resolve the public userId through a trusted server-side mapping and must not accept a frontend-supplied ID as proof of ownership. Preserve the fail-closed behavior: missing/deactivated users are denied; unavailable, malformed, or unsuccessful lookups do not authorize attraction access.
-
-## Proposed HTTP Contract
+## Approved HTTP Contract (implemented; verification pending)
 
 Use the `/api/v1` prefix and JSON camelCase. The self-profile routes contain no user ID in the route, query, or request body. Resolve the account only from the validated token's issuer and subject. A profile request cannot select, create, or mutate an account by supplying a client-controlled ID or identity value.
 
@@ -77,11 +85,13 @@ PATCH semantics and validation:
 - JSON values of the wrong type, unknown properties, and invalid supplied fields return `400`; no failed request changes any profile field or `UpdatedAt`.
 - A persisted optimistic concurrency token belongs to each `UserRecord`. If simultaneous PATCH requests read the same version, only one may save; the stale request returns `409` with a `profile_concurrency_conflict` problem code, and the winner's complete profile remains stored. This status is separate from the `username_conflict` response. Do not retry-and-merge: a stale partial update can otherwise silently overwrite a field that the caller did not see, and the API contract already requires rejected writes to leave the submitted update unapplied.
 
-No Users admin or provider-login route is added. The internal access lookup is explicitly included as specified above; do not extend it into account administration or profile retrieval.
+M3-11 covers self-profile operations and the internal access lookup, not provider sign-in or the full administrator feature set. The checkout contains separate bootstrap and administrator operations; those are outside this issue's acceptance scope.
 
-## File-by-File Plan
+## File-by-File Implementation Review
 
-(Note: Solution file wiring is done by the developer, not by a layer agent.)
+The implementation below is already present. Do not recreate these projects. Remaining work is acceptance verification and any gap fixes that verification establishes.
+
+The file and test paths listed in the following proposal describe the original intended layout. Where they differ from the checkout, use the current implementation checkpoint above as the source of truth; the differences are not, by themselves, missing work.
 
 ### Domain
 
@@ -128,7 +138,7 @@ No Users admin or provider-login route is added. The internal access lookup is e
 - Per-account-state assertions: Active can GET/PATCH; Banned can GET but PATCH returns 403 and stored profile is unchanged; Deactivated GET/PATCH return 403 and stored profile is unchanged. A deactivated record is not reactivated by repeated GET or internal access lookup. Invalid, unknown-property, username-conflict, and stale-concurrency updates leave persisted state consistent and do not change unrelated fields.
 - The testing agent may create and maintain all Users tests. The Domain, Data, and API layer agents may edit tests only in their corresponding Users test directory. These exact directories are recorded in `.github/agents/testing.agent.md`, `.github/agents/domain-dev.agent.md`, `.github/agents/data-persistence.agent.md`, and `.github/agents/api-service.agent.md`. Shared helpers under each test project's `Support/` require explicit file-level authorization.
 
-### Commit-sized implementation slices and validation
+### Original commit-sized implementation proposal (historical; do not replay)
 
 Keep the implementation in separate layer commits. Each commit adds its layer's production project to `TravelTracker.slnx` and test project to `TravelTracker.Tests.slnx`; each commit must pass its listed validation before starting the next layer.
 
@@ -139,18 +149,17 @@ Keep the implementation in separate layer commits. Each commit adds its layer's 
 
 The repository's CI workflow [ci.yml](../../.github/workflows/ci.yml) starts a disposable PostgreSQL 17 service for pull requests. It first runs `Category!=PostgreSQL` with `TRAVELTRACKER_TEST_POSTGRES` cleared, then runs `Category=PostgreSQL` against that service. Locally, run the ordinary filter without PostgreSQL; run the relational filter only with `TRAVELTRACKER_TEST_POSTGRES` pointing to an isolated PostgreSQL instance where the test user has `CREATEDB`. Never use production credentials or a production database for tests.
 
-### Documentation
+### Remaining verification plan
 
-- `docs/users-service.md`: new startup, database, bearer configuration, profile and internal access contracts, account-state behavior, and policy map.
-- `docs/api.md`: add Users routes and their outcomes; distinguish the approved slice from old scaffold routes.
-- `docs/domain.md`: describe Users.Domain ownership, provider mapping and owner/server-controlled fields.
-- `docs/data.md`: document Users-owned PostgreSQL persistence, migration and provider identity uniqueness.
-- `docs/authentication.md`: document Users policies and deployment-specific identity choices, including the backend-only `users.access` permission.
-- `docs/attractions-service.md`: replace the stale POST `(iss, sub)` consumer contract with the approved GET-by-public-user-ID contract, documenting the trusted ID mapping and fail-closed behavior.
-- `docs/milestone-3-contracts.md`: record the Users profile/internal lookup contract, port 5101, deferred admin work, and deactivated response behavior.
-- `README.md`: update project inventory, running instructions and capability status without claiming provider sign-in or admin management is implemented.
+1. **Done:** profile request validation and application orchestration were extracted from `UsersController` into `UserProfileService`; the HTTP behavior tests pass after the refactor.
+2. **Done:** the non-PostgreSQL suite passed 547 cases with 0 failures and 0 skipped.
+3. **Pending PostgreSQL environment:** run the relational suite against a disposable database with `TRAVELTRACKER_TEST_POSTGRES` and CREATEDB permission. Confirm migrations/restart durability, constraints, unique mappings/usernames, and concurrent-write behavior.
+4. **Partially verified:** the HTTP suites pass, including Users auth and Attractions backchannel coverage. Still verify independent Users startup/health on port 5101 and, where available, the full frontend-to-Users journey.
+5. Compare the collected evidence with every issue acceptance criterion. Fix only confirmed gaps in the owning layer and its authorized tests, then rerun affected tests and the appropriate validation gate.
 
-## Acceptance Evidence
+The original sequence below records how the implementation was expected to be built. The projects and documentation already exist; do not replay those implementation steps.
+
+## Acceptance Evidence to Confirm
 
 - Independent Users host starts on port 5101 with other service hosts stopped; anonymous health succeeds and protected profile operations require a valid Users-audience token.
 - The frontend completes OIDC sign-in and calls `GET /api/v1/users/me` with its API access token. The validated `(iss, sub)` is the sole profile-provisioning key; the first valid request creates one profile and repeated requests return it. Invalid tokens never provision. A deactivated profile returns 403 and is never automatically reactivated.
@@ -163,4 +172,4 @@ The repository's CI workflow [ci.yml](../../.github/workflows/ci.yml) starts a d
 - A non-PostgreSQL storage-unavailable test verifies `503` on a protected profile request without leaking exception details.
 - Captured-log tests prove no profile PII, provider identity, or bearer token is emitted for successful or rejected requests.
 - PostgreSQL migration and restart tests prove durable profile and mapping persistence. Ordinary tests run without PostgreSQL; relational tests use an isolated PostgreSQL instance.
-- The owner decisions listed at the top are resolved. Before implementing cross-service use, reconcile the approved ID-keyed GET with the existing Attractions `(iss, sub)` POST consumer contract without trusting a client-supplied user ID. Valid-token account-standing failures are documented as 403.
+- The owner decisions listed at the top are resolved. The code and current Attractions guide use trusted identity-to-public-ID resolution followed by the ID-keyed access lookup; test this flow before marking it verified. Valid-token account-standing failures are documented as 403.
