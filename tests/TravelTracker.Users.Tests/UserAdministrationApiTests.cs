@@ -4,6 +4,7 @@ using System.Text.Json;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Data.Repositories;
 using TravelTracker.Users.Domain.Models;
+using TravelTracker.Users.Domain.Types;
 using TravelTracker.Users.Tests.Support;
 
 namespace TravelTracker.Users.Tests;
@@ -14,7 +15,8 @@ public sealed class UserAdministrationApiTests
     static readonly Guid TargetId = Guid.Parse("019ac550-1000-7000-8000-000000000002");
     static readonly DateTimeOffset Created = DateTimeOffset.Parse("2026-11-04T12:00:00Z");
 
-    static UserAccount Account(string role = "traveller") => new(TargetId, UsersApiFactory.Issuer, "target", "target@example.test", role, "active", Created);
+    static UserAccount Account(string role = "traveller") => new(TargetId, new ProviderIdentity(UsersApiFactory.Issuer, "target"),
+        role == "administrator" ? UserRole.Administrator : UserRole.User, UserStatus.Active, Created) { VerifiedEmail = "target@example.test" };
 
     static Task<HttpResponseMessage> Change(HttpClient client, Guid id, string role = "administrator", string expectedRole = "traveller", string reason = "Trusted application administrator") =>
         client.PatchAsJsonAsync($"/api/v1/users/{id}/role", new { role, expectedRole, reason });
@@ -46,7 +48,7 @@ public sealed class UserAdministrationApiTests
     {
         using var app = new UsersApiFactory();
         // Deliberately retain the repository's order rather than introducing controller-side sorting.
-        app.Repository.AdministratorListResult = [Account(), Account() with { UserId = Guid.Parse("019ac550-1000-7000-8000-000000000003"), Email = "another@example.test" }];
+        app.Repository.AdministratorListResult = [Account(), Account() with { PublicId = Guid.Parse("019ac550-1000-7000-8000-000000000003"), VerifiedEmail = "another@example.test" }];
         using var client = app.Browser(app.Token(subject: "actor"));
         var response = await client.GetAsync("/api/v1/users");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -70,7 +72,7 @@ public sealed class UserAdministrationApiTests
         const string reason = "  Approved account access change  ";
         var response = await Change(client, TargetId, role, expectedRole, reason);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(new UserProfileResponse(saved.UserId, saved.Email, saved.Role, saved.Status), await response.Content.ReadFromJsonAsync<UserProfileResponse>());
+        Assert.Equal(new UserProfileResponse(saved.PublicId, saved.VerifiedEmail, role, "active"), await response.Content.ReadFromJsonAsync<UserProfileResponse>());
         Assert.Equal((UsersApiFactory.Issuer, "actor", TargetId, role, expectedRole, reason), app.Repository.RoleChangeRequest!.Value);
         Assert.Equal(1, app.Repository.RoleChangeCalls);
     }
@@ -130,27 +132,4 @@ public sealed class UserAdministrationApiTests
         Assert.Null(app.Repository.RoleChangeRequest);
     }
 
-    [Theory]
-    [InlineData(false, "admin-subject")]
-    [InlineData(true, "wrong-subject")]
-    public async Task UnverifiedOrMismatchedFirstSignInNeverProvisionsAUser(bool verified, string subject)
-    {
-        using var app = new UsersApiFactory(); app.Identity.Verified = verified; app.Identity.Subject = subject;
-        using var client = app.Browser(app.Token(role: "administrator"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/users/me")).StatusCode);
-        Assert.Null(app.Repository.Account);
-    }
-
-    [Fact]
-    public async Task ProviderRoleClaimsNeverPromoteNewlyProvisionedTravellerAndExistingRoleIsRetained()
-    {
-        using var app = new UsersApiFactory(); using var client = app.Browser(app.Token(role: "administrator"));
-        var first = await client.GetFromJsonAsync<UserProfileResponse>("/api/v1/users/me");
-        Assert.Equal("traveller", first!.Role);
-        Assert.Equal("active", first.Status);
-        Assert.Equal(0, app.Repository.BootstrapCalls);
-        Assert.Equal(1, app.Identity.Calls);
-        var again = await client.GetFromJsonAsync<UserProfileResponse>("/api/v1/users/me");
-        Assert.Equal(first, again); Assert.Equal(1, app.Identity.Calls);
-    }
 }

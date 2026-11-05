@@ -1,3 +1,4 @@
+using TravelTracker.Users.Domain.Models;
 using Microsoft.EntityFrameworkCore;
 using TravelTracker.Users.Data;
 using TravelTracker.Users.Tests.Support;
@@ -23,7 +24,7 @@ public sealed class PersistenceTests
         var restarted = database.Repository();
         var read = await restarted.FindAsync(Issuer, "account-one", default);
         Assert.Equal(first, read);
-        Assert.Equal("administrator", read!.Role);
+        Assert.Equal(UserRole.Administrator, read!.Role);
         Assert.Equal(first, await restarted.BootstrapAsync(Issuer, "account-one", Email, default));
         Assert.Null(await restarted.BootstrapAsync(Issuer, "another-account", Email, default));
         await using var context = database.Context();
@@ -54,10 +55,10 @@ public sealed class PersistenceTests
         var repository = database.Repository();
         var first = await repository.BootstrapAsync(Issuer, "account-one", Email, default);
         await using (var context = database.Context())
-            await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"UserAccounts\" SET \"Role\" = 'traveller' WHERE \"UserId\" = {first!.UserId}");
+            await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"UserAccounts\" SET \"Role\" = 'traveller' WHERE \"UserId\" = {first!.PublicId}");
         var replay = await repository.BootstrapAsync(Issuer, "account-one", Email, default);
-        Assert.Equal("traveller", replay!.Role);
-        Assert.Equal(first!.UserId, replay.UserId);
+        Assert.Equal(UserRole.User, replay!.Role);
+        Assert.Equal(first!.PublicId, replay.PublicId);
         Assert.Null(await repository.BootstrapAsync(Issuer, "account-two", Email, default));
         await using var check = database.Context();
         Assert.Equal(1, await Count(check, "AdministratorAudit"));
@@ -70,7 +71,7 @@ public sealed class PersistenceTests
         var repository = database.Repository();
         var first = await repository.BootstrapAsync(Issuer, "account-one", Email, default);
         await using (var context = database.Context())
-            await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"UserAccounts\" WHERE \"UserId\" = {first!.UserId}");
+            await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"UserAccounts\" WHERE \"UserId\" = {first!.PublicId}");
         Assert.Null(await repository.BootstrapAsync(Issuer, "account-one", Email, default));
         Assert.Null(await repository.BootstrapAsync(Issuer, "account-two", Email, default));
         await using var check = database.Context();

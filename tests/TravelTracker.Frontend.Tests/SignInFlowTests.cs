@@ -31,6 +31,7 @@ public sealed class SignInFlowTests
         Assert.Equal("traveltracker-api", query["audience"]);
         Assert.Equal("test-client", query["client_id"]);
         Assert.Contains("catalogue.read", query["scope"]);
+        Assert.Contains("users.read", query["scope"]);
         Assert.False(string.IsNullOrEmpty(query["nonce"]));
     }
 

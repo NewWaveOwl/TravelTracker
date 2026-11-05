@@ -27,8 +27,8 @@
         {
             <form class="admin-confirmation" aria-labelledby="role-change-heading" @onsubmit="ConfirmAsync" @onsubmit:preventDefault>
                 <h2 id="role-change-heading" tabindex="-1" @ref="confirmationHeading">Confirm role change</h2>
-                <p><strong>@target.Email</strong>: @target.Role → @NewRole</p>
-                <p>@(NewRole == "administrator" ? "Administrator access allows this user to manage registered users and their roles." : target.UserId == me?.UserId ? "Demoting your own account will remove your access to this panel." : "This user will lose administrator access.")</p>
+                <p><strong>@AccountLabel(target)</strong>: @target.Role → @NewRole</p>
+                <p>@(NewRole == "administrator" ? "Administrator access allows this user to manage registered users and their roles." : target.UserId == me?.PublicId ? "Demoting your own account will remove your access to this panel." : "This user will lose administrator access.")</p>
                 <label for="role-change-reason">Reason *<textarea id="role-change-reason" @bind="reason" maxlength="500" aria-describedby="reason-help" disabled="@busy"></textarea></label>
                 <small id="reason-help">Give a reason for the audit record, up to 500 characters.</small>
                 <div class="actions"><button type="submit" disabled="@busy">@(busy ? "Changing role…" : "Confirm role change")</button><button type="button" class="secondary" disabled="@busy" @onclick="CancelChange">Cancel</button></div>
@@ -43,11 +43,11 @@
             }
             else
             {
-                <div class="admin-table-scroll"><table class="admin-users-table"><caption class="visually-hidden">Registered TravelTracker users and role management</caption><thead><tr><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead><tbody>
+                <div class="admin-table-scroll"><table class="admin-users-table"><caption class="visually-hidden">Registered TravelTracker users and role management</caption><thead><tr><th scope="col">Account</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead><tbody>
                 @foreach (var user in users)
                 {
-                    <tr @key="user.UserId"><th scope="row">@user.Email @(user.UserId == me?.UserId ? "(you)" : "")</th><td>@user.Role</td><td>@user.Status</td><td>
-                        <button class="secondary" disabled="@(busy || LastActiveAdministrator(user) || InactiveTraveller(user))" @onclick="() => BeginChange(user)">@(user.Role == "administrator" ? "Demote to traveller" : "Promote to administrator")<span class="visually-hidden">: @user.Email</span></button>
+                    <tr @key="user.UserId"><th scope="row">@AccountLabel(user) @(user.UserId == me?.PublicId ? "(you)" : "")</th><td>@user.Role</td><td>@user.Status</td><td>
+                        <button class="secondary" disabled="@(busy || LastActiveAdministrator(user) || InactiveTraveller(user))" @onclick="() => BeginChange(user)">@(user.Role == "administrator" ? "Demote to traveller" : "Promote to administrator")<span class="visually-hidden">: @AccountLabel(user)</span></button>
                         @if (LastActiveAdministrator(user)) { <small>The last active administrator cannot be demoted.</small> }
                         @if (InactiveTraveller(user)) { <small>Only active accounts can be promoted.</small> }
                     </td></tr>

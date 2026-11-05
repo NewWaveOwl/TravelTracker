@@ -95,11 +95,22 @@ The Blazor `/attractions` view consumes these public HTTP DTOs and sends the cur
 
 The frontend's optional duration ± field is a local preview and has no HTTP or persistence field. The map is the user-supplied static placeholder; choosing a location currently means confirming manually entered coordinates. No endpoint or database change is included in #43.
 
-## Users first-administrator contracts
+## Users contracts
 
-The owner-approved Users service runs independently in `TravelTracker.Users.Api` over HTTPS (local port 5101), using its own PostgreSQL database. `GET /api/v1/users/me` requires `catalogue.read` and returns the caller's public userId/email/role/status. An unknown identity is provisioned only as an active traveller after provider userinfo confirms the validated subject and verified email; failed verification is forbidden. Deactivated accounts receive 403. `POST /api/v1/users/bootstrap-first-administrator` additionally requires a server-owned setup credential, an allowed verified provider email bound to the same validated subject, and a never-consumed bootstrap record. It accepts no client-selected identity/role fields and returns a confirmed public profile, or safe 400/401/403/404/409/503 failures. Exact identity replay may return the current role but never re-elevates it.
+The independent Users service runs on HTTPS port 5101 locally and owns its PostgreSQL database. The following profile routes identify the caller from the validated token issuer and subject.
 
-`POST /api/v1/users/access` uses a separate high-entropy service Bearer credential over HTTPS, rather than the caller's access token, to return live status/role for the existing Attractions consumer. Unknown identities return deactivated/traveller. The endpoint never creates an account. `/health` is anonymous liveness only. See [first-admin setup](first-administrator-setup.md); full profile CRUD and status-management endpoints remain unimplemented; administrator listing and role changes are documented below.
+| Route | Permission | Behavior |
+| --- | --- | --- |
+| `GET /api/v1/users/me` | `users.read` | Returns the caller's profile. The first valid request creates an active traveller with blank editable fields. Banned accounts can read their profile. Deactivated accounts receive 403. |
+| `PATCH /api/v1/users/me` | `users.write` | Active accounts can change `username`, `email` and `address`. Omitted fields keep their values. A null address clears it. Invalid or unknown fields return 400. A duplicate username or stale write returns 409. |
+| `GET /internal/users/{userId}/access` | `users.access` and an allowlisted service subject | Returns `userId`, `status` and `role`, or 404 for an unknown ID. |
+| `POST /internal/users/identity` | `users.access` and an allowlisted service subject | Resolves a backend-validated issuer and subject to an existing public ID, or returns 404. |
+
+The self-profile response includes `publicId`, `username`, `email`, `address`, `role`, `status`, `createdAt` and `updatedAt`. Editable email is profile contact information. Internal lookups never create accounts. Protected routes return 401 for invalid or missing bearer credentials and 403 for missing permission. Users returns 503 when required storage is unavailable.
+
+`POST /api/v1/users/bootstrap-first-administrator` requires `catalogue.read`, the setup credential, an allowed verified provider email bound to the validated subject, and a never-consumed bootstrap record. It accepts no client-selected identity or role fields. A replay for the same identity may return the current role without re-elevating the account.
+
+`POST /api/v1/users/access` uses a separate high-entropy service Bearer credential over HTTPS, rather than the caller's access token, to return live status/role for the legacy Attractions consumer. Unknown identities return deactivated/traveller. The endpoint never creates an account. `/health` is anonymous liveness only. See [first-admin setup](first-administrator-setup.md). The self-profile GET/PATCH routes above are implemented; general cross-account profile CRUD, account status changes, and account deletion are not. Administrator listing and role changes are documented below.
 
 ### Administrator account listing and role changes
 

@@ -19,6 +19,7 @@ The dependency direction is Api → Data → Domain.
 
 - `src/TravelTracker.Data/**`
 - `src/TravelTracker.Attractions.Data/**`
+- `src/TravelTracker.Users.Data/**`
 
 The original Data project owns in-memory Transport/Route Point persistence and identifier generation. Attractions Data owns its PostgreSQL DbContext, mappings, migrations, repositories and write sessions. Future Data projects require an approved issue.
 
@@ -29,6 +30,13 @@ The Data agent may edit only this existing test file:
 - `tests/TravelTracker.Api.Tests/EntityIdGeneratorTests.cs`
 
 Do not edit any other existing test files or shared support helpers unless an approved task names a specific file. This agent does not own HTTP route or transport tests, and no file is owned by two agents.
+
+For approved M3-11 Users work, the Data agent may also create or edit these files:
+
+- `tests/TravelTracker.Users.Data.Tests/TravelTracker.Users.Data.Tests.csproj`
+- `tests/TravelTracker.Users.Data.Tests/UserRepositoryPostgreSqlTests.cs`
+
+Coordinate those tests with the testing agent, who is authorized to create and maintain tests across all three Users test directories. Do not edit the Users Domain or API test directories; shared helpers require exact file-level authorization.
 
 ## Responsibilities
 
@@ -43,11 +51,11 @@ Do not edit any other existing test files or shared support helpers unless an ap
 
 ## Prohibited changes
 
-- Do not edit `src/TravelTracker.Domain/**`, `src/TravelTracker.Attractions.Domain/**`, `src/TravelTracker.Api/**`, `src/TravelTracker.Attractions.Api/**`, `src/TravelTracker.Security/**`, frontend paths, solution files, skills, or copilot instructions.
+- Do not edit `src/TravelTracker.Domain/**`, `src/TravelTracker.Attractions.Domain/**`, `src/TravelTracker.Users.Domain/**`, `src/TravelTracker.Api/**`, `src/TravelTracker.Attractions.Api/**`, `src/TravelTracker.Users.Api/**`, `src/TravelTracker.Security/**`, frontend paths, solution files, skills, or copilot instructions.
 - Do not implement controllers, application services, DTOs, endpoint contracts, or HTTP-specific behavior in Data.
 - Do not add domain logic or business rules that belong in the Domain layer.
 - Do not expose `Id64` or any internal identifier beyond Data through any public interface, model, or API boundary.
-- Do not edit any file outside the two allowed Data projects and the exact permitted test file.
+- Do not edit any file outside the three allowed Data projects, the exact existing permitted test file, or, for approved M3-11 Users work, `tests/TravelTracker.Users.Data.Tests/TravelTracker.Users.Data.Tests.csproj` and `tests/TravelTracker.Users.Data.Tests/UserRepositoryPostgreSqlTests.cs`.
 - Do not create new service projects or frontends unless the approved issue explicitly names them.
 
 ## Working rules

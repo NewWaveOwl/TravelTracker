@@ -1,53 +1,55 @@
 using TravelTracker.Users.Domain.Models;
+using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Tests;
 
 public sealed class DomainTests
 {
     static readonly DateTimeOffset Created = DateTimeOffset.Parse("2026-11-04T16:00:00Z");
+    static readonly ProviderIdentity Identity = new("https://identity.example/", "subject-1");
 
     [Fact]
     public void OrdinaryProvisioningCreatesAnActiveTravellerWithANewPublicId()
     {
-        var account = UserAccount.CreateTraveller("https://identity.example/", "subject-1", "traveller@example.test", Created);
-        Assert.NotEqual(Guid.Empty, account.UserId);
-        Assert.Equal(7, account.UserId.Version);
-        Assert.Equal("traveller", account.Role);
-        Assert.Equal("active", account.Status);
+        var account = UserAccount.CreateTraveller(Identity, Created);
+        Assert.NotEqual(Guid.Empty, account.PublicId);
+        Assert.Equal(7, account.PublicId.Version);
+        Assert.Equal(UserRole.User, account.Role);
+        Assert.Equal(UserStatus.Active, account.Status);
         Assert.Equal(Created, account.CreatedAt);
-        Assert.Equal("https://identity.example/", account.Issuer);
-        Assert.Equal("subject-1", account.Subject);
+        Assert.Equal(Identity, account.ProviderIdentity);
+        Assert.Null(account.Email);
     }
 
     [Fact]
     public void AuthorizedBootstrapCreatesAnAdministratorWithoutChangingProviderIdentity()
     {
-        var account = UserAccount.CreateAdministrator("https://identity.example/", "subject-1", "admin@example.test", Created);
-        Assert.Equal("administrator", account.Role);
-        Assert.Equal("active", account.Status);
-        Assert.Equal("subject-1", account.Subject);
-        Assert.Equal("admin@example.test", account.Email);
+        var account = UserAccount.CreateAdministrator(Identity, Created);
+        Assert.Equal(UserRole.Administrator, account.Role);
+        Assert.Equal(UserStatus.Active, account.Status);
+        Assert.Equal(Identity, account.ProviderIdentity);
     }
 
     [Theory]
-    [InlineData("", "subject-1", "admin@example.test")]
-    [InlineData("  ", "subject-1", "admin@example.test")]
-    [InlineData("https://identity.example/", "", "admin@example.test")]
-    [InlineData("https://identity.example/", "  ", "admin@example.test")]
-    [InlineData("https://identity.example/", "subject-1", "")]
-    [InlineData("https://identity.example/", "subject-1", "  ")]
-    public void ProvisioningRejectsMissingIdentityAndEmail(string issuer, string subject, string email) =>
-        Assert.Throws<ArgumentException>(() => UserAccount.CreateAdministrator(issuer, subject, email, Created));
-
-    [Theory]
-    [InlineData("admin", "active")]
-    [InlineData("Administrator", "active")]
-    [InlineData("administrator", "enabled")]
-    [InlineData("traveller", "Active")]
-    public void UnsupportedRolesOrStandingAreRejected(string role, string status) =>
-        Assert.Throws<ArgumentException>(() => new UserAccount(Guid.CreateVersion7(), "https://identity.example/", "subject-1", "admin@example.test", role, status, Created));
+    [InlineData("", "subject-1")]
+    [InlineData("  ", "subject-1")]
+    [InlineData("https://identity.example/", "")]
+    [InlineData("https://identity.example/", "  ")]
+    public void ProviderIdentityRejectsMissingComponents(string issuer, string subject) =>
+        Assert.Throws<ArgumentException>(() => new ProviderIdentity(issuer, subject));
 
     [Fact]
-    public void RestoredAccountsRequireAPublicIdentifier() =>
-        Assert.Throws<ArgumentException>(() => new UserAccount(Guid.Empty, "https://identity.example/", "subject-1", "admin@example.test", "administrator", "active", Created));
+    public void UnsupportedRolesOrStandingAreRejected()
+    {
+        var account = UserAccount.CreateTraveller(Identity, Created) with { Role = (UserRole)99, Status = (UserStatus)99 };
+        Assert.Contains("role", account.Validate());
+        Assert.Contains("status", account.Validate());
+    }
+
+    [Fact]
+    public void RestoredAccountsRequireAPublicIdentifier()
+    {
+        var account = UserAccount.CreateAdministrator(Identity, Created) with { PublicId = Guid.Empty };
+        Assert.Contains("publicId", account.Validate());
+    }
 }
