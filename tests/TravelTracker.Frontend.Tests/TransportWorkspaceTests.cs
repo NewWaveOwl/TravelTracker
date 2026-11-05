@@ -48,6 +48,18 @@ public sealed class TransportWorkspaceTests : BunitContext
         return new(HttpStatusCode.OK) { Content = JsonContent.Create(result) };
     }
 
+    /**
+     * Chooses an explicit saved location for each endpoint through the default map.
+     * @param page The rendered selection workspace.
+     */
+    static void ChooseEndpoints(IRenderedComponent<TransportWorkspace> page)
+    {
+        page.Find("#choose-departure").Click();
+        page.Find("svg g[role=button]").Click();
+        page.Find("#choose-destination").Click();
+        page.Find("svg g[role=button]").Click();
+    }
+
     [Fact]
     public void SavedSelectionRetainsPublicIdsAndMapMarkerSelectsDestination()
     {
@@ -57,11 +69,12 @@ public sealed class TransportWorkspaceTests : BunitContext
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
         page.FindAll("button.transport-card").First().Click();
         page.FindAll("button").Single(b => b.TextContent == "Choose on map").Click();
-        page.Find("svg g[role=button]").Click();
+        ChooseEndpoints(page);
         page.WaitForAssertion(() => Assert.Contains("Reusable location; no timetable", page.Markup));
         page.Find(".transport-add").Click();
         page.WaitForAssertion(() => Assert.Single(draft));
         Assert.Equal(Train.TransportModeId, draft[0].Transport.TransportModeId);
+        Assert.Equal(Station.RoutePointId, draft[0].Departure.RoutePointId);
         Assert.Equal(Station.RoutePointId, draft[0].Destination.RoutePointId);
         Assert.Contains("Travel time not supplied", page.Markup);
         Assert.DoesNotContain("Create destination location", page.Markup);
@@ -106,10 +119,10 @@ public sealed class TransportWorkspaceTests : BunitContext
         Configure(new StubHandler((request, _) => Task.FromResult(unavailable ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : Read(request))));
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.Contains("unavailable", page.Markup));
-        page.Find("#transport-query").Change("rail"); unavailable = false;
+        unavailable = false;
         page.Find("[role=alert] button").Click();
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
-        Assert.Equal("rail", page.Find("#transport-query").GetAttribute("value"));
+        Assert.Empty(page.FindAll("#transport-query"));
     }
 
     [Fact]
@@ -126,7 +139,7 @@ public sealed class TransportWorkspaceTests : BunitContext
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
         page.FindAll("button.transport-card").First().Click();
         page.Find("#new-point-name").Change("Saved station"); page.Find("#new-point-lat").Change("43.6"); page.Find("#new-point-lon").Change("-79.3"); page.Find(".point-create").Submit();
-        page.WaitForAssertion(() => Assert.Contains("Destination location saved.", page.Markup));
+        page.WaitForAssertion(() => Assert.Contains("Location saved.", page.Markup));
         Assert.NotNull(fields); Assert.DoesNotContain("routePointId", fields.Keys); Assert.DoesNotContain("departure", fields.Keys);
         Assert.Equal(43.6m, fields["lat"].GetDecimal());
     }
@@ -141,7 +154,7 @@ public sealed class TransportWorkspaceTests : BunitContext
         for (var i = 0; i < 2; i++)
         {
             page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
-            page.FindAll(".transport-columns > section")[1].QuerySelector("button.transport-card")!.Click();
+            ChooseEndpoints(page);
             page.Find(".transport-add").Click();
         }
         page.WaitForAssertion(() => Assert.Equal(2, draft.Count));
@@ -159,9 +172,9 @@ public sealed class TransportWorkspaceTests : BunitContext
         IReadOnlyList<TransportSelection> draft = [];
         var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
-        page.FindAll("button.transport-card")[0].Click(); page.FindAll("button.transport-card")[1].Click(); page.Find(".transport-add").Click();
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page); page.Find(".transport-add").Click();
         page.WaitForAssertion(() => Assert.Single(draft)); reject = true;
-        page.FindAll(".transport-columns > section")[0].QuerySelector("form")!.Submit();
+        page.FindAll(".transport-columns > section")[1].QuerySelector("form")!.Submit();
         page.WaitForAssertion(() => Assert.Empty(draft));
         Assert.Contains("Sign in", page.Markup);
     }
@@ -194,7 +207,7 @@ public sealed class TransportWorkspaceTests : BunitContext
         IReadOnlyList<TransportSelection> draft = [];
         var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
-        page.FindAll("button.transport-card")[0].Click(); page.FindAll("button.transport-card")[1].Click();
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
         confirm = true;
         var click = page.Find(".transport-add").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -211,8 +224,8 @@ public sealed class TransportWorkspaceTests : BunitContext
         Configure(new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<object>()) })), false);
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.Contains("No locations found", page.Markup));
-        Assert.Contains("No transport found", page.Markup);
-        Assert.False(page.Find("#transport-query").HasAttribute("disabled"));
+        Assert.Contains("No saved transport entries", page.Markup);
+        Assert.False(page.FindAll("button").Single(b => b.TextContent == "Reload transport").HasAttribute("disabled"));
         Assert.False(page.Find("#point-query").HasAttribute("disabled"));
         page.FindAll("button").Single(b => b.TextContent == "Choose on map").Click();
         Assert.Empty(page.FindAll("svg g[role=button]"));
@@ -241,13 +254,13 @@ public sealed class TransportWorkspaceTests : BunitContext
         Configure(new StubHandler((request, _) => { requests.Add(request.RequestUri!.OriginalString); return Task.FromResult(Read(request)); }), false);
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
-        Assert.Equal(7, page.FindAll("#transport-code option").Count);
+        Assert.Empty(page.FindAll("#transport-query, #transport-code"));
         Assert.Equal(4, page.FindAll("#point-type option").Count);
         page.FindAll("button.transport-card").First().Click();
-        page.Find("#transport-query").Change("rail & ferry"); page.Find("#transport-code").Change("bike");
+
         page.Find("#point-query").Change("museum/park"); page.Find("#point-type").Change("attraction");
-        page.FindAll(".transport-columns > section")[0].QuerySelector("form")!.Submit();
-        page.WaitForAssertion(() => Assert.Contains(requests, url => url.EndsWith("/api/v1/transport-modes?name=rail%20%26%20ferry&code=bike", StringComparison.Ordinal)));
+        page.FindAll(".transport-columns > section")[1].QuerySelector("form")!.Submit();
+        page.WaitForAssertion(() => Assert.Contains(requests, url => url.EndsWith("/api/v1/transport-modes?name=&code=", StringComparison.Ordinal)));
         Assert.Contains(requests, url => url.EndsWith("/api/v1/route-points?name=museum%2Fpark&type=attraction", StringComparison.Ordinal));
     }
 
@@ -266,7 +279,7 @@ public sealed class TransportWorkspaceTests : BunitContext
         var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved bus", page.Markup));
         page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
-        page.FindAll(".transport-columns > section")[1].QuerySelector("button.transport-card")!.Click();
+        ChooseEndpoints(page);
         page.Find(".transport-add").Click(); page.WaitForAssertion(() => Assert.Single(draft));
         Assert.Equal(Train.TransportModeId, draft[0].Transport.TransportModeId);
         page.Find(".transport-chain button.transport-card").Click();
@@ -296,10 +309,73 @@ public sealed class TransportWorkspaceTests : BunitContext
         Assert.True(page.Find(".destination-panel").HasAttribute("inert"));
         page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
         Assert.Equal("Pending location", page.Find("#new-point-name").GetAttribute("value"));
-        page.FindAll(".transport-columns > section")[1].QuerySelector("button.transport-card")!.Click();
+        ChooseEndpoints(page);
         page.Find(".transport-add").Click();
         Assert.True(page.Find(".destination-panel").HasAttribute("inert"));
         page.Find(".transport-chain button.transport-card").Click();
         Assert.False(page.Find(".destination-panel").HasAttribute("inert"));
+    }
+
+    [Fact]
+    public void DirectTransportOpensMapAndRequiresBothSavedEndpointsBeforePublishing()
+    {
+        var museum = new RoutePointDto(Guid.Parse("00000000-0000-0000-0000-000000000144"), "attraction", "Saved museum", "2 Museum Road", 43.7m, -79.4m, null);
+        Configure(new StubHandler((request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("route-points", StringComparison.Ordinal)) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new[] { Station, museum }) });
+            if (path.EndsWith(museum.RoutePointId.ToString(), StringComparison.Ordinal)) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(museum) });
+            return Task.FromResult(Read(request));
+        }), false);
+        IReadOnlyList<TransportSelection> draft = [];
+        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
+        Assert.Empty(page.FindAll("#transport-query, #transport-code"));
+        Assert.DoesNotContain(page.FindAll("button"), b => b.TextContent == "Search transport");
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+        Assert.Equal(2, page.FindAll("svg g[role=button]").Count);
+        Assert.False(page.Find(".destination-panel").HasAttribute("inert"));
+        page.Find("#choose-destination").Click(); page.FindAll("svg g[role=button]")[1].Click();
+        Assert.True(page.Find(".transport-add").HasAttribute("disabled"));
+        page.Find("#choose-departure").Click(); page.FindAll("svg g[role=button]")[0].Click();
+        page.Find(".transport-add").Click();
+        page.WaitForAssertion(() => Assert.Single(draft));
+        Assert.Equal(Station.RoutePointId, draft[0].Departure.RoutePointId);
+        Assert.Equal(museum.RoutePointId, draft[0].Destination.RoutePointId);
+        page.Find(".transport-chain button.transport-card").Click();
+        Assert.Contains("Saved station", page.Find("#choose-departure").TextContent);
+        Assert.Contains("Saved museum", page.Find("#choose-destination").TextContent);
+        page.Find("#choose-departure").Click(); page.FindAll("svg g[role=button]")[1].Click(); page.Find(".transport-add").Click();
+        page.WaitForAssertion(() => Assert.Equal(museum.RoutePointId, draft.Single().Departure.RoutePointId));
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+        Assert.Contains("Saved museum", page.Find("#choose-departure").TextContent);
+    }
+
+    [Fact]
+    public void CreatedLocationsPopulateTheExplicitDepartureThenDestination()
+    {
+        var destination = Station with { RoutePointId = Guid.Parse("00000000-0000-0000-0000-000000000145"), Name = "New destination" };
+        var posts = 0;
+        Configure(new StubHandler((request, _) =>
+        {
+            if (request.Method == HttpMethod.Post) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created) { Content = JsonContent.Create(++posts == 1 ? Station : destination) });
+            if (request.RequestUri!.AbsolutePath.EndsWith(destination.RoutePointId.ToString(), StringComparison.Ordinal)) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(destination) });
+            return Task.FromResult(Read(request));
+        }));
+        IReadOnlyList<TransportSelection> draft = [];
+        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+        page.Find("#new-point-name").Change("New departure"); page.Find("#new-point-lat").Change("43.6"); page.Find("#new-point-lon").Change("-79.3");
+        page.Find(".point-create").Submit();
+        page.WaitForAssertion(() => Assert.Contains("Saved station", page.Find("#choose-departure").TextContent));
+        Assert.Contains("Choose destination", page.Find("#choose-destination").TextContent);
+        page.Find("#new-point-name").Change("New destination"); page.Find(".point-create").Submit();
+        page.WaitForAssertion(() => Assert.Contains("New destination", page.Find("#choose-destination").TextContent));
+        page.Find(".transport-add").Click();
+        page.WaitForAssertion(() => Assert.Single(draft));
+        Assert.Equal(Station.RoutePointId, draft[0].Departure.RoutePointId);
+        Assert.Equal(destination.RoutePointId, draft[0].Destination.RoutePointId);
+        Assert.Equal(2, posts);
     }
 }

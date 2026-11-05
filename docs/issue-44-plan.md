@@ -4,6 +4,8 @@ Implement the owner-selected [Version 1 side-by-side concept](https://www.figma.
 
 ## Ground truth
 
+Owner correction after live review: transport selection must use direct cards without a transport search/filter action and immediately open the map. Each draft occurrence must include explicit saved departure and destination endpoints. This supersedes the original transport-filter UI plan below; location filtering remains useful. The frontend agent owns the correction, and endpoint/session regression tests plus a read-only review precede the requested commit.
+
 The independent Transport service already supplies authenticated collection, detail and creation endpoints for saved transport entries and route points. The Blazor frontend supplies `ProtectedClient`, session revocation and the attraction workspace. Trips currently has a placeholder form, without a trip persistence endpoint. Existing attraction maps are static previews, not interactive pickers.
 
 Catalogue records have no schedules or travel times. The design's illustrative durations must not become fabricated runtime estimates. Any displayed draft duration must be entered explicitly by the traveller; otherwise the UI states that timing is unavailable. A map coordinate has no saved public identity until an authorized route-point creation succeeds.

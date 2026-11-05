@@ -105,3 +105,4 @@ main:has(.transport-workspace){max-width:1920px;padding:32px 60px 64px;color:var
 .transport-columns{overflow-x:clip}.destination-panel{opacity:0;transform:translateX(28px);visibility:hidden;pointer-events:none;transition:opacity 300ms cubic-bezier(.22,1,.36,1),transform 300ms cubic-bezier(.22,1,.36,1),visibility 0s linear 300ms}.destination-panel.is-open{opacity:1;transform:translateX(0);visibility:visible;pointer-events:auto;transition-delay:0s}
 @media(max-width:1250px){.destination-panel:not(.is-open){max-height:0;overflow:hidden;padding-block:0}.destination-panel{transform:translateY(20px)}.destination-panel.is-open{transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){.destination-panel,.destination-panel.is-open{transition:none;transform:none}}
+.endpoint-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.endpoint-choices .transport-card{min-width:0}.endpoint-choices .transport-card strong{font-size:20px}

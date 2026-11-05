@@ -24,7 +24,9 @@ public partial class TransportWorkspace : IDisposable
     readonly List<TransportSelection> selections = [];
     TransportDto? selectedTransport;
     RoutePointDto? selectedPoint;
-    string transportQuery = "", pointQuery = "", code = "", type = "";
+    RoutePointDto? selectedDeparture;
+    bool choosingDeparture = true;
+    string pointQuery = "", type = "";
     string transportName = "", description = "", newCode = "car";
     string pointName = "", address = "", lat = "", lon = "", sourceId = "", newType = "attraction";
     string? error, status;
@@ -49,8 +51,8 @@ public partial class TransportWorkspace : IDisposable
     void AuthenticationChanged(Task<AuthenticationState> task) => _ = InvokeAsync(async () =>
     {
         operation?.Cancel(); busy = false;
-        selections.Clear(); transports = []; points = []; selectedPoint = null; selectedTransport = null;
-        transportName = description = pointName = address = lat = lon = sourceId = transportQuery = pointQuery = code = type = string.Empty;
+        selections.Clear(); transports = []; points = []; selectedPoint = selectedDeparture = null; selectedTransport = null; choosingDeparture = true;
+        transportName = description = pointName = address = lat = lon = sourceId = pointQuery = type = string.Empty;
         fieldErrors = new Dictionary<string, string[]>();
         editingIndex = null; error = status = null;
         await UpdateAccessAsync(await task);
@@ -73,13 +75,31 @@ public partial class TransportWorkspace : IDisposable
      */
     async Task LoadAsync() => await RunAsync(async token =>
     {
-        var modes = await Client.SearchTransportAsync(transportQuery, code, token);
+        var modes = await Client.SearchTransportAsync("", "", token);
         var locations = await Client.SearchPointsAsync(pointQuery, type, token);
         transports = modes; points = locations;
     });
 
-    async Task SelectTransportAsync(Guid id) => await RunAsync(async token => selectedTransport = await Client.GetTransportAsync(id, token));
-    async Task SelectPointAsync(Guid id) => await RunAsync(async token => selectedPoint = await Client.GetPointAsync(id, token));
+    async Task SelectTransportAsync(Guid id) => await RunAsync(async token =>
+    {
+        selectedTransport = await Client.GetTransportAsync(id, token);
+        transports = transports.Select(item => item.TransportModeId == id ? selectedTransport : item).ToArray();
+        showMap = true;
+        choosingDeparture = selectedDeparture is null;
+    });
+    async Task SelectPointAsync(Guid id)
+    {
+        var departure = choosingDeparture;
+        await RunAsync(async token => ApplyPoint(await Client.GetPointAsync(id, token), departure));
+    }
+
+    void ApplyPoint(RoutePointDto point, bool departure)
+    {
+        if (departure) { selectedDeparture = point; choosingDeparture = false; }
+        else selectedPoint = point;
+    }
+
+    void ChooseEndpoint(bool departure) { if (!busy) choosingDeparture = departure; }
 
     /**
      * Rechecks saved public IDs before publishing an ordered draft to the trip editor.
@@ -87,23 +107,24 @@ public partial class TransportWorkspace : IDisposable
      */
     async Task AddAsync()
     {
-        if (selectedTransport is null || selectedPoint is null) return;
-        var transportId = selectedTransport.TransportModeId; var pointId = selectedPoint.RoutePointId;
+        if (selectedTransport is null || selectedDeparture is null || selectedPoint is null) return;
+        var transportId = selectedTransport.TransportModeId; var departureId = selectedDeparture.RoutePointId; var pointId = selectedPoint.RoutePointId;
         await RunAsync(async token =>
         {
             var transport = await Client.GetTransportAsync(transportId, token);
+            var departure = await Client.GetPointAsync(departureId, token);
             var destination = await Client.GetPointAsync(pointId, token);
             token.ThrowIfCancellationRequested();
-            var entry = new TransportSelection(transport, destination);
+            var entry = new TransportSelection(transport, departure, destination);
             if (editingIndex is { } index) selections[index] = entry; else selections.Add(entry);
-            editingIndex = null; selectedTransport = null; selectedPoint = null;
+            editingIndex = null; selectedTransport = null; selectedPoint = null; selectedDeparture = selections.LastOrDefault()?.Destination; choosingDeparture = selectedDeparture is null;
             await SelectionChanged.InvokeAsync(selections.ToArray());
             status = "Draft updated. Trip saving is not connected yet.";
         });
     }
 
-    void Edit(int index) { if (busy) return; editingIndex = index; selectedTransport = selections[index].Transport; selectedPoint = selections[index].Destination; }
-    void NewEntry() { editingIndex = null; selectedTransport = null; selectedPoint = null; }
+    void Edit(int index) { if (busy) return; editingIndex = index; selectedTransport = selections[index].Transport; selectedDeparture = selections[index].Departure; selectedPoint = selections[index].Destination; choosingDeparture = false; showMap = true; }
+    void NewEntry() { if (busy) return; editingIndex = null; selectedTransport = null; selectedPoint = null; selectedDeparture = selections.LastOrDefault()?.Destination; choosingDeparture = selectedDeparture is null; }
     async Task RemoveAsync(int index) { if (busy) return; selections.RemoveAt(index); NewEntry(); await SelectionChanged.InvokeAsync(selections.ToArray()); }
 
     async Task CreateTransportAsync()
@@ -113,7 +134,7 @@ public partial class TransportWorkspace : IDisposable
         await RunAsync(async token =>
         {
             var saved = await Client.CreateTransportAsync(new() { ["name"] = transportName.Trim(), ["code"] = newCode, ["description"] = description }, token);
-            selectedTransport = saved; transports = new[] { saved }.Concat(transports.Where(v => v.TransportModeId != saved.TransportModeId)).ToArray();
+            selectedTransport = saved; showMap = true; transports = new[] { saved }.Concat(transports.Where(v => v.TransportModeId != saved.TransportModeId)).ToArray();
             status = "Transport entry saved.";
         });
     }
@@ -121,6 +142,7 @@ public partial class TransportWorkspace : IDisposable
     async Task CreatePointAsync()
     {
         if (!canWrite || busy) return;
+        var departure = choosingDeparture;
         if (string.IsNullOrWhiteSpace(pointName) || !Types.Contains(newType) ||
             !decimal.TryParse(lat, NumberStyles.Float, CultureInfo.InvariantCulture, out var latitude) || latitude is < -90 or > 90 ||
             !decimal.TryParse(lon, NumberStyles.Float, CultureInfo.InvariantCulture, out var longitude) || longitude is < -180 or > 180 ||
@@ -129,8 +151,8 @@ public partial class TransportWorkspace : IDisposable
         await RunAsync(async token =>
         {
             var saved = await Client.CreatePointAsync(new() { ["name"] = pointName.Trim(), ["type"] = newType, ["address"] = address, ["lat"] = latitude, ["lon"] = longitude, ["sourceId"] = string.IsNullOrWhiteSpace(sourceId) ? null : Guid.Parse(sourceId) }, token);
-            selectedPoint = saved; points = new[] { saved }.Concat(points.Where(v => v.RoutePointId != saved.RoutePointId)).ToArray();
-            status = "Destination location saved.";
+            ApplyPoint(saved, departure); points = new[] { saved }.Concat(points.Where(v => v.RoutePointId != saved.RoutePointId)).ToArray();
+            status = "Location saved.";
         });
     }
 
@@ -149,8 +171,8 @@ public partial class TransportWorkspace : IDisposable
             error = failure.Status switch { 404 => "This saved transport or location is no longer available. Refresh the catalogue.", 400 or 422 => "Check the transport or location form fields. Your entries are retained.", _ => failure.Message };
             if (failure.Status == 401)
             {
-                signedIn = false; canWrite = false; selections.Clear(); transports = []; points = []; selectedTransport = null; selectedPoint = null;
-                transportName = description = pointName = address = lat = lon = sourceId = transportQuery = pointQuery = code = type = string.Empty;
+                signedIn = false; canWrite = false; selections.Clear(); transports = []; points = []; selectedTransport = null; selectedPoint = selectedDeparture = null; choosingDeparture = true;
+                transportName = description = pointName = address = lat = lon = sourceId = pointQuery = type = string.Empty;
                 await SelectionChanged.InvokeAsync(selections.ToArray());
             }
         }
