@@ -7,8 +7,6 @@ namespace TravelTracker.Domain.Models;
  * Stays and visits are deferred (roadmap concepts in docs/domain.md).
  */
 public sealed class Trip {
-    private static readonly HashSet<string> TransportCodes = ["car", "bus", "train", "pedestrian", "bike", "plane"];
-
     /** Trip name. */
     public string Name { get; }
     /** Zone the traveller enters times in. */
@@ -68,7 +66,7 @@ public sealed class Trip {
             var leg = legs[i];
             var path = $"legs[{i}]";
             if (leg.Sequence != i + 1) Fail($"{path}.sequence", $"expected sequence {i + 1} but got {leg.Sequence}; legs must be ordered without gaps.");
-            if (!TransportCodes.Contains(leg.TransportCode)) Fail($"{path}.transportCode", $"'{leg.TransportCode}' is not one of {string.Join(", ", TransportCodes)}.");
+            if (leg.Transport.TransportModeId == Guid.Empty) Fail($"{path}.transport", "a transport mode is required.");
             if (leg.Arrival <= leg.Departure) Fail($"{path}.arrival", "arrival must be after departure.");
             if (leg.Departure < start) Fail($"{path}.departure", "departure is before the trip start.");
             if (leg.Arrival > end) Fail($"{path}.arrival", "arrival is after the trip end.");
@@ -76,14 +74,14 @@ public sealed class Trip {
             CheckZoneOffset(leg.Arrival, zone, $"{path}.arrival", Fail);
             if (i == 0) continue;
             var previous = legs[i - 1];
-            if (leg.From.RoutePointId != previous.To.RoutePointId) Fail($"{path}.from", "must start where the previous leg ended.");
+            if (leg.From.PlaceId != previous.To.PlaceId) Fail($"{path}.from", "must start where the previous leg ended.");
             if (leg.Departure < previous.Arrival) Fail($"{path}.departure", "overlaps the previous leg; depart at or after its arrival.");
         }
         var first = legs[0];
         var last = legs[^1];
         if (first.From.Type != "accommodation") Fail("legs[0].from", "a trip must start at an accommodation.");
         if (isRoundTrip) {
-            if (last.To.RoutePointId != first.From.RoutePointId) Fail($"legs[{legs.Count - 1}].to", "a round trip must return to where it started.");
+            if (last.To.PlaceId != first.From.PlaceId) Fail($"legs[{legs.Count - 1}].to", "a round trip must return to where it started.");
             if (!legs.Any(leg => leg.To.Type == "attraction")) Fail("legs", "a round trip must include at least one attraction.");
         } else if (last.To.Type != "attraction") Fail($"legs[{legs.Count - 1}].to", "a one-way trip must end at an attraction.");
         return errors;
