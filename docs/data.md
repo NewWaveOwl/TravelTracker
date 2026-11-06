@@ -1,14 +1,14 @@
 # Data Layer
 
-[TravelTracker.Attractions.Data](../src/TravelTracker.Attractions.Data) owns the implemented PostgreSQL/EF Core context, migrations, attraction repository and identity allocator. [TravelTracker.Data](../src/TravelTracker.Data) retains historical unused in-memory helpers and other unfinished service contracts. The historical [SQL schema](../src/Database/schema.sql) is not the applied migration history of Attractions. See [migration/startup/ownership and test instructions](attractions-service.md).
+[TravelTracker.Attractions.Data](../src/TravelTracker.Attractions.Data) and [TravelTracker.Accommodations.Data](../src/TravelTracker.Accommodations.Data) own their PostgreSQL/EF Core contexts, migrations and repositories. [TravelTracker.Data](../src/TravelTracker.Data) retains historical unused in-memory helpers and other unfinished service contracts. The historical [SQL schema](../src/Database/schema.sql) is not the applied migration history of either independent service. See the [Attractions](attractions-service.md) and [Accommodations](accommodations-service.md) startup and test instructions.
 
 ## Selected database
 
-**PostgreSQL is the selected database**, confirmed by the repository owner on 2026-10-28. EF Core persistence uses the `Npgsql.EntityFrameworkCore.PostgreSQL` provider. This resolves database decision 3 in [Milestone 3 contracts](milestone-3-contracts.md) for #35, #36 and the persistence work in #41. Provider package versions must be compatible with the project's .NET/EF Core version; no PostgreSQL server version has been selected here.
+**PostgreSQL is the selected database**, confirmed by the repository owner on 2026-10-28. EF Core persistence uses the `Npgsql.EntityFrameworkCore.PostgreSQL` provider. This resolves database decision 3 in [Milestone 3 contracts](milestone-3-contracts.md) for #35, #36, #38 and the persistence work in #41. Provider package versions must be compatible with the project's .NET/EF Core version; no PostgreSQL server version has been selected here.
 
 Keep each service's database ownership separate. Domain models remain free of EF Core/Npgsql dependencies; provider configuration, mappings and migrations belong in Data and API composition. Generate and verify migrations against PostgreSQL, and use isolated PostgreSQL databases for relational persistence tests. EF InMemory is the default test-only provider for application/domain/HTTP/security tests; run `dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"` without PostgreSQL. Tests marked `Category=PostgreSQL` retain real constraints, migrations, locking, rollback and restart checks with `TRAVELTRACKER_TEST_POSTGRES` (CREATEDB). EF InMemory and SQLite do not substitute for that relational evidence. Production remains PostgreSQL; no runtime in-memory switch is added. Connection strings and credentials come from environment-specific configuration and must not be committed or logged.
 
-PostgreSQL is now implemented for the independent Attractions service. Transport/Route Points also has independent PostgreSQL persistence; see [Transport service](transport-service.md). The existing SQL schema remains a historical foundation, separate from Attractions migrations. See [Npgsql's provider documentation](https://www.npgsql.org/efcore/).
+PostgreSQL is implemented for the independent Attractions, Accommodations, Users and Transport services. Transport/Route Points share their Transport service database; see [Transport service](transport-service.md). The existing SQL schema remains a historical foundation, separate from each service's migrations. See [Npgsql's provider documentation](https://www.npgsql.org/efcore/).
 
 ## Schema
 
@@ -19,6 +19,10 @@ API bearer authentication adds no token storage or signing keys to Data. The ind
 `TravelTracker.Users.Data` references its own Domain and EF Core/Npgsql only. Its committed migrations create account, permanent bootstrap-consumption and administrator-audit records. Public IDs are application-issued UUIDv7 values. Role changes and bootstrap share a transaction advisory lock, recheck live actor/target standing and roles, protect the last active administrator, and save the role plus actor/target/before/after/reason audit atomically. Listing also checks live administrator authority within the database transaction. First-use provisioning creates an active traveller and preserves existing standing and roles. The account row stores editable profile fields separately from verified provider email. A filtered unique index enforces case-insensitive username uniqueness. Profile writes check active standing and use an optimistic concurrency token.
 
 Use a separate `ConnectionStrings:Users`; the Attractions service consumes the authenticated HTTPS access contract and never reads Users tables. Production uses PostgreSQL. Users HTTP tests use an isolated test repository; Marked PostgreSQL tests exercise migrations, profile persistence, concurrency, permanent bootstrap consumption and audit rollback against disposable databases.
+
+## Accommodations persistence
+
+`TravelTracker.Accommodations.Data` references its service-owned Domain and EF Core/Npgsql. Its initial migration creates the `Accommodations` catalogue table with a UUID primary key, name, address, decimal coordinates, validated owner issuer/subject and `IsShared`. Database checks enforce nonblank names, coordinate ranges and nonblank owner identity. The repository applies private/shared visibility predicates in PostgreSQL before materializing search or detail results. The Accommodations database is separate from the historical shared schema and every other service database. Configure `ConnectionStrings:Accommodations`; migrations are opt-in at startup through `Database:ApplyMigrations`.
 
 Enums: `TransportMode` (`car`, `bus`, `train`, `pedestrian`, `plane`), `TripType` (`one_way`, `round_trip`).
 
@@ -39,6 +43,7 @@ Note: `Trips` stores one leg directly on the row (one transport, one departure, 
 |---|---|---|
 | [IUserRepository](../src/TravelTracker.Data/Repositories/IUserRepository.cs) | internal / `Guid` | `GetByIdAsync`, `GetByEmailAsync`, `GetAllAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ChangeStatusAsync` |
 | [IAccomadationRepository](../src/TravelTracker.Data/Repositories/IAccomadationRepository.cs) | internal / `Guid` | `GetByIdAsync`, `GetAllAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync` |
+| [IAccommodationRepository](../src/TravelTracker.Accommodations.Data/Repositories/IAccommodationRepository.cs) | public / `Guid` | `GetVisibleAsync`, `GetVisibleByIdAsync`, `AddAsync` |
 | [IAttractionRepository](../src/TravelTracker.Attractions.Data/Repositories/IAttractionRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync` |
 | [ITransportModeRepository](../src/TravelTracker.Transport.Data/Repositories/ITransportModeRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `AddAsync`, `UpdateAsync` |
 | [ISettingsRepository](../src/TravelTracker.Data/Repositories/ISettingsRepository.cs) | public / `Guid` (public id) | `GetByUserIdAsync`, `UpsertAsync` |
@@ -55,7 +60,7 @@ Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: J
 
 ## Implemented service repositories
 
-Attractions owns its EF context, mappings and migration history. Transport owns `TransportDbContext`, `EfTransportModeRepository`, `EfRoutePointRepository` and the initial Transport migration. Both use PostgreSQL/Npgsql. Transport's dedicated tables store internal app-issued bigint keys and unique public UUIDs, enforce supported mode/type and coordinate constraints, and return detached domain values. Seeds preserve the existing sample public identities and cover all six modes, including bike. SourceId is unverified metadata with no foreign key. See [Transport startup, allocation limits and relational testing](transport-service.md).
+Attractions owns its EF context, mappings and migration history. Accommodations owns `AccommodationsDbContext`, its mapping, initial migration and visibility-scoped repository. Transport owns `TransportDbContext`, `EfTransportModeRepository`, `EfRoutePointRepository` and the initial Transport migration. All use PostgreSQL/Npgsql. Accommodation rows store their public UUID directly as the primary key with owner/visibility and coordinate constraints. Transport's dedicated tables store internal app-issued bigint keys and unique public UUIDs, enforce supported mode/type and coordinate constraints, and return detached domain values. Seeds preserve the existing sample public identities and cover all six modes, including bike. SourceId is unverified metadata with no foreign key. See [Transport startup, allocation limits and relational testing](transport-service.md).
 
 Historical in-memory repositories in `TravelTracker.Data` remain unused by runnable hosts; shared Trip domain tests still use the historical identity/model foundation. They do not represent production persistence.
 
