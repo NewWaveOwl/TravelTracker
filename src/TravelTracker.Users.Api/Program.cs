@@ -1,3 +1,4 @@
+using TravelTracker.Security.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
@@ -19,7 +20,7 @@ public partial class UsersProgram
      */
     public static async Task Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = ApiHostBuilder.Create(args);
         builder.Services.AddControllers();
         builder.Services.AddApiBearerAuthentication(builder.Configuration);
         builder.Services.AddOptions<AuthorizationOptions>().Configure<IOptions<BearerSettings>>((options, settings) =>
