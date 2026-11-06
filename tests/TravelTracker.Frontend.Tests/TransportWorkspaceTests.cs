@@ -37,6 +37,9 @@ public sealed class TransportWorkspaceTests : BunitContext
         ((ClaimsIdentity)authentication.User.Identity!).AddClaim(new Claim(AccessTokenClaims.GrantedScope, write ? "catalogue.read catalogue.write" : "catalogue.read"));
         var client = new ProtectedClient(authentication, new ServiceDirectory(new Dictionary<string, string> { ["Transport"] = "http://localhost:5105" }), new ServiceClient(new HttpClient(handler), NullLogger<ServiceClient>.Instance), clock, NullLogger<ProtectedClient>.Instance, sessions);
         Services.AddSingleton<TimeProvider>(clock); Services.AddSingleton(sessions); Services.AddSingleton<AuthenticationStateProvider>(authentication); Services.AddSingleton(new TransportClient(client));
+        Services.AddSingleton(new TravelTracker.Frontend.Api.Settings.SettingsClient(client));
+        Services.AddScoped<TravelTracker.Frontend.Services.UserPreferences>();
+        Services.AddLogging();
         return authentication;
     }
 

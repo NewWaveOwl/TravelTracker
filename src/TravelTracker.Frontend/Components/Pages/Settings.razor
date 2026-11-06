@@ -1,4 +1,109 @@
 @page "/settings"
+@using TravelTracker.Frontend.Features.Settings
+@using TravelTracker.Frontend.Api
+@implements IDisposable
 
 <PageHeading Title="Settings" />
-<Feedback Kind="FeedbackKind.Empty">Your preferences will be available when the Settings service is connected.</Feedback>
+<div class="settings-page">
+@if (!signedIn && !hasValues && loaded)
+{
+    <Feedback Kind="FeedbackKind.Permission" Title="Sign in to manage your settings"><a href="account">Go to your account</a> to sign in.</Feedback>
+}
+else if (!loaded)
+{
+    <Feedback Kind="FeedbackKind.Loading">Loading your settings…</Feedback>
+}
+else
+{
+    @if (error is not null)
+    {
+        <section class="settings-alert" role="alert" tabindex="-1" @ref="errorSummary">
+            <h2>@ErrorHeading</h2>
+            <p>@error.Message</p>
+            @if (VisibleErrors.Any())
+            {
+                <ul>@foreach (var field in VisibleErrors) { <li><a href="@("#" + FieldIds[field.Key])">@string.Join(" ", field.Value)</a></li> }</ul>
+            }
+            @if (!signedIn) { <p><a href="account">Go to your account</a> to sign in again.</p> }
+            @if (conflict) { <button class="secondary" @onclick="LoadAsync" disabled="@loading">Reload saved settings</button> }
+            else if (!hasValues && signedIn) { <button class="secondary" @onclick="LoadAsync" disabled="@loading">Retry loading</button> }
+        </section>
+    }
+    @if (loading && hasValues) { <p class="settings-status" role="status">Loading saved settings…</p> }
+    @if (saving) { <p class="settings-status" role="status">Saving settings…</p> }
+    else if (status is not null) { <p class="settings-status" role="status">@status</p> }
+    @if (signedIn && !canWrite && hasValues) { <p class="settings-status" role="status">Read-only access. Changing settings requires settings write permission.</p> }
+
+    @if (hasValues)
+    {
+        <form class="settings-form" aria-labelledby="settings-heading" aria-busy="@((saving || loading).ToString().ToLowerInvariant())" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <h2 id="settings-heading">Your preferences</h2>
+            <fieldset disabled="@(saving || !canWrite || !signedIn)">
+                <div class="settings-grid">
+                    <div class="settings-field">
+                        <label for="settings-theme">Theme
+                            <select id="settings-theme" @bind="draft.Theme" aria-invalid="@(Invalid("theme"))" aria-describedby="@(Described("theme", "settings-theme-error"))">
+                                @foreach (var theme in SettingsRules.Themes) { <option value="@theme">@ThemeLabel(theme)</option> }
+                            </select>
+                        </label>
+                        @if (FieldError("theme") is { } themeMessage) { <small id="settings-theme-error" class="field-error">@themeMessage</small> }
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="settings-transport">Preferred transport mode
+                            <select id="settings-transport" @bind="draft.TransportMode" aria-invalid="@(Invalid("preferredTransportMode"))" aria-describedby="@(Described("preferredTransportMode", "settings-transport-error"))">
+                                @foreach (var mode in SettingsRules.TransportModes) { <option value="@mode">@ModeLabel(mode)</option> }
+                            </select>
+                        </label>
+                        @if (FieldError("preferredTransportMode") is { } transportMessage) { <small id="settings-transport-error" class="field-error">@transportMessage</small> }
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="settings-latitude">Default map latitude (-90 to 90)
+                            <input id="settings-latitude" inputmode="decimal" @bind="draft.Latitude" @bind:event="oninput" aria-invalid="@(Invalid("defaultMapLatitude"))" aria-describedby="@(Described("defaultMapLatitude", "settings-latitude-error"))" />
+                        </label>
+                        @if (FieldError("defaultMapLatitude") is { } latitudeMessage) { <small id="settings-latitude-error" class="field-error">@latitudeMessage</small> }
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="settings-longitude">Default map longitude (-180 to 180)
+                            <input id="settings-longitude" inputmode="decimal" @bind="draft.Longitude" @bind:event="oninput" aria-invalid="@(Invalid("defaultMapLongitude"))" aria-describedby="@(Described("defaultMapLongitude", "settings-longitude-error"))" />
+                        </label>
+                        @if (FieldError("defaultMapLongitude") is { } longitudeMessage) { <small id="settings-longitude-error" class="field-error">@longitudeMessage</small> }
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="settings-zoom">Default map zoom (0 to 20)
+                            <input id="settings-zoom" inputmode="numeric" @bind="draft.Zoom" @bind:event="oninput" aria-invalid="@(Invalid("defaultMapZoom"))" aria-describedby="@(Described("defaultMapZoom", "settings-zoom-error"))" />
+                        </label>
+                        @if (FieldError("defaultMapZoom") is { } zoomMessage) { <small id="settings-zoom-error" class="field-error">@zoomMessage</small> }
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="settings-timezone">Time zone (IANA name)
+                            <input id="settings-timezone" list="settings-time-zones" autocomplete="off" @bind="draft.TimeZone" @bind:event="oninput" aria-invalid="@(Invalid("timeZone"))" aria-describedby="@(Described("timeZone", "settings-timezone-error"))" />
+                        </label>
+                        @if (FieldError("timeZone") is { } timezoneMessage) { <small id="settings-timezone-error" class="field-error">@timezoneMessage</small> }
+                    </div>
+                    <datalist id="settings-time-zones">@foreach (var zone in TimeZoneNames) { <option value="@zone"></option> }</datalist>
+                </div>
+                <div class="settings-actions">
+                    <button type="submit" disabled="@(!CanSave)">@(saving ? "Saving…" : "Save settings")</button>
+                </div>
+            </fieldset>
+        </form>
+
+        <section class="settings-deferred" aria-labelledby="deferred-heading">
+            <h2 id="deferred-heading">Saved for later features</h2>
+            <p>These preferences are stored with your account. This client does not apply them yet, so they change nothing on screen:</p>
+            <ul>
+                <li><strong>Theme</strong>: this client has no dark palette yet.</li>
+                <li><strong>Default map view</strong>: this client has no map yet.</li>
+                <li><strong>Time zone</strong>: this client does not show trip times yet.</li>
+            </ul>
+            <p>The preferred transport mode is applied now as the default mode when you create a transport entry.</p>
+        </section>
+    }
+}
+</div>
+
