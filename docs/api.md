@@ -12,11 +12,10 @@ Attractions and Accommodations each have dedicated Api/Data/Domain projects and 
 |---|---|---|
 | [IAttractionService](../src/TravelTracker.Attractions.Api/Services/IAttractionService.cs) | `Attraction` | `GetAllAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync` |
 | [ITransportModeService](../src/TravelTracker.Transport.Api/Services/ITransportModeService.cs) | `TransportMode` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `CreateAsync`, `UpdateAsync` |
-| [ISettingsService](../src/TravelTracker.Api/Services/ISettingsService.cs) | `UserSettings` (empty type declaration) | `GetOrCreateAsync`, `UpdateAsync` |
 | [ITripService](../src/TravelTracker.Api/Services/ITripService.cs) | `Trip`, `TripLeg` (empty type declarations) | `GetHistoryAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
 | [ITripMapService](../src/TravelTracker.Api/Services/ITripMapService.cs) | `TripMapPoint` (empty type declaration) | `GetMapPointsAsync` |
 
-The Attraction, Accommodation, TransportMode and Users profile interfaces have concrete implementations in their owning service APIs. Trips/Settings/map retain their existing contracts but have no runtime implementation or endpoint. The historical shared entity identity is an `EntityId<T>` with an internal `Id64` key and public uuidv7; the independent Accommodation service uses a public UUIDv7 as its database primary key. APIs expose only public GUIDs and DTOs, never persistence keys or owner identity.
+The Attraction, Accommodation, TransportMode and Users profile interfaces have concrete implementations in their owning service APIs. Settings is implemented by the independent Settings service ([settings-service.md](settings-service.md)); the shared settings placeholder and its legacy interfaces were removed. Trips/map retain their existing contracts but have no runtime implementation or endpoint. The historical shared entity identity is an `EntityId<T>` with an internal `Id64` key and public uuidv7; the independent Accommodation service uses a public UUIDv7 as its database primary key. APIs expose only public GUIDs and DTOs, never persistence keys or owner identity.
 
 The historical `Accomodation` model and `IAccomadationRepository` remain unchanged for compatibility; the Accommodations API owns a separate `Accommodation` model, repository and HTTP contract.
 
@@ -31,7 +30,7 @@ The historical `Accomodation` model and `IAccomadationRepository` remain unchang
 | Transport | `GET /transport-modes`, `GET /transport-modes/{id}` |
 | Attractions | `GET/POST /attractions`, `GET/PATCH /attractions/{id}` |
 | Trips | `GET /trips` (the caller's own trips), `POST /trips`, `GET/PATCH/DELETE /trips/{id}`, `PUT /trips/{id}/legs`, `GET /trips/{id}/map-points` |
-| Settings | `GET/PUT /settings` (the caller's own settings) |
+| Settings | `GET/PUT /settings` (the caller's own settings; `settings.read` / `settings.write`; `ETag` and `If-Match` required on PUT; see [settings-service.md](settings-service.md)) |
 | Ticket import (future) | `POST /ticket-imports`, `GET /ticket-imports/{id}`, `POST /ticket-imports/{id}/confirm` |
 | All | `GET /health` |
 

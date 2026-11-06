@@ -33,7 +33,7 @@ Enums: `TransportMode` (`car`, `bus`, `train`, `pedestrian`, `plane`), `TripType
 | `Attractions` | `Id` bigint PK (app-issued), `Uuid` unique, `Name`, `Address` |
 | `Trips` | `Id` bigint PK (app-issued), `Uuid` unique, `UserId` FK -> `Users`, `Transport`, `Type`, `DeparturePlaceId` FK -> `Accommodations`, `DestinationPlaceId` FK -> `Attractions` |
 
-No tables yet for `UserSettings`, `TripLegs`, `Stays`, `Visits`, `TicketImports`, route points, scheduled transport routes or intermediate stops.
+No tables yet for `TripLegs`, `Stays`, `Visits`, `TicketImports`, route points, scheduled transport routes or intermediate stops.
 
 Note: `Trips` stores one leg directly on the row (one transport, one departure, one destination). `ITripRepository.ReplaceLegsAsync` already assumes multiple legs per trip, so the schema needs a `TripLegs` table before that method can be implemented.
 
@@ -46,12 +46,11 @@ Note: `Trips` stores one leg directly on the row (one transport, one departure, 
 | [IAccommodationRepository](../src/TravelTracker.Accommodations.Data/Repositories/IAccommodationRepository.cs) | public / `Guid` | `GetVisibleAsync`, `GetVisibleByIdAsync`, `AddAsync` |
 | [IAttractionRepository](../src/TravelTracker.Attractions.Data/Repositories/IAttractionRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync` |
 | [ITransportModeRepository](../src/TravelTracker.Transport.Data/Repositories/ITransportModeRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `AddAsync`, `UpdateAsync` |
-| [ISettingsRepository](../src/TravelTracker.Data/Repositories/ISettingsRepository.cs) | public / `Guid` (public id) | `GetByUserIdAsync`, `UpsertAsync` |
 | [ITripRepository](../src/TravelTracker.Data/Repositories/ITripRepository.cs) | public / `Guid` (public id) | `GetAllByUserIdAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
 
 `IUserRepository` and `IAccomadationRepository` are `internal`, no public path out of `TravelTracker.Data` for them yet.
 
-The existing `IAccomadationRepository`/`Accomodation` spellings and all signatures are kept. User/accommodation create/update methods return the saved entity; attraction/transport add/update, settings upsert and trip replace-legs methods return task completion. Trips/Settings referenced types now have empty partial declarations for compilation; their data contracts and persistence remain unfinished.
+The existing `IAccomadationRepository`/`Accomodation` spellings and all signatures are kept. User/accommodation create/update methods return the saved entity; attraction/transport add/update, trip replace-legs methods return task completion. Trip referenced types now have empty partial declarations for compilation; their data contracts and persistence remain unfinished.
 
 ## Ownership
 

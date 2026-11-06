@@ -37,7 +37,7 @@ The Api [response DTOs](../src/TravelTracker.Transport.Api/Contracts) preserve t
 
 ## Unfinished feature types
 
-[UserSettings](../src/TravelTracker.Domain/Models/UserSettings.cs) and [TripMapPoint](../src/TravelTracker.Domain/Models/TripMapPoint.cs) are empty partial declarations needed by the existing interfaces. They supply no fields, persistence or endpoints. Stay, Visit and TicketImport remain roadmap concepts; stay/visit invariants are deferred.
+The independent [Settings domain](../src/TravelTracker.Settings.Domain/Models/UserSettings.cs) is the only `UserSettings` type; it defines the preference model, defaults and validation. The shared [TripMapPoint](../src/TravelTracker.Domain/Models/TripMapPoint.cs) is an empty partial declaration needed by the existing interfaces. It supplies no fields, persistence or endpoints. Stay, Visit and TicketImport remain roadmap concepts; stay/visit invariants are deferred.
 
 ## Trip rules (implemented, pure domain)
 
