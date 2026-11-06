@@ -87,6 +87,14 @@ These changes are in `TravelTracker.Security` and therefore apply to every API h
 - Requests that match no route now return `404` for anonymous callers and for callers with any scope. Before, the fallback catalogue policy answered `401` or `403` first. Endpoints that declare no policy are still guarded by the fallback (`catalogue.read`), and `/health` stays anonymous.
 - Every API host builds its host with `ApiHostBuilder.Create(args)`, which anchors the content root to the application folder instead of the working directory.
 
+## Frontend (#48)
+
+The Blazor client reads and saves preferences at `/settings` through its own typed client. Its base URL is `Services:Settings` in `src/TravelTracker.Frontend/appsettings.json` (`http://localhost:5107`). The client sends the signed-in session's token only to that configured service, and never sends a user identifier.
+
+- Saves send `If-Match` with the ETag from the last read. A `412` or `428` keeps the traveller's edits, blocks Save and offers **Reload saved settings**, which replaces the form with the saved values. A `400` maps field errors beside their inputs; `401`, `403`, `503` and network failures keep the edits and never show success. An unconfirmed network save asks the traveller to reload before saving again.
+- The saved transport mode is applied now: it is the default mode for new transport catalogue entries. Theme, default map view and time zone are saved but not yet applied, because the client has no dark palette, no map and no trip times; the page says so.
+- Client validation mirrors these rules so bad input is caught before a request. The service remains the authority.
+
 ## Not implemented
 
 - Time-zone validation uses the host's time zone database; Windows-only identifiers are not translated to IANA names.

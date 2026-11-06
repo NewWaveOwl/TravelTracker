@@ -85,7 +85,7 @@ The historical SQL schema in `src/Database/schema.sql` is not applied automatica
 
 ## Getting started
 
-The independent Blazor Web App lives in [src/TravelTracker.Frontend](src/TravelTracker.Frontend). Run `dotnet run --project src/TravelTracker.Frontend --launch-profile http` and open http://localhost:5100. It runs in interactive Server mode and calls the services over HTTP from the server, so no browser CORS or proxy setup is needed; service URLs live under `Services` in its `appsettings.json` (Attractions 5104, Transport 5105). It provides the Figma-based shell, shared form/status displays and public service health checks; Auth0 sign-in and a protected Transport read are on the account page once the `Auth0` settings are provided (see [Auth0 setup](docs/frontend-auth0.md)); trip saving remains a separate feature. Its tests are in `tests/TravelTracker.Frontend.Tests`.
+The independent Blazor Web App lives in [src/TravelTracker.Frontend](src/TravelTracker.Frontend). Run `dotnet run --project src/TravelTracker.Frontend --launch-profile http` and open http://localhost:5100. It runs in interactive Server mode and calls the services over HTTP from the server, so no browser CORS or proxy setup is needed; service URLs live under `Services` in its `appsettings.json` (Attractions 5104, Transport 5105, Settings 5107). It provides the Figma-based shell, shared form/status displays and public service health checks; Auth0 sign-in and a protected Transport read are on the account page once the `Auth0` settings are provided (see [Auth0 setup](docs/frontend-auth0.md)); trip saving remains a separate feature. Its tests are in `tests/TravelTracker.Frontend.Tests`.
 
 Install the **.NET 10 SDK**, then clone the repository:
 
