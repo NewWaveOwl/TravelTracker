@@ -9,6 +9,8 @@ public static class ScopePolicies
 {
     public const string CatalogueRead = "catalogue.read";
     public const string CatalogueWrite = "catalogue.write";
+    public const string SettingsRead = "settings.read";
+    public const string SettingsWrite = "settings.write";
 
     /**
      * Matches exact, case-sensitive OAuth scopes in space-separated or repeated claims.
