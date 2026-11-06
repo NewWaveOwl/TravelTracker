@@ -1,5 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using TravelTracker.Accommodations.Api;
 using TravelTracker.Accommodations.Api.Tests.Support;
 
 namespace TravelTracker.Accommodations.Api.Tests;
@@ -76,5 +79,35 @@ public sealed class AuthenticationTests
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Equal(0, factory.Users!.Calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Health_RemainsPublicWithMissingOrInvalidToken(bool invalidToken)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = invalidToken ? new("Bearer", "invalid") : null;
+
+        using var response = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Development_ShippedConfigurationStartsWithPublicHealthAndProtectedCollection()
+    {
+        // No ApiFactory overrides: load the repository's shipped Development settings, no other services running.
+        using var factory = new WebApplicationFactory<AccommodationsProgram>().WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        using var client = factory.CreateClient();
+
+        using var health = await client.GetAsync("/health");
+        using var collection = await client.GetAsync("/api/v1/accommodations");
+        using var swagger = await client.GetAsync("/swagger/v1/swagger.json");
+
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, collection.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, swagger.StatusCode);
     }
 }
