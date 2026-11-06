@@ -213,9 +213,4 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
             account.Status.ToString().ToLowerInvariant(),
             account.Role == UserRole.User ? "traveller" : "administrator"));
     }
-
-    /** Returns liveness only; it does not assert provider or PostgreSQL readiness. */
-    [HttpGet("/health")]
-    [AllowAnonymous]
-    public IResult Health() => Results.Ok(new { status = "ok", service = "Users" });
 }
