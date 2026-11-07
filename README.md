@@ -32,10 +32,10 @@ The following features are not yet available through the running application:
 - Trips, ordered itinerary legs, history and map views. Settings preferences are available through the independent Settings service ([docs/settings-service.md](docs/settings-service.md)).
 - Scheduled journeys, departure and arrival times, and stop timing.
 - PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
-- Persistent storage and endpoints for Trips.
+- Trip history, editing and deleting. Trips create and own-trip detail are implemented in the independent Trips service (see [Trips service](docs/trips-service.md)).
 - Complete traveller-facing feature screens (the Blazor navigation and HTTP foundation is in `src/TravelTracker.Frontend`).
 
-The historical shared user and `Accomodation` models remain for compatibility. The independent Accommodations service owns its own model, PostgreSQL store and HTTP endpoints. Trip/TripLeg domain rules are implemented, but their HTTP/persistence features remain unfinished. The independent Settings service implements `UserSettings`; the shared placeholder and legacy settings interfaces were removed. TripMapPoint remains a placeholder.
+The historical shared user and `Accomodation` models remain for compatibility. The independent Accommodations service owns its own model, PostgreSQL store and HTTP endpoints. Trip/TripLeg domain rules are implemented and the independent Trips service (port 5108) saves and returns own trips with PostgreSQL; trip history, editing and deleting remain unfinished. The independent Settings service implements `UserSettings`; the shared placeholder and legacy settings interfaces were removed. TripMapPoint remains a placeholder.
 
 A route point describes a reusable location. A transport entry describes a transport option. Neither currently represents a scheduled journey.
 
@@ -45,7 +45,7 @@ A route point describes a reusable location. A transport entry describes a trans
 - .NET 10 and ASP.NET Core.
 - Swagger/OpenAPI through Swashbuckle.
 - Independent PostgreSQL persistence for Accommodations, Attractions, Users and Transport/Route Points.
-- PostgreSQL through EF Core/Npgsql (owner decision, 2026-10-28), implemented for Accommodations, Attractions, Users, Transport and Settings; Trips persistence remains future work.
+- PostgreSQL through EF Core/Npgsql (owner decision, 2026-10-28), implemented for Accommodations, Attractions, Users, Transport, Settings and Trips.
 - xUnit and ASP.NET Core test hosts.
 - GitHub Actions for pull-request testing.
 

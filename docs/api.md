@@ -29,7 +29,7 @@ The historical `Accomodation` model and `IAccomadationRepository` remain unchang
 | Accommodations | `GET /accommodations`, `GET/POST/PATCH /accommodations/{id}` |
 | Transport | `GET /transport-modes`, `GET /transport-modes/{id}` |
 | Attractions | `GET/POST /attractions`, `GET/PATCH /attractions/{id}` |
-| Trips | `GET /trips` (the caller's own trips), `POST /trips`, `GET/PATCH/DELETE /trips/{id}`, `PUT /trips/{id}/legs`, `GET /trips/{id}/map-points` |
+| Trips (implemented on the Trips service: `POST /api/v1/trips`, `GET /api/v1/trips/{id}`; see [Trips service](trips-service.md)) | `GET /trips` (the caller's own trips), `GET/PATCH/DELETE /trips/{id}`, `PUT /trips/{id}/legs`, `GET /trips/{id}/map-points` remain future |
 | Settings | `GET/PUT /settings` (the caller's own settings; `settings.read` / `settings.write`; `ETag` and `If-Match` required on PUT; see [settings-service.md](settings-service.md)) |
 | Ticket import (future) | `POST /ticket-imports`, `GET /ticket-imports/{id}`, `POST /ticket-imports/{id}/confirm` |
 | All | `GET /health` |
