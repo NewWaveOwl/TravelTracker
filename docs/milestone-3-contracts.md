@@ -41,6 +41,9 @@ Current (implemented):
 
 - `TravelTracker.Domain`: models and identifier types. No EF Core, no web references. Verified in `TravelTracker.Domain.csproj`.
 - `TravelTracker.Data`: repositories, seed data and `EntityIdGenerator`. References Domain only. `InternalsVisibleTo` exposes `Id64` to Data.
+- `TravelTracker.Trips.Domain`: trip models (`Trip`, `TripLeg`, `TripPlace`, `TripTransport`, `TripTime`, `TripError`, `TripValidationException`, `TripMapPoint`). Plain SDK with no references, the same shape as the other services' Domain projects.
+- `TravelTracker.Trips.Data`: Trips EF Core context, migrations, `EfTripRepository` and the owner-scoped `ITripRepository` port. References Trips.Domain only.
+- `TravelTracker.Trips.Api`: the independent Trips host; the #40 reference clients, validator and save services live in `TravelTracker.Api/Trips` and are consumed by this host.
 - `TravelTracker.Transport.Api/Data/Domain`: independent Transport/Route Points boundary with PostgreSQL persistence and shared bearer security. See [startup and selection](transport-service.md).
 - `TravelTracker.Api`: library of remaining unimplemented service interfaces; no runnable catalogue endpoints.
 - `TravelTracker.Transport.Api.Tests`: Transport HTTP, bearer, selection and PostgreSQL tests. `TravelTracker.Api.Tests` retains shared Trip/identity tests.

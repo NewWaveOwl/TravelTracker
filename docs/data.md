@@ -1,6 +1,6 @@
 # Data Layer
 
-[TravelTracker.Attractions.Data](../src/TravelTracker.Attractions.Data) and [TravelTracker.Accommodations.Data](../src/TravelTracker.Accommodations.Data) own their PostgreSQL/EF Core contexts, migrations and repositories. [TravelTracker.Data](../src/TravelTracker.Data) retains historical unused in-memory helpers and other unfinished service contracts. The historical [SQL schema](../src/Database/schema.sql) is not the applied migration history of either independent service. See the [Attractions](attractions-service.md) and [Accommodations](accommodations-service.md) startup and test instructions.
+[TravelTracker.Attractions.Data](../src/TravelTracker.Attractions.Data), [TravelTracker.Accommodations.Data](../src/TravelTracker.Accommodations.Data) and [TravelTracker.Trips.Data](../src/TravelTracker.Trips.Data) own their PostgreSQL/EF Core contexts, migrations and repositories. Trips.Data references only [TravelTracker.Trips.Domain](../src/TravelTracker.Trips.Domain); its repository port `ITripRepository` lives beside its implementation, like the Settings and other service repositories. [TravelTracker.Data](../src/TravelTracker.Data) retains historical unused in-memory helpers and other unfinished service contracts. The historical [SQL schema](../src/Database/schema.sql) is not the applied migration history of either independent service. See the [Attractions](attractions-service.md) and [Accommodations](accommodations-service.md) startup and test instructions.
 
 ## Selected database
 
@@ -35,7 +35,7 @@ Enums: `TransportMode` (`car`, `bus`, `train`, `pedestrian`, `plane`), `TripType
 
 No tables yet for `TripLegs`, `Stays`, `Visits`, `TicketImports`, route points, scheduled transport routes or intermediate stops.
 
-Note: `Trips` stores one leg directly on the row (one transport, one departure, one destination). `ITripRepository.ReplaceLegsAsync` already assumes multiple legs per trip, so the schema needs a `TripLegs` table before that method can be implemented.
+Note: the historical `Trips` row above describes the legacy shape. The independent Trips service (`TravelTracker.Trips.Data`) stores trips in a `Trips` table with owner columns and a `TripLegs` table with ordered legs and snapshot columns; see [Trips service](trips-service.md).
 
 ## Repository interfaces
 
@@ -46,7 +46,7 @@ Note: `Trips` stores one leg directly on the row (one transport, one departure, 
 | [IAccommodationRepository](../src/TravelTracker.Accommodations.Data/Repositories/IAccommodationRepository.cs) | public / `Guid` | `GetVisibleAsync`, `GetVisibleByIdAsync`, `AddAsync` |
 | [IAttractionRepository](../src/TravelTracker.Attractions.Data/Repositories/IAttractionRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync` |
 | [ITransportModeRepository](../src/TravelTracker.Transport.Data/Repositories/ITransportModeRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `AddAsync`, `UpdateAsync` |
-| [ITripRepository](../src/TravelTracker.Data/Repositories/ITripRepository.cs) | public / `Guid` (public id) | `GetAllByUserIdAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
+| [ITripRepository](../src/TravelTracker.Trips.Data/Repositories/ITripRepository.cs) (Trips.Data) | public / `Guid` (public id) | owner-scoped `AddAsync(trip, issuer, subject)` and `GetOwnedByIdAsync`; history, update and delete are not in the contract yet |
 
 `IUserRepository` and `IAccomadationRepository` are `internal`, no public path out of `TravelTracker.Data` for them yet.
 
@@ -61,7 +61,7 @@ Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: J
 
 Attractions owns its EF context, mappings and migration history. Accommodations owns `AccommodationsDbContext`, its mapping, initial migration and visibility-scoped repository. Transport owns `TransportDbContext`, `EfTransportModeRepository`, `EfRoutePointRepository` and the initial Transport migration. All use PostgreSQL/Npgsql. Accommodation rows store their public UUID directly as the primary key with owner/visibility and coordinate constraints. Transport's dedicated tables store internal app-issued bigint keys and unique public UUIDs, enforce supported mode/type and coordinate constraints, and return detached domain values. Seeds preserve the existing sample public identities and cover all six modes, including bike. SourceId is unverified metadata with no foreign key. See [Transport startup, allocation limits and relational testing](transport-service.md).
 
-Historical in-memory repositories in `TravelTracker.Data` remain unused by runnable hosts; shared Trip domain tests still use the historical identity/model foundation. They do not represent production persistence.
+Historical in-memory repositories in `TravelTracker.Data` remain unused by runnable hosts. Trip domain tests live in `tests/TravelTracker.Trips.Domain.Tests`. They do not represent production persistence.
 
 ## Planned trip-point and route persistence
 

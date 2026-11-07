@@ -67,10 +67,16 @@ A route point describes a reusable location. A transport entry describes a trans
 | `src/TravelTracker.Transport.Api` | Independent Transport/Route Points HTTP operations and startup on 5105. |
 | `src/TravelTracker.Transport.Data` | Transport-owned PostgreSQL context, migrations and repositories. |
 | `src/TravelTracker.Transport.Domain` | Transport entities and identity types. |
-| `src/TravelTracker.Api` | Unimplemented service interfaces (library, no web host). |
+| `src/TravelTracker.Api` | Unimplemented service interfaces and the #40 trip reference clients, validator and save services (library, no web host). |
 | `src/TravelTracker.Data` | Repositories, sample data and identity generation. |
 | `src/TravelTracker.Domain` | Shared models and identifier types. |
-| `tests/TravelTracker.Api.Tests` | Shared trip-domain and historical identity tests. |
+| `src/TravelTracker.Trips.Api` | Independent Trips HTTP operations and startup on 5108. |
+| `src/TravelTracker.Trips.Data` | Trips-owned PostgreSQL context, migrations, repository port and implementation. |
+| `src/TravelTracker.Trips.Domain` | Trip, leg, place snapshot and itinerary rules without web/EF dependencies. |
+| `tests/TravelTracker.Api.Tests` | Trip reference validation, save/read services and historical identity tests. |
+| `tests/TravelTracker.Trips.Domain.Tests` | Pure itinerary rule tests. |
+| `tests/TravelTracker.Trips.Api.Tests` | Trips HTTP, bearer, ownership and status tests. |
+| `tests/TravelTracker.Trips.Data.Tests` | PostgreSQL trip persistence, rollback and restart tests (`Category=PostgreSQL`). |
 | `tests/TravelTracker.Accommodations.Domain.Tests` | Accommodation model validation and ownership invariants. |
 | `tests/TravelTracker.Accommodations.Data.Tests` | PostgreSQL migration, visibility queries and persistence tests. |
 | `tests/TravelTracker.Accommodations.Api.Tests` | Accommodation HTTP contracts, bearer scope and privacy tests. |

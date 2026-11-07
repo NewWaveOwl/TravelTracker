@@ -1,6 +1,17 @@
 # Independent Trips service (#41)
 
-The Trips service saves a complete itinerary and returns it only to its owner. It is hosted by `TravelTracker.Trips.Api`, stores its trips in its own PostgreSQL database (`TravelTracker.Trips.Data`), and runs on port **5108**. The trip domain rules and the reference validator are the shared `TravelTracker.Domain` `Trip` types and the `TravelTracker.Api` trip services from #40.
+The Trips service saves a complete itinerary and returns it only to its owner. It is hosted by `TravelTracker.Trips.Api`, stores its trips in its own PostgreSQL database (`TravelTracker.Trips.Data`), and runs on port **5108**. The trip domain rules live in `TravelTracker.Trips.Domain`, the repository port and PostgreSQL implementation in `TravelTracker.Trips.Data`, and the reference validator and save and read services in `TravelTracker.Api/Trips` (from #40).
+
+## Project layout and dependency direction
+
+| Project | References | Owns |
+| --- | --- | --- |
+| `TravelTracker.Trips.Domain` | none (plain SDK) | `Trip`, `TripLeg`, `TripPlace`, `TripTransport`, `TripTime`, `TripError`, `TripValidationException`, `TripMapPoint`; the itinerary rules |
+| `TravelTracker.Trips.Data` | `TravelTracker.Trips.Domain` only | EF Core context, mappings, migration, `ITripRepository` and `EfTripRepository` |
+| `TravelTracker.Api` (library) | `TravelTracker.Trips.Domain`, `TravelTracker.Trips.Data`, `TravelTracker.Data`, `TravelTracker.Domain` | reference clients, validator, save and read services |
+| `TravelTracker.Trips.Api` (host) | `TravelTracker.Api`, `TravelTracker.Trips.Data`, `TravelTracker.Security` | HTTP controllers, composition, exception mapping |
+
+Dependency direction stays Api to Data to Domain. `TravelTracker.Data` no longer contains any trip type.
 
 It does not read the catalogue services' tables. Before saving, it asks the Accommodations, Attractions and Transport services over HTTP, forwarding the caller's token, and asks Users for live account standing with a backend credential.
 
@@ -104,7 +115,8 @@ Instants are written in UTC because Npgsql refuses a non-zero offset for `timest
 
 | Project | What it proves | Requirement |
 | --- | --- | --- |
-| `tests/TravelTracker.Api.Tests` | Domain rules, reference validation, save service and logs | None |
+| `tests/TravelTracker.Trips.Domain.Tests` | Itinerary rules: ordering, connections, endpoints, time zone offsets | None |
+| `tests/TravelTracker.Api.Tests` | Reference validation, save service and logs | None |
 | `tests/TravelTracker.Trips.Api.Tests` | Real signed-JWT validation, scope matrix, status mapping, ownership, standing rules, fail-closed paths, public DTO shape, health | None (owner-aware in-memory store and scripted upstream) |
 | `tests/TravelTracker.Trips.Data.Tests` | PostgreSQL migration, atomic rollback when a leg write fails, restart preservation with offsets, owner scoping, database check constraints | `TRAVELTRACKER_TEST_POSTGRES` with CREATEDB; tests are marked `Category=PostgreSQL` |
 
