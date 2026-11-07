@@ -12,7 +12,7 @@ Database decision 3 is resolved: the owner selected PostgreSQL with EF Core/Npgs
 ## 1. Establish ground truth
 
 1. Read, in this order: `docs/design.md` (purpose, releases M1-M3, trip rules, capabilities), `docs/domain.md` (entities, identifiers, planned trip rules), `docs/api.md` (current contract), `docs/data.md`, `docs/trip-points-and-routes.md`, then `README.md` and `CONTRIBUTING.md`.
-2. Read the source for the area you are planning. Build a two-column list: **implemented** (reachable through the running API and covered by tests) versus **planned only** (docs, empty partial types such as `Trip`, `TripLeg`, `UserSettings`, `TripMapPoint`, `schema.sql`, interfaces without endpoints).
+2. Read the source for the area you are planning. Build a two-column list: **implemented** (reachable through the running API and covered by tests) versus **planned only** (docs, empty partial types such as `Trip`, `TripLeg`, `TripMapPoint`, `schema.sql`, interfaces without endpoints).
 3. When docs and code disagree, report the discrepancy. Do not silently pick one. Docs describe intent; code describes reality; the human decides which to change. Check `git log` and open issues/PRs so you do not plan work that is done or in flight.
 
 ## Lecture and milestone alignment

@@ -86,7 +86,7 @@ public sealed class AuthenticationTests
         using var factory = new WebApplicationFactory<TravelTracker.Transport.Api.TransportProgram>().WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
         using var client = factory.CreateClient();
         using var health = await client.GetAsync("/health");
-        using var catalogue = await client.GetAsync("/test/identity");
+        using var catalogue = await client.GetAsync("/api/v1/transport-modes");
         using var swagger = await client.GetAsync("/swagger/v1/swagger.json");
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, catalogue.StatusCode);

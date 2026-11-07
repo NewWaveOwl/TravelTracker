@@ -65,6 +65,20 @@ public sealed class UserProfileScopeMatrixTests
         Assert.Null(app.Repository.Account);
     }
 
+    [Theory]
+    [InlineData("signature")]
+    [InlineData("issuer")]
+    [InlineData("audience")]
+    [InlineData("expired")]
+    public async Task ProfileRejectsInvalidBearerBeforeProvisioningAnAccount(string failure)
+    {
+        using var app = new UsersApiFactory();
+        using var client = app.Browser(app.Token(subject: "stranger", scope: "users.read users.write", failure: failure));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(Me)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PatchAsJsonAsync(Me, new { address = "1 Main St" })).StatusCode);
+        Assert.Null(app.Repository.Account);
+    }
+
     [Fact]
     public async Task ProfileRoutesRefuseCleartextHttp()
     {

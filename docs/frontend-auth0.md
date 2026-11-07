@@ -110,6 +110,10 @@ Outside this verification: production deployment, long-duration session behavior
 
 References: [ASP.NET Core OpenID Connect](https://learn.microsoft.com/aspnet/core/security/authentication/configure-oidc), [Auth0 regular web application quickstart](https://auth0.com/docs/quickstart/webapp/aspnet-core).
 
+## Settings scopes (#48)
+
+The account's own preferences use two scopes on the Settings API. `settings.read` is in the default `Auth0:Scope` (the view needs it to load values), so add it to the API's scopes and to the frontend application's user-delegated grant before signing in. `settings.write` is optional, like `catalogue.write`: without it the Settings page is read-only and says so. To allow saving, add `settings.write` to the API, grant it, set `Auth0:Scope` to `openid profile email catalogue.read users.read settings.read settings.write` and sign in again. The page reads the grant from the server-owned session metadata, never from a browser-decoded token; the Settings service remains authoritative for every write. See [Settings service](settings-service.md#frontend-48).
+
 ## Attraction write grants (#43)
 
 For users intended to create/edit attractions, authorize `catalogue.write` in the API's user-delegated application access and user role/grant. Configure `Auth0:Scope` as `openid profile email catalogue.read users.read catalogue.write`; the default remains read-only. Restart and sign in again to obtain the new grant. The frontend stores scope returned by the trusted token endpoint as server-owned session metadata (when OAuth omits scope, requested scopes apply). ID-token claims cannot impersonate this metadata. It controls UI availability only; no access token is browser-decoded, and Attractions remains authoritative for scope, ownership and live Users standing. Older sessions without granted-scope metadata remain read-only until a new sign-in.

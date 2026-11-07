@@ -1,3 +1,4 @@
+using TravelTracker.Security.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi;
@@ -20,7 +21,7 @@ public partial class AccommodationsProgram
      */
     public static async Task Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = ApiHostBuilder.Create(args);
         builder.Services.AddControllers();
         builder.Services.Configure<ApiBehaviorOptions>(options =>
         {

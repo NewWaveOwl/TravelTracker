@@ -1,6 +1,6 @@
 # Domain Model
 
-[TravelTracker.Domain](../src/TravelTracker.Domain) owns the business models used by the API and Data projects. Existing names, property types and identifiers are preserved.
+[TravelTracker.Domain](../src/TravelTracker.Domain) owns the shared business models used by the API and Data projects. Existing names, property types and identifiers are preserved. Trip models live in the independent [TravelTracker.Trips.Domain](../src/TravelTracker.Trips.Domain) project, which has no project or package references, matching the other services' Domain projects.
 
 Bearer validation belongs to the API, not Domain. The authenticated identity is the validated `(iss, sub)` pair. The independent Users service now maps that identity to a public UUIDv7 account and enforces live standing; the original shared `User` model below remains unchanged. See [authentication boundaries](authentication.md) and [Users setup](first-administrator-setup.md).
 
@@ -37,11 +37,11 @@ The Api [response DTOs](../src/TravelTracker.Transport.Api/Contracts) preserve t
 
 ## Unfinished feature types
 
-[UserSettings](../src/TravelTracker.Domain/Models/UserSettings.cs) and [TripMapPoint](../src/TravelTracker.Domain/Models/TripMapPoint.cs) are empty partial declarations needed by the existing interfaces. They supply no fields, persistence or endpoints. Stay, Visit and TicketImport remain roadmap concepts; stay/visit invariants are deferred.
+The independent [Settings domain](../src/TravelTracker.Settings.Domain/Models/UserSettings.cs) is the only `UserSettings` type; it defines the preference model, defaults and validation. The shared [TripMapPoint](../src/TravelTracker.Trips.Domain/Models/TripMapPoint.cs) (in TravelTracker.Trips.Domain) is an empty partial declaration needed by the existing interfaces. It supplies no fields, persistence or endpoints. Stay, Visit and TicketImport remain roadmap concepts; stay/visit invariants are deferred.
 
-## Trip rules (implemented, pure domain)
+## Trip rules (implemented, pure domain in TravelTracker.Trips.Domain)
 
-[Trip](../src/TravelTracker.Domain/Models/Trip.cs) and [TripLeg](../src/TravelTracker.Domain/Models/TripLeg.cs) are immutable. `Trip.Create` / `WithLegs` throw [TripValidationException](../src/TravelTracker.Domain/Models/TripValidationException.cs) listing every [TripError](../src/TravelTracker.Domain/Models/TripError.cs) (field path plus message), so a rejected edit leaves the old trip unchanged. Enforced: first leg starts at an accommodation; one-way ends at an attraction; round trip returns to its start and visits an attraction; legs are sequenced 1..n, connected, arrive after departing, do not overlap, and sit inside the trip start/end. Leg times carry an offset that must match the trip time zone; [TripTime.Resolve](../src/TravelTracker.Domain/Models/TripTime.cs) rejects impossible local times and requires an explicit offset for ambiguous ones. Nothing is corrected silently. Trip ownership, ids and persistence are not part of this layer.
+[Trip](../src/TravelTracker.Trips.Domain/Models/Trip.cs) and [TripLeg](../src/TravelTracker.Trips.Domain/Models/TripLeg.cs) are immutable. `Trip.Create` / `WithLegs` throw [TripValidationException](../src/TravelTracker.Trips.Domain/Models/TripValidationException.cs) listing every [TripError](../src/TravelTracker.Trips.Domain/Models/TripError.cs) (field path plus message), so a rejected edit leaves the old trip unchanged. Enforced: first leg starts at an accommodation; one-way ends at an attraction; round trip returns to its start and visits an attraction; legs are sequenced 1..n, connected, arrive after departing, do not overlap, and sit inside the trip start/end. Leg times carry an offset that must match the trip time zone; [TripTime.Resolve](../src/TravelTracker.Trips.Domain/Models/TripTime.cs) rejects impossible local times and requires an explicit offset for ambiguous ones. Nothing is corrected silently. Trip ownership, ids and persistence are not part of this layer.
 
 ## Planned trip rules
 

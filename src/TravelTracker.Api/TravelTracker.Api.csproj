@@ -6,7 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\TravelTracker.Data\TravelTracker.Data.csproj" />
     <ProjectReference Include="..\TravelTracker.Domain\TravelTracker.Domain.csproj" />
+    <ProjectReference Include="..\TravelTracker.Trips.Domain\TravelTracker.Trips.Domain.csproj" />
+    <ProjectReference Include="..\TravelTracker.Trips.Data\TravelTracker.Trips.Data.csproj" />
   </ItemGroup>
 </Project>
