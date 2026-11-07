@@ -10,6 +10,8 @@
     <Project Path="src/TravelTracker.Settings.Data/TravelTracker.Settings.Data.csproj" />
     <Project Path="src/TravelTracker.Settings.Domain/TravelTracker.Settings.Domain.csproj" />
     <Project Path="src/TravelTracker.Security/TravelTracker.Security.csproj" />
+    <Project Path="src/TravelTracker.Trips.Api/TravelTracker.Trips.Api.csproj" />
+    <Project Path="src/TravelTracker.Trips.Data/TravelTracker.Trips.Data.csproj" />
     <Project Path="src/TravelTracker.Transport.Api/TravelTracker.Transport.Api.csproj" />
 <Project Path="src/TravelTracker.Transport.Data/TravelTracker.Transport.Data.csproj" />
 <Project Path="src/TravelTracker.Transport.Domain/TravelTracker.Transport.Domain.csproj" />
@@ -35,5 +37,7 @@
     <Project Path="tests/TravelTracker.Settings.Domain.Tests/TravelTracker.Settings.Domain.Tests.csproj" />
     <Project Path="tests/TravelTracker.Settings.Data.Tests/TravelTracker.Settings.Data.Tests.csproj" />
     <Project Path="tests/TravelTracker.Settings.Api.Tests/TravelTracker.Settings.Api.Tests.csproj" />
+    <Project Path="tests/TravelTracker.Trips.Api.Tests/TravelTracker.Trips.Api.Tests.csproj" />
+    <Project Path="tests/TravelTracker.Trips.Data.Tests/TravelTracker.Trips.Data.Tests.csproj" />
   </Folder>
 </Solution>
