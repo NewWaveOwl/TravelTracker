@@ -1,0 +1,125 @@
+using Microsoft.EntityFrameworkCore;
+using TravelTracker.Data.Repositories;
+using TravelTracker.Domain.Models;
+using TravelTracker.Trips.Data.Entities;
+
+namespace TravelTracker.Trips.Data.Repositories;
+
+/**
+ * Stores trips in the service-owned PostgreSQL database. A save writes the trip, its legs and their snapshots in
+ * one explicit transaction, so a failure at any row leaves nothing behind.
+ *
+ * @param database The Trips database context for the current request.
+ */
+public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
+{
+    /**
+     * Commits the trip row and every leg row together, or commits nothing.
+     *
+     * @param trip The validated trip to store.
+     * @param ownerIssuer The validated token issuer of the owner.
+     * @param ownerSubject The validated token subject of the owner.
+     * @param cancellationToken Cancels database I/O.
+     * @return Completion after the transaction commits.
+     */
+    public async Task AddAsync(Trip trip, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            database.Trips.Add(ToRow(trip, ownerIssuer, ownerSubject));
+            await database.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        finally
+        {
+            database.ChangeTracker.Clear();
+        }
+    }
+
+    /**
+     * Loads a trip with its legs in sequence order, only when the caller owns it.
+     *
+     * @param tripId The public trip identifier.
+     * @param ownerIssuer The caller's validated issuer.
+     * @param ownerSubject The caller's validated subject.
+     * @param cancellationToken Cancels database I/O.
+     * @return The detached trip, or null when absent or owned by someone else.
+     */
+    public async Task<Trip?> GetOwnedByIdAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default)
+    {
+        var row = await database.Trips.AsNoTracking()
+            .Include(trip => trip.Legs)
+            .SingleOrDefaultAsync(trip => trip.TripId == tripId && trip.OwnerIssuer == ownerIssuer && trip.OwnerSubject == ownerSubject,
+                cancellationToken);
+        return row is null ? null : ToDomain(row);
+    }
+
+    /**
+     * Maps a stored trip and its legs back to the domain, restoring each offset the traveller entered.
+     *
+     * @param row The stored trip with its legs loaded.
+     * @return The rebuilt trip, which is validated again by the domain.
+     */
+    private static Trip ToDomain(TripRow row) => Trip.Create(
+        row.Name,
+        TimeZoneInfo.FindSystemTimeZoneById(row.TimeZoneId),
+        row.StartAt.ToOffset(row.StartOffset),
+        row.EndAt.ToOffset(row.EndOffset),
+        row.IsRoundTrip,
+        row.Legs.OrderBy(leg => leg.Sequence).Select(leg => new TripLeg(
+            leg.Sequence,
+            new TripPlace(leg.FromPlaceId, leg.FromPlaceType, leg.FromPlaceName, leg.FromPlaceAddress, leg.FromLatitude, leg.FromLongitude),
+            new TripPlace(leg.ToPlaceId, leg.ToPlaceType, leg.ToPlaceName, leg.ToPlaceAddress, leg.ToLatitude, leg.ToLongitude),
+            new TripTransport(leg.TransportModeId, leg.TransportCode, leg.TransportName),
+            leg.DepartureAt.ToOffset(leg.DepartureOffset),
+            leg.ArrivalAt.ToOffset(leg.ArrivalOffset))),
+        row.TripId);
+
+    /**
+     * Maps a validated trip, its owner and its snapshots to persistence rows. Instants are written in UTC because
+     * Npgsql refuses a non-zero offset for timestamptz; the entered offsets are stored beside them.
+     *
+     * @param trip The validated trip.
+     * @param ownerIssuer The owner's issuer.
+     * @param ownerSubject The owner's subject.
+     * @return A detached trip row with its leg rows attached.
+     */
+    private static TripRow ToRow(Trip trip, string ownerIssuer, string ownerSubject) => new()
+    {
+        TripId = trip.TripId,
+        OwnerIssuer = ownerIssuer,
+        OwnerSubject = ownerSubject,
+        Name = trip.Name,
+        TimeZoneId = trip.TimeZone.Id,
+        StartAt = trip.Start.ToUniversalTime(),
+        StartOffset = trip.Start.Offset,
+        EndAt = trip.End.ToUniversalTime(),
+        EndOffset = trip.End.Offset,
+        IsRoundTrip = trip.IsRoundTrip,
+        Legs = trip.Legs.Select(leg => new TripLegRow
+        {
+            TripId = trip.TripId,
+            Sequence = leg.Sequence,
+            FromPlaceId = leg.From.PlaceId,
+            FromPlaceType = leg.From.Type,
+            FromPlaceName = leg.From.Name,
+            FromPlaceAddress = leg.From.Address,
+            FromLatitude = leg.From.Latitude,
+            FromLongitude = leg.From.Longitude,
+            ToPlaceId = leg.To.PlaceId,
+            ToPlaceType = leg.To.Type,
+            ToPlaceName = leg.To.Name,
+            ToPlaceAddress = leg.To.Address,
+            ToLatitude = leg.To.Latitude,
+            ToLongitude = leg.To.Longitude,
+            TransportModeId = leg.Transport.TransportModeId,
+            TransportCode = leg.Transport.Code,
+            TransportName = leg.Transport.Name,
+            DepartureAt = leg.Departure.ToUniversalTime(),
+            DepartureOffset = leg.Departure.Offset,
+            ArrivalAt = leg.Arrival.ToUniversalTime(),
+            ArrivalOffset = leg.Arrival.Offset
+        }).ToList()
+    };
+}
