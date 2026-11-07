@@ -110,13 +110,15 @@ public partial class Settings : IDisposable
     }
 
     /**
-     * reads the saved values and replaces the form with them. this is the only path that clears a stale conflict.
+     * reads the saved values and replaces the form with them. this is the only path that clears a stale conflict, and only when the read succeeds; a failed reload keeps the conflict so the old etag cannot be saved.
      * @return Completion of the read and its user-facing state.
      */
     async Task LoadAsync()
     {
         var (current, version) = StartRequest();
+        var wasConflict = conflict;
         loading = true; status = null; ClearError();
+        conflict = wasConflict;
         try
         {
             var revision = await Client.GetAsync(current.Token);
@@ -219,7 +221,7 @@ public partial class Settings : IDisposable
         error = failure;
         errors = failure.Errors;
         focusError = true;
-        conflict = failure.Status is 412 or 428;
+        conflict |= failure.Status is 412 or 428;
         if (failure.Status == 401)
         {
             signedIn = canWrite = false;

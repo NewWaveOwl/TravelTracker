@@ -185,6 +185,34 @@ public sealed class SettingsPageTests : BunitContext
     }
 
     [Fact]
+    public void FailedReloadAfterAConflictKeepsSaveDisabledAndTheReloadButton()
+    {
+        Configure();
+        var page = Render<Settings>();
+        WaitForForm(page);
+        service.ChangeElsewhere(new SettingsDto("light", 0, 0, 2, "bus", "UTC"));
+        page.Find("#settings-zoom").Input("7");
+        page.Find("form.settings-form").Submit();
+        page.WaitForAssertion(() => Assert.Contains("Your settings changed", page.Find("[role=alert]").TextContent));
+
+        service.Override = request => request.Method == HttpMethod.Get ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : null;
+        page.Find("[role=alert] button").Click();
+        page.WaitForAssertion(() => Assert.Equal(2, service.Requests.Count(request => request.Method == HttpMethod.Get)));
+        page.WaitForAssertion(() => Assert.False(page.Find("[role=alert] button").HasAttribute("disabled")));
+
+        Assert.True(page.Find("button[type=submit]").HasAttribute("disabled"));
+        Assert.Equal("Reload saved settings", page.Find("[role=alert] button").TextContent.Trim());
+        Assert.Equal("7", page.Find("#settings-zoom").GetAttribute("value"));
+        Assert.Equal(0, service.AcceptedWrites);
+
+        service.Override = null;
+        page.Find("[role=alert] button").Click();
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll("[role=alert]")));
+        Assert.False(page.Find("button[type=submit]").HasAttribute("disabled"));
+        Assert.Equal("bus", page.Find("#settings-transport").GetAttribute("value"));
+    }
+
+    [Fact]
     public void MissingPreconditionAsksForReloadWithoutClaimingSuccess()
     {
         Configure();
