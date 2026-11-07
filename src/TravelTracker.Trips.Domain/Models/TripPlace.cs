@@ -1,4 +1,4 @@
-namespace TravelTracker.Domain.Models;
+namespace TravelTracker.Trips.Domain.Models;
 
 /**
  * Snapshot of one referenced place, copied when the trip is saved so later

@@ -31,6 +31,8 @@ public sealed class DependencyBoundaryTests
     [InlineData("TravelTracker.Accommodations.Domain")]
     [InlineData("TravelTracker.Users.Domain")]
     [InlineData("TravelTracker.Transport.Domain")]
+    [InlineData("TravelTracker.Trips.Domain")]
+    [InlineData("TravelTracker.Settings.Domain")]
     public void Domain_HasNoReferences(string project)
     {
         var document = LoadProject(project);
@@ -49,6 +51,8 @@ public sealed class DependencyBoundaryTests
     [InlineData("TravelTracker.Accommodations.Data", "TravelTracker.Accommodations.Domain")]
     [InlineData("TravelTracker.Users.Data", "TravelTracker.Users.Domain")]
     [InlineData("TravelTracker.Transport.Data", "TravelTracker.Transport.Domain")]
+    [InlineData("TravelTracker.Trips.Data", "TravelTracker.Trips.Domain")]
+    [InlineData("TravelTracker.Settings.Data", "TravelTracker.Settings.Domain")]
     public void Data_IsNotWebAndOnlyReferencesDomain(string project, string domain)
     {
         var document = LoadProject(project);

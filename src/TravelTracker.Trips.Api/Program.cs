@@ -5,7 +5,6 @@ using Microsoft.OpenApi;
 using TravelTracker.Api.Authentication;
 using TravelTracker.Api.References;
 using TravelTracker.Api.Trips;
-using TravelTracker.Data.Repositories;
 using TravelTracker.Trips.Api.Errors;
 using TravelTracker.Trips.Data;
 using TravelTracker.Trips.Data.Repositories;

@@ -1,4 +1,4 @@
-namespace TravelTracker.Domain.Models;
+namespace TravelTracker.Trips.Domain.Models;
 
 /**
  * One ordered journey inside a trip, with snapshots of its two places and its transport mode.

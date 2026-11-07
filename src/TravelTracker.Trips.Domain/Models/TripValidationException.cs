@@ -1,4 +1,4 @@
-namespace TravelTracker.Domain.Models;
+namespace TravelTracker.Trips.Domain.Models;
 
 /**
  * Thrown when a trip or an edit to it breaks the itinerary rules. The trip

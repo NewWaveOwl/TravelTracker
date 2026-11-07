@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using TravelTracker.Data.Repositories;
-using TravelTracker.Domain.Models;
+using TravelTracker.Trips.Domain.Models;
 using TravelTracker.Trips.Data.Entities;
 
 namespace TravelTracker.Trips.Data.Repositories;

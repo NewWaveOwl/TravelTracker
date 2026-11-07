@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using TravelTracker.Domain.Models;
+using TravelTracker.Trips.Domain.Models;
 using TravelTracker.Trips.Data;
 using TravelTracker.Trips.Data.Repositories;
 

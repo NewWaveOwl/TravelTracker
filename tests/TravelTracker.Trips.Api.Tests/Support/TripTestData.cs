@@ -1,5 +1,5 @@
 using System.Net;
-using TravelTracker.Domain.Models;
+using TravelTracker.Trips.Domain.Models;
 
 namespace TravelTracker.Trips.Api.Tests.Support;
 

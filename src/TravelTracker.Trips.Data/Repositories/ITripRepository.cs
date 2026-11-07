@@ -1,6 +1,6 @@
-using TravelTracker.Domain.Models;
+using TravelTracker.Trips.Domain.Models;
 
-namespace TravelTracker.Data.Repositories;
+namespace TravelTracker.Trips.Data.Repositories;
 
 /**
  * Defines owner-scoped trip persistence. Every write names the validated owner, and every read

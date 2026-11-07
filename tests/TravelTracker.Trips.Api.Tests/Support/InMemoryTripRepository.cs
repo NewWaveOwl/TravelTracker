@@ -1,5 +1,6 @@
 using TravelTracker.Data.Repositories;
-using TravelTracker.Domain.Models;
+using TravelTracker.Trips.Data.Repositories;
+using TravelTracker.Trips.Domain.Models;
 
 namespace TravelTracker.Trips.Api.Tests.Support;
 

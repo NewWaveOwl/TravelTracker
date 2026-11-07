@@ -13,5 +13,7 @@
     <Using Include="Xunit" />
     <ProjectReference Include="../../src/TravelTracker.Api/TravelTracker.Api.csproj" />
     <ProjectReference Include="../../src/TravelTracker.Data/TravelTracker.Data.csproj" />
+    <ProjectReference Include="../../src/TravelTracker.Trips.Domain/TravelTracker.Trips.Domain.csproj" />
+    <ProjectReference Include="../../src/TravelTracker.Trips.Data/TravelTracker.Trips.Data.csproj" />
   </ItemGroup>
 </Project>

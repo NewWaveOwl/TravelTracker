@@ -1,3 +1,4 @@
+using TravelTracker.Trips.Data.Repositories;
 using Microsoft.Extensions.Logging;
 using TravelTracker.Api.References;
 using TravelTracker.Data.Repositories;

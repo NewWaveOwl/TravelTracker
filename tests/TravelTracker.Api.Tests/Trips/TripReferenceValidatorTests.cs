@@ -1,7 +1,7 @@
 using System.Net;
 using TravelTracker.Api.Tests.Support;
 using TravelTracker.Api.Trips;
-using TravelTracker.Domain.Models;
+using TravelTracker.Trips.Domain.Models;
 
 namespace TravelTracker.Api.Tests.Trips;
 

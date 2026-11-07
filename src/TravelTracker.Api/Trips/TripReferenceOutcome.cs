@@ -1,4 +1,4 @@
-using TravelTracker.Domain.Models;
+using TravelTracker.Trips.Domain.Models;
 
 namespace TravelTracker.Api.Trips;
 

@@ -1,4 +1,4 @@
-namespace TravelTracker.Domain.Models;
+namespace TravelTracker.Trips.Domain.Models;
 
 /**
  * A dated, connected itinerary. Immutable: an edit returns a new trip or throws,

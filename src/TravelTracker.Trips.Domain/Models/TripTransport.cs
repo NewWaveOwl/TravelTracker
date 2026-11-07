@@ -1,4 +1,4 @@
-namespace TravelTracker.Domain.Models;
+namespace TravelTracker.Trips.Domain.Models;
 
 /**
  * Snapshot of the transport mode a leg uses, copied when the trip is saved.

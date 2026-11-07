@@ -1,3 +1,4 @@
+using TravelTracker.Trips.Data.Repositories;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Security.Claims;

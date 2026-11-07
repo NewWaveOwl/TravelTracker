@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
-using TravelTracker.Domain.Models;
+using TravelTracker.Trips.Domain.Models;
 
-namespace TravelTracker.Api.Tests;
+namespace TravelTracker.Trips.Domain.Tests;
 
 /**
  * Verifies the pure trip itinerary rules; no host, no storage.
