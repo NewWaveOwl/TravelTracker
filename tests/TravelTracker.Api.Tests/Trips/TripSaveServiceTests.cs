@@ -81,6 +81,36 @@ public sealed class TripSaveServiceTests {
     }
 
     /**
+     * The validated caller becomes the owner; another subject cannot read the stored trip.
+     */
+    [Fact]
+    public async Task Save_RecordsValidatedOwner_AndHidesTripFromOtherSubjects() {
+        var repository = new FakeTripRepository();
+        await Create(TripFixture.HealthyUpstream(), repository)
+            .SaveAsync(TripFixture.Caller, TripFixture.CallerToken, TripFixture.OneWayDraft(), CancellationToken.None);
+        var saved = Assert.Single(repository.Stored);
+
+        Assert.NotNull(await repository.GetOwnedByIdAsync(saved.TripId, TripFixture.Caller.Issuer, TripFixture.Caller.Subject));
+        Assert.Null(await repository.GetOwnedByIdAsync(saved.TripId, TripFixture.Caller.Issuer, "auth0|someone-else"));
+    }
+
+    /**
+     * A failed write is reported to the caller as an exception, not as a stored or ready trip.
+     */
+    [Fact]
+    public async Task Save_WriteFailure_Throws_AndStoresNothing() {
+        var repository = new FakeTripRepository { NextWriteFailure = new InvalidOperationException("simulated write failure") };
+        var logs = new LogSink();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => TripFixture.CreateSaveService(TripFixture.HealthyUpstream(), repository, logs)
+            .SaveAsync(TripFixture.Caller, TripFixture.CallerToken, TripFixture.OneWayDraft(), CancellationToken.None));
+
+        Assert.Empty(repository.Stored);
+        Assert.Contains(logs.Entries, entry => entry.Level == Microsoft.Extensions.Logging.LogLevel.Error
+            && entry.Message.Contains("InvalidOperationException") && !entry.Message.Contains("simulated write failure"));
+    }
+
+    /**
      * A saved trip reads back its snapshot values with every catalogue host unreachable, because the reads never call one.
      */
     [Fact]
@@ -90,9 +120,10 @@ public sealed class TripSaveServiceTests {
             .SaveAsync(TripFixture.Caller, TripFixture.CallerToken, TripFixture.OneWayDraft(), CancellationToken.None);
 
         // the read path is storage only: it holds no HTTP client, so no catalogue host is involved
-        var trips = await repository.GetAllByUserIdAsync(TripFixture.UserId);
+        var saved = Assert.Single(repository.Stored);
+        var trip = await repository.GetOwnedByIdAsync(saved.TripId, TripFixture.Caller.Issuer, TripFixture.Caller.Subject);
 
-        var leg = Assert.Single(Assert.Single(trips).Legs);
+        var leg = Assert.Single(trip!.Legs);
         Assert.Equal("Hotel Lumiere", leg.From.Name);
         Assert.Equal("Louvre", leg.To.Name);
         Assert.Equal("Train", leg.Transport.Name);

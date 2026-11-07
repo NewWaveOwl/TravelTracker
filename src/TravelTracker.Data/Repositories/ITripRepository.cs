@@ -3,58 +3,31 @@ using TravelTracker.Domain.Models;
 namespace TravelTracker.Data.Repositories;
 
 /**
- * Defines persistence operations for trips and their child records.
+ * Defines owner-scoped trip persistence. Every write names the validated owner, and every read
+ * is filtered by that owner, so another user's trip is indistinguishable from an absent one.
+ * History, edit and delete operations are not part of this contract yet.
  */
 public interface ITripRepository
 {
     /**
-     * Retrieves a user's trip history.
+     * Stores a complete trip with its legs and snapshots as one unit. Nothing is kept when the write fails.
      *
-     * @param userId The public identifier of the user whose trips to retrieve.
-     * @return A task containing the user's trips.
+     * @param trip The validated trip to store.
+     * @param ownerIssuer The validated token issuer of the owner.
+     * @param ownerSubject The validated token subject of the owner.
+     * @param cancellationToken Cancels the write.
+     * @return A task that completes when the trip is committed.
      */
-    Task<List<Trip>> GetAllByUserIdAsync(Guid userId);
+    Task AddAsync(Trip trip, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default);
 
     /**
-     * Retrieves a trip by its unique identifier.
+     * Retrieves a trip only when it belongs to the given owner.
      *
-     * @param tripId The public identifier to search for.
-     * @return A task containing the matching trip, or null when it does not exist.
+     * @param tripId The public identifier of the trip.
+     * @param ownerIssuer The validated token issuer of the caller.
+     * @param ownerSubject The validated token subject of the caller.
+     * @param cancellationToken Cancels the read.
+     * @return A task containing the trip, or null when it is absent or owned by someone else.
      */
-    Task<Trip?> GetByIdAsync(Guid tripId);
-
-    /**
-     * Adds a trip to the data store.
-     *
-     * @param trip The trip to add.
-     * @return A task that represents the asynchronous operation.
-     */
-    Task AddAsync(Trip trip);
-
-    /**
-     * Saves changes to an existing trip.
-     *
-     * @param trip The trip containing the updated values.
-     * @return A task that represents the asynchronous operation.
-     */
-    Task UpdateAsync(Trip trip);
-
-    /**
-     * Deletes a trip from the data store.
-     *
-     * @param tripId The public identifier of the trip to delete.
-     * @return A task containing true when the trip was deleted; otherwise, false.
-     */
-    Task<bool> DeleteAsync(Guid tripId);
-
-    /**
-     * Replaces the legs belonging to a trip.
-     *
-     * @param tripId The public identifier of the trip whose legs to replace.
-     * @param legs The full ordered set of legs to store.
-     * @return A task that represents the asynchronous operation.
-     */
-    Task ReplaceLegsAsync(
-        Guid tripId,
-        List<TripLeg> legs);
+    Task<Trip?> GetOwnedByIdAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default);
 }
