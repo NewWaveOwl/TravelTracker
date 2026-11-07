@@ -108,7 +108,7 @@ public static class BearerAuthenticationExtensions
         services.AddAuthorization();
         services.AddOptions<AuthorizationOptions>().Configure<IOptions<BearerSettings>>((options, settings) =>
         {
-            foreach (var scope in new[] { ScopePolicies.CatalogueRead, ScopePolicies.CatalogueWrite, ScopePolicies.SettingsRead, ScopePolicies.SettingsWrite })
+            foreach (var scope in new[] { ScopePolicies.CatalogueRead, ScopePolicies.CatalogueWrite, ScopePolicies.SettingsRead, ScopePolicies.SettingsWrite, ScopePolicies.TripsRead, ScopePolicies.TripsWrite })
                 options.AddPolicy(scope, policy => policy.RequireAuthenticatedUser()
                     .RequireAssertion(context => ScopePolicies.HasScope(context.User, settings.Value.ScopeClaimType, scope)));
             options.DefaultPolicy = options.GetPolicy(ScopePolicies.CatalogueRead)!;
