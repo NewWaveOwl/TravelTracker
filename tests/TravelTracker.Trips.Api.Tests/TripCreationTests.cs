@@ -53,6 +53,82 @@ public sealed class TripCreationTests
         Assert.DoesNotContain(factory.Upstream.Credentials.Keys, key => key.Contains("/internal/") && factory.Upstream.Credentials[key] == callerToken);
     }
 
+    [Fact]
+    public async Task Create_NullLegEntry_Returns400WithFieldError_AndStoresNothing()
+    {
+        using var factory = new TripsApiFactory();
+        TripTestData.SeedAccounts(factory.Upstream);
+        TripTestData.SeedHealthyCatalogue(factory.Upstream);
+        using var client = factory.CreateClientFor("alice");
+        var body = new { name = "Paris weekend", timeZone = "Europe/Paris", start = TripTestData.Start, end = TripTestData.Start.AddHours(4), isRoundTrip = false, legs = new object?[] { null } };
+
+        using var response = await client.PostAsJsonAsync("/api/v1/trips", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("legs[0]", await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, factory.Repository.Count);
+        Assert.DoesNotContain(factory.Upstream.Calls, call => call.Contains("/api/v1/"));
+    }
+
+    [Theory]
+    [InlineData("bearer")]
+    [InlineData("BEARER")]
+    [InlineData("Bearer")]
+    public async Task Create_AcceptsAnySchemeCasing_AndForwardsTheSameToken(string scheme)
+    {
+        using var factory = new TripsApiFactory();
+        TripTestData.SeedAccounts(factory.Upstream);
+        TripTestData.SeedHealthyCatalogue(factory.Upstream);
+        using var client = factory.CreateClient();
+        var token = factory.CreateToken();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"{scheme} {token}");
+
+        using var response = await client.PostAsJsonAsync("/api/v1/trips", TripTestData.OneWayBody());
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal("Bearer " + token, factory.Upstream.Credentials[$"GET /api/v1/attractions/{TripTestData.Museum:D}"]);
+    }
+
+    [Theory]
+    [InlineData("lat")]
+    [InlineData("lon")]
+    [InlineData("name")]
+    [InlineData("address")]
+    public async Task Create_AttractionAnswerMissingAField_FailsClosedInsteadOfSnapshottingDefaults(string missing)
+    {
+        using var factory = new TripsApiFactory();
+        TripTestData.SeedAccounts(factory.Upstream);
+        TripTestData.SeedHealthyCatalogue(factory.Upstream);
+        var fields = new Dictionary<string, object> { ["name"] = "Louvre", ["address"] = "Rue de Rivoli", ["lat"] = 48.86m, ["lon"] = 2.34m };
+        fields.Remove(missing);
+        factory.Upstream.Respond("GET", $"/api/v1/attractions/{TripTestData.Museum:D}", HttpStatusCode.OK, fields);
+        using var client = factory.CreateClientFor("alice");
+
+        using var response = await client.PostAsJsonAsync("/api/v1/trips", TripTestData.OneWayBody());
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(0, factory.Repository.Count);
+    }
+
+    [Theory]
+    [InlineData("lat")]
+    [InlineData("lon")]
+    public async Task Create_AccommodationAnswerMissingCoordinates_FailsClosed(string missing)
+    {
+        using var factory = new TripsApiFactory();
+        TripTestData.SeedAccounts(factory.Upstream);
+        TripTestData.SeedHealthyCatalogue(factory.Upstream);
+        var fields = new Dictionary<string, object> { ["name"] = "Hotel Lumiere", ["address"] = "1 rue de Rivoli", ["lat"] = 48.85m, ["lon"] = 2.35m };
+        fields.Remove(missing);
+        factory.Upstream.Respond("GET", $"/api/v1/accommodations/{TripTestData.Hotel:D}", HttpStatusCode.OK, fields);
+        using var client = factory.CreateClientFor("alice");
+
+        using var response = await client.PostAsJsonAsync("/api/v1/trips", TripTestData.OneWayBody());
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(0, factory.Repository.Count);
+    }
+
     [Theory]
     [InlineData("banned")]
     [InlineData("deactivated")]

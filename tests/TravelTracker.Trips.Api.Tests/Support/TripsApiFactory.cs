@@ -47,7 +47,7 @@ internal sealed class TripsApiFactory : WebApplicationFactory<TripsProgram>
      * @param failure Optional invalid-token case.
      * @return A bearer token for this isolated host.
      */
-    internal string CreateToken(string? scopes = "trips.read trips.write", string subject = "alice", string? failure = null)
+    internal string CreateToken(string? scopes = "trips.read trips.write catalogue.read", string subject = "alice", string? failure = null)
     {
         using var otherKey = RSA.Create(2048);
         var claims = new List<Claim>();
@@ -72,7 +72,7 @@ internal sealed class TripsApiFactory : WebApplicationFactory<TripsProgram>
      * @param scopes Permissions to include, or null to omit the bearer token.
      * @return An authenticated or anonymous client.
      */
-    internal HttpClient CreateClientFor(string subject = "alice", string? scopes = "trips.read trips.write")
+    internal HttpClient CreateClientFor(string subject = "alice", string? scopes = "trips.read trips.write catalogue.read")
     {
         var client = CreateClient();
         if (scopes is not null)

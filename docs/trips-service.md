@@ -46,7 +46,7 @@ Swagger is available at `/swagger` in the Development environment.
 | Method and path | Scope | Result |
 | --- | --- | --- |
 | `GET /health` | Anonymous | `200` with `{"status":"ok","service":"Trips"}`. Liveness only. |
-| `POST /api/v1/trips` | `trips.write` | `201` with the saved trip and `Location: /api/v1/trips/{tripId}`. |
+| `POST /api/v1/trips` | `trips.write` and `catalogue.read` | `201` with the saved trip and `Location: /api/v1/trips/{tripId}`. |
 | `GET /api/v1/trips/{tripId}` | `trips.read` | `200` for the caller's own trip. |
 
 Requests and responses use camelCase JSON and public GUIDs only. The owner comes from the validated token (`iss` and `sub`); the body cannot name an owner, and unknown properties are refused with `400`.

@@ -77,6 +77,18 @@ public sealed class ReferenceSender(IOptions<TripReferenceOptions> options, ILog
     }
 
     /**
+     * Reports a 200 answer that lacked the fields a snapshot needs. Defaulting them would save a wrong place,
+     * for example coordinates 0, 0, so the lookup fails closed like any other unreadable answer.
+     *
+     * @param operation The lookup description used in the log line.
+     * @return An Unavailable result without a value.
+     */
+    public ReferenceResult<TValue> Incomplete<TValue>(string operation) {
+        logger.LogWarning("{Operation} answered without the fields a snapshot needs; treated as unavailable.", operation);
+        return ReferenceResult<TValue>.Failed(ReferenceStatus.Unavailable, "upstream response was missing required fields.");
+    }
+
+    /**
      * Reads a successful body, treating an empty body as unavailable.
      *
      * @param response The 200 response to read.

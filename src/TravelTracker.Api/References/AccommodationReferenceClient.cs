@@ -19,13 +19,16 @@ public sealed class AccommodationReferenceClient(HttpClient http, ReferenceSende
      * @return A place snapshot when found, otherwise the non-found outcome.
      */
     public async Task<ReferenceResult<TripPlace>> GetPlaceAsync(Guid accommodationId, string bearerToken, CancellationToken cancellationToken) {
+        var operation = $"accommodation {accommodationId:D} lookup";
         var result = await sender.SendAsync<AccommodationResponse>(http,
-            ReferenceRequest.Get($"api/v1/accommodations/{accommodationId:D}", bearerToken), $"accommodation {accommodationId:D} lookup", cancellationToken);
-        return result.Status == ReferenceStatus.Found
-            ? ReferenceResult<TripPlace>.Found(new(accommodationId, "accommodation", result.Value!.Name, result.Value.Address, result.Value.Lat, result.Value.Lon))
-            : result.Forward<TripPlace>();
+            ReferenceRequest.Get($"api/v1/accommodations/{accommodationId:D}", bearerToken), operation, cancellationToken);
+        if (result.Status != ReferenceStatus.Found) return result.Forward<TripPlace>();
+        var place = result.Value!;
+        return string.IsNullOrWhiteSpace(place.Name) || place.Address is null || place.Lat is null || place.Lon is null
+            ? sender.Incomplete<TripPlace>(operation)
+            : ReferenceResult<TripPlace>.Found(new(accommodationId, "accommodation", place.Name, place.Address, place.Lat.Value, place.Lon.Value));
     }
 
-    /** The fields of the Accommodations response that a trip snapshot keeps. */
-    private sealed record AccommodationResponse(string Name, string Address, decimal Lat, decimal Lon);
+    /** The fields of the Accommodations response that a trip snapshot keeps; a missing one is detected, never defaulted. */
+    private sealed record AccommodationResponse(string? Name, string? Address, decimal? Lat, decimal? Lon);
 }

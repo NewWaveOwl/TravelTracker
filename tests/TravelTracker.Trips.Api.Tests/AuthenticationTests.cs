@@ -30,8 +30,10 @@ public sealed class AuthenticationTests
     [InlineData("", 403)]
     [InlineData("trips.read", 403)]
     [InlineData("catalogue.write", 403)]
-    [InlineData("trips.write", 201)]
-    public async Task Create_RequiresTripsWriteScope(string? scopes, int status)
+    [InlineData("trips.write", 403)]
+    [InlineData("catalogue.read", 403)]
+    [InlineData("trips.write catalogue.read", 201)]
+    public async Task Create_RequiresTripsWriteAndCatalogueReadScopes(string? scopes, int status)
     {
         using var factory = new TripsApiFactory();
         TripTestData.SeedAccounts(factory.Upstream);
@@ -41,6 +43,21 @@ public sealed class AuthenticationTests
         using var response = await client.PostAsJsonAsync("/api/v1/trips", TripTestData.OneWayBody());
 
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_WithoutCatalogueRead_IsRefusedBeforeAnyLookup_NotReportedAsMissingReferences()
+    {
+        using var factory = new TripsApiFactory();
+        TripTestData.SeedAccounts(factory.Upstream);
+        TripTestData.SeedHealthyCatalogue(factory.Upstream);
+        using var client = factory.CreateClientFor("alice", "trips.write");
+
+        using var response = await client.PostAsJsonAsync("/api/v1/trips", TripTestData.OneWayBody());
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(factory.Upstream.Calls);
+        Assert.Equal(0, factory.Repository.Count);
     }
 
     [Theory]

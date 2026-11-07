@@ -101,7 +101,7 @@ Endpoint-to-scope policy (catalogue policies implemented in the combined API; ot
 | Transport entries | `catalogue.read` | `catalogue.write` | Preloaded entries are read-only for travellers. |
 | Users | `users.read` (self) | `users.write` (self); `users.admin` for status | Admin status changes need a written reason and an audit entry. |
 | Accommodations | `catalogue.read` | `catalogue.write` | Private places belong to the creator. |
-| Trips | `trips.read` | `trips.write` | Owner only. Implemented by the Trips service (#41): `POST /api/v1/trips` and `GET /api/v1/trips/{id}`. |
+| Trips | `trips.read` | `trips.write` | Owner only. Implemented by the Trips service (#41): `POST /api/v1/trips` and `GET /api/v1/trips/{id}`. Creating a trip also needs `catalogue.read`, because the caller's token is forwarded to the catalogue services to read the referenced places; without it the request is refused with 403 before any lookup. |
 | Settings | `settings.read` | `settings.write` | Self only. |
 | `GET /health` | none | none | Anonymous. |
 

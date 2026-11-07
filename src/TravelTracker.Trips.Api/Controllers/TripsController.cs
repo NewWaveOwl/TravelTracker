@@ -52,12 +52,17 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
     /**
      * Validates every reference and trip rule, then stores the snapshot trip only when all of them pass.
      *
+     * Needs both scopes: trips.write to save, and catalogue.read because the caller's token is forwarded to the
+     * catalogue services, which refuse it without that scope. Checking it here reports a missing scope as 403
+     * instead of letting valid references come back as 404.
+     *
      * @param request Caller-writable trip values; the owner is taken from the validated token.
      * @return 201 with the saved trip and a Location header; 400 for invalid trip data; 401 or 403 for the account;
      * 404 when a referenced place is absent or not visible; 503 when a dependency cannot confirm the request.
      */
     [HttpPost]
     [Authorize(Policy = ScopePolicies.TripsWrite)]
+    [Authorize(Policy = ScopePolicies.CatalogueRead)]
     [ProducesResponseType(typeof(TripResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -68,6 +73,10 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
         var bearerToken = BearerTokenFromHeader();
         if (caller is null || bearerToken is null)
             return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "A validated issuer, subject and access token are required.");
+
+        for (var index = 0; index < request.Legs!.Count; index++)
+            if (request.Legs[index] is null) ModelState.AddModelError($"legs[{index}]", "Each leg must be an object.");
+        if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
         var draft = ToDraft(request);
         if (draft is null) return ValidationProblem(ModelState);
@@ -113,12 +122,12 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
     /**
      * Reads the raw bearer credential that the reference lookups forward to the catalogue services.
      *
-     * @return The token, or null when the Authorization header is not a bearer credential.
+     * @return The token, or null when the Authorization header is not a bearer credential. The scheme name is case-insensitive.
      */
     private string? BearerTokenFromHeader()
     {
         var header = Request.Headers.Authorization.ToString();
-        return header.StartsWith("Bearer ", StringComparison.Ordinal) ? header["Bearer ".Length..].Trim() : null;
+        return header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header["Bearer ".Length..].Trim() : null;
     }
 
     /**
