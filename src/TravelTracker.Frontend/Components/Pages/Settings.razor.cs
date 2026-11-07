@@ -42,6 +42,13 @@ public partial class Settings : IDisposable
     /** time zone names this host knows, offered as suggestions; the service still decides what it accepts. */
     static readonly IReadOnlyList<string> TimeZoneNames = TimeZoneInfo.GetSystemTimeZones().Select(zone => zone.Id).OrderBy(id => id, StringComparer.Ordinal).ToArray();
 
+    /**
+     * zone choices: every zone this host knows, plus the saved value when the host does not know it, so it stays selectable and validation can explain it.
+     */
+    IReadOnlyList<string> TimeZoneOptions => TimeZoneNames.Contains(draft.TimeZone)
+        ? TimeZoneNames
+        : TimeZoneNames.Append(draft.TimeZone).OrderBy(zone => zone, StringComparer.Ordinal).ToArray();
+
     /** saving needs a confirmed revision to echo, write access and no unresolved conflict. */
     bool CanSave => signedIn && canWrite && hasValues && !saving && !loading && !conflict && etag is not null;
 
@@ -245,12 +252,13 @@ public partial class Settings : IDisposable
     string? Invalid(string name) => FieldError(name) is null ? null : "true";
 
     /**
-     * links an input to its error text only while that text exists.
+     * describes an input by its hint, and also by its error text while that text exists.
      * @param name the JSON field name.
-     * @param id the error element id.
-     * @return the id when the field has an error; otherwise null.
+     * @param errorId the error element id.
+     * @param hintId the hint element id, always present.
+     * @return the space separated ids to reference.
      */
-    string? Described(string name, string id) => FieldError(name) is null ? null : id;
+    string Described(string name, string errorId, string hintId) => FieldError(name) is null ? hintId : $"{hintId} {errorId}";
 
     /**
      * gives the theme option a readable label.

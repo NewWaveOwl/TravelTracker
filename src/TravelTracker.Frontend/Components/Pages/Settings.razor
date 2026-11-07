@@ -5,6 +5,7 @@
 
 <PageHeading Title="Settings" />
 <div class="settings-page">
+<p class="settings-intro">Manage your TravelTracker preferences.</p>
 @if (!signedIn && !hasValues && loaded)
 {
     <Feedback Kind="FeedbackKind.Permission" Title="Sign in to manage your settings"><a href="account">Go to your account</a> to sign in.</Feedback>
@@ -36,74 +37,70 @@ else
 
     @if (hasValues)
     {
-        <form class="settings-form" aria-labelledby="settings-heading" aria-busy="@((saving || loading).ToString().ToLowerInvariant())" @onsubmit="SaveAsync" @onsubmit:preventDefault>
-            <h2 id="settings-heading">Your preferences</h2>
+        <form class="settings-form" aria-label="Your preferences" aria-busy="@((saving || loading).ToString().ToLowerInvariant())" @onsubmit="SaveAsync" @onsubmit:preventDefault>
             <fieldset disabled="@(saving || !canWrite || !signedIn)">
-                <div class="settings-grid">
-                    <div class="settings-field">
-                        <label for="settings-theme">Theme
-                            <select id="settings-theme" @bind="draft.Theme" aria-invalid="@(Invalid("theme"))" aria-describedby="@(Described("theme", "settings-theme-error"))">
-                                @foreach (var theme in SettingsRules.Themes) { <option value="@theme">@ThemeLabel(theme)</option> }
-                            </select>
-                        </label>
-                        @if (FieldError("theme") is { } themeMessage) { <small id="settings-theme-error" class="field-error">@themeMessage</small> }
-                    </div>
+                <div class="settings-groups">
+                    <section class="settings-group" aria-labelledby="app-preferences-heading">
+                        <h2 id="app-preferences-heading">App preferences</h2>
+                        <div class="settings-field">
+                            <label for="settings-theme">Theme
+                                <select id="settings-theme" @bind="draft.Theme" aria-invalid="@(Invalid("theme"))" aria-describedby="@(Described("theme", "settings-theme-error", "settings-theme-hint"))">
+                                    @foreach (var theme in SettingsRules.Themes) { <option value="@theme">@ThemeLabel(theme)</option> }
+                                </select>
+                            </label>
+                            <small id="settings-theme-hint" class="settings-hint">Saved for a future dark palette.</small>
+                            @if (FieldError("theme") is { } themeMessage) { <small id="settings-theme-error" class="field-error">@themeMessage</small> }
+                        </div>
+                        <div class="settings-field">
+                            <label for="settings-timezone">Time zone
+                                <select id="settings-timezone" @bind="draft.TimeZone" aria-invalid="@(Invalid("timeZone"))" aria-describedby="@(Described("timeZone", "settings-timezone-error", "settings-timezone-hint"))">
+                                    @foreach (var zone in TimeZoneOptions) { <option value="@zone">@zone</option> }
+                                </select>
+                            </label>
+                            <small id="settings-timezone-hint" class="settings-hint">Saved for future trip times.</small>
+                            @if (FieldError("timeZone") is { } timezoneMessage) { <small id="settings-timezone-error" class="field-error">@timezoneMessage</small> }
+                        </div>
+                    </section>
 
-                    <div class="settings-field">
-                        <label for="settings-transport">Preferred transport mode
-                            <select id="settings-transport" @bind="draft.TransportMode" aria-invalid="@(Invalid("preferredTransportMode"))" aria-describedby="@(Described("preferredTransportMode", "settings-transport-error"))">
-                                @foreach (var mode in SettingsRules.TransportModes) { <option value="@mode">@ModeLabel(mode)</option> }
-                            </select>
-                        </label>
-                        @if (FieldError("preferredTransportMode") is { } transportMessage) { <small id="settings-transport-error" class="field-error">@transportMessage</small> }
-                    </div>
-
-                    <div class="settings-field">
-                        <label for="settings-latitude">Default map latitude (-90 to 90)
-                            <input id="settings-latitude" inputmode="decimal" @bind="draft.Latitude" @bind:event="oninput" aria-invalid="@(Invalid("defaultMapLatitude"))" aria-describedby="@(Described("defaultMapLatitude", "settings-latitude-error"))" />
-                        </label>
-                        @if (FieldError("defaultMapLatitude") is { } latitudeMessage) { <small id="settings-latitude-error" class="field-error">@latitudeMessage</small> }
-                    </div>
-
-                    <div class="settings-field">
-                        <label for="settings-longitude">Default map longitude (-180 to 180)
-                            <input id="settings-longitude" inputmode="decimal" @bind="draft.Longitude" @bind:event="oninput" aria-invalid="@(Invalid("defaultMapLongitude"))" aria-describedby="@(Described("defaultMapLongitude", "settings-longitude-error"))" />
-                        </label>
-                        @if (FieldError("defaultMapLongitude") is { } longitudeMessage) { <small id="settings-longitude-error" class="field-error">@longitudeMessage</small> }
-                    </div>
-
-                    <div class="settings-field">
-                        <label for="settings-zoom">Default map zoom (0 to 20)
-                            <input id="settings-zoom" inputmode="numeric" @bind="draft.Zoom" @bind:event="oninput" aria-invalid="@(Invalid("defaultMapZoom"))" aria-describedby="@(Described("defaultMapZoom", "settings-zoom-error"))" />
-                        </label>
-                        @if (FieldError("defaultMapZoom") is { } zoomMessage) { <small id="settings-zoom-error" class="field-error">@zoomMessage</small> }
-                    </div>
-
-                    <div class="settings-field">
-                        <label for="settings-timezone">Time zone (IANA name)
-                            <input id="settings-timezone" list="settings-time-zones" autocomplete="off" @bind="draft.TimeZone" @bind:event="oninput" aria-invalid="@(Invalid("timeZone"))" aria-describedby="@(Described("timeZone", "settings-timezone-error"))" />
-                        </label>
-                        @if (FieldError("timeZone") is { } timezoneMessage) { <small id="settings-timezone-error" class="field-error">@timezoneMessage</small> }
-                    </div>
-                    <datalist id="settings-time-zones">@foreach (var zone in TimeZoneNames) { <option value="@zone"></option> }</datalist>
+                    <section class="settings-group" aria-labelledby="trip-preferences-heading">
+                        <h2 id="trip-preferences-heading">Trip preferences</h2>
+                        <div class="settings-field">
+                            <label for="settings-transport">Preferred transport mode
+                                <select id="settings-transport" @bind="draft.TransportMode" aria-invalid="@(Invalid("preferredTransportMode"))" aria-describedby="@(Described("preferredTransportMode", "settings-transport-error", "settings-transport-hint"))">
+                                    @foreach (var mode in SettingsRules.TransportModes) { <option value="@mode">@ModeLabel(mode)</option> }
+                                </select>
+                            </label>
+                            <small id="settings-transport-hint" class="settings-hint">The preferred transport mode is applied now as the default mode when you create a transport entry.</small>
+                            @if (FieldError("preferredTransportMode") is { } transportMessage) { <small id="settings-transport-error" class="field-error">@transportMessage</small> }
+                        </div>
+                        <div class="settings-field">
+                            <label for="settings-latitude">Default map latitude (-90 to 90)
+                                <input id="settings-latitude" inputmode="decimal" @bind="draft.Latitude" @bind:event="oninput" aria-invalid="@(Invalid("defaultMapLatitude"))" aria-describedby="@(Described("defaultMapLatitude", "settings-latitude-error", "settings-latitude-hint"))" />
+                            </label>
+                            <small id="settings-latitude-hint" class="settings-hint">Saved for future map support.</small>
+                            @if (FieldError("defaultMapLatitude") is { } latitudeMessage) { <small id="settings-latitude-error" class="field-error">@latitudeMessage</small> }
+                        </div>
+                        <div class="settings-field">
+                            <label for="settings-longitude">Default map longitude (-180 to 180)
+                                <input id="settings-longitude" inputmode="decimal" @bind="draft.Longitude" @bind:event="oninput" aria-invalid="@(Invalid("defaultMapLongitude"))" aria-describedby="@(Described("defaultMapLongitude", "settings-longitude-error", "settings-longitude-hint"))" />
+                            </label>
+                            <small id="settings-longitude-hint" class="settings-hint">Saved for future map support.</small>
+                            @if (FieldError("defaultMapLongitude") is { } longitudeMessage) { <small id="settings-longitude-error" class="field-error">@longitudeMessage</small> }
+                        </div>
+                        <div class="settings-field">
+                            <label for="settings-zoom">Default map zoom (0 to 20)
+                                <input id="settings-zoom" inputmode="numeric" @bind="draft.Zoom" @bind:event="oninput" aria-invalid="@(Invalid("defaultMapZoom"))" aria-describedby="@(Described("defaultMapZoom", "settings-zoom-error", "settings-zoom-hint"))" />
+                            </label>
+                            <small id="settings-zoom-hint" class="settings-hint">Saved for future map support.</small>
+                            @if (FieldError("defaultMapZoom") is { } zoomMessage) { <small id="settings-zoom-error" class="field-error">@zoomMessage</small> }
+                        </div>
+                    </section>
                 </div>
                 <div class="settings-actions">
-                    <button type="submit" disabled="@(!CanSave)">@(saving ? "Saving…" : "Save settings")</button>
+                    <button type="submit" disabled="@(!CanSave)">@(saving ? "Saving…" : "Save changes")</button>
                 </div>
             </fieldset>
         </form>
-
-        <section class="settings-deferred" aria-labelledby="deferred-heading">
-            <h2 id="deferred-heading">Saved for later features</h2>
-            <p>These preferences are stored with your account. This client does not apply them yet, so they change nothing on screen:</p>
-            <ul>
-                <li><strong>Theme</strong>: this client has no dark palette yet.</li>
-                <li><strong>Default map view</strong>: this client has no map yet.</li>
-                <li><strong>Time zone</strong>: this client does not show trip times yet.</li>
-            </ul>
-            <p>The preferred transport mode is applied now as the default mode when you create a transport entry.</p>
-        </section>
     }
 }
 </div>
-

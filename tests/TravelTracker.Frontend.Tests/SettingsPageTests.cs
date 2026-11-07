@@ -77,7 +77,7 @@ public sealed class SettingsPageTests : BunitContext
         page.Find("#settings-latitude").Input("45.5");
         page.Find("#settings-longitude").Input("-73.5");
         page.Find("#settings-zoom").Input("5");
-        page.Find("#settings-timezone").Input("America/Montreal");
+        page.Find("#settings-timezone").Change("America/Montreal");
         page.Find("form.settings-form").Submit();
         page.WaitForAssertion(() => Assert.Contains("Settings saved.", page.Markup));
         Assert.Equal(new SettingsDto("dark", 45.5m, -73.5m, 5, "train", "America/Montreal"), service.Stored);
@@ -92,6 +92,39 @@ public sealed class SettingsPageTests : BunitContext
         Assert.Equal("45.5", reloaded.Find("#settings-latitude").GetAttribute("value"));
         Assert.Equal("5", reloaded.Find("#settings-zoom").GetAttribute("value"));
         Assert.Equal("America/Montreal", reloaded.Find("#settings-timezone").GetAttribute("value"));
+    }
+
+    [Fact]
+    public void ShowsFigmaGroupingWordingAndHintsWithOneSaveButton()
+    {
+        Configure();
+        var page = Render<Settings>();
+        WaitForForm(page);
+        Assert.Contains("Manage your TravelTracker preferences.", page.Markup);
+        Assert.Contains("App preferences", page.Find("[aria-labelledby=app-preferences-heading]").TextContent);
+        Assert.Contains("Trip preferences", page.Find("[aria-labelledby=trip-preferences-heading]").TextContent);
+        Assert.Contains("Saved for a future dark palette.", page.Find("#settings-theme-hint").TextContent);
+        Assert.Contains("Saved for future trip times.", page.Find("#settings-timezone-hint").TextContent);
+        Assert.Equal("Saved for future map support.", page.Find("#settings-latitude-hint").TextContent);
+        Assert.Equal("Saved for future map support.", page.Find("#settings-longitude-hint").TextContent);
+        Assert.Equal("Saved for future map support.", page.Find("#settings-zoom-hint").TextContent);
+        Assert.Contains("The preferred transport mode is applied now", page.Find("#settings-transport-hint").TextContent);
+        Assert.Empty(page.FindAll("datalist"));
+        Assert.Equal("Save changes", page.Find("button[type=submit]").TextContent.Trim());
+    }
+
+    [Fact]
+    public void SavedZoneTheHostDoesNotKnowStaysSelectableAndIsRejectedLikeTheService()
+    {
+        Configure();
+        service.ChangeElsewhere(new SettingsDto("system", 0, 0, 2, "car", "Legacy/Zone"));
+        var page = Render<Settings>();
+        WaitForForm(page);
+        Assert.Equal("Legacy/Zone", page.Find("#settings-timezone").GetAttribute("value"));
+        page.Find("form.settings-form").Submit();
+        page.WaitForAssertion(() => Assert.Contains("Enter an IANA time zone", page.Find("#settings-timezone-error").TextContent));
+        Assert.DoesNotContain(service.Requests, request => request.Method == HttpMethod.Put);
+        Assert.Equal("true", page.Find("#settings-timezone").GetAttribute("aria-invalid"));
     }
 
     [Fact]
