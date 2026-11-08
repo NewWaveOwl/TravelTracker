@@ -1,10 +1,112 @@
+const mapLibreDist = "https://unpkg.com/maplibre-gl@6.17.0/dist/";
+const basemapStyle = "https://tiles.openfreemap.org/styles/liberty";
+let mapLibreAssets;
+let assetAttempt = 0;
+
+function loadMapLibre() {
+    if (!mapLibreAssets) {
+        const stylesheet = document.createElement("link");
+        stylesheet.rel = "stylesheet";
+        stylesheet.href = mapLibreDist + "maplibre-gl.css";
+        const css = new Promise((resolve, reject) => {
+            stylesheet.onload = resolve;
+            stylesheet.onerror = reject;
+        });
+        document.head.append(stylesheet);
+
+        const moduleUrl = new URL("maplibre-gl.mjs", mapLibreDist);
+        if (assetAttempt++ > 0) moduleUrl.searchParams.set("retry", assetAttempt);
+        mapLibreAssets = Promise.all([import(moduleUrl.href), css])
+            .then(([library]) => library)
+            .catch(error => {
+                stylesheet.remove();
+                mapLibreAssets = undefined;
+                throw error;
+            });
+    }
+    return mapLibreAssets;
+}
+
+function attachBasemap(container, planner, initialCamera) {
+    let basemap;
+    let camera = initialCamera;
+    let attempt = 0;
+    let timeout;
+
+    function clearMap() {
+        clearTimeout(timeout);
+        basemap?.remove();
+        basemap = undefined;
+        container.replaceChildren();
+    }
+
+    function notify(ready) {
+        planner.invokeMethodAsync("SetBasemapReady", ready).catch(() => {});
+    }
+
+    async function load() {
+        const generation = ++attempt;
+        clearMap();
+
+        function fail() {
+            if (generation !== attempt) return;
+            attempt++;
+            clearMap();
+            notify(false);
+        }
+
+        timeout = setTimeout(fail, 15000);
+        try {
+            const { Map } = await loadMapLibre();
+            if (generation !== attempt) return;
+
+            const [longitude, latitude, zoom] = camera;
+            basemap = new Map({
+                container,
+                style: basemapStyle,
+                center: [longitude, latitude],
+                zoom,
+                interactive: false,
+                trackResize: false
+            });
+            const canvas = basemap.getCanvas();
+            canvas.tabIndex = -1;
+            canvas.setAttribute("aria-hidden", "true");
+            basemap.once("load", () => {
+                if (generation !== attempt) return;
+                clearTimeout(timeout);
+                notify(true);
+            });
+        } catch {
+            fail();
+        }
+    }
+
+    void load();
+    return {
+        setCamera(next) {
+            camera = next;
+            const [longitude, latitude, zoom] = camera;
+            basemap?.jumpTo({ center: [longitude, latitude], zoom });
+        },
+        resize() { basemap?.resize(); },
+        retry() { void load(); },
+        disconnect() {
+            attempt++;
+            clearMap();
+        }
+    };
+}
+
 export function viewBoxPoint(svg, clientX, clientY) {
     const point = new DOMPoint(clientX, clientY).matrixTransform(svg.getScreenCTM().inverse());
     return [point.x, point.y];
 }
 
-export function watchViewport(svg, map) {
+export function watchViewport(svg, container, map, camera) {
+    const basemap = attachBasemap(container, map, camera);
     const observer = new ResizeObserver(([entry]) => {
+        basemap.resize();
         const { width, height } = entry.contentRect;
         map.invokeMethodAsync("ResizeViewport", Math.round(width), Math.round(height)).catch(() => {});
     });
@@ -116,9 +218,12 @@ export function watchViewport(svg, map) {
     }, options);
 
     return {
+        setCamera: basemap.setCamera,
+        retryBasemap: basemap.retry,
         disconnect() {
             events.abort();
             observer.disconnect();
+            basemap.disconnect();
         }
     };
 }

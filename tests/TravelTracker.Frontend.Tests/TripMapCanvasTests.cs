@@ -8,6 +8,8 @@ namespace TravelTracker.Frontend.Tests;
 /** Exercises map picks and marker selections through rendered Blazor controls. */
 public sealed class TripMapCanvasTests : BunitContext
 {
+    public TripMapCanvasTests() => JSInterop.Mode = JSRuntimeMode.Loose;
+
     [Fact]
     public void ReturnStopsAtTheSameCoordinatesStayIndividuallySelectable()
     {
@@ -37,7 +39,8 @@ public sealed class TripMapCanvasTests : BunitContext
         var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, [east, west]));
 
         Assert.Equal(2, map.FindAll(".trip-marker").Count);
-        Assert.NotEmpty(map.FindAll("image[href^='https://tile.openstreetmap.org/']"));
+        Assert.Single(map.FindAll(".map-basemap"));
+        Assert.Empty(map.FindAll("image[href^='https://tile.openstreetmap.org/']"));
         Assert.All(map.FindAll(".trip-marker image"), pin =>
         {
             Assert.Equal("assets/trip-map/pin-transport_stop.svg", pin.GetAttribute("href"));
@@ -71,7 +74,6 @@ public sealed class TripMapCanvasTests : BunitContext
     [Fact]
     public async Task FullMapUsesTheMeasuredViewportAndKeepsPinsAtTheirExportedSize()
     {
-        JSInterop.Mode = JSRuntimeMode.Loose;
         var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
         var map = Render<TripMapCanvas>(parameters => parameters
             .Add(component => component.FullScreen, true)
@@ -84,6 +86,35 @@ public sealed class TripMapCanvasTests : BunitContext
         Assert.Equal("54", pin.GetAttribute("width"));
         Assert.Equal("76", pin.GetAttribute("height"));
         Assert.Equal("assets/trip-map/pin-accommodation.svg", pin.GetAttribute("href"));
+    }
+
+    [Fact]
+    public async Task BasemapFollowsPlannerZoomAndCanRetryAfterLoadFailure()
+    {
+        var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
+        var viewport = module.SetupModule("watchViewport", _ => true);
+        viewport.SetupVoid("setCamera", _ => true).SetVoidResult();
+        viewport.SetupVoid("retryBasemap", _ => true).SetVoidResult();
+        var map = Render<TripMapCanvas>();
+
+        var initialCamera = Assert.IsType<double[]>(module.VerifyInvoke("watchViewport").Arguments[3]);
+        Assert.Equal(-73.5674, initialCamera[0], 6);
+        Assert.Equal(45.5019, initialCamera[1], 6);
+        Assert.Equal(12, initialCamera[2]);
+
+        map.Find("button[aria-label='Zoom in']").Click();
+        var zoomedCamera = Assert.IsType<double[]>(viewport.VerifyInvoke("setCamera").Arguments[0]);
+        Assert.Equal(initialCamera[0], zoomedCamera[0], 6);
+        Assert.Equal(initialCamera[1], zoomedCamera[1], 6);
+        Assert.Equal(13, zoomedCamera[2]);
+
+        await map.InvokeAsync(() => map.Instance.SetBasemapReady(false));
+        Assert.Equal("Map background unavailable.", map.Find(".map-status [aria-live]").TextContent);
+        map.Find(".map-status button").Click();
+        viewport.VerifyInvoke("retryBasemap");
+
+        await map.InvokeAsync(() => map.Instance.SetBasemapReady(true));
+        Assert.Empty(map.FindAll(".map-status"));
     }
 
     [Fact]

@@ -19,14 +19,8 @@
         </button>
     </div>
     <div class="map-frame">
+        <div @ref="basemap" class="map-basemap"></div>
         <svg @ref="viewport" viewBox="@($"0 0 {ViewportWidth} {ViewportHeight}")" role="group" data-marker-drop="@(AllowMarkerDrop ? "true" : null)" tabindex="0" aria-label="Map with numbered trip stops. Drag or use arrow keys to pan." @onkeydown="PanWithKey">
-            @foreach (var tile in VisibleTiles())
-            {
-                <image @key="(zoom, tile.Column, tile.Row)"
-                       href="@($"https://tile.openstreetmap.org/{zoom}/{tile.WrappedColumn}/{tile.Row}.png")"
-                       x="@Number(tile.X)" y="@Number(tile.Y)" width="@TileSize" height="@TileSize"
-                       preserveAspectRatio="none" pointer-events="none" aria-hidden="true" />
-            }
             @foreach (var connection in connections)
             {
                 <path class="route-halo" d="@connection.Path" pointer-events="none" aria-hidden="true" />
@@ -87,7 +81,16 @@
                 </foreignObject>
             }
         </svg>
-        <a class="map-credit" href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>
+        @if (basemapReady != true)
+        {
+            <div class="map-status">
+                <span aria-live="polite">@(basemapReady is null ? "Loading map…" : "Map background unavailable.")</span>
+                @if (basemapReady == false)
+                {
+                    <button type="button" class="secondary" @onclick="RetryBasemapAsync">Retry map</button>
+                }
+            </div>
+        }
     </div>
     @if (CanPick)
     {
@@ -122,9 +125,13 @@
     private const double MaximumLatitude = 85.05112878;
 
     private ElementReference viewport;
+    private ElementReference basemap;
     private IJSObjectReference? pointerModule;
-    private IJSObjectReference? resizeObserver;
+    private IJSObjectReference? mapViewport;
     private DotNetObjectReference<TripMapCanvas>? mapReference;
+    private (double X, double Y, int Zoom)? basemapCamera;
+    private bool? basemapReady;
+    private bool disposed;
     private (decimal Lat, decimal Lon)[] previousStops = [];
     private int previousSelection = -1;
     private bool hasMeasuredViewport;
@@ -138,21 +145,73 @@
     private string Icon(string code) => Assets[$"assets/trip-map/{code}.svg"];
     private string Pin(string type) => Icon($"pin-{type}");
 
-    /** Watches the full-screen SVG so tiles and pins stay at the correct scale on resize. */
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender || !FullScreen) return;
+    /** Keeps the MapLibre basemap aligned with the editable overlay. */
+    protected override Task OnAfterRenderAsync(bool firstRender) => UpdateBasemapAsync(firstRender);
 
+    private async Task UpdateBasemapAsync(bool initialize)
+    {
         try
         {
-            pointerModule ??= await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Trips/TripMapCanvas.razor.js");
-            mapReference = DotNetObjectReference.Create(this);
-            resizeObserver = await pointerModule.InvokeAsync<IJSObjectReference>("watchViewport", viewport, mapReference);
+            if (initialize)
+            {
+                var module = pointerModule ?? await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Trips/TripMapCanvas.razor.js");
+                if (disposed)
+                {
+                    await module.DisposeAsync();
+                    return;
+                }
+
+                pointerModule = module;
+                mapReference ??= DotNetObjectReference.Create(this);
+                var initial = (center.X, center.Y, zoom);
+                var instance = await module.InvokeAsync<IJSObjectReference>("watchViewport", viewport, basemap, mapReference, CameraArguments());
+                if (disposed)
+                {
+                    if (instance is not null) await ReleaseViewportAsync(instance);
+                    return;
+                }
+
+                mapViewport = instance;
+                basemapCamera = initial;
+            }
+
+            var camera = (center.X, center.Y, zoom);
+            if (!disposed && mapViewport is not null && camera != basemapCamera)
+            {
+                basemapCamera = camera;
+                await mapViewport.InvokeVoidAsync("setCamera", CameraArguments());
+            }
         }
         catch (JSDisconnectedException) { }
+        catch (JSException) { await SetBasemapReady(false); }
     }
 
-    /** Updates the tile viewport without resetting a traveller's pan or zoom. */
+    private double[] CameraArguments()
+    {
+        var (latitude, longitude) = GeographicPoint(center);
+        // MapLibre uses 512 pixels at zoom zero. The overlay uses 256.
+        return [longitude, latitude, zoom - 1];
+    }
+
+    /** Reports whether the vector basemap loaded while leaving the planner controls usable. */
+    [JSInvokable]
+    public Task SetBasemapReady(bool ready) => InvokeAsync(() =>
+    {
+        if (disposed) return;
+        basemapReady = ready;
+        StateHasChanged();
+    });
+
+    private async Task RetryBasemapAsync()
+    {
+        basemapReady = null;
+        if (mapViewport is null)
+            await UpdateBasemapAsync(initialize: true);
+        else
+            await mapViewport.InvokeVoidAsync("retryBasemap");
+    }
+
+    /** Updates the map viewport without resetting a traveller's pan or zoom. */
     [JSInvokable]
     public void ResizeViewport(int width, int height)
     {
@@ -283,27 +342,6 @@
         }
 
         return markers.OrderBy(marker => marker.Index == SelectedIndex).ThenBy(marker => marker.Index);
-    }
-
-    /**
-     * Returns the visible tile range with wrapped columns and clipped rows.
-     * @return Tiles intersecting the viewport, with their SVG positions.
-     */
-    private IEnumerable<(int Column, int Row, int WrappedColumn, double X, double Y)> VisibleTiles()
-    {
-        var origin = Origin;
-        var tileCount = 1 << zoom;
-        var firstColumn = (int)Math.Floor(origin.X / TileSize);
-        var lastColumn = (int)Math.Ceiling((origin.X + ViewportWidth) / TileSize);
-        var firstRow = Math.Max(0, (int)Math.Floor(origin.Y / TileSize));
-        var lastRow = Math.Min(tileCount, (int)Math.Ceiling((origin.Y + ViewportHeight) / TileSize));
-
-        for (var row = firstRow; row < lastRow; row++)
-        {
-            for (var column = firstColumn; column < lastColumn; column++)
-                yield return (column, row, (column % tileCount + tileCount) % tileCount,
-                    column * TileSize - origin.X, row * TileSize - origin.Y);
-        }
     }
 
     /** Centers and zooms the viewport around the planned stops, including routes across the date line. */
@@ -438,10 +476,13 @@
     /** @return The latitude and longitude for a world-space point. */
     private static (decimal Lat, decimal Lon) Unproject((double X, double Y) point)
     {
-        var latitude = Math.Atan(Math.Sinh(Math.PI * (1 - 2 * Math.Clamp(point.Y, 0, 1)))) * 180 / Math.PI;
-        var longitude = (point.X - Math.Floor(point.X)) * 360 - 180;
+        var (latitude, longitude) = GeographicPoint(point);
         return (Math.Round((decimal)latitude, 6), Math.Round((decimal)longitude, 6));
     }
+
+    private static (double Lat, double Lon) GeographicPoint((double X, double Y) point) =>
+        (Math.Atan(Math.Sinh(Math.PI * (1 - 2 * Math.Clamp(point.Y, 0, 1)))) * 180 / Math.PI,
+            (point.X - Math.Floor(point.X)) * 360 - 180);
 
     /**
      * Activates a numbered marker with the same keys as a button.
@@ -467,21 +508,24 @@
     private static string Number(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     /**
-     * Releases the pointer conversion module when leaving the map.
+     * Releases the browser map, pointer events and JavaScript module when leaving the map.
      * @return Completion of the release, including when the circuit has already closed.
      */
     public async ValueTask DisposeAsync()
     {
+        disposed = true;
         try
         {
-            if (resizeObserver is not null)
-            {
-                await resizeObserver.InvokeVoidAsync("disconnect");
-                await resizeObserver.DisposeAsync();
-            }
+            if (mapViewport is not null) await ReleaseViewportAsync(mapViewport);
             if (pointerModule is not null) await pointerModule.DisposeAsync();
         }
         catch (JSDisconnectedException) { }
         finally { mapReference?.Dispose(); }
+    }
+
+    private static async ValueTask ReleaseViewportAsync(IJSObjectReference instance)
+    {
+        await instance.InvokeVoidAsync("disconnect");
+        await instance.DisposeAsync();
     }
 }
