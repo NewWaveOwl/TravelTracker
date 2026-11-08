@@ -34,7 +34,7 @@ public sealed class ProfileEditModelTests
     public void InvalidUsernameProducesFieldAssociatedError()
     {
         var model = new ProfileEditModel(new SelfUserProfile(Guid.NewGuid(), "traveller", "active", "traveller", "traveller@example.test"));
-        model.Username = "x!";
+        model.Username = "abc!";
 
         var errors = Validate(model);
 

@@ -198,7 +198,7 @@ public sealed class AccountTests : BunitContext
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         page.Find("button").Click();
-        page.Find("#profile-username").Change("x!");
+        page.Find("#profile-username").Change("abc!");
         page.Find("button[type='submit']").Click();
         Assert.Contains("Use only letters", page.Markup);
         Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
