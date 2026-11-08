@@ -447,3 +447,71 @@ transfers stay below each card. */
 .settings-alert h2, .settings-alert p { color: hsl(0, 75%, 25%); margin: 0; }
 .settings-alert a { color: hsl(0, 75%, 25%); }
 .settings-status { margin: 0; padding: 16px 24px; background: hsl(120, 25%, 75%); }
+
+/* M3-20 accommodation workspace */
+main:has(.accommodation-workspace) { max-width: 1536px; padding: 32px 48px 80px; }
+.accommodation-workspace { display: flex; flex-direction: column; gap: 24px; }
+.accommodation-heading { min-height: 0; height: auto; padding: 28px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; color: #fff; background: var(--forest); }
+.accommodation-heading h1 { margin: 4px 0 8px; font-size: 48px; line-height: 1.15; }
+.accommodation-heading p { margin: 0; }
+.accommodation-columns { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr); gap: 24px; align-items: start; }
+.accommodation-catalogue, .accommodation-details { min-width: 0; padding: 28px; background: #fff; border: 1px solid var(--border); }
+.accommodation-catalogue h2, .accommodation-details h2 { margin-bottom: 20px; color: var(--forest); font-size: 32px; line-height: 1.2; }
+.accommodation-search { display: flex; align-items: end; gap: 16px; margin-bottom: 20px; }
+.accommodation-search label { flex: 1; min-width: 0; }
+.accommodation-search .actions { display: flex; gap: 10px; }
+.accommodation-results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.accommodation-card { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; background: #eef2e8; border: 2px solid transparent; }
+.accommodation-card.selected { border-color: var(--forest); background: #e2eadc; }
+.accommodation-card h3 { margin: 0; overflow-wrap: anywhere; font: 28px/1.25 'Aldrich', sans-serif; color: var(--forest); }
+.accommodation-card p { margin: 0 0 auto; font-size: 22px; line-height: 1.35; overflow-wrap: anywhere; }
+.accommodation-card button { margin-top: 8px; }
+.accommodation-visibility { display: inline-block; padding: 3px 10px; background: #dce5d7; color: var(--forest); font: 16px/1.5 'Aldrich', sans-serif; letter-spacing: .04em; }
+.accommodation-count { margin: 0 0 14px; color: var(--forest); font: 16px/1.5 'Aldrich', sans-serif; }
+.accommodation-empty { padding: 24px; background: #f5f1e8; }
+.accommodation-empty h3 { margin: 0 0 8px; color: var(--forest); }
+.accommodation-empty p { margin: 0; font-size: 22px; }
+.accommodation-details { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; background: #f4f0e8; }
+.accommodation-details h2, .accommodation-details p { margin: 0; overflow-wrap: anywhere; }
+.accommodation-details dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 20px; width: 100%; margin: 4px 0; font-size: 22px; }
+.accommodation-details dd { margin: 0; overflow-wrap: anywhere; }
+.accommodation-status { margin: 0; padding: 12px 18px; background: #e2eadc; }
+.accommodation-readonly { margin: 20px 0 0; padding: 14px 18px; background: #f5f1e8; font-size: 20px; }
+.accommodation-feedback, .accommodation-error { padding: 24px; background: #f5f1e8; border: 2px solid var(--border); }
+.accommodation-feedback h2, .accommodation-error h2 { margin: 0 0 10px; font-size: 28px; line-height: 1.25; }
+.accommodation-feedback p, .accommodation-error p { margin: 0 0 12px; font-size: 22px; }
+.accommodation-error { color: var(--error); background: #fce8e6; border-color: var(--error); }
+.accommodation-error ul { margin: 0 0 12px; }
+.accommodation-modal-backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 24px; background: rgb(0 0 0 / 55%); }
+.accommodation-modal { width: min(760px, 100%); max-height: min(92vh, 980px); overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding: 30px; background: #f0eadf; box-shadow: 0 18px 64px rgb(0 0 0 / 30%); }
+.accommodation-modal>header { height: auto; min-height: 0; margin: -30px -30px 0; padding: 22px 30px; display: flex; justify-content: space-between; gap: 16px; background: var(--forest); color: #fff; }
+.accommodation-modal>header h2 { font-size: 30px; line-height: 1.2; }
+.accommodation-modal>p { margin: 0; font-size: 21px; }
+.accommodation-modal form fieldset { display: flex; flex-direction: column; gap: 14px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.accommodation-modal label { display: flex; flex-direction: column; gap: 5px; font-size: 21px; line-height: 1.35; }
+.accommodation-modal input, .accommodation-modal select, .accommodation-search input { width: 100%; min-width: 0; min-height: 54px; padding: 10px 14px; border: 2px solid #b8c5b3; border-radius: 3px; background: #fff; color: #000; font: 22px/1.35 'Atkinson Hyperlegible', sans-serif; }
+.accommodation-coordinate-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.accommodation-modal .field-error { display: block; color: var(--error); font-size: 18px; line-height: 1.3; }
+.accommodation-modal input[aria-invalid=true], .accommodation-modal select[aria-invalid=true] { border-color: var(--error); }
+.accommodation-private-note { margin: 0; padding: 10px 14px; background: #e2eadc; color: var(--forest); }
+.accommodation-modal .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+.accommodation-modal .accommodation-error { padding: 14px 18px; }
+.accommodation-modal .accommodation-error h3 { margin: 0 0 6px; font: 22px/1.25 'Aldrich', sans-serif; }
+.accommodation-modal .accommodation-error p { margin: 0; font-size: 19px; }
+@media(max-width: 1100px) {
+    main:has(.accommodation-workspace) { padding: 24px; }
+    .accommodation-columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media(max-width: 640px) {
+    main:has(.accommodation-workspace) { padding: 18px 14px 48px; }
+    .accommodation-heading { align-items: flex-start; flex-direction: column; padding: 20px; }
+    .accommodation-heading h1 { font-size: 36px; line-height: 1.2; }
+    .accommodation-catalogue, .accommodation-details { padding: 18px; }
+    .accommodation-results, .accommodation-coordinate-grid { grid-template-columns: minmax(0, 1fr); }
+    .accommodation-search { align-items: stretch; flex-direction: column; }
+    .accommodation-search .actions { flex-wrap: wrap; }
+    .accommodation-modal-backdrop { padding: 10px; }
+    .accommodation-modal { max-height: 96vh; padding: 18px; }
+    .accommodation-modal>header { margin: -18px -18px 0; padding: 16px 18px; }
+    .accommodation-modal>header h2 { font-size: 24px; }
+}

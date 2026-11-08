@@ -107,6 +107,6 @@ Expected auth/error handling follows the existing API client: missing/invalid be
 - Search response does not identify record ownership, only visibility. UI must avoid labeling an item as "yours" based on visibility alone.
 - Trip selection is in-memory only because the current `/new-trip` page does not save a trip/stay. M3-20 should not claim restart persistence for the selected draft.
 
-## Approval gate
+## Approval and implementation status
 
-This document is the Research → Plan deliverable only. No product code has been changed. Review the proposed scope and file list before implementation starts.
+The owner approved this plan in chat before implementation began. Implementation is complete on `accomodation-search-creative-view`; behavior and validation evidence are recorded in [`docs/m3-20-implementation.md`](../m3-20-implementation.md), with the read-only review in [`docs/m3-20-review.md`](../m3-20-review.md).

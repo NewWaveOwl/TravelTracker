@@ -50,6 +50,7 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
 
     static bool AllowedQuery(string service, string path, string query) =>
         service == "Attractions" && path == "/api/v1/attractions" && NameQuery().IsMatch(query) ||
+        service == "Accommodations" && path == "/api/v1/accommodations" && NameQuery().IsMatch(query) ||
         service == "Transport" && (path == "/api/v1/transport-modes" && TransportQuery().IsMatch(query) || path == "/api/v1/route-points" && PointQuery().IsMatch(query));
 
     [GeneratedRegex("^name=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})*&code=(?:car|bus|train|pedestrian|bike|plane)?$")]

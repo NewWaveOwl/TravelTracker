@@ -17,6 +17,7 @@ builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationSta
 builder.Services.AddScoped<ProtectedClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Transport.TransportClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Attractions.AttractionsClient>();
+builder.Services.AddScoped<TravelTracker.Frontend.Api.Accommodations.AccommodationsClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Users.UsersClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Services.AdminAccessState>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Settings.SettingsClient>();
