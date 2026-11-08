@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -75,6 +77,45 @@ public sealed class TripPlannerTests : BunitContext
             Assert.Empty(routes.FindAll(".trip-stop"));
             Assert.Equal("", routes.Find(".trip-basics input").GetAttribute("value"));
         });
+    }
+
+    [Fact]
+    public async Task SaveIgnoresASecondClickUntilTheApiConfirms()
+    {
+        var writes = 0;
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reply = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Configure(async (request, token) =>
+        {
+            if (request.Method == HttpMethod.Get)
+                return Json(Saved);
+
+            Assert.Equal(HttpMethod.Put, request.Method);
+            writes++;
+            started.TrySetResult(true);
+            return await reply.Task.WaitAsync(token);
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        Click(page, "Review on map");
+        var save = page.Find(".trip-review button");
+        var firstClick = save.TriggerEventAsync("onclick", new MouseEventArgs());
+
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.True(page.Find(".trip-review button").HasAttribute("disabled"));
+            Assert.DoesNotContain("Saved Weekend", page.Markup);
+            await save.TriggerEventAsync("onclick", new MouseEventArgs()).WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal(1, writes);
+        }
+        finally
+        {
+            reply.TrySetResult(Json(Saved));
+        }
+
+        await firstClick;
+        Assert.Contains("Saved Weekend", page.Markup);
     }
 
     [Fact]
@@ -194,9 +235,57 @@ public sealed class TripPlannerTests : BunitContext
         Click(routes.FindComponent<NewTrip>(), "Standard editor");
         Assert.EndsWith("/new-trip", navigation.Uri);
         Assert.Empty(routes.FindAll(".trip-map-canvas"));
+        Assert.Empty(JSInterop.Invocations["confirm"]);
 
         Task NavigateUsingHeader(string path) => routes.InvokeAsync(() =>
             navigation.NavigateTo(routes.Find($"a[href='{path}']").GetAttribute("href")!));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LeavingThePlannerWithUnsavedEditsRequiresConfirmation(bool discard)
+    {
+        Configure((_, _) => throw new InvalidOperationException("Leaving must not call a service."));
+        JSInterop.Setup<bool>("confirm", _ => true).SetResult(discard);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/new-trip");
+        var routes = Render<Routes>();
+
+        Assert.False(routes.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
+        routes.Find(".trip-basics input").Change("Unsaved weekend");
+        Assert.True(routes.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
+
+        await routes.InvokeAsync(() => navigation.NavigateTo("/"));
+
+        Assert.Single(JSInterop.Invocations["confirm"]);
+        if (discard)
+        {
+            Assert.Equal(navigation.BaseUri, navigation.Uri);
+            Assert.Empty(routes.FindComponents<NewTrip>());
+        }
+        else
+        {
+            Assert.EndsWith("/new-trip", navigation.Uri);
+            Assert.Equal("Unsaved weekend", routes.Find(".trip-basics input").GetAttribute("value"));
+        }
+    }
+
+    [Fact]
+    public async Task DecliningADifferentSavedTripLinkKeepsTheCurrentDraft()
+    {
+        Configure((_, _) => throw new InvalidOperationException("A declined link must not load the trip."));
+        JSInterop.Setup<bool>("confirm", _ => true).SetResult(false);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/map");
+        var routes = Render<Routes>();
+        routes.Find(".trip-basics input").Change("Unsaved weekend");
+
+        await routes.InvokeAsync(() => navigation.NavigateTo($"/map/{TripId:D}"));
+
+        Assert.Single(JSInterop.Invocations["confirm"]);
+        Assert.EndsWith("/map", navigation.Uri);
+        Assert.Equal("Unsaved weekend", routes.Find(".trip-basics input").GetAttribute("value"));
     }
 
     [Fact]

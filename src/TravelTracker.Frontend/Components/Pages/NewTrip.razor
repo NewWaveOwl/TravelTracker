@@ -7,6 +7,7 @@
 @using TravelTracker.Frontend.Features.Trips
 
 <PageTitle>@(showMap ? "Map View" : "Trip Editor") | TravelTracker</PageTitle>
+<NavigationLock ConfirmExternalNavigation="dirty" OnBeforeInternalNavigation="ConfirmDraftNavigationAsync" />
 
 <div @ref="plannerElement" class="trip-planner @(MapVisible ? "map-workspace" : null)">
     @if (MapVisible)

@@ -152,6 +152,8 @@ Press `Ctrl+C` in the terminal to stop the app.
    return, choose a mode again and select the pins in the opposite direction.
    Select a connection on the map to edit its times. Choose **Review on map**
    to check and save the ordered itinerary. Reopen a saved trip by its link or ID.
+   The draft is shared between **Map View** and **New Trip**. Leaving or reloading
+   the planner with unsaved changes prompts for confirmation.
 
 Newly picked Stop markers go into the shared transport-stop catalogue. New
 attractions and accommodations are private by default.

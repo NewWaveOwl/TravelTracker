@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.JSInterop;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Accommodations;
@@ -203,7 +204,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Initializes the entry view and loads a trip when a saved-trip link is opened. */
     protected override async Task OnParametersSetAsync()
     {
-        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+        var path = PlannerPath(Navigation.Uri);
         if (path == observedPath)
             return;
 
@@ -234,6 +235,43 @@ public partial class NewTrip : IAsyncDisposable
             errors = [];
             saveFailed = false;
         }
+    }
+
+    /**
+     * Gets the planner route without a query, fragment or trailing slash.
+     * @param location The target URL or a relative route.
+     * @return The normalized route relative to the app base.
+     */
+    string PlannerPath(string location) =>
+        Navigation.ToBaseRelativePath(Navigation.ToAbsoluteUri(location).AbsoluteUri).Split('?', '#')[0].TrimEnd('/');
+
+    /**
+     * Confirms navigation that would abandon the current draft.
+     * @param context The target location and cancellation for the navigation attempt.
+     */
+    async Task ConfirmDraftNavigationAsync(LocationChangingContext context)
+    {
+        if (!dirty)
+            return;
+
+        var path = PlannerPath(context.TargetLocation);
+        var segments = path.Split('/');
+        var planner = segments[0].Equals("map", StringComparison.OrdinalIgnoreCase) ||
+            segments[0].Equals("new-trip", StringComparison.OrdinalIgnoreCase);
+        var sameDraft = planner && (segments.Length == 1 && draft.Id is null ||
+            segments.Length == 2 && Guid.TryParse(segments[1], out var id) && id == draft.Id);
+        if (sameDraft)
+            return;
+
+        try
+        {
+            var discard = await JavaScript.InvokeAsync<bool>("confirm", context.CancellationToken,
+                "You have unsaved trip changes. Leave this page and discard them?");
+            if (!discard)
+                context.PreventNavigation();
+        }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested) { }
+        catch (JSDisconnectedException) { context.PreventNavigation(); }
     }
 
     /** Cancels outstanding calls and unregisters the shortcut when the editor closes. */
