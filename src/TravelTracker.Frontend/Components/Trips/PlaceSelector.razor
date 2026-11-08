@@ -1,0 +1,36 @@
+<fieldset class="place-selector" aria-describedby="@(Error is null ? null : Id + "-error")">
+    <legend>@Label</legend>
+    @if (Value is not null && !changing)
+    {
+        <p class="place-selected" id="@Id" tabindex="-1">@Value.Name <small>(@TypeLabel(Value.Type)) @Value.Address</small></p>
+        <button type="button" class="secondary" @onclick="() => changing = true">Change</button>
+    }
+    else
+    {
+        @if (Types.Length > 1)
+        {
+            <label for="@(Id)-type">Kind of place
+                <select id="@(Id)-type" @bind="type">
+                    @foreach (var option in Types) { <option value="@option">@TypeLabel(option)</option> }
+                </select>
+            </label>
+        }
+        <label for="@(Id)-search">Search @TypeLabel(type).ToLowerInvariant() by name
+            <input id="@(Id)-search" type="search" @bind="query" @bind:event="oninput" @onkeydown="KeyPressedAsync" />
+        </label>
+        <button type="button" id="@(Id)-search-button" class="secondary" @onclick="SearchAsync" disabled="@busy">@(busy ? "Searching…" : "Search")</button>
+        @if (failure is not null) { <p class="field-error" role="alert">@failure</p> }
+        @if (searched && results.Count == 0 && failure is null) { <p role="status">No matching @TypeLabel(type).ToLowerInvariant() found.</p> }
+        @if (results.Count > 0)
+        {
+            <ul class="place-results" aria-label="Search results">
+                @foreach (var result in results)
+                {
+                    var choice = result;
+                    <li><span>@choice.Name <small>@choice.Address</small></span> <button type="button" @onclick="() => Choose(choice)">Select</button></li>
+                }
+            </ul>
+        }
+    }
+    @if (Error is not null) { <p class="field-error" id="@(Id)-error" role="alert">@Error</p> }
+</fieldset>
