@@ -4,7 +4,7 @@
     <header class="accommodation-heading">
         <div>
             <small>YOUR TRIP / LODGING</small>
-            <h1 id="accommodation-heading">Find a place to stay</h1>
+            <h1 id="accommodation-heading" tabindex="-1" @ref="workspaceHeading">Find a place to stay</h1>
             <p>Search visible stays or add a place to your trip draft.</p>
         </div>
         @if (canWrite && signedIn)
@@ -20,6 +20,7 @@
     else if (signedIn && !canRead)
     {
         <div class="accommodation-feedback" role="alert"><h2>Accommodation read access required</h2><p>Your session does not have <code>catalogue.read</code>. Sign in with the approved catalogue read grant to browse accommodations.</p></div>
+        @if (status is not null) { <p class="accommodation-status" role="status">@status</p> }
     }
     else if (signedIn)
     {

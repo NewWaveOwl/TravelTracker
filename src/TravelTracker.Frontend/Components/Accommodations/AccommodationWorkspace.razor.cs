@@ -30,7 +30,7 @@ public partial class AccommodationWorkspace : IDisposable
     IReadOnlyDictionary<string, string[]> errors = new Dictionary<string, string[]>();
     bool signedIn, canRead, canWrite, canShare, loaded, searching, loadingDetails, showCreate, saving, busy, disposed, retrySearch;
     bool focusError, focusDetails, focusNameOnRender, focusAddOnRender;
-    ElementReference errorSummary, createErrorSummary, detailsHeading, addButton, firstModalControl, lastModalControl;
+    ElementReference errorSummary, createErrorSummary, detailsHeading, workspaceHeading, addButton, firstModalControl, lastModalControl;
     CancellationTokenSource? request;
     int generation;
 
@@ -54,7 +54,12 @@ public partial class AccommodationWorkspace : IDisposable
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (focusNameOnRender && showCreate) { focusNameOnRender = false; await firstModalControl.FocusAsync(); }
-        else if (focusAddOnRender && !showCreate) { focusAddOnRender = false; await addButton.FocusAsync(); }
+        else if (focusAddOnRender && !showCreate)
+        {
+            focusAddOnRender = false;
+            if (signedIn && canWrite) await addButton.FocusAsync();
+            else await workspaceHeading.FocusAsync();
+        }
         else if (focusError) { focusError = false; if (showCreate) await createErrorSummary.FocusAsync(); else await errorSummary.FocusAsync(); }
         if (focusDetails && selected is not null) { focusDetails = false; await detailsHeading.FocusAsync(); }
     }
@@ -198,30 +203,34 @@ public partial class AccommodationWorkspace : IDisposable
             var saved = await Client.CreateAsync(draft.ToRequest(), current.Token);
             if (!Current(version)) return;
             selected = saved;
-            focusDetails = true;
+            focusDetails = canRead;
             results = string.IsNullOrWhiteSpace(query)
                 ? results.Append(saved).DistinctBy(item => item.AccommodationId).OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase).ThenBy(item => item.AccommodationId).ToArray()
                 : results;
             showCreate = false; draft = new(); formError = null; errors = new Dictionary<string, string[]>();
+            focusAddOnRender = !canRead;
             await SelectionChanged.InvokeAsync(saved);
             if (!Current(version)) return;
             status = "Place saved and selected for this trip draft.";
-            try
+            if (canRead)
             {
-                var refreshed = await Client.SearchAsync(query, current.Token);
-                if (Current(version)) results = refreshed;
-            }
-            catch (OperationCanceledException) when (current.IsCancellationRequested) { }
-            catch (ApiError failure)
-            {
-                if (!Current(version)) return;
-                if (failure.Status is 401 or 403)
+                try
                 {
-                    await HandleReadFailure(failure, searchFailure: true);
-                    if (failure.Status == 403)
-                        status = "Place saved, but catalogue access is now denied. It is not selected in this trip draft.";
+                    var refreshed = await Client.SearchAsync(query, current.Token);
+                    if (Current(version)) results = refreshed;
                 }
-                else { error = failure; retrySearch = true; status = "Place saved and selected. Search results could not be refreshed; retry the search instead of submitting again."; }
+                catch (OperationCanceledException) when (current.IsCancellationRequested) { }
+                catch (ApiError failure)
+                {
+                    if (!Current(version)) return;
+                    if (failure.Status is 401 or 403)
+                    {
+                        await HandleReadFailure(failure, searchFailure: true);
+                        if (failure.Status == 403)
+                            status = "Place saved, but catalogue access is now denied. It is not selected in this trip draft.";
+                    }
+                    else { error = failure; retrySearch = true; status = "Place saved and selected. Search results could not be refreshed; retry the search instead of submitting again."; }
+                }
             }
         }
         catch (OperationCanceledException) when (current.IsCancellationRequested) { }

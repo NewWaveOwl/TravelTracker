@@ -22,6 +22,20 @@ Design references: [search/results](https://www.figma.com/design/7eOFtBm64Ep9fQX
 
 The VSTest host needed loopback permission in this environment; the first restricted run could not start it. The successful test results above are from the subsequent loopback-enabled runs. No PostgreSQL test group was run because this change adds no persistence behavior. A live Auth0 tenant plus running Accommodations and Users services was not used, so the authenticated cloud end-to-end journey remains unverified.
 
+## Follow-up review fixes
+
+PR #87 review at `a66598a` identified two medium findings. A successful create now skips the post-save catalogue refresh when the session lacks `catalogue.read`, preserving the service-confirmed selected accommodation and showing the success status. After a denied write removes the Add button, closing the dialog restores focus to the visible workspace heading instead of the removed opener. Regression tests cover write-only create and dismissing the dialog after a denied save.
+
+Follow-up validation:
+
+- `dotnet build TravelTracker.slnx --configuration Release --no-restore --verbosity minimal -m:1` — succeeded, 0 warnings and 0 errors.
+- `dotnet test tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~Accommodation" --verbosity minimal -m:1` — 27 passed, 0 failed, 0 skipped.
+- `dotnet test tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj --configuration Release --no-build --no-restore --verbosity minimal -m:1` — 265 passed, 0 failed, 0 skipped.
+- `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL" --verbosity minimal -m:1` — 948 passed, 0 failed, 0 skipped. Data-test assemblies contain only PostgreSQL-category cases and therefore had no tests under this filter.
+- `git diff --check` — passed.
+
+The PostgreSQL group and live Auth0/service journey remain unverified. The follow-up findings are addressed in this branch; the reviewer has not yet re-reviewed these fixes.
+
 ## Review
 
-The final read-only review reported **0 findings** and a **Ready to merge** verdict. Earlier review findings about stale cached catalogue data on `403`/`404`, the README Auth0 link and the plan approval note were resolved; the final review verified the access-denial cache-clearing behavior and its regression tests. See [review record](m3-20-review.md).
+The initial read-only review reported **0 findings** and a **Ready to merge** verdict before the subsequent PR #87 review. Earlier review findings about stale cached catalogue data on `403`/`404`, the README Auth0 link and the plan approval note were resolved; the later PR review and fixes are recorded above. See [review record](m3-20-review.md).

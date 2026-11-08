@@ -29,15 +29,20 @@ public sealed class AccommodationWorkspaceTests : BunitContext
      * Connects the component to the real protected client and deterministic Users/catalogue HTTP responses.
      * @param handler Answers the public service requests.
      * @param write Grants catalogue.write when true.
+     * @param read Grants catalogue.read when true.
+     * @param usersRead Grants users.read when true.
      * @return The replaceable authentication session.
      */
-    SwitchableAuthentication Configure(StubHandler handler, bool write = true)
+    SwitchableAuthentication Configure(StubHandler handler, bool write = true, bool read = true, bool usersRead = true)
     {
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
         authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10));
-        ((ClaimsIdentity)authentication.User.Identity!).AddClaim(new Claim(AccessTokenClaims.GrantedScope,
-            $"catalogue.read users.read{(write ? " catalogue.write" : "")}"));
+        var scopes = new List<string>();
+        if (read) scopes.Add("catalogue.read");
+        if (usersRead) scopes.Add("users.read");
+        if (write) scopes.Add("catalogue.write");
+        ((ClaimsIdentity)authentication.User.Identity!).AddClaim(new Claim(AccessTokenClaims.GrantedScope, string.Join(' ', scopes)));
         var protectedClient = new ProtectedClient(authentication,
             new ServiceDirectory(new Dictionary<string, string>
             {
@@ -292,6 +297,47 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("You do not have permission", page.Markup));
         Assert.Equal("Shared stay", page.Find("#accommodation-name").GetAttribute("value"));
         Assert.True(page.Find(".accommodation-modal button[type=submit]").HasAttribute("disabled"));
+
+        page.Find(".accommodation-modal button[aria-label='Close add accommodation form']").Click();
+
+        Assert.Empty(page.FindAll("[role=dialog]"));
+        Assert.Empty(page.FindAll(".accommodation-heading button"));
+        Assert.Contains("Find a place to stay", page.Find("#accommodation-heading").TextContent);
+    }
+
+    [Fact]
+    public void WriteOnlyCreateKeepsConfirmedSelectionWithoutAttemptingCatalogueRead()
+    {
+        var posts = 0;
+        var searches = 0;
+        var item = new AccommodationDto(Id, "Write-only Stay", "Toronto", 43.6m, -79.4m, "private");
+        Configure(Handler(request =>
+        {
+            if (request.Method == HttpMethod.Post)
+            {
+                posts++;
+                return Task.FromResult(Json(item, HttpStatusCode.Created));
+            }
+            searches++;
+            return Task.FromResult(Json(Array.Empty<AccommodationDto>()));
+        }), read: false, usersRead: false);
+        AccommodationDto? chosen = null;
+        var page = Render<AccommodationWorkspace>(parameters => parameters.Add(component => component.SelectionChanged,
+            EventCallback.Factory.Create<AccommodationDto?>(this, value => chosen = value)));
+        Assert.Contains("Accommodation read access required", page.Markup);
+        Assert.Empty(page.FindAll(".accommodation-results"));
+        page.Find(".accommodation-heading button").Click();
+        page.Find("#accommodation-name").Change("Write-only Stay");
+        page.Find("#accommodation-lat").Change("43.6");
+        page.Find("#accommodation-lon").Change("-79.4");
+
+        page.Find(".accommodation-modal form").Submit();
+
+        page.WaitForAssertion(() => Assert.Contains("Place saved and selected for this trip draft", page.Markup));
+        Assert.Equal(Id, chosen!.AccommodationId);
+        Assert.Equal(1, posts);
+        Assert.Equal(0, searches);
+        Assert.Empty(page.FindAll("[role=dialog]"));
     }
 
     [Fact]
