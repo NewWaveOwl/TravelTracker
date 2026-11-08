@@ -35,6 +35,7 @@
 }
 
 .map-basemap { position: absolute; inset: 0; }
+.map-basemap ::deep .maplibregl-canvas { pointer-events: none; }
 .map-basemap ::deep .maplibregl-ctrl-bottom-right { z-index: 2; }
 
 .map-frame > svg {

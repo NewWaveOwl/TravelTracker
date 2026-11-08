@@ -118,6 +118,8 @@ export function watchViewport(svg, container, map, camera) {
     let offsetX = 0;
     let offsetY = 0;
     let sending = false;
+    let wheelDelta = 0;
+    let lastWheelTime = -Infinity;
 
     async function pan() {
         if (sending) return;
@@ -135,6 +137,27 @@ export function watchViewport(svg, container, map, camera) {
             sending = false;
         }
     }
+
+    svg.addEventListener("wheel", event => {
+        const mode = event.deltaMode;
+        const { deltaX, deltaY } = event;
+        if (event.ctrlKey || event.metaKey || !deltaY || Math.abs(deltaX) > Math.abs(deltaY)) return;
+
+        event.preventDefault();
+        if (pointer?.dragging) return;
+
+        // Collect small trackpad deltas and treat line/page wheel events as a step.
+        const delta = mode === 0 ? deltaY : Math.sign(deltaY) * 60;
+        if (event.timeStamp - lastWheelTime > 250 || Math.sign(delta) !== Math.sign(wheelDelta))
+            wheelDelta = 0;
+        lastWheelTime = event.timeStamp;
+        wheelDelta += delta;
+        if (Math.abs(wheelDelta) < 60) return;
+
+        wheelDelta = 0;
+        const [x, y] = viewBoxPoint(svg, event.clientX, event.clientY);
+        map.invokeMethodAsync("ZoomAtPointer", -Math.sign(delta), x, y).catch(() => {});
+    }, { ...options, passive: false });
 
     svg.addEventListener("pointerdown", event => {
         if (!event.isPrimary || event.button !== 0) return;

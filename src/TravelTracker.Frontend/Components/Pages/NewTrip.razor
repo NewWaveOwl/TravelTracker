@@ -273,9 +273,9 @@
         </details>
     </div>;
 
-    RenderFragment TripBasics => @<div>
-        <fieldset class="trip-basics" disabled="@busy">
-            <legend>Trip basics</legend>
+    RenderFragment TripBasics => @<section class="trip-panel trip-basics" aria-labelledby="trip-basics-title">
+        <h2 id="trip-basics-title">Trip basics</h2>
+        <fieldset class="trip-basic-fields" aria-labelledby="trip-basics-title" disabled="@busy">
             <label>Trip name <input type="text" @bind="draft.Name" @bind:after="MarkEdited" placeholder="Name your trip" /></label>
             <label>Time zone <input type="text" @bind="draft.TimeZone" @bind:after="MarkEdited" placeholder="America/Toronto" /></label>
             <label>Trip starts <input type="datetime-local" step="1" value="@DateTimeValue(draft.Start)" @onchange="e => SetDateTime(e, value => draft.Start = value)" /></label>
@@ -286,7 +286,7 @@
                 <button type="button" @onclick="ShowStops">Continue to stops</button>
             }
         </fieldset>
-    </div>;
+    </section>;
 
     RenderFragment MarkerPalette => @<div>
                     <div class="trip-palette" aria-label="Marker palette">

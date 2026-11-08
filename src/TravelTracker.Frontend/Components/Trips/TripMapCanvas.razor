@@ -20,7 +20,7 @@
     </div>
     <div class="map-frame">
         <div @ref="basemap" class="map-basemap"></div>
-        <svg @ref="viewport" viewBox="@($"0 0 {ViewportWidth} {ViewportHeight}")" role="group" data-marker-drop="@(AllowMarkerDrop ? "true" : null)" tabindex="0" aria-label="Map with numbered trip stops. Drag or use arrow keys to pan." @onkeydown="PanWithKey">
+        <svg @ref="viewport" viewBox="@($"0 0 {ViewportWidth} {ViewportHeight}")" role="group" data-marker-drop="@(AllowMarkerDrop ? "true" : null)" tabindex="0" aria-label="Map with numbered trip stops. Drag or use arrow keys to pan. Scroll to zoom." @onkeydown="PanWithKey">
             @foreach (var connection in connections)
             {
                 <path class="route-halo" d="@connection.Path" pointer-events="none" aria-hidden="true" />
@@ -377,14 +377,36 @@
             center.Y + vertical * ViewportHeight / (4d * WorldSize)));
 
     /**
-     * Changes the zoom while preserving the current center where possible.
+     * Changes the zoom while keeping the point under the zoom origin in place.
      * @param delta The number of zoom levels to move.
+     * @param offset The zoom origin relative to the viewport center.
      */
-    private void ChangeZoom(int delta)
+    private void ChangeZoom(int delta, (double X, double Y) offset = default)
     {
+        var previousScale = 1d / WorldSize;
         zoom = Math.Clamp(zoom + delta, MinimumZoom, MaximumZoom);
-        SetCenter(center);
+        var scaleChange = previousScale - 1d / WorldSize;
+        SetCenter((center.X + offset.X * scaleChange, center.Y + offset.Y * scaleChange));
     }
+
+    /**
+     * Zooms one level at the mouse position while keeping the map and pins aligned.
+     * @param delta One level in or out.
+     * @param x Horizontal position in the SVG view box.
+     * @param y Vertical position in the SVG view box.
+     * @return Completion of the zoom update.
+     */
+    [JSInvokable]
+    public Task ZoomAtPointer(int delta, double x, double y) => InvokeAsync(() =>
+    {
+        if (delta is not (-1 or 1) || !double.IsFinite(x) || !double.IsFinite(y))
+            return;
+
+        var previousZoom = zoom;
+        ChangeZoom(delta, (x - ViewportWidth / 2d, y - ViewportHeight / 2d));
+        if (zoom != previousZoom)
+            StateHasChanged();
+    });
 
     /**
      * Wraps longitude and keeps the viewport within the available tile rows.

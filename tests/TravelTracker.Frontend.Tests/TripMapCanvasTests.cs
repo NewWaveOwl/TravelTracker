@@ -118,6 +118,34 @@ public sealed class TripMapCanvasTests : BunitContext
     }
 
     [Fact]
+    public async Task WheelZoomKeepsThePlaceUnderThePointerAndUpdatesTheBasemap()
+    {
+        const double x = 576;
+        const double y = 108;
+        var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
+        var viewport = module.SetupModule("watchViewport", _ => true);
+        viewport.SetupVoid("setCamera", _ => true).SetVoidResult();
+        module.Setup<double[]>("viewBoxPoint", _ => true).SetResult([x, y]);
+        (decimal Lat, decimal Lon) selected = default;
+        var map = Render<TripMapCanvas>(parameters => parameters
+            .Add(component => component.CanPick, true)
+            .Add(component => component.LocationPicked, point => selected = point));
+
+        map.Find(".location-target").Click();
+        var original = selected;
+
+        await map.InvokeAsync(() => map.Instance.ZoomAtPointer(1, x, y));
+        map.Find(".location-target").Click();
+        Assert.Equal(original, selected);
+        Assert.Equal(13, Assert.IsType<double[]>(viewport.VerifyInvoke("setCamera").Arguments[0])[2]);
+
+        await map.InvokeAsync(() => map.Instance.ZoomAtPointer(-1, x, y));
+        map.Find(".location-target").Click();
+        Assert.Equal(original, selected);
+        Assert.Equal(12, Assert.IsType<double[]>(viewport.VerifyInvoke("setCamera", 2)[1].Arguments[0])[2]);
+    }
+
+    [Fact]
     public void PointerPickUsesTheConvertedSvgPosition()
     {
         var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
