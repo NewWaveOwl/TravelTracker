@@ -22,6 +22,7 @@ public partial class NewTrip : IDisposable
     [Inject] TripPlacesClient PlaceCatalogue { get; set; } = default!;
     [Inject] TransportClient Transport { get; set; } = default!;
     [Parameter] public Guid? TripId { get; set; }
+    [CascadingParameter] Microsoft.AspNetCore.Components.RouteData? ActiveRoute { get; set; }
 
     readonly CancellationTokenSource closed = new();
     TripPlannerDraft draft = new();
@@ -64,17 +65,16 @@ public partial class NewTrip : IDisposable
     static string Pressed(bool active) => active ? "true" : "false";
 
     bool MapVisible => showMap || review;
-    string ConnectionHint => pendingMode is null ? "Choose a mode, then select two consecutive stops."
-        : connectionFrom is { } from ? $"From {draft.Stops[from].Place.Name}. Select the next stop to make the connection."
+    string ConnectionHint => pendingMode is null ? "Choose a mode, then select a starting stop and a destination."
+        : connectionFrom is { } from ? $"From {draft.Stops[from].Place.Name}. Select any other stop as the destination."
         : "Select the starting stop.";
 
     (string Code, string Label)[] MapLegs => Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(index =>
     {
         var leg = draft.LegTo(index);
         if (leg.Mode is not { } mode) return (string.Empty, string.Empty);
-        var time = leg.DurationMinutes is { } minutes ? TimeSpan.FromMinutes(minutes) : draft.ArrivalFor(leg) - leg.Departure;
-        return (mode.Code, time is { TotalMinutes: > 0 } duration
-            ? $"{mode.Name} · {DurationLabel(duration)}"
+        return (mode.Code, DisplayedDuration(leg) is { } minutes
+            ? $"{mode.Name} · {DurationLabel(minutes)}"
             : mode.Name);
     }).ToArray();
 
@@ -122,8 +122,8 @@ public partial class NewTrip : IDisposable
         MarkEdited();
     }
 
-    int? DisplayedDuration(TripPlannerDraft.Leg connection) => connection.DurationMinutes ??
-        (connection.Arrival - connection.Departure is { TotalMinutes: >= 1 } span ? (int)span.TotalMinutes : null);
+    long? DisplayedDuration(TripPlannerDraft.Leg connection) =>
+        draft.DurationFor(connection) is { } duration ? (long)Math.Ceiling(duration.TotalMinutes) : null;
 
     void SetDuration(TripPlannerDraft.Leg connection, ChangeEventArgs change)
     {
@@ -144,8 +144,8 @@ public partial class NewTrip : IDisposable
     /** Confirms the active connection's planned times before review. */
     void ApplyConnectionChanges()
     {
-        if (CurrentLeg is not { Departure: { } departure } connection ||
-            draft.ArrivalFor(connection) is not { } arrival || (connection.DurationMinutes is null && arrival <= departure))
+        if (CurrentLeg is not { } connection || draft.ArrivalFor(connection) is null ||
+            draft.DurationFor(connection) is null)
         {
             errors = ["Enter a departure and a later arrival or a duration for this connection."];
             saveFailed = false;
@@ -154,14 +154,14 @@ public partial class NewTrip : IDisposable
         MarkEdited();
     }
 
-    static string DurationLabel(TimeSpan duration) => duration.TotalHours < 1
-        ? $"{duration.Minutes} min"
-        : $"{(int)duration.TotalHours} h {duration.Minutes} min";
+    static string DurationLabel(long minutes) => minutes < 60
+        ? $"{minutes} min"
+        : $"{minutes / 60} h {minutes % 60} min";
 
     /** Initializes the entry view and loads a trip when a saved-trip link is opened. */
     protected override async Task OnParametersSetAsync()
     {
-        var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
         if (path == observedPath)
             return;
 
@@ -169,15 +169,17 @@ public partial class NewTrip : IDisposable
         observedPath = path;
         routeVersion++;
         busy = false;
-        showMap = path.StartsWith("/map", StringComparison.OrdinalIgnoreCase);
+        showMap = path.Split('/')[0].Equals("map", StringComparison.OrdinalIgnoreCase);
         ShowBasics();
 
-        if (TripId is { } id)
+        // Map and New Trip share this component, even when the router reuses the same parameters.
+        var tripId = ActiveRoute is null ? TripId : ActiveRoute.RouteValues.GetValueOrDefault(nameof(TripId)) as Guid?;
+        if (tripId is { } id)
         {
             if (id != routeId || draft.Id != id)
                 await OpenTripAsync(id);
         }
-        else if (previousPath is not null && (draft.Id is not null || !showMap))
+        else if (previousPath is not null && draft.Id is not null)
         {
             draft = new();
             routeId = null;
@@ -202,6 +204,7 @@ public partial class NewTrip : IDisposable
     {
         showMap = map;
         ShowBasics();
+        NavigateToPlanner(map, draft.Id);
     }
 
     void ShowBasics()
@@ -290,15 +293,19 @@ public partial class NewTrip : IDisposable
         if (pendingMode is not { } mode)
             return;
 
-        if (connectionFrom is { } from && index == from + 1)
-        {
-            SelectMode(mode);
-            CancelConnection();
-        }
-        else if (index < draft.Stops.Count - 1)
+        if (connectionFrom is not { } from)
         {
             connectionFrom = index;
+            return;
         }
+
+        if (index == from)
+            return;
+
+        selected = draft.JoinStops(from, index);
+        SelectMode(mode);
+        MarkEdited();
+        CancelConnection();
     }
 
     void MoveStop(int index, int offset)
@@ -605,12 +612,21 @@ public partial class NewTrip : IDisposable
     void UpdateLink(Guid id)
     {
         routeId = id;
-        var path = $"{(showMap || review ? "map" : "new-trip")}/{id:D}";
-        if (Navigation.ToBaseRelativePath(Navigation.Uri) != path)
-        {
-            observedPath = $"/{path}";
-            Navigation.NavigateTo(path, replace: true);
-        }
+        NavigateToPlanner(showMap || review, id, replace: true);
+    }
+
+    /** Keeps the URL and navigation links aligned with the displayed editor. */
+    void NavigateToPlanner(bool map, Guid? id, bool replace = false)
+    {
+        var path = map ? "map" : "new-trip";
+        if (id is { } tripId)
+            path += $"/{tripId:D}";
+
+        if (Navigation.ToBaseRelativePath(Navigation.Uri) == path)
+            return;
+
+        observedPath = path;
+        Navigation.NavigateTo(path, replace: replace);
     }
 
     static string MarkerLabel(string type) => Markers.First(option => option.Code == type).Label;

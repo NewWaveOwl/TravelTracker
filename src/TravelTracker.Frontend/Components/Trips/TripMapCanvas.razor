@@ -4,6 +4,8 @@
 @inject IJSRuntime JavaScript
 @implements IAsyncDisposable
 
+@{ var connections = ScreenConnections(); }
+
 <section class="trip-map-canvas @(FullScreen ? "full-map" : null)" aria-label="Trip map">
     <div class="map-controls" role="group" aria-label="Map controls">
         <button type="button" aria-label="Zoom in" title="Zoom in" disabled="@(zoom == MaximumZoom)" @onclick="() => ChangeZoom(1)">
@@ -25,19 +27,10 @@
                        x="@Number(tile.X)" y="@Number(tile.Y)" width="@TileSize" height="@TileSize"
                        preserveAspectRatio="none" pointer-events="none" aria-hidden="true" />
             }
-            @for (var index = 0; index < Legs.Count && index + 1 < Stops.Count; index++)
+            @foreach (var connection in connections)
             {
-                var leg = Legs[index];
-                if (string.IsNullOrEmpty(leg.Code)) continue;
-
-                var from = ScreenPoint(Stops[index].Lat, Stops[index].Lon);
-                var to = ScreenPoint(Stops[index + 1].Lat, Stops[index + 1].Lon);
-                var curve = leg.Code == "plane" ? Math.Min(90, Math.Abs(to.X - from.X) / 4) : 0;
-                var x = (from.X + to.X) / 2;
-                var y = (from.Y + to.Y) / 2;
-                var segment = $"M {Number(from.X)} {Number(from.Y)} Q {Number(x)} {Number(y - curve)} {Number(to.X)} {Number(to.Y)}";
-                <path class="route-halo" d="@segment" pointer-events="none" aria-hidden="true" />
-                <path class="route-line @leg.Code" d="@segment" pointer-events="none" aria-hidden="true" />
+                <path class="route-halo" d="@connection.Path" pointer-events="none" aria-hidden="true" />
+                <path class="route-line @connection.Code" d="@connection.Path" pointer-events="none" aria-hidden="true" />
             }
             @if (CanPick)
             {
@@ -76,27 +69,20 @@
                     </g>
                 }
             }
-            @for (var index = 0; index < Legs.Count && index + 1 < Stops.Count; index++)
+            @foreach (var connection in connections)
             {
-                var destination = index + 1;
-                var leg = Legs[index];
-                if (string.IsNullOrEmpty(leg.Code)) continue;
-                var from = ScreenPoint(Stops[index].Lat, Stops[index].Lon);
-                var to = ScreenPoint(Stops[index + 1].Lat, Stops[index + 1].Lon);
-                var x = (from.X + to.X) / 2;
-                var curve = leg.Code == "plane" ? Math.Min(90, Math.Abs(to.X - from.X) / 4) : 0;
-                var y = (from.Y + to.Y - curve) / 2;
-                <foreignObject class="map-leg-label" x="@Number(x + 10)" y="@Number(y - 36)" width="260" height="35" pointer-events="none">
+                <foreignObject class="map-leg-label" x="@Number(connection.LabelX)" y="@Number(connection.LabelY)" width="260" height="35" pointer-events="none">
                     @if (ConnectionSelected.HasDelegate)
                     {
-                        <button type="button" title="Edit connection duration" aria-label="@($"Edit connection {destination}: {leg.Label}")"
-                                @onclick="() => ConnectionSelected.InvokeAsync(destination)">
-                            <img src="@Icon(leg.Code)" alt="" /><span>@leg.Label</span>
+                        <button type="button" title="Edit connection duration"
+                                aria-label="@($"Edit connection {connection.Destination}: {Stops[connection.Destination - 1].Name} to {Stops[connection.Destination].Name}, {connection.Label}")"
+                                @onclick="() => ConnectionSelected.InvokeAsync(connection.Destination)">
+                            <img src="@Icon(connection.Code)" alt="" /><span>@connection.Label</span>
                         </button>
                     }
                     else
                     {
-                        <div><img src="@Icon(leg.Code)" alt="" /><span>@leg.Label</span></div>
+                        <div><img src="@Icon(connection.Code)" alt="" /><span>@connection.Label</span></div>
                     }
                 </foreignObject>
             }
@@ -107,7 +93,7 @@
     {
         <p>Click the map or use the center crosshair to choose a location.</p>
     }
-    @if (Legs.Take(Math.Max(0, Stops.Count - 1)).Any(leg => !string.IsNullOrEmpty(leg.Code)))
+    @if (connections.Count > 0)
     {
         <p>Lines show approximate connections between stops.</p>
     }
@@ -228,6 +214,52 @@
         var point = Project(latitude, longitude);
         return (ViewportWidth / 2d + WrappedDifference(point.X - center.X) * WorldSize,
             ViewportHeight / 2d + (point.Y - center.Y) * WorldSize);
+    }
+
+    /** Separates lines and editable labels when a pair of places is visited more than once. */
+    private List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY)> ScreenConnections()
+    {
+        var result = new List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY)>();
+        var groups = Enumerable.Range(0, Math.Min(Legs.Count, Math.Max(0, Stops.Count - 1)))
+            .Where(index => !string.IsNullOrEmpty(Legs[index].Code))
+            .GroupBy(index =>
+            {
+                var from = (Stops[index].Lat, Stops[index].Lon);
+                var to = (Stops[index + 1].Lat, Stops[index + 1].Lon);
+                return from.CompareTo(to) <= 0 ? (from, to) : (to, from);
+            });
+
+        foreach (var group in groups)
+        {
+            var (first, last) = group.Key;
+            var start = ScreenPoint(first.Lat, first.Lon);
+            var end = ScreenPoint(last.Lat, last.Lon);
+            var dx = end.X - start.X;
+            var dy = end.Y - start.Y;
+            var length = Math.Max(1, Math.Sqrt(dx * dx + dy * dy));
+            var x = (start.X + end.X) / 2;
+            var y = (start.Y + end.Y) / 2;
+            var count = group.Count();
+            var slot = -(count - 1) / 2d;
+
+            foreach (var index in group)
+            {
+                var leg = Legs[index];
+                var from = ScreenPoint(Stops[index].Lat, Stops[index].Lon);
+                var to = ScreenPoint(Stops[index + 1].Lat, Stops[index + 1].Lon);
+                var curveX = x - 52 * slot * dy / length;
+                var curveY = y + 52 * slot * dx / length;
+                if (leg.Code == "plane")
+                    curveY -= Math.Min(90, Math.Abs(dx) / 4);
+                var path = $"M {Number(from.X)} {Number(from.Y)} Q {Number(curveX)} {Number(curveY)} {Number(to.X)} {Number(to.Y)}";
+                var labelY = count == 1 ? (y + curveY) / 2 - 36 : y + 38 * slot - 36;
+                result.Add((index + 1, leg.Code, leg.Label, path, x + 10, labelY));
+                slot++;
+            }
+        }
+
+        result.Sort((first, second) => first.Destination.CompareTo(second.Destination));
+        return result;
     }
 
     /**

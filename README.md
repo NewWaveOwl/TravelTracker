@@ -144,8 +144,10 @@ Press `Ctrl+C` in the terminal to stop the app.
 
 4. Start or restart the frontend with the preview command above. Sign in from
    [Account](http://localhost:5100/account), then open [Map View](http://localhost:5100/map).
-   Use the Markers palette to search saved locations or pick a point. Select each
-   destination to set its incoming transport and times. Choose **Review on map**
+   Use the Markers palette to search saved locations or pick a point. Choose a
+   transport mode, then select any starting pin and destination pin. To plan a
+   return, choose a mode again and select the pins in the opposite direction.
+   Select a connection on the map to edit its times. Choose **Review on map**
    to check and save the ordered itinerary. Reopen a saved trip by its link or ID.
 
 Newly picked Stop markers go into the shared transport-stop catalogue. New

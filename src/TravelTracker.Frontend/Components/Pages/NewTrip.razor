@@ -66,7 +66,14 @@
                         }
                         <button type="button" class="trip-stop" aria-pressed="@Pressed(selected == stopIndex)" disabled="@busy" @onclick="() => SelectStop(stopIndex)">
                             <span class="trip-number">@((stopIndex + 1).ToString("00"))</span>
-                            <span><strong>@stop.Place.Name</strong><small>@MarkerLabel(stop.Place.Type) @(!string.IsNullOrWhiteSpace(stop.Place.Address) ? $" · {stop.Place.Address}" : "")</small></span>
+                            <span>
+                                <strong>@stop.Place.Name</strong>
+                                <small>@MarkerLabel(stop.Place.Type) @(!string.IsNullOrWhiteSpace(stop.Place.Address) ? $" · {stop.Place.Address}" : "")</small>
+                                @if (draft.DurationAtStop(stopIndex) is { } duration)
+                                {
+                                    <small class="trip-stop-duration">@(stop.Place.Type == "accommodation" ? "Stay" : "Time at stop") · @DurationLabel((long)Math.Ceiling(duration.TotalMinutes))</small>
+                                }
+                            </span>
                         </button>
                         @if (!review && selected == stopIndex)
                         {
@@ -224,7 +231,7 @@
                             </fieldset>
                             @if (showMap)
                             {
-                                <p>Use the transport palette to connect stops. Reorder stops in the itinerary.</p>
+                                <p>Choose transport, then select the start and destination in travel order.</p>
                                 <button type="button" disabled="@busy" @onclick="ApplyConnectionChanges">Apply connection changes</button>
                             }
                         }

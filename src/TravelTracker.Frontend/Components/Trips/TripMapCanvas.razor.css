@@ -57,17 +57,13 @@
 .trip-marker { cursor: pointer; }
 .marker-tether { stroke: #265873; stroke-width: 3; pointer-events: none; }
 
-.marker-body {
-    stroke: white;
-    stroke-width: 3;
-}
-
-.marker-body { fill: var(--forest); }
-.trip-marker text { fill: white; font: bold 16px 'Atkinson Hyperlegible', sans-serif; }
-.trip-marker[aria-pressed="true"] .marker-body { fill: #ffcbbe; stroke: var(--forest); }
-.trip-marker[aria-pressed="true"] text { fill: var(--forest); }
+.marker-body { fill: transparent; }
+.marker-number { fill: #fffdf5; }
+.trip-marker:hover .marker-number { fill: #ffecd9; }
+.trip-marker[aria-pressed="true"] .marker-number { fill: var(--trip-peach, #ffcbbe); }
+.trip-marker text { fill: var(--forest); font: bold 16px 'Atkinson Hyperlegible', sans-serif; }
 .trip-marker:focus-visible { outline: none; }
-.trip-marker:focus-visible .marker-body { stroke: #a65b16; stroke-width: 5; }
+.trip-marker:focus-visible .marker-number { stroke: var(--forest); stroke-width: 2; }
 
 .map-credit {
     position: absolute;
@@ -84,11 +80,6 @@
     font: .8rem/1.4 'Atkinson Hyperlegible', sans-serif;
 }
 
-.marker-body { fill: transparent; stroke: transparent; }
-.marker-number { fill: #fffdf5; }
-.trip-marker[aria-pressed="true"] .marker-body { fill: transparent; stroke: #3e4f3d; }
-.trip-marker[aria-pressed="true"] .marker-number { fill: #ffcbbe; }
-.trip-marker text { fill: var(--forest); }
 .route-line { stroke: #327dab; }
 .route-line.pedestrian { stroke: #3b7866; stroke-dasharray: 5 5; }
 .route-line.train { stroke: #35795f; }
@@ -128,10 +119,3 @@
 .trip-marker[data-move-index] { cursor: grab; }
 .full-map svg[data-dragging] .trip-marker[data-move-index] { cursor: grabbing; }
 .full-map svg[data-dragging] .marker-remove { visibility: hidden; }
-.trip-marker:hover .marker-body,
-.trip-marker[aria-pressed="true"] .marker-body,
-.trip-marker:focus-visible .marker-body {
-    fill: #ffc07555;
-    stroke: #315b44;
-    stroke-width: 3;
-}

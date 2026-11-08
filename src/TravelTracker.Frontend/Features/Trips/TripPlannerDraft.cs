@@ -10,19 +10,41 @@ internal sealed class TripPlannerDraft
     DateTimeOffset? savedStart;
     DateTimeOffset? savedEnd;
     string? savedZone;
+    bool? roundTrip;
 
     internal Guid? Id { get; set; }
     internal string Name { get; set; } = "";
     internal string TimeZone { get; set; } = "America/Toronto";
     internal DateTime? Start { get; set; }
     internal DateTime? End { get; set; }
-    internal bool RoundTrip { get; set; }
+    internal bool RoundTrip
+    {
+        get => roundTrip ?? ReturnsToStart;
+        set => roundTrip = value;
+    }
     internal IReadOnlyList<Stop> Stops => stops;
 
     /** A distinct occurrence of a place in the itinerary. */
-    internal sealed class Stop(TripPlaceDto place)
+    internal sealed class Stop
     {
-        internal TripPlaceDto Place { get; set; } = place;
+        readonly Location location;
+
+        internal Stop(TripPlaceDto place) : this(new Location(place)) { }
+
+        Stop(Location location) => this.location = location;
+
+        internal TripPlaceDto Place
+        {
+            get => location.Place;
+            set => location.Place = value;
+        }
+
+        internal Stop Revisit() => new(location);
+
+        sealed class Location(TripPlaceDto place)
+        {
+            internal TripPlaceDto Place { get; set; } = place;
+        }
     }
 
     /** The plan for one specific pair of adjacent stop occurrences. */
@@ -57,6 +79,77 @@ internal sealed class TripPlannerDraft
     internal void Move(int index, int destination) =>
         (stops[index], stops[destination]) = (stops[destination], stops[index]);
 
+    /**
+     * Joins two selected places in the clicked direction while retaining existing connections.
+     * @param from Index of the departure stop.
+     * @param to Index of the destination stop.
+     * @return Destination index in the resulting itinerary.
+     */
+    internal int JoinStops(int from, int to)
+    {
+        if (to == from + 1)
+            return to;
+
+        var source = stops[from];
+        var target = stops[to];
+        var sections = new List<List<Stop>>();
+        for (var index = 0; index < stops.Count; index++)
+        {
+            if (index == 0 || !legs.TryGetValue((stops[index - 1], stops[index]), out var connection) || connection.Mode is null)
+                sections.Add([]);
+            sections[^1].Add(stops[index]);
+        }
+
+        var departure = sections.FirstOrDefault(section => section[^1] == source)
+            ?? sections.FirstOrDefault(section => SamePlace(section[^1].Place, source.Place));
+        var arrival = sections.FirstOrDefault(section => section != departure && section[0] == target)
+            ?? sections.FirstOrDefault(section => section != departure && SamePlace(section[0].Place, target.Place));
+        if (arrival is null && departure is not null && SamePlace(departure[0].Place, target.Place))
+        {
+            var accommodation = departure.FindIndex(stop => stop.Place.Type == "accommodation");
+            if (accommodation > 0)
+                return StartLoopAtAccommodation(departure, accommodation);
+        }
+
+        // When a visit already has a connection in this direction, start or end a separate visit.
+        var joined = departure ?? [source.Revisit()];
+        var destination = arrival?[0] ?? target.Revisit();
+        var insertAt = Math.Min(departure is null ? sections.Count : sections.IndexOf(departure),
+            arrival is null ? sections.Count : sections.IndexOf(arrival));
+        if (departure is not null)
+            sections.Remove(departure);
+        if (arrival is not null)
+            sections.Remove(arrival);
+        joined.AddRange(arrival ?? [destination]);
+        sections.Insert(insertAt, joined);
+
+        stops.Clear();
+        stops.AddRange(sections.SelectMany(section => section));
+        return stops.IndexOf(destination);
+    }
+
+    /** Rotates a newly closed loop so it begins and ends at an accommodation. */
+    int StartLoopAtAccommodation(List<Stop> section, int startIndex)
+    {
+        var start = section[startIndex];
+        var previous = section[startIndex - 1];
+        var returnVisit = start.Revisit();
+        legs[(previous, returnVisit)] = legs[(previous, start)];
+        legs.Remove((previous, start));
+
+        var offset = stops.IndexOf(section[0]);
+        stops.RemoveRange(offset, section.Count);
+        stops.InsertRange(offset, section.Skip(startIndex).Concat(section.Take(startIndex)).Append(returnVisit));
+        return offset + section.Count - startIndex;
+    }
+
+    /** Indicates whether the ordered stops return to the starting accommodation. */
+    bool ReturnsToStart => stops.Count > 1 && stops[0].Place.Type == "accommodation"
+        && SamePlace(stops[0].Place, stops[^1].Place);
+
+    static bool SamePlace(TripPlaceDto first, TripPlaceDto second) => first == second ||
+        (first.PlaceId != Guid.Empty && first.PlaceId == second.PlaceId && first.Type == second.Type);
+
     /** Retrieves the editable leg ending at the given stop. */
     internal Leg LegTo(int destination)
     {
@@ -79,17 +172,21 @@ internal sealed class TripPlannerDraft
             TimeZone = trip.TimeZone,
             Start = trip.Start.DateTime,
             End = trip.End.DateTime,
-            RoundTrip = trip.IsRoundTrip,
             savedStart = trip.Start,
             savedEnd = trip.End,
             savedZone = trip.TimeZone
         };
+        var places = new Dictionary<TripPlaceDto, Stop>();
         foreach (var leg in trip.Legs.OrderBy(leg => leg.Sequence))
         {
             if (draft.stops.Count == 0)
+            {
                 draft.Add(leg.From);
-            var destination = draft.Add(leg.To);
-            draft.legs[(draft.stops[destination - 1], draft.stops[destination])] = new Leg
+                places.Add(leg.From, draft.stops[0]);
+            }
+            var destination = places.TryGetValue(leg.To, out var visit) ? visit.Revisit() : new Stop(leg.To);
+            places.TryAdd(leg.To, destination);
+            draft.legs[(draft.stops[^1], destination)] = new Leg
             {
                 Mode = leg.Transport,
                 Departure = leg.Departure.DateTime,
@@ -97,25 +194,67 @@ internal sealed class TripPlannerDraft
                 SavedDeparture = leg.Departure,
                 SavedArrival = leg.Arrival
             };
+            draft.stops.Add(destination);
         }
+        if (draft.RoundTrip != trip.IsRoundTrip)
+            draft.RoundTrip = trip.IsRoundTrip;
         return draft;
     }
 
     /** Gets the displayed arrival, calculated from elapsed duration in the trip's time zone. */
     internal DateTime? ArrivalFor(Leg leg)
     {
-        if (leg.DurationMinutes is not { } minutes)
+        if (leg.DurationMinutes is null)
             return leg.Arrival;
-        if (leg.Departure is not { } departure || !TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone))
-            return null;
-
-        var start = ResolveLocal(departure, leg.SavedDeparture, zone);
-        return ArrivalAfter(start, minutes, zone)?.DateTime;
+        return TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone)
+            ? ArrivalInZone(leg, zone)?.DateTime
+            : null;
     }
 
-    DateTimeOffset? ResolveLocal(DateTime time, DateTimeOffset? savedTime, TimeZoneInfo zone)
+    /** Gets the elapsed duration using the same local time resolution as saving. */
+    internal TimeSpan? DurationFor(Leg leg)
     {
-        var local = DateTime.SpecifyKind(time, DateTimeKind.Unspecified);
+        if (leg.DurationMinutes is { } minutes)
+            return TimeSpan.FromMinutes(minutes);
+        if (!TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone))
+            return null;
+
+        var start = ResolveLocal(leg.Departure, leg.SavedDeparture, zone);
+        var end = ArrivalInZone(leg, zone);
+        return end - start is { Ticks: > 0 } duration ? duration : null;
+    }
+
+    /**
+     * Calculates the time at an intermediate stop between its inbound and outbound connections.
+     * @param index The visit's index in the ordered itinerary.
+     * @return Elapsed time when both boundaries are known and in order.
+     */
+    internal TimeSpan? DurationAtStop(int index)
+    {
+        if (index <= 0 || index >= stops.Count - 1 ||
+            !TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone))
+            return null;
+
+        var inbound = LegTo(index);
+        var outbound = LegTo(index + 1);
+        if (inbound.Mode is null || outbound.Mode is null)
+            return null;
+
+        var arrival = ArrivalInZone(inbound, zone);
+        var departure = ResolveLocal(outbound.Departure, outbound.SavedDeparture, zone);
+        return departure - arrival is { Ticks: >= 0 } duration ? duration : null;
+    }
+
+    DateTimeOffset? ArrivalInZone(Leg leg, TimeZoneInfo zone) => leg.DurationMinutes is { } minutes
+        ? ArrivalAfter(ResolveLocal(leg.Departure, leg.SavedDeparture, zone), minutes, zone)
+        : ResolveLocal(leg.Arrival, leg.SavedArrival, zone);
+
+    DateTimeOffset? ResolveLocal(DateTime? time, DateTimeOffset? savedTime, TimeZoneInfo zone)
+    {
+        if (time is not { } value)
+            return null;
+
+        var local = DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
         if (TimeZone.Trim() == savedZone && savedTime is { } saved && local == saved.DateTime)
             return saved;
         if (zone.IsInvalidTime(local) || zone.IsAmbiguousTime(local))
@@ -160,7 +299,7 @@ internal sealed class TripPlannerDraft
                 errors.Add("Start the trip at an accommodation.");
             if (RoundTrip)
             {
-                if (first.PlaceId == Guid.Empty ? first != last : first.PlaceId != last.PlaceId || first.Type != last.Type)
+                if (!SamePlace(first, last))
                     errors.Add("Return to the starting accommodation for a round trip.");
                 if (!stops.Any(stop => stop.Place.Type == "attraction"))
                     errors.Add("Include at least one attraction in a round trip.");
