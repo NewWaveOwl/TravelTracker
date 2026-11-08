@@ -2,13 +2,17 @@ using System.Net;
 using System.Net.Http.Json;
 using Bunit;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using TravelTracker.Frontend.Api;
+using TravelTracker.Frontend.Api.Accommodations;
 using TravelTracker.Frontend.Api.Attractions;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
+using TravelTracker.Frontend.Api.Users;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Components;
 using TravelTracker.Frontend.Components.Pages;
@@ -71,6 +75,38 @@ public sealed class TripPlannerTests : BunitContext
             Assert.Empty(routes.FindAll(".trip-stop"));
             Assert.Equal("", routes.Find(".trip-basics input").GetAttribute("value"));
         });
+    }
+
+    [Fact]
+    public void AccommodationCatalogueAddsTheSelectedPlaceToTheSharedMapDraft()
+    {
+        var accommodation = new AccommodationDto(Hotel.PlaceId, Hotel.Name, Hotel.Address,
+            Hotel.Lat, Hotel.Lon, "private");
+        Configure((request, _) =>
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            object body = request.RequestUri!.AbsolutePath switch
+            {
+                "/api/v1/accommodations" => new[] { accommodation },
+                var path when path == $"/api/v1/accommodations/{accommodation.AccommodationId:D}" => accommodation,
+                _ => throw new InvalidOperationException("Unexpected catalogue request.")
+            };
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(body) });
+        }, withAccommodationCatalogue: true);
+        var page = Render<NewTrip>();
+
+        Click(page, "Browse accommodations");
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".accommodation-card")));
+        page.Find(".accommodation-card button").Click();
+        page.Find(".accommodation-details button").Click();
+        Assert.Equal(Hotel.Name, page.Find(".trip-stop strong").TextContent);
+        Assert.Contains("Saved place selected for this trip draft", page.Find(".accommodation-details").TextContent);
+
+        Click(page, "Map View");
+
+        Assert.Empty(page.FindAll(".accommodation-workspace"));
+        Assert.Single(page.FindAll(".trip-marker"));
+        Assert.Equal($"Stop 1: {Hotel.Name}", page.Find(".trip-marker").GetAttribute("aria-label"));
     }
 
     [Fact]
@@ -500,13 +536,15 @@ public sealed class TripPlannerTests : BunitContext
         }
     }
 
-    void Configure(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond)
+    void Configure(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond,
+        bool withAccommodationCatalogue = false)
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         var clock = new FakeTimeProvider(Start);
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
-        authentication.SignIn("test-token", Start.AddHours(1));
+        authentication.SignIn("test-token", Start.AddHours(1),
+            withAccommodationCatalogue ? "catalogue.read" : "users.read users.write");
         var directory = new ServiceDirectory(new Dictionary<string, string>
         {
             ["Trips"] = "http://localhost:5108",
@@ -520,6 +558,14 @@ public sealed class TripPlannerTests : BunitContext
         Services.AddSingleton(transport);
         Services.AddSingleton(new TripsClient(client));
         Services.AddSingleton(new TripPlacesClient(new AttractionsClient(client), transport, client));
+        if (withAccommodationCatalogue)
+        {
+            Services.AddSingleton<AuthenticationStateProvider>(authentication);
+            Services.AddSingleton<TimeProvider>(clock);
+            Services.AddSingleton(sessions);
+            Services.AddSingleton(new AccommodationsClient(client));
+            Services.AddSingleton(new UsersClient(client, new ConfigurationBuilder().Build()));
+        }
     }
 
     static HttpResponseMessage Json(TripDto value) => new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };

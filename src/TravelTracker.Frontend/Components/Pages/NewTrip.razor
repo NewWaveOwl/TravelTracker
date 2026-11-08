@@ -2,6 +2,7 @@
 @page "/new-trip/{TripId:guid}"
 @page "/map"
 @page "/map/{TripId:guid}"
+@using TravelTracker.Frontend.Components.Accommodations
 @using TravelTracker.Frontend.Components.Trips
 @using TravelTracker.Frontend.Features.Trips
 
@@ -27,9 +28,19 @@
             </div>
             <div class="trip-actions" aria-label="Trip view">
                 <button type="button" class="secondary" disabled="@busy" @onclick="() => SwitchView(true)">Map View</button>
+                <button type="button" class="secondary" disabled="@busy" aria-expanded="@Pressed(browseAccommodations)"
+                        @onclick="() => browseAccommodations = !browseAccommodations">
+                    @(browseAccommodations ? "Close accommodation catalogue" : "Browse accommodations")
+                </button>
                 <button type="button" class="secondary" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review on map</button>
             </div>
         </div>
+        @if (browseAccommodations)
+        {
+            <div class="trip-accommodation-catalogue">
+                <AccommodationWorkspace SelectionChanged="SelectAccommodation" SelectedAccommodationId="SelectedAccommodationId" />
+            </div>
+        }
     }
 
     <div class="trip-columns @(!MapVisible ? "editor" : null)">

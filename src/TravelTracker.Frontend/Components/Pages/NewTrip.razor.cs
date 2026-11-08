@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
 using TravelTracker.Frontend.Api;
+using TravelTracker.Frontend.Api.Accommodations;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
 using TravelTracker.Frontend.Features.Trips;
@@ -32,6 +33,7 @@ public partial class NewTrip : IDisposable
     enum MapTool { Markers, Transport }
 
     bool showMap;
+    bool browseAccommodations;
     bool stopsStep;
     bool savedReview;
     MapTool? mapTool;
@@ -60,6 +62,8 @@ public partial class NewTrip : IDisposable
     decimal? longitude;
 
     TripPlannerDraft.Leg? CurrentLeg => selected > 0 && selected < draft.Stops.Count ? draft.LegTo(selected) : null;
+    Guid? SelectedAccommodationId => selected >= 0 && selected < draft.Stops.Count &&
+        draft.Stops[selected].Place is { Type: "accommodation" } place ? place.PlaceId : null;
     (decimal Lat, decimal Lon)? PickedCoordinates => latitude is { } lat && longitude is { } lon ? (lat, lon) : null;
 
     static string Pressed(bool active) => active ? "true" : "false";
@@ -374,6 +378,29 @@ public partial class NewTrip : IDisposable
         placing = false;
         editingMarker = null;
         MarkEdited();
+    }
+
+    /**
+     * Adds a confirmed catalogue accommodation to the shared itinerary, or selects its existing stop.
+     * @param accommodation The selected public record, or null when catalogue selection is cleared.
+     */
+    void SelectAccommodation(AccommodationDto? accommodation)
+    {
+        if (accommodation is null || busy || MapVisible)
+            return;
+
+        for (var index = 0; index < draft.Stops.Count; index++)
+        {
+            var place = draft.Stops[index].Place;
+            if (place.Type == "accommodation" && place.PlaceId == accommodation.AccommodationId)
+            {
+                SelectStop(index);
+                return;
+            }
+        }
+
+        AddStop(new(accommodation.AccommodationId, "accommodation", accommodation.Name,
+            accommodation.Address, accommodation.Lat, accommodation.Lon));
     }
 
     void AddReturnStop()
