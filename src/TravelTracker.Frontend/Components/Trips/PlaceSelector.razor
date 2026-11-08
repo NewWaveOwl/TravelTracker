@@ -21,6 +21,14 @@
         <button type="button" id="@(Id)-search-button" class="secondary" @onclick="SearchAsync" disabled="@busy">@(busy ? "Searching…" : "Search")</button>
         @if (failure is not null) { <p class="field-error" role="alert">@failure</p> }
         @if (searched && results.Count == 0 && failure is null) { <p role="status">No matching @TypeLabel(type).ToLowerInvariant() found.</p> }
+        @if (CanAdd && !adding)
+        {
+            <button type="button" id="@(Id)-add" class="secondary" @onclick="() => adding = true">Add a new accommodation</button>
+        }
+        @if (CanAdd && adding)
+        {
+            <AccommodationQuickAdd Id="@(Id + "-new")" Saved="AddedAsync" Cancelled="() => adding = false" />
+        }
         @if (results.Count > 0)
         {
             <ul class="place-results" aria-label="Search results">

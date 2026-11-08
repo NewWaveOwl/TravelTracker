@@ -1,0 +1,18 @@
+@using TravelTracker.Frontend.Api.Accommodations
+@using TravelTracker.Frontend.Features.Accommodations
+
+<div class="place-add" role="group" aria-label="Add an accommodation">
+    <p class="trip-hint">New places are private to you. Shared places are managed on the accommodation workspace.</p>
+    <label for="@(Id)-name">Name *<input id="@(Id)-name" @bind="draft.Name" /></label>
+    @if (Message("name") is { } nameError) { <small class="field-error">@nameError</small> }
+    <label for="@(Id)-address">Address<input id="@(Id)-address" @bind="draft.Address" /></label>
+    <label for="@(Id)-lat">Latitude *<input id="@(Id)-lat" @bind="draft.Lat" inputmode="decimal" /></label>
+    @if (Message("lat") is { } latError) { <small class="field-error">@latError</small> }
+    <label for="@(Id)-lon">Longitude *<input id="@(Id)-lon" @bind="draft.Lon" inputmode="decimal" /></label>
+    @if (Message("lon") is { } lonError) { <small class="field-error">@lonError</small> }
+    @if (failure is not null) { <p class="field-error" role="alert">@failure</p> }
+    <div class="trip-actions">
+        <button type="button" id="@(Id)-save" @onclick="SaveAsync" disabled="@saving">@(saving ? "Saving…" : "Save place")</button>
+        <button type="button" class="secondary" @onclick="() => Cancelled.InvokeAsync()" disabled="@saving">Cancel</button>
+    </div>
+</div>

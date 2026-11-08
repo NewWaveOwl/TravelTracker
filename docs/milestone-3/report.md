@@ -25,7 +25,7 @@ Trade-offs: the Trips save has no idempotency key, so a network failure after a 
 | Member | Services | Frontend work | Shared work |
 |---|---|---|---|
 | Artiom | Attractions, Transport | Attraction views (M3-17), transport and route-point selection (M3-18) | Milestone board and submission workflow (M3-02), compiler warnings (M3-05), bearer authentication and scope policies (M3-08) |
-| Christel | Users, Accommodations | Frontend shell (M3-06), sign-in (M3-07); profile (M3-19) and accommodation views (M3-20) are still open | Layer agents (M3-03) |
+| Christel | Users, Accommodations | Frontend shell (M3-06), sign-in (M3-07); profile (M3-19) and accommodation views (M3-20) merged in PRs #86 and #87 | Layer agents (M3-03) |
 | James | Trips, Settings | Settings view (M3-22), trip creation and details (M3-21) | Architecture and contracts (M3-01), testing guidance (M3-04), CI and validation (M3-23) |
 
 Each member owns two independently runnable services, as the milestone requires. The matching verification for each frontend view lives in `tests/TravelTracker.Frontend.Tests`.

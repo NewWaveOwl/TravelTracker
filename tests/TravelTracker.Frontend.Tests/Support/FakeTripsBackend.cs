@@ -51,6 +51,7 @@ public sealed class FakeTripsBackend : HttpMessageHandler
         var name = System.Web.HttpUtility.ParseQueryString(uri.Query)["name"] ?? "";
         return (uri.Port, path) switch
         {
+            (5106, "/api/v1/accommodations") when request.Method == HttpMethod.Post => await CreateAccommodationAsync(request, cancellationToken),
             (5106, "/api/v1/accommodations") => Json(Match(name, new { accommodationId = Hotel, name = "Hotel Lumiere", address = "1 Rue de Rivoli", lat = 48.86m, lon = 2.34m, visibility = "shared" })),
             (5104, "/api/v1/attractions") => Json(Match(name, new { attractionId = Museum, name = "Louvre", description = (string?)null, rating = (decimal?)null, address = "Rue de Rivoli", lat = 48.86m, lon = 2.33m, estimatedVisitMinutes = 120 },
                 new { attractionId = Park, name = "Tuileries", description = (string?)null, rating = (decimal?)null, address = "Place de la Concorde", lat = 48.86m, lon = 2.32m, estimatedVisitMinutes = 60 })),
@@ -62,6 +63,19 @@ public sealed class FakeTripsBackend : HttpMessageHandler
                 stored.TryGetValue(id, out var trip) ? Json(trip) : new HttpResponseMessage(HttpStatusCode.NotFound),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
         };
+    }
+
+    /** the accommodation bodies the service received. */
+    public List<string> AccommodationBodies { get; } = [];
+
+    async Task<HttpResponseMessage> CreateAccommodationAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+        AccommodationBodies.Add(body);
+        using var json = JsonDocument.Parse(body);
+        var root = json.RootElement;
+        var saved = new { accommodationId = Hotel, name = root.GetProperty("name").GetString(), address = root.GetProperty("address").GetString(), lat = root.GetProperty("lat").GetDecimal(), lon = root.GetProperty("lon").GetDecimal(), visibility = "private" };
+        return new HttpResponseMessage(HttpStatusCode.Created) { Content = JsonContent.Create(saved) };
     }
 
     async Task<HttpResponseMessage> CreateAsync(HttpRequestMessage request, CancellationToken cancellationToken)

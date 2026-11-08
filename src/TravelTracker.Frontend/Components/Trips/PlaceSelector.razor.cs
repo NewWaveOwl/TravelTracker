@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Accommodations;
 using TravelTracker.Frontend.Api.Attractions;
 using TravelTracker.Frontend.Api.Transport;
+using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Features.Trips;
 
 namespace TravelTracker.Frontend.Components.Trips;
@@ -14,6 +16,7 @@ public partial class PlaceSelector : IDisposable
     [Inject] AccommodationsClient Accommodations { get; set; } = default!;
     [Inject] AttractionsClient Attractions { get; set; } = default!;
     [Inject] TransportClient Transport { get; set; } = default!;
+    [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
     [Inject] ILogger<PlaceSelector> Logger { get; set; } = default!;
 
     /** Visible name of the field group. */
@@ -36,10 +39,18 @@ public partial class PlaceSelector : IDisposable
 
     string type = "";
     string query = "";
-    bool busy, searched, changing;
+    bool busy, searched, changing, adding, canWriteCatalogue;
     string? failure;
     IReadOnlyList<TripPlaceChoice> results = [];
     readonly CancellationTokenSource lifetime = new();
+
+    bool CanAdd => canWriteCatalogue && type == "accommodation";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await Authentication.GetAuthenticationStateAsync()).User;
+        canWriteCatalogue = user.FindAll(AccessTokenClaims.GrantedScope).SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Contains("catalogue.write", StringComparer.Ordinal);
+    }
 
     protected override void OnParametersSet()
     {
@@ -81,6 +92,12 @@ public partial class PlaceSelector : IDisposable
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         finally { busy = false; }
+    }
+
+    async Task AddedAsync(AccommodationDto saved)
+    {
+        adding = false;
+        await Choose(new TripPlaceChoice(saved.AccommodationId, "accommodation", saved.Name, saved.Address));
     }
 
     async Task Choose(TripPlaceChoice choice)

@@ -272,6 +272,44 @@ public sealed class NewTripPageTests : BunitContext
     }
 
     [Fact]
+    public void AddingAnAccommodationSelectsTheConfirmedRecord()
+    {
+        Configure("catalogue.read catalogue.write trips.read trips.write settings.read");
+        var page = FillBasics();
+        page.Find("#leg-0-from-add").Click();
+        page.Find("#leg-0-from-new-name").Change("Pension Nord");
+        page.Find("#leg-0-from-new-address").Change("2 Rue Nord");
+        page.Find("#leg-0-from-new-lat").Change("48.88");
+        page.Find("#leg-0-from-new-lon").Change("2.35");
+        page.Find("#leg-0-from-new-save").Click();
+        page.WaitForAssertion(() => Assert.Contains("Pension Nord", page.Find("p#leg-0-from").TextContent));
+        var body = Assert.Single(backend.AccommodationBodies);
+        Assert.Contains("\"visibility\":\"private\"", body);
+    }
+
+    [Fact]
+    public void AddingAnAccommodationWithBadCoordinatesSendsNothing()
+    {
+        Configure("catalogue.read catalogue.write trips.read trips.write settings.read");
+        var page = FillBasics();
+        page.Find("#leg-0-from-add").Click();
+        page.Find("#leg-0-from-new-name").Change("Pension Nord");
+        page.Find("#leg-0-from-new-lat").Change("999");
+        page.Find("#leg-0-from-new-lon").Change("2.35");
+        page.Find("#leg-0-from-new-save").Click();
+        Assert.Contains("latitude", page.Markup);
+        Assert.Empty(backend.AccommodationBodies);
+    }
+
+    [Fact]
+    public void AddingAnAccommodationNeedsTheCatalogueWriteGrant()
+    {
+        Configure();
+        var page = FillBasics();
+        Assert.Empty(page.FindAll("#leg-0-from-add"));
+    }
+
+    [Fact]
     public void WithoutTripsWriteTheSaveIsDisabledButPlanningWorks()
     {
         Configure("catalogue.read trips.read");
