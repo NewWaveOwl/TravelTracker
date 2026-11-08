@@ -22,7 +22,7 @@ Course material informs the requested work; exercises are not additional tasks. 
 - **One primary type per file.** Models, DTOs, requests, interfaces, repositories and strategies each get their own file. Small private helpers can stay with the type they support. Use a named feature folder when it helps.
 - **`Program.cs` is the composition root:** configuration, DI registration, middleware, route mapping. Feature handlers live elsewhere.
 - **No extra architecture** (mediator, CQRS, new layers, separate deployables) for a small feature. Do not split a cohesive shared interface into one-method interfaces, or reorganize files, unless the task needs it.
-- **Verify current state:** `Trip`, `TripLeg`, `UserSettings` and `TripMapPoint` are empty partial declarations that keep existing interfaces compiling. They are not implemented features and must not be described as such.
+- **Verify current state:** `Trip`, `TripLeg` and `TripMapPoint` are empty partial declarations that keep existing interfaces compiling. They are not implemented features and must not be described as such.
 
 ## Layers and DI
 

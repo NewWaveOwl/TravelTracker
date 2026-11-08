@@ -28,6 +28,16 @@ public sealed class BootstrapApiTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HealthRemainsPublicWithMissingOrInvalidBearer(bool invalidToken)
+    {
+        using var app = new UsersApiFactory();
+        using var client = app.Browser(invalidToken ? "invalid" : null);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health")).StatusCode);
+    }
+
+    [Theory]
     [InlineData("signature")]
     [InlineData("issuer")]
     [InlineData("audience")]
