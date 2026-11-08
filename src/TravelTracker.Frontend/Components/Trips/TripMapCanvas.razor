@@ -4,22 +4,20 @@
 @inject IJSRuntime JavaScript
 @implements IAsyncDisposable
 
-<section class="trip-map-canvas" aria-label="Trip map">
+<section class="trip-map-canvas @(FullScreen ? "full-map" : null)" aria-label="Trip map">
     <div class="map-controls" role="group" aria-label="Map controls">
-        <button type="button" aria-label="Zoom in" title="Zoom in" disabled="@(zoom == MaximumZoom)" @onclick="() => ChangeZoom(1)">+</button>
-        <button type="button" aria-label="Zoom out" title="Zoom out" disabled="@(zoom == MinimumZoom)" @onclick="() => ChangeZoom(-1)">−</button>
-        <button type="button" aria-label="Pan west" title="Pan west" @onclick="() => Pan(-1, 0)">←</button>
-        <button type="button" aria-label="Pan north" title="Pan north" @onclick="() => Pan(0, -1)">↑</button>
-        <button type="button" aria-label="Pan south" title="Pan south" @onclick="() => Pan(0, 1)">↓</button>
-        <button type="button" aria-label="Pan east" title="Pan east" @onclick="() => Pan(1, 0)">→</button>
-        <button type="button" disabled="@(Stops.Count == 0)" @onclick="FitStops">Fit stops</button>
-        @if (CanPick)
-        {
-            <button type="button" @onclick="PickCenterAsync">Pick map center</button>
-        }
+        <button type="button" aria-label="Zoom in" title="Zoom in" disabled="@(zoom == MaximumZoom)" @onclick="() => ChangeZoom(1)">
+            <img src="@Icon("zoom-in")" alt="" />
+        </button>
+        <button type="button" aria-label="Zoom out" title="Zoom out" disabled="@(zoom == MinimumZoom)" @onclick="() => ChangeZoom(-1)">
+            <img src="@Icon("zoom-out")" alt="" />
+        </button>
+        <button type="button" aria-label="@CenterAction" title="@CenterAction" disabled="@(!CanPick && Stops.Count == 0)" @onclick="UseCenterAsync">
+            <img src="@Icon("map-center")" alt="" />
+        </button>
     </div>
     <div class="map-frame">
-        <svg @ref="viewport" viewBox="0 0 768 432" role="group" aria-label="Map with numbered trip stops">
+        <svg @ref="viewport" viewBox="@($"0 0 {ViewportWidth} {ViewportHeight}")" role="group" data-marker-drop="@(AllowMarkerDrop ? "true" : null)" tabindex="0" aria-label="Map with numbered trip stops. Drag or use arrow keys to pan." @onkeydown="PanWithKey">
             @foreach (var tile in VisibleTiles())
             {
                 <image @key="(zoom, tile.Column, tile.Row)"
@@ -27,28 +25,31 @@
                        x="@Number(tile.X)" y="@Number(tile.Y)" width="@TileSize" height="@TileSize"
                        preserveAspectRatio="none" pointer-events="none" aria-hidden="true" />
             }
-            @if (Stops.Count > 1)
+            @for (var index = 0; index < Legs.Count && index + 1 < Stops.Count; index++)
             {
-                <polyline class="route-halo" points="@RoutePoints" pointer-events="none" aria-hidden="true" />
-                <polyline class="route-line" points="@RoutePoints" pointer-events="none" aria-hidden="true" />
+                var leg = Legs[index];
+                if (string.IsNullOrEmpty(leg.Code)) continue;
+
+                var from = ScreenPoint(Stops[index].Lat, Stops[index].Lon);
+                var to = ScreenPoint(Stops[index + 1].Lat, Stops[index + 1].Lon);
+                var curve = leg.Code == "plane" ? Math.Min(90, Math.Abs(to.X - from.X) / 4) : 0;
+                var x = (from.X + to.X) / 2;
+                var y = (from.Y + to.Y) / 2;
+                var segment = $"M {Number(from.X)} {Number(from.Y)} Q {Number(x)} {Number(y - curve)} {Number(to.X)} {Number(to.Y)}";
+                <path class="route-halo" d="@segment" pointer-events="none" aria-hidden="true" />
+                <path class="route-line @leg.Code" d="@segment" pointer-events="none" aria-hidden="true" />
             }
             @if (CanPick)
             {
                 <rect class="location-target" x="0" y="0" width="@ViewportWidth" height="@ViewportHeight" fill="transparent"
                       aria-hidden="true" @onclick="PickFromPointerAsync" />
-                <path class="map-crosshair" d="M376 216h16 M384 208v16" pointer-events="none" aria-hidden="true" />
-            }
-            @if (PendingLocation is { } pending)
-            {
-                var point = ScreenPoint(pending.Lat, pending.Lon);
-                <circle class="pending-pin" cx="@Number(point.X)" cy="@Number(point.Y)" r="13"
-                        pointer-events="none" aria-label="Pending stop" />
+                <path class="map-crosshair" d="@($"M{ViewportWidth / 2 - 8} {ViewportHeight / 2}h16 M{ViewportWidth / 2} {ViewportHeight / 2 - 8}v16")" pointer-events="none" aria-hidden="true" />
             }
             @foreach (var marker in ScreenMarkers())
             {
                 var index = marker.Index;
                 var stop = Stops[index];
-                <g @key="index" class="trip-marker" transform="@($"translate({Number(marker.X)} {Number(marker.Y)})")"
+                <g @key="index" class="trip-marker" data-move-index="@(StopMoved.HasDelegate ? index.ToString(CultureInfo.InvariantCulture) : null)" transform="@($"translate({Number(marker.X)} {Number(marker.Y)})")"
                        role="button" tabindex="0" aria-label="@($"Stop {index + 1}: {stop.Name}")"
                        aria-pressed="@(index == SelectedIndex ? "true" : "false")"
                        @onclick="() => StopSelected.InvokeAsync(index)" @onkeydown="e => SelectWithKeyAsync(e, index)">
@@ -56,21 +57,48 @@
                     {
                         <line class="marker-tether" x1="@Number(-marker.Offset)" y1="0" x2="0" y2="0" aria-hidden="true" />
                     }
-                    @switch (stop.Type)
-                    {
-                        case "accommodation":
-                            <rect class="marker-body" x="-16" y="-16" width="32" height="32" rx="5" />
-                            break;
-                        case "attraction":
-                            <path class="marker-body" d="M0 -21 L20 0 L0 21 L-20 0 Z" />
-                            break;
-                        default:
-                            <circle class="marker-body" r="17" />
-                            break;
-                    }
-                    <text text-anchor="middle" dominant-baseline="central" aria-hidden="true">@(index + 1)</text>
+                    <rect class="marker-body" x="-27" y="-76" width="54" height="76" rx="10" />
+                    <image href="@Pin(stop.Type)" x="-27" y="-76" width="54" height="76" aria-hidden="true" />
+                    <rect class="marker-number" pointer-events="none" x="16" y="-80" width="34" height="23" rx="6" />
+                    <text pointer-events="none" x="33" y="-68" text-anchor="middle" dominant-baseline="central" aria-hidden="true">@((index + 1).ToString("00"))</text>
                     <title>@stop.Name</title>
                 </g>
+                @if (index == SelectedIndex && StopRemoved.HasDelegate)
+                {
+                    var removeX = marker.X < 50 ? 61 : -37;
+                    var removeY = marker.Y < 85 ? 14 : -60;
+                    <g class="marker-remove" transform="@($"translate({Number(marker.X + removeX)} {Number(marker.Y + removeY)})")"
+                       role="button" tabindex="0" aria-label="@($"Remove {stop.Name} from itinerary")"
+                       @onclick="() => StopRemoved.InvokeAsync(index)"
+                       @onkeydown="e => RemoveWithKeyAsync(e, index)">
+                        <circle r="11" />
+                        <path d="M-4 -4L4 4M4 -4L-4 4" aria-hidden="true" />
+                    </g>
+                }
+            }
+            @for (var index = 0; index < Legs.Count && index + 1 < Stops.Count; index++)
+            {
+                var destination = index + 1;
+                var leg = Legs[index];
+                if (string.IsNullOrEmpty(leg.Code)) continue;
+                var from = ScreenPoint(Stops[index].Lat, Stops[index].Lon);
+                var to = ScreenPoint(Stops[index + 1].Lat, Stops[index + 1].Lon);
+                var x = (from.X + to.X) / 2;
+                var curve = leg.Code == "plane" ? Math.Min(90, Math.Abs(to.X - from.X) / 4) : 0;
+                var y = (from.Y + to.Y - curve) / 2;
+                <foreignObject class="map-leg-label" x="@Number(x + 10)" y="@Number(y - 36)" width="260" height="35" pointer-events="none">
+                    @if (ConnectionSelected.HasDelegate)
+                    {
+                        <button type="button" title="Edit connection duration" aria-label="@($"Edit connection {destination}: {leg.Label}")"
+                                @onclick="() => ConnectionSelected.InvokeAsync(destination)">
+                            <img src="@Icon(leg.Code)" alt="" /><span>@leg.Label</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <div><img src="@Icon(leg.Code)" alt="" /><span>@leg.Label</span></div>
+                    }
+                </foreignObject>
             }
         </svg>
         <a class="map-credit" href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>
@@ -79,9 +107,9 @@
     {
         <p>Click the map or use the center crosshair to choose a location.</p>
     }
-    @if (Stops.Count > 1)
+    @if (Legs.Take(Math.Max(0, Stops.Count - 1)).Any(leg => !string.IsNullOrEmpty(leg.Code)))
     {
-        <p>Lines show the order of stops. They are approximate connections.</p>
+        <p>Lines show approximate connections between stops.</p>
     }
 </section>
 
@@ -89,12 +117,18 @@
     [Parameter] public IReadOnlyList<TripPlaceDto> Stops { get; set; } = [];
     [Parameter] public int SelectedIndex { get; set; } = -1;
     [Parameter] public EventCallback<int> StopSelected { get; set; }
+    [Parameter] public EventCallback<int> ConnectionSelected { get; set; }
     [Parameter] public EventCallback<(decimal Lat, decimal Lon)> LocationPicked { get; set; }
     [Parameter] public bool CanPick { get; set; }
-    [Parameter] public (decimal Lat, decimal Lon)? PendingLocation { get; set; }
+    [Parameter] public EventCallback<int> StopRemoved { get; set; }
+    [Parameter] public EventCallback<(int Index, decimal Lat, decimal Lon)> StopMoved { get; set; }
+    [Parameter] public bool FullScreen { get; set; }
+    [Parameter] public bool AllowMarkerDrop { get; set; }
+    [Parameter] public EventCallback<(string Type, decimal Lat, decimal Lon)> MarkerDropped { get; set; }
+    [Parameter] public IReadOnlyList<(string Code, string Label)> Legs { get; set; } = [];
 
-    private const int ViewportWidth = 768;
-    private const int ViewportHeight = 432;
+    private int ViewportWidth = 768;
+    private int ViewportHeight = 432;
     private const int TileSize = 256;
     private const int MinimumZoom = 2;
     private const int MaximumZoom = 19;
@@ -103,18 +137,52 @@
 
     private ElementReference viewport;
     private IJSObjectReference? pointerModule;
+    private IJSObjectReference? resizeObserver;
+    private DotNetObjectReference<TripMapCanvas>? mapReference;
     private (decimal Lat, decimal Lon)[] previousStops = [];
-    private (decimal Lat, decimal Lon)? previousPending;
     private int previousSelection = -1;
+    private bool hasMeasuredViewport;
     private int zoom = DefaultZoom;
     private (double X, double Y) center = Project(45.5019m, -73.5674m);
     private int WorldSize => TileSize << zoom;
     private (double X, double Y) Origin => (center.X * WorldSize - ViewportWidth / 2d, center.Y * WorldSize - ViewportHeight / 2d);
-    private string RoutePoints => string.Join(" ", Stops.Select(stop =>
+
+    private string CenterAction => CanPick ? "Pick map center" : "Fit stops";
+
+    private string Icon(string code) => Assets[$"assets/trip-map/{code}.svg"];
+    private string Pin(string type) => Icon($"pin-{type}");
+
+    /** Watches the full-screen SVG so tiles and pins stay at the correct scale on resize. */
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var point = ScreenPoint(stop.Lat, stop.Lon);
-        return $"{Number(point.X)},{Number(point.Y)}";
-    }));
+        if (!firstRender || !FullScreen) return;
+
+        try
+        {
+            pointerModule ??= await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Trips/TripMapCanvas.razor.js");
+            mapReference = DotNetObjectReference.Create(this);
+            resizeObserver = await pointerModule.InvokeAsync<IJSObjectReference>("watchViewport", viewport, mapReference);
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    /** Updates the tile viewport without resetting a traveller's pan or zoom. */
+    [JSInvokable]
+    public void ResizeViewport(int width, int height)
+    {
+        if (width < 120 || height < 120)
+            return;
+
+        var firstMeasurement = !hasMeasuredViewport;
+        hasMeasuredViewport = true;
+        if (width == ViewportWidth && height == ViewportHeight)
+            return;
+
+        (ViewportWidth, ViewportHeight) = (width, height);
+        if (firstMeasurement && Stops.Count > 0) FitStops();
+        else SetCenter(center);
+        StateHasChanged();
+    }
 
     /** Refit a changed route only when its stops would otherwise be out of view. */
     protected override void OnParametersSet()
@@ -134,10 +202,6 @@
                 SetCenter(Project(selected.Lat, selected.Lon));
         }
 
-        if (PendingLocation != previousPending && PendingLocation is { } pending && !IsVisible(ScreenPoint(pending.Lat, pending.Lon)))
-            SetCenter(Project(pending.Lat, pending.Lon));
-
-        previousPending = PendingLocation;
         previousSelection = SelectedIndex;
     }
 
@@ -225,7 +289,8 @@
         var right = points.Max(point => point.X);
         var top = points.Min(point => point.Y);
         var bottom = points.Max(point => point.Y);
-        var fitScale = Math.Min((ViewportWidth - 96) / Math.Max(right - left, 0.000001),
+        var fitWidth = FullScreen && ViewportWidth >= 900 ? ViewportWidth * .46 : ViewportWidth;
+        var fitScale = Math.Min((fitWidth - 96) / Math.Max(right - left, 0.000001),
             (ViewportHeight - 96) / Math.Max(bottom - top, 0.000001));
         var fitZoom = (int)Math.Floor(Math.Log2(fitScale / TileSize));
         zoom = Math.Clamp(fitZoom, MinimumZoom, DefaultZoom + 2);
@@ -257,7 +322,7 @@
      */
     private void SetCenter((double X, double Y) point)
     {
-        var halfHeight = ViewportHeight / (2d * WorldSize);
+        var halfHeight = Math.Min(.5, ViewportHeight / (2d * WorldSize));
         center = (point.X - Math.Floor(point.X), Math.Clamp(point.Y, halfHeight, 1 - halfHeight));
     }
 
@@ -278,24 +343,72 @@
         await PickAsync(((origin.X + point[0]) / worldSize, (origin.Y + point[1]) / worldSize));
     }
 
-    /**
-     * Uses the center crosshair as an accessible map-picking target.
-     * @return Completion of the location selection callback.
-     */
-    private Task PickCenterAsync() => PickAsync(center);
-
-    /**
-     * Unprojects a tile-space point and sends the corresponding coordinates to the draft.
-     * @param point The world point selected by the traveller.
-     * @return Completion of the location selection callback.
-     */
-    private Task PickAsync((double X, double Y) point)
+    /** Picks the crosshair while placing a marker and fits the itinerary otherwise. */
+    private Task UseCenterAsync()
     {
-        if (!CanPick) return Task.CompletedTask;
+        if (CanPick) return PickAsync(center);
 
+        FitStops();
+        return Task.CompletedTask;
+    }
+
+    /** Pans the focused map using its directional keys. */
+    private void PanWithKey(KeyboardEventArgs args)
+    {
+        switch (args.Key)
+        {
+            case "ArrowLeft": Pan(-1, 0); break;
+            case "ArrowRight": Pan(1, 0); break;
+            case "ArrowUp": Pan(0, -1); break;
+            case "ArrowDown": Pan(0, 1); break;
+        }
+    }
+
+    /** Moves the viewport by the drag delta measured in SVG units. */
+    [JSInvokable]
+    public Task PanByDrag(double x, double y) => InvokeAsync(() =>
+    {
+        SetCenter((center.X - x / WorldSize, center.Y - y / WorldSize));
+        StateHasChanged();
+    });
+
+    /** Moves a pin by the drag distance while keeping the camera fixed. */
+    [JSInvokable]
+    public Task MoveMarker(int index, double x, double y)
+    {
+        if (!StopMoved.HasDelegate || index < 0 || index >= Stops.Count ||
+            !double.IsFinite(x) || !double.IsFinite(y))
+            return Task.CompletedTask;
+
+        var stop = Stops[index];
+        var point = ScreenPoint(stop.Lat, stop.Lon);
+        var origin = Origin;
+        var targetX = Math.Clamp(point.X + x, 0, ViewportWidth);
+        var targetY = Math.Clamp(point.Y + y, 0, ViewportHeight);
+        var (lat, lon) = Unproject(((origin.X + targetX) / WorldSize, (origin.Y + targetY) / WorldSize));
+        return StopMoved.InvokeAsync((index, lat, lon));
+    }
+
+    /** Converts a dropped palette marker into a geographic placement. */
+    [JSInvokable]
+    public Task DropMarker(string type, double x, double y)
+    {
+        if (!AllowMarkerDrop) return Task.CompletedTask;
+
+        var origin = Origin;
+        var (lat, lon) = Unproject(((origin.X + x) / WorldSize, (origin.Y + y) / WorldSize));
+        return MarkerDropped.InvokeAsync((type, lat, lon));
+    }
+
+    private Task PickAsync((double X, double Y) point) =>
+        CanPick ? LocationPicked.InvokeAsync(Unproject(point)) : Task.CompletedTask;
+
+    /** @return The latitude and longitude for a world-space point. */
+    private static (decimal Lat, decimal Lon) Unproject((double X, double Y) point)
+    {
         var latitude = Math.Atan(Math.Sinh(Math.PI * (1 - 2 * Math.Clamp(point.Y, 0, 1)))) * 180 / Math.PI;
         var longitude = (point.X - Math.Floor(point.X)) * 360 - 180;
-        return LocationPicked.InvokeAsync((Math.Round((decimal)latitude, 6), Math.Round((decimal)longitude, 6)));
+        return (Math.Round((decimal)latitude, 6), Math.Round((decimal)longitude, 6));
     }
 
     /**
@@ -307,9 +420,13 @@
     private Task SelectWithKeyAsync(KeyboardEventArgs key, int index) =>
         key.Key is "Enter" or " " ? StopSelected.InvokeAsync(index) : Task.CompletedTask;
 
+    /** Allows keyboard removal through the selected pin's delete control. */
+    private Task RemoveWithKeyAsync(KeyboardEventArgs key, int index) =>
+        key.Key is "Enter" or " " ? StopRemoved.InvokeAsync(index) : Task.CompletedTask;
+
     /** @return Whether the marker's center is within the visible viewport. */
-    private static bool IsVisible((double X, double Y) point) =>
-        point.X is >= 0 and <= ViewportWidth && point.Y is >= 0 and <= ViewportHeight;
+    private bool IsVisible((double X, double Y) point) =>
+        point.X >= 0 && point.X <= ViewportWidth && point.Y >= 0 && point.Y <= ViewportHeight;
 
     /** @return The equivalent horizontal displacement in the nearest copy of the world. */
     private static double WrappedDifference(double value) => value - Math.Round(value);
@@ -323,8 +440,16 @@
      */
     public async ValueTask DisposeAsync()
     {
-        if (pointerModule is null) return;
-        try { await pointerModule.DisposeAsync(); }
+        try
+        {
+            if (resizeObserver is not null)
+            {
+                await resizeObserver.InvokeVoidAsync("disconnect");
+                await resizeObserver.DisposeAsync();
+            }
+            if (pointerModule is not null) await pointerModule.DisposeAsync();
+        }
         catch (JSDisconnectedException) { }
+        finally { mapReference?.Dispose(); }
     }
 }

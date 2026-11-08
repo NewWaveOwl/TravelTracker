@@ -7,19 +7,113 @@
 
 <PageTitle>@(showMap ? "Map View" : "Trip Editor") | TravelTracker</PageTitle>
 
-<div class="trip-planner">
-    <div class="trip-heading">
-        <div>
-            <h1>@(review ? "Review on map" : showMap ? "Map View" : "Trip editor")</h1>
-            <p>@(review ? "Check your ordered route and times before saving." : "Plan your trip with places, transport and times.")</p>
+<div class="trip-planner @(MapVisible ? "map-workspace" : null)">
+    @if (MapVisible)
+    {
+        <div class="map-surface">
+            <TripMapCanvas Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())" SelectedIndex="selected"
+                           Legs="MapLegs" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<int>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
+                           CanPick="@(!review && !busy && mapTool == MapTool.Markers && placing)"
+                           StopMoved="@(!review && !busy ? EventCallback.Factory.Create<(int, decimal, decimal)>(this, MoveMarker) : default)"
+                           StopRemoved="@(!review && !busy ? EventCallback.Factory.Create<int>(this, RemoveStop) : default)" AllowMarkerDrop="@(showMap && !review && !busy)" MarkerDropped="PlaceDroppedMarker" FullScreen="true" />
         </div>
-        <div class="trip-actions" aria-label="Trip view">
-            <button type="button" class="secondary" aria-pressed="@(!review && showMap)" disabled="@busy" @onclick="() => SwitchView(true)">Map View</button>
-            <button type="button" class="secondary" aria-pressed="@(!review && !showMap)" disabled="@busy" @onclick="() => SwitchView(false)">Standard editor</button>
-            <button type="button" class="secondary" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review on map</button>
+    }
+    else
+    {
+        <div class="trip-heading">
+            <div>
+                <h1>Trip editor</h1>
+                <p>Plan your trip with places, transport and times.</p>
+            </div>
+            <div class="trip-actions" aria-label="Trip view">
+                <button type="button" class="secondary" disabled="@busy" @onclick="() => SwitchView(true)">Map View</button>
+                <button type="button" class="secondary" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review on map</button>
+            </div>
         </div>
-    </div>
+    }
 
+    <div class="trip-columns @(!MapVisible ? "editor" : null)">
+        <section class="trip-chain" aria-labelledby="trip-chain-title">
+            @if (MapVisible)
+            {
+                <small class="trip-eyebrow">Map view / Trip planning</small>
+                <h1>@(string.IsNullOrWhiteSpace(draft.Name) ? "Map View" : draft.Name)</h1>
+                <div class="trip-actions trip-steps" aria-label="Planning steps">
+                    <button type="button" class="secondary" aria-pressed="@Pressed(!review && !stopsStep)" disabled="@busy" @onclick="ShowBasics">Basics</button>
+                    <button type="button" class="secondary" aria-pressed="@Pressed(!review && stopsStep)" disabled="@busy" @onclick="ShowStops">Stops</button>
+                    <button type="button" class="secondary" aria-pressed="@Pressed(review)" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review on map</button>
+                </div>
+            }
+            <h2 id="trip-chain-title">@(MapVisible ? savedReview ? "Saved itinerary" : "Your itinerary" : "All selected transports")</h2>
+            <p>@draft.Stops.Count @(draft.Stops.Count == 1 ? "stop" : "stops")</p>
+            @if (draft.Stops.Count == 0)
+            {
+                <p>Start with an accommodation. Add places to build your route.</p>
+            }
+            <ol aria-label="Ordered stops and transport connections">
+                @for (var index = 0; index < draft.Stops.Count; index++)
+                {
+                    var stopIndex = index;
+                    var stop = draft.Stops[stopIndex];
+                    <li @key="stop">
+                        @if (stopIndex > 0)
+                        {
+                            var leg = draft.LegTo(stopIndex);
+                            <div class="trip-leg-time">
+                                <strong>@(leg.Mode?.Name ?? "Choose transport")</strong>
+                                <span>@TimeLabel(leg.Departure) → @TimeLabel(draft.ArrivalFor(leg))</span>
+                            </div>
+                        }
+                        <button type="button" class="trip-stop" aria-pressed="@Pressed(selected == stopIndex)" disabled="@busy" @onclick="() => SelectStop(stopIndex)">
+                            <span class="trip-number">@((stopIndex + 1).ToString("00"))</span>
+                            <span><strong>@stop.Place.Name</strong><small>@MarkerLabel(stop.Place.Type) @(!string.IsNullOrWhiteSpace(stop.Place.Address) ? $" · {stop.Place.Address}" : "")</small></span>
+                        </button>
+                        @if (!review && selected == stopIndex)
+                        {
+                            <div class="trip-stop-actions">
+                                <button type="button" class="secondary" disabled="@(busy || stopIndex == 0)" @onclick="() => MoveStop(stopIndex, -1)">Move up</button>
+                                <button type="button" class="secondary" disabled="@(busy || stopIndex == draft.Stops.Count - 1)" @onclick="() => MoveStop(stopIndex, 1)">Move down</button>
+                                <button type="button" class="secondary" disabled="@busy" @onclick="() => RemoveStop(stopIndex)">Remove</button>
+                            </div>
+                        }
+                    </li>
+                }
+            </ol>
+            @if (showMap && !review && stopsStep)
+            {
+                <button type="button" class="secondary" disabled="@busy" @onclick="OpenMarkers">+ Add stop</button>
+            }
+            @if (!review && draft.Stops.Count > 1 && draft.Stops[0].Place.Type == "accommodation")
+            {
+                <button type="button" class="secondary" disabled="@busy" @onclick="AddReturnStop">+ Return to starting accommodation</button>
+            }
+        </section>
+
+        @if (showMap && !review)
+        {
+            <section class="trip-tools" aria-label="Map tools">
+                <div class="trip-palette">
+                    <strong>Map tools</strong>
+                    <button type="button" class="secondary" aria-pressed="@Pressed(mapTool == MapTool.Markers)" disabled="@busy" @onclick="OpenMarkers">
+                        <img src="@Icon("transport_stop")" alt="" />Markers
+                    </button>
+                    <button type="button" class="secondary" aria-pressed="@Pressed(mapTool == MapTool.Transport)" disabled="@busy" @onclick="OpenTransport">
+                        <img src="@Icon("train")" alt="" />Transport
+                    </button>
+                </div>
+                @if (mapTool == MapTool.Markers)
+                {
+                    @MarkerPalette
+                }
+                else if (mapTool == MapTool.Transport)
+                {
+                    @TransportPalette
+                    <small>@ConnectionHint</small>
+                }
+            </section>
+        }
+
+        <div class="trip-work">
     @if (notice is not null)
     {
         <div class="trip-message success" role="status">
@@ -39,8 +133,122 @@
         </div>
     }
 
-    @if (!review)
-    {
+            @if (review)
+            {
+                <section class="trip-panel trip-review" aria-label="Trip review details">
+                    <h2>@(savedReview ? "Saved trip" : "Review on map")</h2>
+                    <p>@(string.IsNullOrWhiteSpace(draft.Name) ? "Untitled trip" : draft.Name)</p>
+                    <small>@(draft.RoundTrip ? "Round trip" : "One way") · @TimeLabel(draft.Start) → @TimeLabel(draft.End) · @draft.TimeZone</small>
+                    <ol class="review-legs">
+                        @for (var index = 1; index < draft.Stops.Count; index++)
+                        {
+                            var leg = draft.LegTo(index);
+                            <li>
+                                <strong>@index.ToString("00") @TimeLabel(leg.Departure) → @TimeLabel(draft.ArrivalFor(leg)) · @(leg.Mode?.Name ?? "Choose transport")</strong>
+                                <small>@draft.Stops[index - 1].Place.Name → @draft.Stops[index].Place.Name</small>
+                            </li>
+                        }
+                    </ol>
+                    @if (!savedReview)
+                    {
+                        <button type="button" disabled="@busy" @onclick="SaveAsync">@(busy ? "Saving…" : saveFailed ? "Retry save" : "Save trip")</button>
+                    }
+                    <button type="button" class="secondary" disabled="@busy" @onclick="BackFromReview">@(savedReview ? "Back to editor" : "Back to stops")</button>
+                </section>
+            }
+            else
+            {
+                @if (!showMap || !stopsStep)
+                {
+                    @TripBasics
+                    @OpenSavedTrip
+                }
+                @if (!showMap || mapTool == MapTool.Markers)
+                {
+                    @MarkerEditor
+                }
+                @if (!showMap || (stopsStep && mapTool != MapTool.Markers))
+                {
+                    <section class="trip-panel leg-panel" aria-labelledby="leg-panel-title">
+                        <h2 id="leg-panel-title">@(pendingMode is not null ? "Connect stops" : "Plan stops and routes")</h2>
+                        @if (showMap && pendingMode is { } connection)
+                        {
+                            <small class="leg-summary">
+                                @(connectionFrom is { } source ? $"From {draft.Stops[source].Place.Name} / Destination not set" : "Starting stop not set")
+                            </small>
+                            <div class="leg-transport">
+                                <span>Transport</span>
+                                <output><img src="@Icon(connection.Code)" alt="" />@connection.Label</output>
+                            </div>
+                            <p>@ConnectionHint</p>
+                        }
+                        else if (CurrentLeg is { } selectedLeg)
+                        {
+                            <small class="leg-summary">Connection @selected.ToString("00") / @draft.Stops[selected - 1].Place.Name → @draft.Stops[selected].Place.Name</small>
+                            @if (showMap)
+                            {
+                                <div class="leg-transport">
+                                    <span>Transport</span>
+                                    <output>
+                                        @if (selectedLeg.Mode is { } mode)
+                                        {
+                                            <img src="@Icon(mode.Code)" alt="" />@mode.Name
+                                        }
+                                        else
+                                        {
+                                            @:Choose from the transport palette
+                                        }
+                                    </output>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p>Select a destination stop to edit its incoming connection.</p>
+                        }
+                        @if (!showMap)
+                        {
+                            <fieldset class="leg-fields" disabled="@(busy || selected <= 0)">
+                                @TransportPalette
+                            </fieldset>
+                        }
+                        @if (pendingMode is null && CurrentLeg is { } leg)
+                        {
+                            <fieldset class="leg-fields trip-fields" disabled="@busy">
+                                <label>Departure <input type="datetime-local" step="1" value="@DateTimeValue(leg.Departure)"
+                                                        @onchange="e => SetDateTime(e, value => leg.Departure = value)" /></label>
+                                <label>Arrival <input type="datetime-local" step="1" value="@DateTimeValue(draft.ArrivalFor(leg))"
+                                                      @onchange="e => SetDateTime(e, value => { leg.Arrival = value; leg.DurationMinutes = null; })" /></label>
+                                <label>Duration (minutes) <input @ref="durationInput" type="number" min="1" step="1" value="@DisplayedDuration(leg)"
+                                                                 @onchange="e => SetDuration(leg, e)" /></label>
+                            </fieldset>
+                            @if (showMap)
+                            {
+                                <p>Use the transport palette to connect stops. Reorder stops in the itinerary.</p>
+                                <button type="button" disabled="@busy" @onclick="ApplyConnectionChanges">Apply connection changes</button>
+                            }
+                        }
+                        @if (showMap)
+                        {
+                            <button type="button" class="secondary" disabled="@busy" @onclick="() => SwitchView(false)">Standard editor</button>
+                            @if (pendingMode is not null)
+                            {
+                                <button type="button" class="leg-cancel" disabled="@busy" @onclick="CancelConnection">Cancel connection</button>
+                            }
+                        }
+                    </section>
+                }
+                @if (showMap && (!stopsStep || mapTool == MapTool.Markers))
+                {
+                    <button type="button" class="secondary" disabled="@busy" @onclick="() => SwitchView(false)">Standard editor</button>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    RenderFragment OpenSavedTrip => @<div>
         <details class="trip-open">
             <summary>Open a saved trip</summary>
             <form @onsubmit="RequestOpenAsync" @onsubmit:preventDefault>
@@ -56,159 +264,116 @@
                 </div>
             }
         </details>
+    </div>;
+
+    RenderFragment TripBasics => @<div>
         <fieldset class="trip-basics" disabled="@busy">
             <legend>Trip basics</legend>
             <label>Trip name <input type="text" @bind="draft.Name" @bind:after="MarkEdited" placeholder="Name your trip" /></label>
             <label>Time zone <input type="text" @bind="draft.TimeZone" @bind:after="MarkEdited" placeholder="America/Toronto" /></label>
-            <label>Trip starts <input type="datetime-local" @bind="draft.Start" @bind:format="yyyy-MM-ddTHH:mm" @bind:after="MarkEdited" /></label>
-            <label>Trip ends <input type="datetime-local" @bind="draft.End" @bind:format="yyyy-MM-ddTHH:mm" @bind:after="MarkEdited" /></label>
+            <label>Trip starts <input type="datetime-local" step="1" value="@DateTimeValue(draft.Start)" @onchange="e => SetDateTime(e, value => draft.Start = value)" /></label>
+            <label>Trip ends <input type="datetime-local" step="1" value="@DateTimeValue(draft.End)" @onchange="e => SetDateTime(e, value => draft.End = value)" /></label>
             <label class="trip-checkbox"><input type="checkbox" @bind="draft.RoundTrip" @bind:after="MarkEdited" /> Return to start</label>
+            @if (showMap)
+            {
+                <button type="button" @onclick="ShowStops">Continue to stops</button>
+            }
         </fieldset>
-    }
+    </div>;
 
-    <div class="trip-columns @(!showMap && !review ? "editor" : null)">
-        <section class="trip-chain" aria-labelledby="trip-chain-title">
-            <h2 id="trip-chain-title">All selected transports</h2>
-            <p>@draft.Stops.Count @(draft.Stops.Count == 1 ? "stop" : "stops")</p>
-            @if (draft.Stops.Count == 0)
-            {
-                <p>Start with an accommodation. Add places to build your route.</p>
-            }
-            <ol aria-label="Ordered stops and transport legs">
-                @for (var index = 0; index < draft.Stops.Count; index++)
-                {
-                    var stopIndex = index;
-                    var stop = draft.Stops[stopIndex];
-                    <li @key="stop">
-                        @if (stopIndex > 0)
-                        {
-                            var leg = draft.LegTo(stopIndex);
-                            <div class="trip-leg-time">
-                                <strong>@(leg.Mode?.Name ?? "Choose transport")</strong>
-                                <span>@TimeLabel(leg.Departure) → @TimeLabel(leg.Arrival)</span>
-                            </div>
-                        }
-                        <button type="button" class="trip-stop" aria-pressed="@(selected == stopIndex)" disabled="@busy" @onclick="() => SelectStop(stopIndex)">
-                            <span class="trip-number">@((stopIndex + 1).ToString("00"))</span>
-                            <span><strong>@stop.Place.Name</strong><small>@MarkerLabel(stop.Place.Type) @(!string.IsNullOrWhiteSpace(stop.Place.Address) ? $" · {stop.Place.Address}" : "")</small></span>
-                        </button>
-                        @if (!review && selected == stopIndex)
-                        {
-                            <div class="trip-stop-actions">
-                                <button type="button" class="secondary" disabled="@(busy || stopIndex == 0)" @onclick="() => MoveStop(stopIndex, -1)">Move up</button>
-                                <button type="button" class="secondary" disabled="@(busy || stopIndex == draft.Stops.Count - 1)" @onclick="() => MoveStop(stopIndex, 1)">Move down</button>
-                                <button type="button" class="secondary" disabled="@busy" @onclick="() => RemoveStop(stopIndex)">Remove</button>
-                            </div>
-                        }
-                    </li>
-                }
-            </ol>
-            @if (!review && draft.Stops.Count > 1 && draft.Stops[0].Place.Type == "accommodation")
-            {
-                <button type="button" class="secondary" disabled="@busy" @onclick="AddReturnStop">+ Return to starting accommodation</button>
-            }
-        </section>
-
-        <div class="trip-work">
-            @if (showMap || review)
-            {
-                <TripMapCanvas Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())" SelectedIndex="selected"
-                               StopSelected="SelectStop" LocationPicked="PickLocation" CanPick="@(!review && !busy && placing)"
-                               PendingLocation="@(placing ? PickedCoordinates : null)" />
-            }
-
-            @if (review)
-            {
-                <section class="trip-panel" aria-label="Trip review details">
-                    <h2>@(string.IsNullOrWhiteSpace(draft.Name) ? "Untitled trip" : draft.Name)</h2>
-                    <p>@TimeLabel(draft.Start) → @TimeLabel(draft.End) · @draft.TimeZone</p>
-                    <p>@(draft.RoundTrip ? "Round trip" : "One-way trip")</p>
-                    <div class="trip-actions">
-                        <button type="button" class="secondary" disabled="@busy" @onclick="() => SwitchView(showMap)">Edit trip</button>
-                        <button type="button" disabled="@busy" @onclick="SaveAsync">@(busy ? "Saving…" : saveFailed ? "Retry save" : "Save trip")</button>
-                    </div>
-                </section>
-            }
-            else
-            {
-                <fieldset class="trip-panel" disabled="@busy">
-                    <legend>Markers</legend>
+    RenderFragment MarkerPalette => @<div>
                     <div class="trip-palette" aria-label="Marker palette">
                         @foreach (var option in Markers)
                         {
-                            <button type="button" class="secondary" aria-pressed="@(markerType == option.Code)" @onclick="() => SelectMarker(option.Code)">@option.Label</button>
+                            <button type="button" class="secondary" aria-pressed="@Pressed(markerType == option.Code)" disabled="@busy" draggable="@(showMap && !busy ? "true" : null)" data-map-marker="@option.Code" @onclick="() => SelectMarker(option.Code)"><img src="@Icon(option.Code)" alt="" />@option.Label</button>
                         }
                     </div>
-                    <form class="trip-search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
-                        <label>Search saved @MarkerLabel(markerType).ToLowerInvariant() locations <input type="search" @bind="searchValue" placeholder="Enter a place name" /></label>
-                        <button type="submit">Search</button>
-                    </form>
-                    @if (searched)
-                    {
-                        @if (places.Count == 0)
-                        {
-                            <p>No saved locations matched.</p>
-                        }
-                        else
-                        {
-                            <ul class="trip-search-results">
-                                @foreach (var place in places)
-                                {
-                                    <li><button type="button" class="secondary" @onclick="() => AddStop(place)"><strong>@place.Name</strong><small>@place.Address</small></button></li>
-                                }
-                            </ul>
-                        }
-                    }
-                    @if (!placing)
-                    {
-                        <button type="button" class="secondary" @onclick="BeginPlacement">@(showMap ? "Pick a location on the map" : "Enter a location")</button>
-                    }
-                    else
-                    {
-                        <form class="trip-place" @onsubmit="AddPickedStop" @onsubmit:preventDefault>
-                            <p>@(showMap ? "Select a point on the map or enter its coordinates." : "Enter the coordinates for this place.")</p>
-                            @if (markerType == "transport_stop")
-                            {
-                                <p>Saving this trip adds new stops to the shared location catalogue.</p>
-                            }
-                            <div class="trip-fields">
-                                <label>Place name <input type="text" required @bind="placeName" /></label>
-                                <label>Address (optional) <input type="text" @bind="placeAddress" /></label>
-                                <label>Latitude <input type="number" min="-90" max="90" step="any" required @bind="latitude" /></label>
-                                <label>Longitude <input type="number" min="-180" max="180" step="any" required @bind="longitude" /></label>
-                            </div>
-                            <div class="trip-actions">
-                                <button type="submit">Add @MarkerLabel(markerType).ToLowerInvariant()</button>
-                                <button type="button" class="secondary" @onclick="() => placing = false">Cancel</button>
-                            </div>
-                        </form>
-                    }
-                </fieldset>
-                <fieldset class="trip-panel" disabled="@(busy || selected <= 0)">
-                    <legend>Transport</legend>
-                    @if (selected <= 0)
-                    {
-                        <p>Add at least two stops, then select a destination stop to plan its incoming leg.</p>
-                    }
-                    else
-                    {
-                        <p>Leg @selected · @draft.Stops[selected - 1].Place.Name → @draft.Stops[selected].Place.Name</p>
-                    }
+    </div>;
+
+    RenderFragment TransportPalette => @<div>
                     <div class="trip-palette" aria-label="Transport palette">
                         @foreach (var option in Modes)
                         {
-                            <button type="button" class="secondary" aria-pressed="@(CurrentLeg?.Mode?.Code == option.Code)" @onclick="() => SelectMode(option)">@option.Label</button>
+                            <button type="button" class="secondary" aria-pressed="@Pressed((showMap ? pendingMode?.Code ?? CurrentLeg?.Mode?.Code : CurrentLeg?.Mode?.Code) == option.Code)" @onclick="() => ChooseMode(option)"><img src="@Icon(option.Code)" alt="" />@option.Label</button>
                         }
                     </div>
-                    @if (CurrentLeg is { } leg)
+    </div>;
+
+    RenderFragment MarkerEditor => @<div>
+                <section class="trip-panel marker-panel" aria-labelledby="marker-panel-title">
+                    <h2 id="marker-panel-title">@(showMap ? "Add a marker" : "Markers")</h2>
+                    <fieldset class="marker-fields" disabled="@busy">
+                    @if (!showMap)
                     {
-                        <div class="trip-fields">
-                            <label>Planned departure <input type="datetime-local" @bind="leg.Departure" @bind:format="yyyy-MM-ddTHH:mm" @bind:after="MarkEdited" /></label>
-                            <label>Planned arrival <input type="datetime-local" @bind="leg.Arrival" @bind:format="yyyy-MM-ddTHH:mm" @bind:after="MarkEdited" /></label>
-                        </div>
+                        @MarkerPalette
                     }
-                </fieldset>
-            }
-        </div>
-    </div>
-</div>
+                    else
+                    {
+                        <p>Choose a marker, then click the map or drag it onto the map.</p>
+                    }
+                    @if (markerType is { } activeMarker)
+                    {
+                        @if (showMap && draft.Stops.Count > 0)
+                        {
+                            <label>Insert after
+                                <select @bind="insertAfter">
+                                    @for (var index = 0; index < draft.Stops.Count; index++)
+                                    {
+                                        <option value="@index">@draft.Stops[index].Place.Name</option>
+                                    }
+                                </select>
+                            </label>
+                        }
+                        <form class="trip-search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+                            <label>Search saved @MarkerLabel(activeMarker).ToLowerInvariant() locations <input type="search" @bind="searchValue" placeholder="Enter a place name" /></label>
+                            <button type="submit">Search</button>
+                        </form>
+                        @if (searched)
+                        {
+                            @if (places.Count == 0)
+                            {
+                                <p>No saved locations matched.</p>
+                            }
+                            else
+                            {
+                                <ul class="trip-search-results">
+                                    @foreach (var place in places)
+                                    {
+                                        <li><button type="button" class="secondary" @onclick="() => AddStop(place, showMap ? insertAfter : null)"><strong>@place.Name</strong><small>@place.Address</small></button></li>
+                                    }
+                                </ul>
+                            }
+                        }
+                        @if (!placing)
+                        {
+                            <button type="button" class="secondary" @onclick="BeginPlacement">@(showMap ? "Pick a location on the map" : "Enter a location")</button>
+                        }
+                        else
+                        {
+                            <form class="trip-place" @onsubmit="AddPickedStop" @onsubmit:preventDefault>
+                                <p>@(showMap ? "Select a point on the map or enter its coordinates." : "Enter the coordinates for this place.")</p>
+                                @if (activeMarker == "transport_stop")
+                                {
+                                    <p>Saving this trip adds new stops to the shared location catalogue.</p>
+                                }
+                                <div class="trip-fields">
+                                    <label>Place name <input type="text" required @bind="placeName" /></label>
+                                    <label>Address (optional) <input type="text" @bind="placeAddress" /></label>
+                                    <label>Latitude <input type="number" min="-90" max="90" step="any" required @bind="latitude" /></label>
+                                    <label>Longitude <input type="number" min="-180" max="180" step="any" required @bind="longitude" /></label>
+                                </div>
+                                <div class="trip-actions">
+                                    <button type="submit">@(editingMarker is null ? $"Add {MarkerLabel(activeMarker).ToLowerInvariant()}" : "Apply marker details")</button>
+                                    <button type="button" class="secondary" @onclick="() => placing = false">Cancel</button>
+                                </div>
+                            </form>
+                        }
+                    }
+                    else
+                    {
+                        <p>Choose Stop, Attraction, or Accommodation to get started.</p>
+                    }
+                    </fieldset>
+                </section>
+    </div>;
+}

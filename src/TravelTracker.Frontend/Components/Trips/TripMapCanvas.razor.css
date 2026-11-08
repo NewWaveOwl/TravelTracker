@@ -5,22 +5,27 @@
 
 .map-controls {
     display: flex;
-    flex-wrap: wrap;
-    gap: .35rem;
-    margin-bottom: .45rem;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    width: max-content;
+    background: white;
+    border-radius: 16px;
 }
 
 .map-controls button {
-    min-width: 44px;
-    min-height: 44px;
-    padding: .2rem .5rem;
-    font: 1rem/1.2 'Atkinson Hyperlegible', sans-serif;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
 }
 
-.map-controls button:disabled {
-    opacity: .55;
-    cursor: default;
-}
+.map-controls button:disabled { opacity: .55; cursor: default; }
+.map-controls button:not(:disabled):hover { background: #f0eadf; }
 
 .map-frame {
     position: relative;
@@ -52,14 +57,12 @@
 .trip-marker { cursor: pointer; }
 .marker-tether { stroke: #265873; stroke-width: 3; pointer-events: none; }
 
-.marker-body,
-.pending-pin {
+.marker-body {
     stroke: white;
     stroke-width: 3;
 }
 
 .marker-body { fill: var(--forest); }
-.pending-pin { fill: #ffcbbe; stroke: var(--forest); }
 .trip-marker text { fill: white; font: bold 16px 'Atkinson Hyperlegible', sans-serif; }
 .trip-marker[aria-pressed="true"] .marker-body { fill: #ffcbbe; stroke: var(--forest); }
 .trip-marker[aria-pressed="true"] text { fill: var(--forest); }
@@ -79,4 +82,56 @@
 .trip-map-canvas p {
     margin: .35rem 0 0;
     font: .8rem/1.4 'Atkinson Hyperlegible', sans-serif;
+}
+
+.marker-body { fill: transparent; stroke: transparent; }
+.marker-number { fill: #fffdf5; }
+.trip-marker[aria-pressed="true"] .marker-body { fill: transparent; stroke: #3e4f3d; }
+.trip-marker[aria-pressed="true"] .marker-number { fill: #ffcbbe; }
+.trip-marker text { fill: var(--forest); }
+.route-line { stroke: #327dab; }
+.route-line.pedestrian { stroke: #3b7866; stroke-dasharray: 5 5; }
+.route-line.train { stroke: #35795f; }
+.route-line.bus { stroke: #a05a39; }
+.map-leg-label div, .map-leg-label button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #84bdc2;
+    border-radius: 18px;
+    padding: 4px 10px;
+    color: #273d30;
+    font: 16px/24px 'Atkinson Hyperlegible', sans-serif;
+    white-space: nowrap;
+    min-height: 0;
+    max-width: 100%;
+}
+.map-leg-label button { pointer-events: auto; cursor: pointer; }
+.map-leg-label button:hover { background: #a5d0d4; }
+.map-leg-label span { overflow: hidden; text-overflow: ellipsis; }
+.full-map, .full-map .map-frame, .full-map svg { width: 100%; height: 100%; }
+.full-map .map-frame { border-radius: 0; }
+.full-map .map-controls {
+    position: absolute;
+    right: clamp(12px, 1.65vw, 32px);
+    bottom: clamp(28px, 7.4vh, 80px);
+    z-index: 1;
+}
+.full-map svg { touch-action: none; cursor: grab; }
+.full-map svg[data-dragging] { cursor: grabbing; }
+.full-map p { display: none; }
+.marker-remove { cursor: pointer; }
+.marker-remove circle { fill: white; stroke: #3e4f3d; stroke-width: 1; }
+.marker-remove path { fill: none; stroke: #3e4f3d; stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+.marker-remove:focus-visible circle, .marker-remove:hover circle { stroke-width: 2; }
+
+.trip-marker[data-move-index] { cursor: grab; }
+.full-map svg[data-dragging] .trip-marker[data-move-index] { cursor: grabbing; }
+.full-map svg[data-dragging] .marker-remove { visibility: hidden; }
+.trip-marker:hover .marker-body,
+.trip-marker[aria-pressed="true"] .marker-body,
+.trip-marker:focus-visible .marker-body {
+    fill: #ffc07555;
+    stroke: #315b44;
+    stroke-width: 3;
 }

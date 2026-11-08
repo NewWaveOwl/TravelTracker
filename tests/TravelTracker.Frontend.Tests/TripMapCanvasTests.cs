@@ -26,7 +26,7 @@ public sealed class TripMapCanvasTests : BunitContext
         Assert.Equal("false", end.GetAttribute("aria-pressed"));
         end.Click();
         Assert.Equal(2, selected);
-        Assert.Single(map.FindAll(".route-line"));
+        Assert.Empty(map.FindAll(".route-line, .route-halo"));
     }
 
     [Fact]
@@ -37,7 +37,13 @@ public sealed class TripMapCanvasTests : BunitContext
         var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, [east, west]));
 
         Assert.Equal(2, map.FindAll(".trip-marker").Count);
-        Assert.All(map.FindAll("image"), tile => Assert.StartsWith("https://tile.openstreetmap.org/", tile.GetAttribute("href")));
+        Assert.NotEmpty(map.FindAll("image[href^='https://tile.openstreetmap.org/']"));
+        Assert.All(map.FindAll(".trip-marker image"), pin =>
+        {
+            Assert.Equal("assets/trip-map/pin-transport_stop.svg", pin.GetAttribute("href"));
+            Assert.Equal("54", pin.GetAttribute("width"));
+            Assert.Equal("76", pin.GetAttribute("height"));
+        });
     }
 
     [Fact]
@@ -48,14 +54,36 @@ public sealed class TripMapCanvasTests : BunitContext
             .Add(component => component.CanPick, true)
             .Add(component => component.LocationPicked, point => selected = point));
 
-        var center = map.FindAll("button").Single(button => button.TextContent == "Pick map center");
+        var controls = map.FindAll(".map-controls button");
+        Assert.Equal(3, controls.Count);
+        Assert.Equal(new[] { "zoom-in.svg", "zoom-out.svg", "map-center.svg" },
+            map.FindAll(".map-controls img").Select(image => Path.GetFileName(image.GetAttribute("src"))));
+        var center = map.Find("button[aria-label='Pick map center']");
         center.Click();
         var initial = selected;
         Assert.Equal((45.5019m, -73.5674m), initial);
-        map.Find("[aria-label='Pan east']").Click();
+        map.Find("svg").KeyDown("ArrowRight");
         center.Click();
         Assert.Equal(initial.Lat, selected.Lat);
         Assert.True(selected.Lon > initial.Lon);
+    }
+
+    [Fact]
+    public async Task FullMapUsesTheMeasuredViewportAndKeepsPinsAtTheirExportedSize()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
+        var map = Render<TripMapCanvas>(parameters => parameters
+            .Add(component => component.FullScreen, true)
+            .Add(component => component.Stops, [hotel]));
+
+        await map.InvokeAsync(() => map.Instance.ResizeViewport(1600, 800));
+
+        Assert.Equal("0 0 1600 800", map.Find("svg").GetAttribute("viewBox"));
+        var pin = map.Find(".trip-marker image");
+        Assert.Equal("54", pin.GetAttribute("width"));
+        Assert.Equal("76", pin.GetAttribute("height"));
+        Assert.Equal("assets/trip-map/pin-accommodation.svg", pin.GetAttribute("href"));
     }
 
     [Fact]

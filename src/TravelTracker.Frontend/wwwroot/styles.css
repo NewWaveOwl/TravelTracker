@@ -518,3 +518,10 @@ main:has(.accommodation-workspace) { max-width: 1536px; padding: 32px 48px 80px;
     .accommodation-modal>header h2 { font-size: 24px; }
 }
 main:has(.trip-planner) { max-width: 1520px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 56px) 56px; }
+
+main:has(.map-workspace) { max-width: none; margin: 0; padding: 0; }
+body:has(.map-workspace) > header { z-index: 3; }
+@media (max-width: 700px) {
+    .primary-navigation { display: flex; }
+    .primary-navigation a:not(.map-navigation-link) { display: none; }
+}

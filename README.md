@@ -92,28 +92,68 @@ The historical SQL schema in `src/Database/schema.sql` is not applied automatica
 
 ## Getting started
 
-The independent Blazor Web App lives in [src/TravelTracker.Frontend](src/TravelTracker.Frontend). Run `dotnet run --project src/TravelTracker.Frontend --launch-profile http` and open http://localhost:5100. It runs in interactive Server mode and calls the services over HTTP from the server, so no browser CORS or proxy setup is needed; service URLs live under `Services` in its `appsettings.json` (Attractions 5104, Transport 5105, Accommodations 5106, Settings 5107, Trips 5108). It provides the Figma-based shell, shared form/status displays and public service health checks; Auth0 sign-in and a protected Transport read are on the account page once the `Auth0` settings are provided (see [Auth0 setup](docs/frontend-auth0.md)). Its tests are in `tests/TravelTracker.Frontend.Tests`.
-
-Open [Map View](http://localhost:5100/map) to plan a trip. Use the Markers palette to
-search saved locations or pick a map point, then select each destination to set its
-incoming transport and times. Map View and the standard editor share the same draft.
-Review on map shows the ordered itinerary before saving. Use a saved-trip link or ID
-to reopen the trip in Map View.
-
-Saving and reopening require the Trips service and sign-in with the corresponding
-`trips.read` and `trips.write` permissions. Catalogue lookup needs `catalogue.read`;
-saving newly picked locations or creating a missing transport mode also needs
-`catalogue.write`. Newly picked Stop markers are stored in the shared transport-stop
-catalogue. New attraction and accommodation markers are private by default.
-
-Install the **.NET 10 SDK**, then clone the repository:
+Install the **.NET 10 SDK**. If you already have the repository, open PowerShell in
+the TravelTracker folder. For a new checkout, run these commands first.
 
 ```powershell
 git clone https://github.com/NewWaveOwl/TravelTracker.git
 cd TravelTracker
 ```
 
-Build the solution:
+### Preview the website
+
+From the repository root, start the Blazor frontend and leave the terminal open.
+
+```powershell
+dotnet run --project src/TravelTracker.Frontend --launch-profile http
+```
+
+When the terminal shows `Now listening on: http://localhost:5100`, open the
+[home page](http://localhost:5100) or [Map View](http://localhost:5100/map).
+The frontend can preview Map View, manual marker placement and the itinerary
+editor on its own. Sign-in, catalogue search and saving use the services below.
+Press `Ctrl+C` in the terminal to stop the app.
+
+### Run with sign-in and trip saving
+
+1. Configure the frontend and API bearer settings using the [Auth0 setup guide](docs/frontend-auth0.md).
+   Grant `users.read` for the account profile, `trips.read` to reopen saved trips,
+   and `trips.write` with `catalogue.read`
+   to create or edit them. Add `catalogue.write` to save newly picked locations or create missing transport modes.
+2. Start PostgreSQL and configure each API's database, migrations and service
+   credentials using the guides below. The Users API uses HTTPS. Trust the .NET
+   localhost development certificate and point the frontend at Users.
+
+   ```powershell
+   dotnet dev-certs https --trust
+   dotnet user-secrets set "Services:Users" "https://localhost:5101" --project src/TravelTracker.Frontend
+   ```
+
+3. Run each required API command in its own terminal from the repository root.
+   Start Users first. Apply any environment variables from its setup guide in
+   the same terminal as the corresponding command.
+
+   | Service | Local address | Command | Setup |
+   | --- | --- | --- | --- |
+   | Users | `https://localhost:5101` | `dotnet run --project src/TravelTracker.Users.Api --launch-profile https` | [Users database](docs/data.md#users-persistence), [bearer settings](docs/authentication.md) |
+   | Attractions | `http://localhost:5104` | `dotnet run --project src/TravelTracker.Attractions.Api --launch-profile http` | [Attractions setup](docs/attractions-service.md) |
+   | Transport and Route Points | `http://localhost:5105` | `dotnet run --project src/TravelTracker.Transport.Api --launch-profile http` | [Transport setup](docs/transport-service.md) |
+   | Accommodations | `http://localhost:5106` | `dotnet run --project src/TravelTracker.Accommodations.Api --launch-profile http` | [Accommodations setup](docs/accommodations-service.md) |
+   | Trips | `http://localhost:5108` | `dotnet run --project src/TravelTracker.Trips.Api --launch-profile http` | [Trips setup](docs/trips-service.md) |
+   | Settings (optional for trip planning) | `http://localhost:5107` | `dotnet run --project src/TravelTracker.Settings.Api --launch-profile http` | [Settings setup](docs/settings-service.md) |
+
+4. Start or restart the frontend with the preview command above. Sign in from
+   [Account](http://localhost:5100/account), then open [Map View](http://localhost:5100/map).
+   Use the Markers palette to search saved locations or pick a point. Select each
+   destination to set its incoming transport and times. Choose **Review on map**
+   to check and save the ordered itinerary. Reopen a saved trip by its link or ID.
+
+Newly picked Stop markers go into the shared transport-stop catalogue. New
+attractions and accommodations are private by default.
+
+### Build the solution or explore Swagger
+
+Build all projects from the repository root.
 
 ```powershell
 dotnet build TravelTracker.slnx --configuration Release

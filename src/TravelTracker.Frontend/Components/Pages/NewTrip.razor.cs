@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Transport;
@@ -26,19 +28,29 @@ public partial class NewTrip : IDisposable
     IReadOnlyList<TripPlaceDto> places = [];
     IReadOnlyList<string> errors = [];
     int selected = -1;
+    enum MapTool { Markers, Transport }
+
     bool showMap;
+    bool stopsStep;
+    bool savedReview;
+    MapTool? mapTool;
+    (string Code, string Label)? pendingMode;
+    int? connectionFrom;
+    int insertAfter;
     bool review;
     bool busy;
     bool dirty;
     bool searched;
     bool placing;
+    TripPlannerDraft.Stop? editingMarker;
+    int markerNumber;
     bool saveFailed;
     string? observedPath;
     Guid? routeId;
     int routeVersion;
     Guid? pendingOpen;
     string? notice;
-    string markerType = "transport_stop";
+    string? markerType;
     string searchValue = "";
     string placeName = "";
     string placeAddress = "";
@@ -48,6 +60,103 @@ public partial class NewTrip : IDisposable
 
     TripPlannerDraft.Leg? CurrentLeg => selected > 0 && selected < draft.Stops.Count ? draft.LegTo(selected) : null;
     (decimal Lat, decimal Lon)? PickedCoordinates => latitude is { } lat && longitude is { } lon ? (lat, lon) : null;
+
+    static string Pressed(bool active) => active ? "true" : "false";
+
+    bool MapVisible => showMap || review;
+    string ConnectionHint => pendingMode is null ? "Choose a mode, then select two consecutive stops."
+        : connectionFrom is { } from ? $"From {draft.Stops[from].Place.Name}. Select the next stop to make the connection."
+        : "Select the starting stop.";
+
+    (string Code, string Label)[] MapLegs => Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(index =>
+    {
+        var leg = draft.LegTo(index);
+        if (leg.Mode is not { } mode) return (string.Empty, string.Empty);
+        var time = leg.DurationMinutes is { } minutes ? TimeSpan.FromMinutes(minutes) : draft.ArrivalFor(leg) - leg.Departure;
+        return (mode.Code, time is { TotalMinutes: > 0 } duration
+            ? $"{mode.Name} · {DurationLabel(duration)}"
+            : mode.Name);
+    }).ToArray();
+
+    string Icon(string code) => Assets[$"assets/trip-map/{code}.svg"];
+
+    /** Opens the clicked transport connection and focuses its duration field. */
+    void EditConnection(int destination)
+    {
+        if (busy || review || destination <= 0 || destination >= draft.Stops.Count)
+            return;
+
+        ShowStops();
+        selected = destination;
+        focusDuration = true;
+    }
+
+    ElementReference durationInput;
+    bool focusDuration;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!focusDuration) return;
+        focusDuration = false;
+        await durationInput.FocusAsync();
+    }
+
+    static readonly string[] LocalDateTimeFormats = ["yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.FFFFFFF"];
+
+    static string DateTimeValue(DateTime? value) =>
+        value?.ToString("yyyy-MM-ddTHH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture) ?? "";
+
+    void SetDateTime(ChangeEventArgs change, Action<DateTime?> apply)
+    {
+        var input = change.Value?.ToString();
+        if (string.IsNullOrEmpty(input))
+            apply(null);
+        else if (DateTime.TryParseExact(input, LocalDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            apply(date);
+        else
+        {
+            errors = ["Enter a valid date and time."];
+            saveFailed = false;
+            return;
+        }
+        MarkEdited();
+    }
+
+    int? DisplayedDuration(TripPlannerDraft.Leg connection) => connection.DurationMinutes ??
+        (connection.Arrival - connection.Departure is { TotalMinutes: >= 1 } span ? (int)span.TotalMinutes : null);
+
+    void SetDuration(TripPlannerDraft.Leg connection, ChangeEventArgs change)
+    {
+        var input = change.Value?.ToString();
+        if (string.IsNullOrEmpty(input))
+            connection.DurationMinutes = null;
+        else if (int.TryParse(input, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) && minutes > 0)
+            connection.DurationMinutes = minutes;
+        else
+        {
+            errors = ["Enter a whole number of minutes greater than zero."];
+            saveFailed = false;
+            return;
+        }
+        MarkEdited();
+    }
+
+    /** Confirms the active connection's planned times before review. */
+    void ApplyConnectionChanges()
+    {
+        if (CurrentLeg is not { Departure: { } departure } connection ||
+            draft.ArrivalFor(connection) is not { } arrival || (connection.DurationMinutes is null && arrival <= departure))
+        {
+            errors = ["Enter a departure and a later arrival or a duration for this connection."];
+            saveFailed = false;
+            return;
+        }
+        MarkEdited();
+    }
+
+    static string DurationLabel(TimeSpan duration) => duration.TotalHours < 1
+        ? $"{duration.Minutes} min"
+        : $"{(int)duration.TotalHours} h {duration.Minutes} min";
 
     /** Initializes the entry view and loads a trip when a saved-trip link is opened. */
     protected override async Task OnParametersSetAsync()
@@ -61,7 +170,7 @@ public partial class NewTrip : IDisposable
         routeVersion++;
         busy = false;
         showMap = path.StartsWith("/map", StringComparison.OrdinalIgnoreCase);
-        review = false;
+        ShowBasics();
 
         if (TripId is { } id)
         {
@@ -91,8 +200,68 @@ public partial class NewTrip : IDisposable
 
     void SwitchView(bool map)
     {
-        review = false;
         showMap = map;
+        ShowBasics();
+    }
+
+    void ShowBasics()
+    {
+        placing = false;
+        ClearMarkerDetails();
+        stopsStep = false;
+        review = false;
+        savedReview = false;
+        mapTool = null;
+        CancelConnection();
+    }
+
+    void ShowStops()
+    {
+        stopsStep = true;
+        review = false;
+        savedReview = false;
+        mapTool = MapTool.Transport;
+        placing = false;
+        ClearMarkerDetails();
+        CancelConnection();
+    }
+
+    void BackFromReview()
+    {
+        if (showMap) ShowStops();
+        else SwitchView(false);
+    }
+
+    void OpenMarkers()
+    {
+        stopsStep = true;
+        mapTool = MapTool.Markers;
+        markerType = null;
+        placing = false;
+        searched = false;
+        places = [];
+        ClearMarkerDetails();
+        insertAfter = selected >= 0 ? selected : draft.Stops.Count - 1;
+        CancelConnection();
+    }
+
+    void OpenTransport() => ShowStops();
+
+    void CancelConnection()
+    {
+        pendingMode = null;
+        connectionFrom = null;
+    }
+
+    void ChooseMode((string Code, string Label) option)
+    {
+        if (!showMap)
+        {
+            SelectMode(option);
+            return;
+        }
+        pendingMode = option;
+        connectionFrom = null;
     }
 
     void MarkEdited()
@@ -106,34 +275,87 @@ public partial class NewTrip : IDisposable
     void ShowReview()
     {
         review = true;
+        savedReview = false;
+        CancelConnection();
         errors = draft.Build().Errors;
         saveFailed = false;
     }
 
     void SelectStop(int index)
     {
-        if (!busy && index >= 0 && index < draft.Stops.Count)
-            selected = index;
+        if (busy || index < 0 || index >= draft.Stops.Count)
+            return;
+
+        selected = index;
+        if (pendingMode is not { } mode)
+            return;
+
+        if (connectionFrom is { } from && index == from + 1)
+        {
+            SelectMode(mode);
+            CancelConnection();
+        }
+        else if (index < draft.Stops.Count - 1)
+        {
+            connectionFrom = index;
+        }
     }
 
     void MoveStop(int index, int offset)
     {
+        CancelConnection();
         draft.Move(index, index + offset);
         selected = index + offset;
         MarkEdited();
     }
 
-    void RemoveStop(int index)
+    /** Changes the draft location without editing a shared catalogue record. */
+    void MoveMarker((int Index, decimal Lat, decimal Lon) move)
     {
-        draft.Remove(index);
-        selected = Math.Min(index, draft.Stops.Count - 1);
+        if (busy || review || move.Index < 0 || move.Index >= draft.Stops.Count)
+            return;
+
+        var stop = draft.Stops[move.Index];
+        var previous = stop.Place;
+        if (previous.Lat == move.Lat && previous.Lon == move.Lon)
+            return;
+
+        var updated = previous with { PlaceId = Guid.Empty, Lat = move.Lat, Lon = move.Lon, Address = "" };
+        var lastIndex = draft.Stops.Count - 1;
+        if (draft.RoundTrip && lastIndex > 0 && (move.Index == 0 || move.Index == lastIndex))
+        {
+            var other = draft.Stops[move.Index == 0 ? lastIndex : 0];
+            if (other.Place == previous || (previous.PlaceId != Guid.Empty && other.Place.PlaceId == previous.PlaceId))
+                other.Place = updated;
+        }
+        stop.Place = updated;
+        selected = move.Index;
+        CancelConnection();
+        if (editingMarker == stop)
+            (latitude, longitude, placeAddress) = (move.Lat, move.Lon, "");
         MarkEdited();
     }
 
-    void AddStop(TripPlaceDto place)
+    void RemoveStop(int index)
     {
-        selected = draft.Add(place);
+        if (review || busy || index < 0 || index >= draft.Stops.Count)
+            return;
+
+        CancelConnection();
+        if (editingMarker == draft.Stops[index])
+            ClearMarkerDetails();
+        draft.Remove(index);
+        selected = Math.Min(index, draft.Stops.Count - 1);
+        insertAfter = selected;
+        MarkEdited();
+    }
+
+    void AddStop(TripPlaceDto place, int? after = null)
+    {
+        selected = draft.Add(place, after);
+        insertAfter = selected;
         placing = false;
+        editingMarker = null;
         MarkEdited();
     }
 
@@ -145,6 +367,8 @@ public partial class NewTrip : IDisposable
 
     void SelectMarker(string type)
     {
+        if (showMap && (!placing || type != markerType))
+            BeginPlacement();
         if (type == markerType)
             return;
         markerType = type;
@@ -154,6 +378,8 @@ public partial class NewTrip : IDisposable
 
     async Task SearchAsync()
     {
+        if (markerType is not { } type) return;
+
         busy = true;
         searched = false;
         errors = [];
@@ -162,7 +388,7 @@ public partial class NewTrip : IDisposable
         var version = routeVersion;
         try
         {
-            var results = await PlaceCatalogue.SearchAsync(markerType, searchValue, token);
+            var results = await PlaceCatalogue.SearchAsync(type, searchValue, token);
             if (version == routeVersion)
             {
                 places = results;
@@ -185,29 +411,64 @@ public partial class NewTrip : IDisposable
 
     void BeginPlacement()
     {
+        ClearMarkerDetails();
+        insertAfter = selected >= 0 ? selected : draft.Stops.Count - 1;
+        placing = true;
+    }
+
+    void ClearMarkerDetails()
+    {
+        editingMarker = null;
         placeName = "";
         placeAddress = "";
         latitude = null;
         longitude = null;
-        placing = true;
+    }
+
+    /** Starts placement for a palette marker dropped on the map. */
+    void PlaceDroppedMarker((string Type, decimal Lat, decimal Lon) marker)
+    {
+        if (!showMap || review || busy || !Markers.Any(option => option.Code == marker.Type))
+            return;
+
+        if (mapTool != MapTool.Markers)
+            OpenMarkers();
+        SelectMarker(marker.Type);
+        PickLocation((marker.Lat, marker.Lon));
     }
 
     void PickLocation((decimal Lat, decimal Lon) position)
     {
-        if (!busy && placing)
-            (latitude, longitude) = position;
+        if (busy || !placing || markerType is not { } type)
+            return;
+
+        var name = editingMarker is null && !string.IsNullOrWhiteSpace(placeName)
+            ? placeName.Trim() : $"{MarkerLabel(type)} {++markerNumber}";
+        var address = editingMarker is null ? placeAddress.Trim() : "";
+        AddStop(new(Guid.Empty, type, name, address, position.Lat, position.Lon), insertAfter);
+        placing = true;
+        editingMarker = draft.Stops[selected];
+        placeName = name;
+        placeAddress = address;
+        (latitude, longitude) = position;
     }
 
     void AddPickedStop()
     {
-        if (string.IsNullOrWhiteSpace(placeName) || PickedCoordinates is not { } position ||
+        if (markerType is not { } type || string.IsNullOrWhiteSpace(placeName) || PickedCoordinates is not { } position ||
             position.Lat is < -90 or > 90 || position.Lon is < -180 or > 180)
         {
             errors = ["Enter a place name and valid map coordinates."];
             saveFailed = false;
             return;
         }
-        AddStop(new(Guid.Empty, markerType, placeName.Trim(), placeAddress.Trim(), position.Lat, position.Lon));
+        if (showMap && editingMarker is { } marker)
+        {
+            marker.Place = marker.Place with { Name = placeName.Trim(), Address = placeAddress.Trim(), Lat = position.Lat, Lon = position.Lon };
+            MarkEdited();
+            return;
+        }
+        AddStop(new(Guid.Empty, type, placeName.Trim(), placeAddress.Trim(), position.Lat, position.Lon), showMap ? insertAfter : null);
     }
 
     void SelectMode((string Code, string Label) option)
@@ -296,6 +557,7 @@ public partial class NewTrip : IDisposable
                 return;
             draft = TripPlannerDraft.FromSaved(saved);
             dirty = false;
+            savedReview = true;
             notice = $"Saved {saved.Name}.";
             UpdateLink(saved.TripId);
         }
@@ -303,7 +565,9 @@ public partial class NewTrip : IDisposable
         {
             errors = error.Errors.Count == 0
                 ? [error.Message]
-                : error.Errors.Values.SelectMany(messages => messages).Where(message => message.Length > 0).DefaultIfEmpty(error.Message).ToArray();
+                : error.Errors.Values.SelectMany(messages => messages).Where(message => message.Length > 0).DefaultIfEmpty(error.Message)
+                    .Select(message => Regex.Replace(message, @"\blegs?\b", match => match.Value.ToLowerInvariant() == "legs"
+                        ? "connections" : "connection", RegexOptions.IgnoreCase)).ToArray();
             saveFailed = error.Kind != FailureKind.Validation;
         }
         catch (ApiError) when (version != routeVersion) { }

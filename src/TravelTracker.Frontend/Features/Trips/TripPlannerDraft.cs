@@ -31,15 +31,17 @@ internal sealed class TripPlannerDraft
         internal TripDto.Mode? Mode { get; set; }
         internal DateTime? Departure { get; set; }
         internal DateTime? Arrival { get; set; }
+        internal int? DurationMinutes { get; set; }
         internal DateTimeOffset? SavedDeparture { get; init; }
         internal DateTimeOffset? SavedArrival { get; init; }
     }
 
-    /** Appends a place and returns the index of the new stop. */
-    internal int Add(TripPlaceDto place)
+    /** Inserts a place after the selected stop, or appends it when no insertion point is supplied. */
+    internal int Add(TripPlaceDto place, int? after = null)
     {
-        stops.Add(new Stop(place));
-        return stops.Count - 1;
+        var index = after is { } previous ? Math.Clamp(previous + 1, 0, stops.Count) : stops.Count;
+        stops.Insert(index, new Stop(place));
+        return index;
     }
 
     /** Removes the stop and its associated leg edits. */
@@ -99,6 +101,38 @@ internal sealed class TripPlannerDraft
         return draft;
     }
 
+    /** Gets the displayed arrival, calculated from elapsed duration in the trip's time zone. */
+    internal DateTime? ArrivalFor(Leg leg)
+    {
+        if (leg.DurationMinutes is not { } minutes)
+            return leg.Arrival;
+        if (leg.Departure is not { } departure || !TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone))
+            return null;
+
+        var start = ResolveLocal(departure, leg.SavedDeparture, zone);
+        return ArrivalAfter(start, minutes, zone)?.DateTime;
+    }
+
+    DateTimeOffset? ResolveLocal(DateTime time, DateTimeOffset? savedTime, TimeZoneInfo zone)
+    {
+        var local = DateTime.SpecifyKind(time, DateTimeKind.Unspecified);
+        if (TimeZone.Trim() == savedZone && savedTime is { } saved && local == saved.DateTime)
+            return saved;
+        if (zone.IsInvalidTime(local) || zone.IsAmbiguousTime(local))
+            return null;
+        var offset = zone.GetUtcOffset(local);
+        var utcTicks = local.Ticks - offset.Ticks;
+        return utcTicks >= DateTime.MinValue.Ticks && utcTicks <= DateTime.MaxValue.Ticks
+            ? new DateTimeOffset(local, offset) : null;
+    }
+
+    static DateTimeOffset? ArrivalAfter(DateTimeOffset? start, int minutes, TimeZoneInfo zone)
+    {
+        if (start is not { } departure || minutes <= 0 || minutes > (DateTimeOffset.MaxValue - departure).TotalMinutes)
+            return null;
+        return TimeZoneInfo.ConvertTime(departure.ToUniversalTime().AddMinutes(minutes), zone);
+    }
+
     /**
      * Checks draft fields and builds the request. Empty catalogue identifiers can be resolved after validation.
      * @return The request when valid and an ordered list of validation messages otherwise.
@@ -141,15 +175,25 @@ internal sealed class TripPlannerDraft
         {
             var leg = LegTo(index);
             if (leg.Mode is null)
-                errors.Add($"Select transport for leg {index}.");
-            var departure = Resolve(leg.Departure, leg.SavedDeparture, $"Leg {index} departure");
-            var arrival = Resolve(leg.Arrival, leg.SavedArrival, $"Leg {index} arrival");
+                errors.Add($"Select transport for connection {index}.");
+            var departure = Resolve(leg.Departure, leg.SavedDeparture, $"Connection {index} departure");
+            DateTimeOffset? arrival;
+            if (leg.DurationMinutes is { } minutes)
+            {
+                arrival = zone is null ? null : ArrivalAfter(departure, minutes, zone);
+                if (departure is not null && arrival is null)
+                    errors.Add($"Connection {index} needs a duration that fits the trip calendar.");
+            }
+            else
+            {
+                arrival = Resolve(leg.Arrival, leg.SavedArrival, $"Connection {index} arrival");
+            }
             if (departure < start || arrival > end)
-                errors.Add($"Leg {index} must be within the trip dates.");
+                errors.Add($"Connection {index} must be within the trip dates.");
             if (arrival <= departure)
-                errors.Add($"Leg {index} must arrive after departure.");
+                errors.Add($"Connection {index} must arrive after departure.");
             if (departure < previousArrival)
-                errors.Add($"Leg {index} overlaps the previous leg.");
+                errors.Add($"Connection {index} overlaps the previous connection.");
             previousArrival = arrival;
             if (leg.Mode is not null && departure is not null && arrival is not null)
                 requestLegs.Add(new(index, Reference(stops[index - 1].Place), Reference(stops[index].Place),
@@ -170,15 +214,10 @@ internal sealed class TripPlannerDraft
             if (zone is null)
                 return null;
 
-            var local = DateTime.SpecifyKind(localTime.Value, DateTimeKind.Unspecified);
-            if (zoneId == savedZone && savedTime is not null && local == savedTime.Value.DateTime)
-                return savedTime;
-            if (zone.IsInvalidTime(local) || zone.IsAmbiguousTime(local))
-            {
-                errors.Add($"{field} falls during a clock change. Choose an unambiguous time.");
-                return null;
-            }
-            return new DateTimeOffset(local, zone.GetUtcOffset(local));
+            var resolved = ResolveLocal(localTime.Value, savedTime, zone);
+            if (resolved is null)
+                errors.Add($"{field} needs a valid, unambiguous local time.");
+            return resolved;
         }
 
         static SaveTripRequest.Place Reference(TripPlaceDto place) => new(place.PlaceId, place.Type);

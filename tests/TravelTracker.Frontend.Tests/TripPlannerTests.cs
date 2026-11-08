@@ -69,25 +69,53 @@ public sealed class TripPlannerTests : BunitContext
     }
 
     [Fact]
-    public void MapPickedStopsAndLegStayInTheDraftWhenSwitchingToStandardEditor()
+    public async Task MapPickedStopsAndLegStayInTheDraftWhenSwitchingToStandardEditor()
     {
         Configure((_, _) => throw new InvalidOperationException("Drafting must not write to a catalogue."));
         Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
         var page = Render<NewTrip>();
 
+        Click(page, "Markers");
+        Assert.All(page.FindAll("[data-map-marker]"), option => Assert.Equal("false", option.GetAttribute("aria-pressed")));
+        Assert.Empty(page.FindAll(".location-target"));
         Click(page, "Accommodation");
-        Click(page, "Pick a location on the map");
         page.Find(".trip-place input[type=text]").Change("My hotel");
-        Click(page, "Pick map center");
+        page.Find("button[aria-label='Pick map center']").Click();
         page.Find(".trip-place").Submit();
 
-        Click(page, "Attraction");
-        Click(page, "Pick a location on the map");
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.DropMarker("attraction", 580, 180));
+        Assert.Equal("assets/trip-map/pin-attraction.svg", page.Find(".trip-marker[aria-pressed='true'] image").GetAttribute("href"));
+        Assert.Equal(2, page.FindAll(".trip-stop").Count);
         page.Find(".trip-place input[type=text]").Change("My museum");
-        page.Find("[aria-label='Pan east']").Click();
-        Click(page, "Pick map center");
         page.Find(".trip-place").Submit();
+        Click(page, "Stop");
+        Assert.Equal("true", page.Find("button[data-map-marker='transport_stop']").GetAttribute("aria-pressed"));
+        Assert.Contains("My museum", page.FindAll(".trip-stop")[1].TextContent);
+        page.Find("button[aria-label='Pick map center']").Click();
+        Assert.Equal(3, page.FindAll(".trip-stop").Count);
+        Assert.Empty(page.FindAll(".route-line, .route-halo"));
+        page.Find("[aria-label^='Stop 3:']").Click();
+        page.Find(".marker-remove").Click();
+        Assert.Equal(2, page.FindAll(".trip-stop").Count);
+        Assert.Empty(page.Find(".marker-panel").QuerySelectorAll("legend"));
+        Click(page, "Transport");
         Click(page, "Walk");
+        var card = page.Find(".leg-panel");
+        Assert.Equal("Connect stops", card.QuerySelector("h2")!.TextContent);
+        Assert.Empty(card.QuerySelectorAll("legend"));
+        Assert.Contains("Walk", card.QuerySelector("output")!.TextContent);
+        Assert.Contains("Standard editor", card.TextContent);
+        page.FindAll(".trip-stop")[0].Click();
+        Assert.Empty(page.FindAll(".route-line, .route-halo"));
+        page.FindAll(".trip-stop")[1].Click();
+        Assert.Single(page.FindAll(".route-line"));
+        var originalPin = page.Find("[aria-label='Stop 2: My museum']").GetAttribute("transform");
+        var originalLeg = page.Find(".route-line").GetAttribute("d");
+        await page.InvokeAsync(() => canvas.Instance.MoveMarker(1, 15, 10));
+        Assert.NotEqual(originalPin, page.Find("[aria-label='Stop 2: My museum']").GetAttribute("transform"));
+        Assert.NotEqual(originalLeg, page.Find(".route-line").GetAttribute("d"));
+        Assert.Equal(2, page.FindAll(".trip-stop").Count);
         Click(page, "Standard editor");
 
         Assert.Equal(2, page.FindAll(".trip-stop").Count);
@@ -131,7 +159,8 @@ public sealed class TripPlannerTests : BunitContext
 
         page.Find(".trip-basics input").Change("Weekend");
         page.FindAll(".trip-basics input[type=datetime-local]")[0].Change("2026-11-14T09:00");
-        page.FindAll(".trip-basics input[type=datetime-local]")[1].Change("2026-11-14T13:00");
+        page.FindAll(".trip-basics input[type=datetime-local]")[1].Change("2026-11-14T13:00:00");
+        Click(page, "Markers");
         Click(page, "Accommodation");
         page.Find(".trip-search").Submit();
         page.WaitForAssertion(() => Assert.Contains("Hotel", page.Find(".trip-search-results").TextContent));
@@ -140,9 +169,15 @@ public sealed class TripPlannerTests : BunitContext
         page.Find(".trip-search").Submit();
         page.WaitForAssertion(() => Assert.Contains("Museum", page.Find(".trip-search-results").TextContent));
         Click(page, "Museum");
+        Click(page, "Transport");
         Click(page, "Train");
-        page.FindAll(".trip-panel input[type=datetime-local]")[0].Change("2026-11-14T10:00");
-        page.FindAll(".trip-panel input[type=datetime-local]")[1].Change("2026-11-14T11:00");
+        page.FindAll(".trip-stop")[0].Click();
+        page.FindAll(".trip-stop")[1].Click();
+        page.Find("button[aria-label^='Edit connection 1:']").Click();
+        page.Find(".leg-panel input[type=number]").Change("60");
+        page.FindAll(".trip-panel input[type=datetime-local]")[0].Change("2026-11-14T10:00:00");
+        Assert.Contains("Train · 1 h 0 min", page.Find(".map-leg-label").TextContent);
+        Assert.StartsWith("2026-11-14T11:00", page.FindAll(".trip-panel input[type=datetime-local]")[1].GetAttribute("value"));
         Click(page, "Review on map");
         Assert.True(page.FindAll("[role=alert]").Count == 0, string.Join(" ", page.FindAll("[role=alert]").Select(alert => alert.TextContent)));
         Click(page, "Save trip");
@@ -157,8 +192,33 @@ public sealed class TripPlannerTests : BunitContext
         Assert.EndsWith($"/map/{TripId:D}", navigation.Uri);
     }
 
+    [Fact]
+    public async Task MapPageServesItsFigmaIconsAsSvg()
+    {
+        await using var factory = new FrontendFactory(signInConfigured: false);
+        using var browser = factory.CreateBrowser();
+        var page = await browser.GetStringAsync("/map");
+        var links = System.Text.RegularExpressions.Regex.Matches(page, @"assets/trip-map/[a-z0-9_.-]+\.svg");
+        Assert.Equal(5, links.Select(link => link.Value).Distinct().Count());
+        var urls = links.Select(link => link.Value).Concat(new[]
+        {
+            "assets/trip-map/bike.svg",
+            "assets/trip-map/pin-attraction.svg",
+            "assets/trip-map/pin-accommodation.svg",
+            "assets/trip-map/pin-transport_stop.svg"
+        });
+        foreach (var url in urls.Distinct())
+        {
+            using var response = await browser.GetAsync("/" + url);
+            response.EnsureSuccessStatusCode();
+            Assert.Equal("image/svg+xml", response.Content.Headers.ContentType?.MediaType);
+            Assert.Contains("<svg", await response.Content.ReadAsStringAsync());
+        }
+    }
+
     void Configure(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond)
     {
+        JSInterop.Mode = JSRuntimeMode.Loose;
         var clock = new FakeTimeProvider(Start);
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
