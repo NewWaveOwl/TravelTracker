@@ -8,7 +8,7 @@
 
 <PageTitle>@(showMap ? "Map View" : "Trip Editor") | TravelTracker</PageTitle>
 
-<div class="trip-planner @(MapVisible ? "map-workspace" : null)">
+<div @ref="plannerElement" class="trip-planner @(MapVisible ? "map-workspace" : null)">
     @if (MapVisible)
     {
         <div class="map-surface">
@@ -57,6 +57,8 @@
             }
             <h2 id="trip-chain-title">@(MapVisible ? savedReview ? "Saved itinerary" : "Your itinerary" : "All selected transports")</h2>
             <p>@draft.Stops.Count @(draft.Stops.Count == 1 ? "stop" : "stops")</p>
+            <button type="button" class="secondary" data-trip-undo aria-keyshortcuts="Control+Z Meta+Z"
+                    title="Undo last edit (Ctrl+Z)" disabled="@(!CanUndo)" @onclick="Undo">Undo last edit</button>
             @if (draft.Stops.Count == 0)
             {
                 <p>Start with an accommodation. Add places to build your route.</p>
@@ -241,9 +243,9 @@
                             var duration = DisplayedDuration(leg);
                             <fieldset class="leg-fields trip-fields" disabled="@busy">
                                 <label>Departure <input type="datetime-local" step="1" value="@DateTimeValue(leg.Departure)"
-                                                        @onchange="e => SetDateTime(e, value => leg.Departure = value)" /></label>
+                                                        @onchange="e => SetDateTime(e, leg.Departure, value => leg.Departure = value)" /></label>
                                 <label>Arrival <input type="datetime-local" step="1" value="@DateTimeValue(draft.ArrivalFor(leg))"
-                                                      @onchange="e => SetDateTime(e, value => { leg.Arrival = value; leg.DurationMinutes = null; })" /></label>
+                                                      @onchange="e => SetDateTime(e, draft.ArrivalFor(leg), value => { leg.Arrival = value; leg.DurationMinutes = null; })" /></label>
                                 <div class="trip-duration" role="group" aria-labelledby="connection-duration-label">
                                     <span id="connection-duration-label">Duration</span>
                                     <div class="trip-duration-inputs">
@@ -338,11 +340,14 @@
     RenderFragment TripBasics => @<section class="trip-panel trip-basics" aria-labelledby="trip-basics-title">
         <h2 id="trip-basics-title">Trip basics</h2>
         <fieldset class="trip-basic-fields" aria-labelledby="trip-basics-title" disabled="@busy">
-            <label>Trip name <input type="text" @bind="draft.Name" @bind:after="MarkEdited" placeholder="Name your trip" /></label>
-            <label>Time zone <input type="text" @bind="draft.TimeZone" @bind:after="MarkEdited" placeholder="America/Toronto" /></label>
-            <label>Trip starts <input type="datetime-local" step="1" value="@DateTimeValue(draft.Start)" @onchange="e => SetDateTime(e, value => draft.Start = value)" /></label>
-            <label>Trip ends <input type="datetime-local" step="1" value="@DateTimeValue(draft.End)" @onchange="e => SetDateTime(e, value => draft.End = value)" /></label>
-            <label class="trip-checkbox"><input type="checkbox" @bind="draft.RoundTrip" @bind:after="MarkEdited" /> Return to start</label>
+            <label>Trip name <input type="text" @bind:get="draft.Name"
+                                    @bind:set="value => EditTripValue(draft.Name, value ?? string.Empty, next => draft.Name = next)" placeholder="Name your trip" /></label>
+            <label>Time zone <input type="text" @bind:get="draft.TimeZone"
+                                    @bind:set="value => EditTripValue(draft.TimeZone, value ?? string.Empty, next => draft.TimeZone = next)" placeholder="America/Toronto" /></label>
+            <label>Trip starts <input type="datetime-local" step="1" value="@DateTimeValue(draft.Start)" @onchange="e => SetDateTime(e, draft.Start, value => draft.Start = value)" /></label>
+            <label>Trip ends <input type="datetime-local" step="1" value="@DateTimeValue(draft.End)" @onchange="e => SetDateTime(e, draft.End, value => draft.End = value)" /></label>
+            <label class="trip-checkbox"><input type="checkbox" @bind:get="draft.RoundTrip"
+                                                @bind:set="value => EditTripValue(draft.RoundTrip, value, next => draft.RoundTrip = next)" /> Return to start</label>
             @if (showMap)
             {
                 <button type="button" @onclick="ShowStops">Continue to stops</button>

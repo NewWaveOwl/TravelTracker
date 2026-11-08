@@ -217,6 +217,31 @@ public sealed class TripMapCanvasTests : BunitContext
     }
 
     [Fact]
+    public void ZoomedOutStopsUseCompactTypeIconsAndRemainSelectable()
+    {
+        var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 0, -.15m);
+        var museum = new TripPlaceDto(Guid.NewGuid(), "attraction", "Museum", "", 0, .15m);
+        var selected = -1;
+        var map = Render<TripMapCanvas>(parameters => parameters
+            .Add(component => component.Stops, [hotel, museum])
+            .Add(component => component.StopSelected, index => selected = index));
+
+        map.Find("button[aria-label='Zoom out']").Click();
+
+        Assert.Equal(2, map.FindAll(".marker-badge").Count);
+        var badge = map.Find("[aria-label='Stop 2: Museum']");
+        Assert.Equal("assets/trip-map/attraction.svg", badge.QuerySelector("image")!.GetAttribute("href"));
+        badge.Click();
+        Assert.Equal(1, selected);
+
+        map.Find("button[aria-label='Zoom in']").Click();
+
+        Assert.Empty(map.FindAll(".marker-badge"));
+        Assert.Equal("assets/trip-map/pin-attraction.svg",
+            map.Find("[aria-label='Stop 2: Museum'] image").GetAttribute("href"));
+    }
+
+    [Fact]
     public void PointerPickUsesTheConvertedSvgPosition()
     {
         var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");

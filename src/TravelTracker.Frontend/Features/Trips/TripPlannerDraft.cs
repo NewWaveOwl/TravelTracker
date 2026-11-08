@@ -56,6 +56,30 @@ internal sealed class TripPlannerDraft
         internal int? DurationMinutes { get; set; }
         internal DateTimeOffset? SavedDeparture { get; init; }
         internal DateTimeOffset? SavedArrival { get; init; }
+
+        internal Leg Copy() => (Leg)MemberwiseClone();
+    }
+
+    /** @return A one-time restore of the current draft, including shared locations and leg details. */
+    internal Action CaptureUndo()
+    {
+        var places = stops.Select(stop => (Stop: stop, stop.Place)).ToArray();
+        var connections = legs.Select(pair => (pair.Key, Value: pair.Value.Copy())).ToArray();
+        var basics = (Name, TimeZone, Start, End, roundTrip);
+
+        return () =>
+        {
+            (Name, TimeZone, Start, End, roundTrip) = basics;
+            stops.Clear();
+            foreach (var (stop, place) in places)
+            {
+                stop.Place = place;
+                stops.Add(stop);
+            }
+            legs.Clear();
+            foreach (var (key, leg) in connections)
+                legs.Add(key, leg);
+        };
     }
 
     /** Inserts a place after the selected stop, or appends it when no insertion point is supplied. */

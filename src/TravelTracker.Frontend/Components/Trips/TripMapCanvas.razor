@@ -40,16 +40,26 @@
                        role="button" tabindex="0" aria-label="@($"Stop {index + 1}: {stop.Name}")" aria-description="@description"
                        aria-pressed="@(index == SelectedIndex ? "true" : "false")"
                        @onclick="() => StopSelected.InvokeAsync(marker.NextIndex)" @onkeydown="e => SelectWithKeyAsync(e, marker.NextIndex)">
-                    <rect class="marker-body" x="-27" y="-76" width="54" height="76" rx="10" />
-                    <image href="@Pin(stop.Type)" x="-27" y="-76" width="54" height="76" aria-hidden="true" />
-                    <rect class="marker-number" pointer-events="none" x="16" y="-80" width="34" height="23" rx="6" />
-                    <text pointer-events="none" x="33" y="-68" text-anchor="middle" dominant-baseline="central" aria-hidden="true">@($"{index + 1:00}{(marker.Shared ? "+" : "")}")</text>
+                    @if (UseMarkerBadges)
+                    {
+                        <circle class="marker-badge" r="16" />
+                        <image href="@Icon(stop.Type)" x="-10" y="-10" width="20" height="20" pointer-events="none" aria-hidden="true" />
+                    }
+                    else
+                    {
+                        <g>
+                            <rect class="marker-body" x="-27" y="-76" width="54" height="76" rx="10" />
+                            <image href="@Pin(stop.Type)" x="-27" y="-76" width="54" height="76" aria-hidden="true" />
+                            <rect class="marker-number" pointer-events="none" x="16" y="-80" width="34" height="23" rx="6" />
+                            <text pointer-events="none" x="33" y="-68" text-anchor="middle" dominant-baseline="central" aria-hidden="true">@($"{index + 1:00}{(marker.Shared ? "+" : "")}")</text>
+                        </g>
+                    }
                     <title>@(description ?? stop.Name)</title>
                 </g>
                 @if (index == SelectedIndex && StopRemoved.HasDelegate)
                 {
-                    var removeX = marker.X < 50 ? 61 : -37;
-                    var removeY = marker.Y < 85 ? 14 : -60;
+                    var removeX = UseMarkerBadges ? (marker.X < 36 ? 26 : -26) : (marker.X < 50 ? 61 : -37);
+                    var removeY = UseMarkerBadges ? (marker.Y < 36 ? 22 : -22) : (marker.Y < 85 ? 14 : -60);
                     <g class="marker-remove" transform="@($"translate({Number(marker.X + removeX)} {Number(marker.Y + removeY)})")"
                        role="button" tabindex="0" aria-label="@($"Remove {stop.Name} from itinerary")"
                        @onclick="() => StopRemoved.InvokeAsync(index)"
@@ -125,6 +135,7 @@
     private const int MinimumZoom = 2;
     private const int MaximumZoom = 19;
     private const int DefaultZoom = 13;
+    private const int MarkerBadgeZoom = 10;
     private const int FullConnectionLabelDistance = 160;
     private const int MinimumConnectionBadgeSize = 24;
     private const int MaximumConnectionBadgeSize = 32;
@@ -145,6 +156,7 @@
     private int zoom = DefaultZoom;
     private (double X, double Y) center = Project(45.5019m, -73.5674m);
     private int WorldSize => TileSize << zoom;
+    private bool UseMarkerBadges => zoom <= MarkerBadgeZoom;
     private (double X, double Y) Origin => (center.X * WorldSize - ViewportWidth / 2d, center.Y * WorldSize - ViewportHeight / 2d);
 
     private string CenterAction => CanPick ? "Pick map center" : "Fit stops";

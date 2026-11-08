@@ -110,6 +110,64 @@ public sealed class TripPlannerTests : BunitContext
     }
 
     [Fact]
+    public void UndoKeepsOnlyTheTenMostRecentDraftEdits()
+    {
+        Configure((_, _) => throw new InvalidOperationException("Undo must not call a service."));
+        var page = Render<NewTrip>();
+        var undo = page.Find("[data-trip-undo]");
+        var name = page.Find(".trip-basics input");
+
+        Assert.True(undo.HasAttribute("disabled"));
+        for (var edit = 1; edit <= 12; edit++)
+            name.Change($"Trip {edit}");
+
+        for (var edit = 11; edit >= 2; edit--)
+        {
+            undo.Click();
+            Assert.Equal($"Trip {edit}", name.GetAttribute("value"));
+        }
+        Assert.True(undo.HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public async Task UndoRestoresDeletedStopsAndConnectionDetailsOneEditAtATime()
+    {
+        Configure((_, _) => throw new InvalidOperationException("Undo must not call a service."));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
+        var page = Render<NewTrip>();
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.DropMarker("accommodation", 350, 200));
+        await page.InvokeAsync(() => canvas.Instance.DropMarker("attraction", 430, 220));
+        await page.InvokeAsync(() => canvas.Instance.DropMarker("transport_stop", 390, 290));
+        Click(page, "Transport");
+        Click(page, "Train");
+        page.FindAll(".trip-stop")[0].Click();
+        page.FindAll(".trip-stop")[2].Click();
+        page.Find("input[aria-label='Duration hours']").Change("2");
+        page.Find(".marker-remove").Click();
+
+        Assert.Equal(2, page.FindAll(".trip-stop").Count);
+        Assert.Empty(page.FindAll(".route-line"));
+
+        Click(page, "Undo last edit");
+        Assert.Equal(3, page.FindAll(".trip-stop").Count);
+        Assert.Single(page.FindAll(".route-line.train"));
+        Assert.Equal("2", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
+
+        Click(page, "Undo last edit");
+        Assert.Single(page.FindAll(".route-line.train"));
+        Assert.Equal("", page.Find("input[aria-label='Duration hours']").GetAttribute("value") ?? "");
+
+        Click(page, "Undo last edit");
+        Assert.Empty(page.FindAll(".route-line"));
+        Assert.Equal(new[] { "Accommodation 1", "Attraction 2", "Stop 3" },
+            page.FindAll(".trip-stop strong").Select(name => name.TextContent));
+
+        Click(page, "Undo last edit");
+        Assert.Equal(2, page.FindAll(".trip-stop").Count);
+    }
+
+    [Fact]
     public async Task RouterSwitchesBetweenMapAndNewTripWithoutLosingAnUnsavedDraft()
     {
         Configure((_, _) => throw new InvalidOperationException("Switching views must not call the catalogue."));
@@ -513,7 +571,7 @@ public sealed class TripPlannerTests : BunitContext
     }
 
     [Fact]
-    public async Task MapPageServesItsFigmaIconsAsSvg()
+    public async Task MapPageServesItsFigmaIconsAndUndoShortcut()
     {
         await using var factory = new FrontendFactory(signInConfigured: false);
         using var browser = factory.CreateBrowser();
@@ -534,6 +592,7 @@ public sealed class TripPlannerTests : BunitContext
             Assert.Equal("image/svg+xml", response.Content.Headers.ContentType?.MediaType);
             Assert.Contains("<svg", await response.Content.ReadAsStringAsync());
         }
+        Assert.Contains("export function watchUndo", await browser.GetStringAsync("/Components/Pages/NewTrip.razor.js"));
     }
 
     void Configure(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond,

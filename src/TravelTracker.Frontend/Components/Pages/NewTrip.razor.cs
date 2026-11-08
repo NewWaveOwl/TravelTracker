@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Accommodations;
 using TravelTracker.Frontend.Api.Transport;
@@ -10,8 +11,9 @@ using TravelTracker.Frontend.Features.Trips;
 namespace TravelTracker.Frontend.Components.Pages;
 
 /** Coordinates the two editing views, review and the authenticated Trips contract. */
-public partial class NewTrip : IDisposable
+public partial class NewTrip : IAsyncDisposable
 {
+    const int UndoLimit = 10;
     static readonly (string Code, string Label)[] Markers =
         [("transport_stop", "Stop"), ("attraction", "Attraction"), ("accommodation", "Accommodation")];
 
@@ -22,10 +24,14 @@ public partial class NewTrip : IDisposable
     [Inject] TripsClient Trips { get; set; } = default!;
     [Inject] TripPlacesClient PlaceCatalogue { get; set; } = default!;
     [Inject] TransportClient Transport { get; set; } = default!;
+    [Inject] IJSRuntime JavaScript { get; set; } = default!;
     [Parameter] public Guid? TripId { get; set; }
     [CascadingParameter] Microsoft.AspNetCore.Components.RouteData? ActiveRoute { get; set; }
 
     readonly CancellationTokenSource closed = new();
+    readonly List<Action> undoHistory = [];
+    ElementReference plannerElement;
+    Task<IJSObjectReference?>? undoShortcut;
     TripPlannerDraft draft = new();
     IReadOnlyList<TripPlaceDto> places = [];
     IReadOnlyList<string> errors = [];
@@ -69,6 +75,7 @@ public partial class NewTrip : IDisposable
     static string Pressed(bool active) => active ? "true" : "false";
 
     bool MapVisible => showMap || review;
+    bool CanUndo => !busy && undoHistory.Count > 0;
     string ConnectionHint => pendingMode is null ? "Choose a mode, then select a starting stop and a destination."
         : connectionFrom is { } from ? $"From {draft.Stops[from].Place.Name}. Select any other stop as the destination."
         : "Select the starting stop.";
@@ -104,9 +111,27 @@ public partial class NewTrip : IDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!focusDuration) return;
-        focusDuration = false;
-        await durationHoursInput.FocusAsync();
+        if (firstRender)
+            undoShortcut = RegisterUndoShortcutAsync();
+        if (focusDuration)
+        {
+            focusDuration = false;
+            await durationHoursInput.FocusAsync();
+        }
+        if (firstRender)
+            await undoShortcut!;
+    }
+
+    /** @return The browser registration used to release the trip shortcut on navigation. */
+    async Task<IJSObjectReference?> RegisterUndoShortcutAsync()
+    {
+        try
+        {
+            await using var module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/NewTrip.razor.js");
+            return module is null ? null : await module.InvokeAsync<IJSObjectReference>("watchUndo", plannerElement);
+        }
+        catch (JSDisconnectedException) { return null; }
+        catch (JSException) { return null; }
     }
 
     static readonly string[] LocalDateTimeFormats = ["yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.FFFFFFF"];
@@ -114,20 +139,19 @@ public partial class NewTrip : IDisposable
     static string DateTimeValue(DateTime? value) =>
         value?.ToString("yyyy-MM-ddTHH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture) ?? "";
 
-    void SetDateTime(ChangeEventArgs change, Action<DateTime?> apply)
+    void SetDateTime(ChangeEventArgs change, DateTime? previous, Action<DateTime?> apply)
     {
         var input = change.Value?.ToString();
         if (string.IsNullOrEmpty(input))
-            apply(null);
+            EditTripValue(previous, null, apply);
         else if (DateTime.TryParseExact(input, LocalDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-            apply(date);
+            EditTripValue(previous, date, apply);
         else
         {
             errors = ["Enter a valid date and time."];
             saveFailed = false;
             return;
         }
-        MarkEdited();
     }
 
     long? DisplayedDuration(TripPlannerDraft.Leg connection) =>
@@ -155,8 +179,8 @@ public partial class NewTrip : IDisposable
             return;
         }
 
-        connection.DurationMinutes = minutes == 0 ? null : (int)minutes;
-        MarkEdited();
+        EditTripValue(connection.DurationMinutes, minutes == 0 ? null : (int)minutes,
+            value => connection.DurationMinutes = value);
     }
 
     /** Confirms the active connection's planned times before review. */
@@ -200,6 +224,7 @@ public partial class NewTrip : IDisposable
         else if (previousPath is not null && draft.Id is not null)
         {
             draft = new();
+            undoHistory.Clear();
             routeId = null;
             selected = -1;
             pendingOpen = null;
@@ -211,11 +236,19 @@ public partial class NewTrip : IDisposable
         }
     }
 
-    /** Cancels outstanding service calls when the editor is closed. */
-    public void Dispose()
+    /** Cancels outstanding calls and unregisters the shortcut when the editor closes. */
+    public async ValueTask DisposeAsync()
     {
         closed.Cancel();
         closed.Dispose();
+        if (undoShortcut is null) return;
+        try
+        {
+            await using var registration = await undoShortcut;
+            if (registration is not null)
+                await registration.InvokeVoidAsync("disconnect");
+        }
+        catch (JSDisconnectedException) { }
     }
 
     void SwitchView(bool map)
@@ -293,6 +326,59 @@ public partial class NewTrip : IDisposable
         saveFailed = false;
     }
 
+    /** Records the draft and its selection before a single user edit. */
+    void RememberEdit()
+    {
+        var restoreDraft = draft.CaptureUndo();
+        var state = (selected, insertAfter, dirty, markerNumber);
+        if (undoHistory.Count == UndoLimit)
+            undoHistory.RemoveAt(0);
+        undoHistory.Add(() =>
+        {
+            restoreDraft();
+            (selected, insertAfter, dirty, markerNumber) = state;
+        });
+    }
+
+    /** Restores the last draft edit without leaving the current planner view. */
+    void Undo()
+    {
+        if (!CanUndo) return;
+
+        var restore = undoHistory[^1];
+        undoHistory.RemoveAt(undoHistory.Count - 1);
+        restore();
+        CancelConnection();
+        if (editingMarker is { } marker)
+        {
+            if (draft.Stops.Contains(marker))
+            {
+                var place = marker.Place;
+                (placeName, placeAddress, latitude, longitude) = (place.Name, place.Address, place.Lat, place.Lon);
+            }
+            else
+                ClearMarkerDetails();
+        }
+
+        notice = "Last change undone.";
+        errors = review ? draft.Build().Errors : [];
+        saveFailed = false;
+    }
+
+    /**
+     * Records and applies a changed field value.
+     * @param previous The value before editing.
+     * @param next The proposed value.
+     * @param apply Assigns the new value.
+     */
+    void EditTripValue<T>(T previous, T next, Action<T> apply)
+    {
+        if (EqualityComparer<T>.Default.Equals(previous, next)) return;
+        RememberEdit();
+        apply(next);
+        MarkEdited();
+    }
+
     void ShowReview()
     {
         review = true;
@@ -320,14 +406,18 @@ public partial class NewTrip : IDisposable
         if (index == from)
             return;
 
+        RememberEdit();
         selected = draft.JoinStops(from, index);
-        SelectMode(mode);
+        var leg = draft.LegTo(selected);
+        if (leg.Mode?.Code != mode.Code)
+            leg.Mode = new(Guid.Empty, mode.Code, mode.Label);
         MarkEdited();
         CancelConnection();
     }
 
     void MoveStop(int index, int offset)
     {
+        RememberEdit();
         CancelConnection();
         draft.Move(index, index + offset);
         selected = index + offset;
@@ -345,6 +435,7 @@ public partial class NewTrip : IDisposable
         if (previous.Lat == move.Lat && previous.Lon == move.Lon)
             return;
 
+        RememberEdit();
         var updated = previous with { PlaceId = Guid.Empty, Lat = move.Lat, Lon = move.Lon, Address = "" };
         var lastIndex = draft.Stops.Count - 1;
         if (draft.RoundTrip && lastIndex > 0 && (move.Index == 0 || move.Index == lastIndex))
@@ -366,6 +457,7 @@ public partial class NewTrip : IDisposable
         if (review || busy || index < 0 || index >= draft.Stops.Count)
             return;
 
+        RememberEdit();
         CancelConnection();
         if (editingMarker == draft.Stops[index])
             ClearMarkerDetails();
@@ -375,8 +467,11 @@ public partial class NewTrip : IDisposable
         MarkEdited();
     }
 
-    void AddStop(TripPlaceDto place, int? after = null)
+    void AddStop(TripPlaceDto place, int? after = null, bool returnToStart = false)
     {
+        RememberEdit();
+        if (returnToStart)
+            draft.RoundTrip = true;
         selected = draft.Add(place, after);
         insertAfter = selected;
         placing = false;
@@ -407,11 +502,7 @@ public partial class NewTrip : IDisposable
             accommodation.Address, accommodation.Lat, accommodation.Lon));
     }
 
-    void AddReturnStop()
-    {
-        draft.RoundTrip = true;
-        AddStop(draft.Stops[0].Place);
-    }
+    void AddReturnStop() => AddStop(draft.Stops[0].Place, returnToStart: true);
 
     void SelectMarker(string type)
     {
@@ -490,10 +581,12 @@ public partial class NewTrip : IDisposable
         if (busy || !placing || markerType is not { } type)
             return;
 
-        var name = editingMarker is null && !string.IsNullOrWhiteSpace(placeName)
-            ? placeName.Trim() : $"{MarkerLabel(type)} {++markerNumber}";
+        var useCustomName = editingMarker is null && !string.IsNullOrWhiteSpace(placeName);
+        var name = useCustomName ? placeName.Trim() : $"{MarkerLabel(type)} {markerNumber + 1}";
         var address = editingMarker is null ? placeAddress.Trim() : "";
         AddStop(new(Guid.Empty, type, name, address, position.Lat, position.Lon), insertAfter);
+        if (!useCustomName)
+            markerNumber++;
         placing = true;
         editingMarker = draft.Stops[selected];
         placeName = name;
@@ -512,8 +605,8 @@ public partial class NewTrip : IDisposable
         }
         if (showMap && editingMarker is { } marker)
         {
-            marker.Place = marker.Place with { Name = placeName.Trim(), Address = placeAddress.Trim(), Lat = position.Lat, Lon = position.Lon };
-            MarkEdited();
+            var place = marker.Place with { Name = placeName.Trim(), Address = placeAddress.Trim(), Lat = position.Lat, Lon = position.Lon };
+            EditTripValue(marker.Place, place, value => marker.Place = value);
             return;
         }
         AddStop(new(Guid.Empty, type, placeName.Trim(), placeAddress.Trim(), position.Lat, position.Lon), showMap ? insertAfter : null);
@@ -523,8 +616,7 @@ public partial class NewTrip : IDisposable
     {
         if (CurrentLeg is { } leg && leg.Mode?.Code != option.Code)
         {
-            leg.Mode = new(Guid.Empty, option.Code, option.Label);
-            MarkEdited();
+            EditTripValue(leg.Mode, new TripDto.Mode(Guid.Empty, option.Code, option.Label), value => leg.Mode = value);
         }
     }
 
@@ -558,6 +650,7 @@ public partial class NewTrip : IDisposable
             if (version != routeVersion)
                 return;
             draft = TripPlannerDraft.FromSaved(saved);
+            undoHistory.Clear();
             selected = draft.Stops.Count > 0 ? 0 : -1;
             placing = false;
             review = false;
@@ -604,6 +697,7 @@ public partial class NewTrip : IDisposable
             if (version != routeVersion)
                 return;
             draft = TripPlannerDraft.FromSaved(saved);
+            undoHistory.Clear();
             dirty = false;
             savedReview = true;
             notice = $"Saved {saved.Name}.";
@@ -633,6 +727,9 @@ public partial class NewTrip : IDisposable
         foreach (var group in pendingPlaces)
         {
             var place = await PlaceCatalogue.CreateAsync(group.Key, token);
+            // Older snapshots contain temporary IDs for the now-persisted locations.
+            if (ReferenceEquals(draft, savingDraft))
+                undoHistory.Clear();
             foreach (var stop in group)
                 stop.Place = place;
         }

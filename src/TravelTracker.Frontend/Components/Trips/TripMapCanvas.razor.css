@@ -62,6 +62,9 @@
 .trip-marker { cursor: pointer; }
 
 .marker-body { fill: transparent; }
+.marker-badge { fill: #ffc075; stroke: white; stroke-width: 1; }
+.trip-marker[aria-pressed="true"] .marker-badge { stroke: var(--forest); stroke-width: 2; }
+.trip-marker:focus-visible .marker-badge { stroke: #265873; stroke-width: 3; }
 .marker-number { fill: #fffdf5; }
 .trip-marker:hover .marker-number { fill: #ffecd9; }
 .trip-marker[aria-pressed="true"] .marker-number { fill: var(--trip-peach, #ffcbbe); }
