@@ -1,144 +1,133 @@
 @page "/account"
 @implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using TravelTracker.Frontend.Api.Users
 @using TravelTracker.Frontend.Auth
-@inject AuthSetup Setup
-@inject AuthenticationStateProvider Authentication
-@inject ProtectedClient Client
-@inject NavigationManager Navigation
-@inject TimeProvider Clock
-@inject ILogger<Account> Logger
+@using TravelTracker.Frontend.Features.Users
 
-<PageHeading Title="Your account" />
+<PageTitle>Your profile | TravelTracker</PageTitle>
+<PageHeading Title="Your profile" />
+
 @if (!Setup.Configured)
 {
     <Feedback Kind="FeedbackKind.Unavailable">Sign-in is temporarily unavailable. Please try again later.</Feedback>
 }
-else if (!loaded)
+else if (!loaded || loadingProfile)
 {
-    <Feedback Kind="FeedbackKind.Loading">Checking your sign-in session…</Feedback>
+    <Feedback Kind="FeedbackKind.Loading">@(signedIn ? "Loading your profile…" : "Checking your sign-in session…")</Feedback>
 }
-else
+else if (!signedIn)
 {
-    @if (SignInFailure is not null)
-    {
-        <Feedback Kind="FeedbackKind.Unexpected" Title="Unable to sign in" Eyebrow="SIGN-IN ERROR">@LoginFailure.MessageFor(SignInFailure)</Feedback>
-    }
-    <section class="form-panel">
-        <h2>@(signedIn ? "You are signed in" : "Sign in")</h2>
+    <section class="profile-panel" aria-labelledby="guest-profile-heading">
+        @if (SignInFailure is not null)
+        {
+            <Feedback Kind="FeedbackKind.Unexpected" Title="Unable to sign in" Eyebrow="SIGN-IN ERROR">@LoginFailure.MessageFor(SignInFailure)</Feedback>
+        }
+        <h2 id="guest-profile-heading">Sign in to view your profile</h2>
+        <p>Your profile is connected to your TravelTracker account. Sign in to view and update your permitted profile details.</p>
         @if (sessionMessage is not null)
         {
             <p role="status">@sessionMessage</p>
         }
         @if (SignedOut == "local")
         {
-            <p role="status">Signed out locally. Provider logout could not be completed. Use Sign in when you want to reconnect.</p>
+            <p role="status">Your TravelTracker session has ended. Provider sign-out could not be completed; sign in again when you're ready.</p>
         }
-        <div class="actions">
-            @if (signedIn)
-            {
-                <button @onclick="CheckAccessAsync" disabled="@(result?.Kind == FeedbackKind.Loading)">Check API access</button>
-                <form method="post" action="auth/logout">
-                    <AntiforgeryToken />
-                    <button type="submit" class="secondary">Sign out</button>
-                </form>
-                <AdminNavigation Class="button secondary" />
-            }
-            else
-            {
-                <button @onclick="SignIn">Sign in</button>
-            }
-        </div>
-        @if (result is not null)
-        {
-            <Feedback Kind="result.Kind">@result.Text</Feedback>
-        }
+        <div class="actions"><button @onclick="SignIn">Sign in</button></div>
     </section>
 }
-
-@code {
-    sealed record CheckResult(FeedbackKind Kind, string Text);
-
-    [SupplyParameterFromQuery(Name = "signin")]
-    string? SignInFailure { get; set; }
-
-    /** Set to "local" when sign-out ended the session here but Auth0's own logout could not be started. */
-    [SupplyParameterFromQuery(Name = "signedout")]
-    string? SignedOut { get; set; }
-
-    bool loaded;
-    bool signedIn;
-    string? sessionMessage;
-    CheckResult? result;
-    CancellationTokenSource? request;
-
-    protected override async Task OnInitializedAsync()
-    {
-        if (!Setup.Configured)
-            return;
-        Authentication.AuthenticationStateChanged += OnAuthenticationChanged;
-        await UpdateSessionAsync(Authentication.GetAuthenticationStateAsync());
-        loaded = true;
-    }
-
-    async Task UpdateSessionAsync(Task<AuthenticationState> pending)
-    {
-        var user = (await pending).User;
-        var previouslySignedIn = signedIn;
-        signedIn = AccessTokenClaims.ActiveToken(user, Clock.GetUtcNow()) is not null;
-        if (!signedIn && (previouslySignedIn || user.Identity?.IsAuthenticated == true))
+else if (profile is null)
+{
+    <Feedback Kind="loadFailureKind" Title="@loadFailureTitle" Retry="RetryLoadAsync">@loadFailure</Feedback>
+    <form method="post" action="auth/logout" class="profile-signout">
+        <AntiforgeryToken />
+        <button type="submit" class="secondary">Sign out</button>
+    </form>
+}
+else
+{
+    <section class="profile-page" aria-busy="@busy.ToString().ToLowerInvariant()">
+        @if (statusMessage is not null)
         {
-            sessionMessage = "Your session has expired. Sign in again to continue.";
-            result = null;
-            request?.Cancel();
+            <p class="profile-status" role="status">@statusMessage</p>
         }
-    }
-
-    void OnAuthenticationChanged(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
-    {
-        await UpdateSessionAsync(state);
-        StateHasChanged();
-    });
-
-    public void Dispose()
-    {
-        Authentication.AuthenticationStateChanged -= OnAuthenticationChanged;
-        request?.Cancel();
-        request?.Dispose();
-    }
-
-    /** Leaves the circuit for the server endpoint that starts hosted sign-in. */
-    void SignIn() => Navigation.NavigateTo("auth/login", forceLoad: true);
-
-    /** Reads the existing Transport sample with a real access token for the catalogue audience. */
-    async Task CheckAccessAsync()
-    {
-        request?.Cancel();
-        request?.Dispose();
-        var current = request = new CancellationTokenSource();
-        result = new CheckResult(FeedbackKind.Loading, "Checking access to Transport…");
-        try
+        @if (profile.Status == "banned")
         {
-            await Client.GetJsonAsync<System.Text.Json.JsonElement>("Transport", "/api/v1/transport-modes/00000000-0000-0000-0000-000000000101", current.Token);
-            result = new CheckResult(FeedbackKind.Success, "Your protected request completed successfully.");
+            <aside class="profile-notice" role="status"><strong>Read-only profile</strong><p>Your account is read-only. You can view your profile, but changes are unavailable.</p></aside>
         }
-        catch (OperationCanceledException) when (current.IsCancellationRequested)
+        else if (!HasScope("users.write"))
         {
-            // superseded by a newer check or the view closed
+            <aside class="profile-notice" role="status"><strong>Read-only profile</strong><p>This session can view your profile but does not have permission to edit it. Sign in again after profile-edit access is granted.</p></aside>
         }
-        catch (ApiError error)
+        else if (writeDenied)
         {
-            result = new CheckResult(Enum.Parse<FeedbackKind>(error.Kind.ToString()), error.Message);
-            if (error.Status == 401)
-            {
-                signedIn = false;
-                sessionMessage = "Your session has expired or was rejected. Sign in again to continue.";
-            }
+            <aside class="profile-error" role="alert"><strong>Profile editing is unavailable</strong><p>@(saveError ?? "Your account no longer has permission to edit this profile. Your entered values are still shown below.")</p></aside>
         }
-        catch (Exception exception)
+
+        @if (editing && editModel is not null && editContext is not null)
         {
-            Logger.LogError(exception, "Protected Transport check failed unexpectedly");
-            result = new CheckResult(FeedbackKind.Unexpected, "The request could not be completed.");
+            <section class="profile-card profile-editor" aria-labelledby="edit-profile-heading">
+                <h2 id="edit-profile-heading">Edit profile</h2>
+                <p class="profile-help">Email is contact information and does not change your sign-in email or password.</p>
+                @if (saveError is not null && !writeDenied)
+                {
+                    <p class="profile-error" role="alert">@saveError</p>
+                }
+                <EditForm EditContext="editContext" OnValidSubmit="SaveAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="profile-validation-summary" />
+                    <div class="profile-field">
+                        <label for="profile-username">Username</label>
+                        <InputText id="profile-username" @bind-Value="editModel.Username" autocomplete="username" maxlength="32" aria-describedby="profile-username-help" disabled="@(busy || writeDenied)" />
+                        <small id="profile-username-help">3–32 characters: letters, numbers, periods, underscores or hyphens.</small>
+                        <ValidationMessage For="() => editModel.Username" />
+                    </div>
+                    <div class="profile-field">
+                        <label for="profile-email">Contact email</label>
+                        <InputText id="profile-email" type="email" @bind-Value="editModel.Email" autocomplete="email" maxlength="254" aria-describedby="profile-email-help" disabled="@(busy || writeDenied)" />
+                        <small id="profile-email-help">You can’t remove a contact email here. This is not your verified sign-in email.</small>
+                        <ValidationMessage For="() => editModel.Email" />
+                    </div>
+                    <div class="profile-field">
+                        <label for="profile-address">Address <span class="profile-optional">(optional)</span></label>
+                        <InputTextArea id="profile-address" @bind-Value="editModel.Address" maxlength="500" aria-describedby="profile-address-help" disabled="@(busy || writeDenied)" />
+                        <small id="profile-address-help">Leave blank to clear your saved address.</small>
+                        <ValidationMessage For="() => editModel.Address" />
+                    </div>
+                    <div class="actions">
+                        <button type="submit" disabled="@(busy || writeDenied || !editModel.HasChanges)">@(busy ? "Saving…" : "Save changes")</button>
+                        <button type="button" class="secondary" disabled="@busy" @onclick="CancelEdit">Cancel</button>
+                    </div>
+                </EditForm>
+            </section>
         }
-    }
+        else
+        {
+            <section class="profile-card" aria-labelledby="profile-overview-heading">
+                <div class="profile-heading-row">
+                    <h2 id="profile-overview-heading">Profile details</h2>
+                    @if (CanEdit)
+                    {
+                        <button @onclick="BeginEdit">Edit profile</button>
+                    }
+                </div>
+                <dl class="profile-details">
+                    <dt>Username</dt><dd>@Display(profile.Username)</dd>
+                    <dt>Contact email</dt><dd>@Display(profile.Email)</dd>
+                    <dt>Address</dt><dd>@Display(profile.Address)</dd>
+                    <dt>Account type</dt><dd>@RoleLabel(profile.Role)</dd>
+                    <dt>Account status</dt><dd>@StatusLabel(profile.Status)</dd>
+                </dl>
+            </section>
+        }
+
+        <div class="profile-actions">
+            <form method="post" action="auth/logout">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary">Sign out</button>
+            </form>
+            <AdminNavigation Class="button secondary" />
+        </div>
+    </section>
 }

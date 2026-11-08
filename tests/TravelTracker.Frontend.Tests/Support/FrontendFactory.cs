@@ -28,12 +28,16 @@ namespace TravelTracker.Frontend.Tests.Support;
 public sealed partial class FrontendFactory(bool signInConfigured = true, string? clientSecret = null, string? keyDirectory = null, SessionRegistry? sessionRegistry = null) : WebApplicationFactory<Program>
 {
     public const string ProtectedReadPath = "/test/protected-read";
-    public const string RequestedScope = "openid profile email catalogue.read users.read";
+    public const string RequestedScope = "openid profile email catalogue.read users.read users.write";
+    public const string SelfProfileJson = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller_1","email":"traveller@example.test","address":"1 Main St"}""";
 
     public FakeAuth0 Auth0 { get; } = new("test-client");
 
-    /** Answers the protected Transport read; its LastRequest shows what the app sent. */
-    public StubHandler Transport { get; } = StubHandler.Status(200, """{"name":"Example Bus"}""");
+    /** Answers protected transport and Users profile reads; its LastRequest shows what the app sent. */
+    public StubHandler Transport { get; } = new((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+    {
+        Content = new StringContent(request.RequestUri?.AbsolutePath == "/api/v1/users/me" ? SelfProfileJson : """{"name":"Example Bus"}""")
+    }));
 
     /** Drives cookie expiry and the token expiry check without waiting. */
     public FakeTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
@@ -46,6 +50,7 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
             builder.UseSetting("Auth0:Domain", "tenant.example.test");
             builder.UseSetting("Auth0:ClientId", "test-client");
             builder.UseSetting("Auth0:Audience", "traveltracker-api");
+            builder.UseSetting("Services:Users", "http://localhost:5106");
             // Fake-tenant grants must never inherit the operator's local requested permissions.
             builder.UseSetting("Auth0:Scope", RequestedScope);
             if (clientSecret is not null)
