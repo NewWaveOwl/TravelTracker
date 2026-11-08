@@ -1,34 +1,37 @@
 # Milestone 3 Architecture and Reflection
  
 ## 1. Layered backend architecture and frontend integration choices
- 
+
 **Owner:** [name]
- 
-TODO. Suggested points to cover:
- 
-- The Domain, Data and Api layers per service, and the dependency direction (Api, then Data, then Domain).
-- Why each service owns its own database and projects.
-- The frontend technology that was chosen, why it was chosen over the alternative (React or ASP.NET Core), and how it talks to the backend (HTTP only, public DTOs).
-- How authentication fits in (bearer validation, scopes, policies).
-- Known trade-offs and open decisions.
-[Write here]
- 
+
+*Draft written from the repository state; the owner should review it before submission.*
+
+Six backend services run independently, each with its own Domain, Data and Api project: Attractions (port 5104), Transport (5105), Accommodations (5106), Settings (5107), Trips (5108) and Users (5101). Dependencies point one way, Api to Data to Domain. A boundary test fails the build if a Domain project gains a reference or a Data project becomes a web project. Each service owns its PostgreSQL database and never reads another service's tables. Services talk to each other only over versioned HTTP contracts: for example, Trips confirms every place and transport mode with the owning service before it saves, and asks Users for the live account standing. If any of them is unavailable, the save fails closed and stores nothing.
+
+The frontend is a Blazor Web App in interactive Server mode (`src/TravelTracker.Frontend`). It has no project reference to any backend project, so it can only use the public HTTP DTOs. It replaced an earlier same-day React choice by owner decision on 2026-11-03. It calls the services from the server, so the browser needs no CORS configuration or proxy, and the access token stays in a server-owned session. The decision is recorded in `docs/milestone-3-contracts.md`.
+
+Sign-in uses Auth0 through the ASP.NET Core OpenID Connect handler with PKCE. Every API validates the bearer token's signature, issuer, audience and expiry, then enforces a scope policy per operation (`catalogue.read`, `catalogue.write`, `users.read`, `settings.read`, `settings.write`, `trips.read`, `trips.write`). The full endpoint-to-policy table is in `docs/milestone-3-contracts.md` and `docs/authentication.md`. No secret is committed: the validation settings are authority, issuer and audience only.
+
+Trade-offs: the Trips save has no idempotency key, so a network failure after a send leaves the outcome unknown (the client says so). Trip history, editing and deletion are not implemented. Scheduled routes, stays and visits were left out of the minimum trip slice by an owner decision.
+
 ---
- 
+
 ## 2. How work was divided across the team
- 
+
 **Owner:** [name]
- 
-TODO. Suggested points to cover:
- 
-- Which teammate owned which backend service.
-- Which teammate owned which frontend views.
-- Shared foundations (security, test support, CI) and who maintained them.
-- How merge conflicts and branch drift were handled.
-[Write here]
- 
+
+*Draft from the owners recorded on the GitHub issues; the owner should add how conflicts and drift were handled.*
+
+| Member | Services | Frontend work | Shared work |
+|---|---|---|---|
+| Artiom | Attractions, Transport | Attraction views (M3-17), transport and route-point selection (M3-18) | Milestone board and submission workflow (M3-02), compiler warnings (M3-05), bearer authentication and scope policies (M3-08) |
+| Christel | Users, Accommodations | Frontend shell (M3-06), sign-in (M3-07); profile (M3-19) and accommodation views (M3-20) are still open | Layer agents (M3-03) |
+| James | Trips, Settings | Settings view (M3-22), trip creation and details (M3-21) | Architecture and contracts (M3-01), testing guidance (M3-04), CI and validation (M3-23) |
+
+Each member owns two independently runnable services, as the milestone requires. The matching verification for each frontend view lives in `tests/TravelTracker.Frontend.Tests`.
+
 ---
- 
+
 ## 3. How skill-based agents accelerated development and where they required manual correction
  
 **Owner:** Christel
