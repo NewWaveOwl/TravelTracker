@@ -8,7 +8,7 @@ public sealed class GrantedScopeTests
     [Theory]
     [InlineData("openid catalogue.read", "openid catalogue.read")]
     [InlineData("openid catalogue.read catalogue.write", "openid catalogue.read catalogue.write")]
-    [InlineData(null, "openid profile email catalogue.read users.read")]
+    [InlineData(null, "openid profile email catalogue.read users.read users.write")]
     [InlineData("", "")]
     public async Task SessionUsesTokenEndpointGrantInsteadOfProviderSuppliedServerClaim(string? grant, string expected)
     {

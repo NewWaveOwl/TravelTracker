@@ -10,10 +10,11 @@ public sealed class SwitchableAuthentication(SessionRegistry sessions) : Authent
     public SessionRegistry Sessions { get; } = sessions;
     public ClaimsPrincipal User { get; private set; } = new(new ClaimsIdentity());
 
-    public void SignIn(string token, DateTimeOffset expiresAt) => User = new ClaimsPrincipal(new ClaimsIdentity(
+    public void SignIn(string token, DateTimeOffset expiresAt, string scopes = "users.read users.write") => User = new ClaimsPrincipal(new ClaimsIdentity(
     [
         new Claim(AccessTokenClaims.Token, token),
         new Claim(AccessTokenClaims.ExpiresAt, expiresAt.ToUnixTimeSeconds().ToString()),
+        new Claim(AccessTokenClaims.GrantedScope, scopes),
         new Claim(SessionRegistry.SessionIdClaim, Sessions.Create(expiresAt)),
     ], "test"));
 
