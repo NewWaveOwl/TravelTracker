@@ -160,12 +160,19 @@ export function watchViewport(svg, container, map, camera) {
     }, { ...options, passive: false });
 
     svg.addEventListener("pointerdown", event => {
-        if (!event.isPrimary || event.button !== 0) return;
+        const rightMouse = event.pointerType === "mouse" && event.button === 2;
+        if (!event.isPrimary || (event.button !== 0 && !rightMouse)) return;
         suppressClick = false;
-        if (event.target.closest(".marker-remove, .map-leg-label button")) return;
-        const marker = event.target.closest(".trip-marker[data-move-index]");
-        pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, dragging: false, marker,
+        if (!rightMouse && event.target.closest(".marker-remove, .map-leg-label button")) return;
+
+        const marker = rightMouse ? null : event.target.closest(".trip-marker[data-move-index]");
+        const canPan = rightMouse || event.pointerType !== "mouse";
+        pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, dragging: false, marker, canPan,
             transform: marker?.getAttribute("transform") };
+    }, options);
+
+    svg.addEventListener("contextmenu", event => {
+        if (event.button === 2) event.preventDefault();
     }, options);
 
     svg.addEventListener("pointermove", event => {
@@ -175,8 +182,10 @@ export function watchViewport(svg, container, map, camera) {
             pointer.dragging = true;
             suppressClick = true;
             svg.setPointerCapture(event.pointerId);
-            svg.setAttribute("data-dragging", "");
+            if (pointer.canPan || pointer.marker) svg.setAttribute("data-dragging", "");
         }
+        if (!pointer.canPan && !pointer.marker) return;
+
         const [x, y] = viewBoxPoint(svg, event.clientX, event.clientY);
         const [previousX, previousY] = viewBoxPoint(svg, pointer.x, pointer.y);
         if (pointer.marker) {

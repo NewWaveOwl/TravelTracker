@@ -20,7 +20,7 @@
     </div>
     <div class="map-frame">
         <div @ref="basemap" class="map-basemap"></div>
-        <svg @ref="viewport" viewBox="@($"0 0 {ViewportWidth} {ViewportHeight}")" role="group" data-marker-drop="@(AllowMarkerDrop ? "true" : null)" tabindex="0" aria-label="Map with numbered trip stops. Drag or use arrow keys to pan. Scroll to zoom." @onkeydown="PanWithKey">
+        <svg @ref="viewport" viewBox="@($"0 0 {ViewportWidth} {ViewportHeight}")" role="group" data-marker-drop="@(AllowMarkerDrop ? "true" : null)" tabindex="0" aria-label="Map with numbered trip stops. Drag with the right mouse button or use arrow keys to pan. Scroll to zoom." @onkeydown="PanWithKey">
             @foreach (var connection in connections)
             {
                 <path class="route-halo" d="@connection.Path" pointer-events="none" aria-hidden="true" />
@@ -30,25 +30,21 @@
             {
                 <rect class="location-target" x="0" y="0" width="@ViewportWidth" height="@ViewportHeight" fill="transparent"
                       aria-hidden="true" @onclick="PickFromPointerAsync" />
-                <path class="map-crosshair" d="@($"M{ViewportWidth / 2 - 8} {ViewportHeight / 2}h16 M{ViewportWidth / 2} {ViewportHeight / 2 - 8}v16")" pointer-events="none" aria-hidden="true" />
             }
             @foreach (var marker in ScreenMarkers())
             {
                 var index = marker.Index;
                 var stop = Stops[index];
-                <g @key="index" class="trip-marker" data-move-index="@(StopMoved.HasDelegate ? index.ToString(CultureInfo.InvariantCulture) : null)" transform="@($"translate({Number(marker.X)} {Number(marker.Y)})")"
-                       role="button" tabindex="0" aria-label="@($"Stop {index + 1}: {stop.Name}")"
+                var description = marker.Shared ? $"Shared pin. Activate to select stop {marker.NextIndex + 1}: {Stops[marker.NextIndex].Name}." : null;
+                <g @key="marker.FirstIndex" class="trip-marker" data-move-index="@(StopMoved.HasDelegate ? index.ToString(CultureInfo.InvariantCulture) : null)" transform="@($"translate({Number(marker.X)} {Number(marker.Y)})")"
+                       role="button" tabindex="0" aria-label="@($"Stop {index + 1}: {stop.Name}")" aria-description="@description"
                        aria-pressed="@(index == SelectedIndex ? "true" : "false")"
-                       @onclick="() => StopSelected.InvokeAsync(index)" @onkeydown="e => SelectWithKeyAsync(e, index)">
-                    @if (marker.Offset != 0)
-                    {
-                        <line class="marker-tether" x1="@Number(-marker.Offset)" y1="0" x2="0" y2="0" aria-hidden="true" />
-                    }
+                       @onclick="() => StopSelected.InvokeAsync(marker.NextIndex)" @onkeydown="e => SelectWithKeyAsync(e, marker.NextIndex)">
                     <rect class="marker-body" x="-27" y="-76" width="54" height="76" rx="10" />
                     <image href="@Pin(stop.Type)" x="-27" y="-76" width="54" height="76" aria-hidden="true" />
                     <rect class="marker-number" pointer-events="none" x="16" y="-80" width="34" height="23" rx="6" />
-                    <text pointer-events="none" x="33" y="-68" text-anchor="middle" dominant-baseline="central" aria-hidden="true">@((index + 1).ToString("00"))</text>
-                    <title>@stop.Name</title>
+                    <text pointer-events="none" x="33" y="-68" text-anchor="middle" dominant-baseline="central" aria-hidden="true">@($"{index + 1:00}{(marker.Shared ? "+" : "")}")</text>
+                    <title>@(description ?? stop.Name)</title>
                 </g>
                 @if (index == SelectedIndex && StopRemoved.HasDelegate)
                 {
@@ -65,18 +61,23 @@
             }
             @foreach (var connection in connections)
             {
-                <foreignObject class="map-leg-label" x="@Number(connection.LabelX)" y="@Number(connection.LabelY)" width="260" height="35" pointer-events="none">
+                <foreignObject class="map-leg-label @(CompactConnectionLabels ? "map-leg-badge" : null)"
+                               x="@Number(connection.LabelX)" y="@Number(connection.LabelY)"
+                               width="@(CompactConnectionLabels ? CompactConnectionSize : 260)"
+                               height="@(CompactConnectionLabels ? CompactConnectionSize : 35)" pointer-events="none">
                     @if (ConnectionSelected.HasDelegate)
                     {
-                        <button type="button" title="Edit connection duration"
+                        <button type="button" title="@(CompactConnectionLabels ? connection.Label : "Edit connection duration")"
                                 aria-label="@($"Edit connection {connection.Destination}: {Stops[connection.Destination - 1].Name} to {Stops[connection.Destination].Name}, {connection.Label}")"
                                 @onclick="() => ConnectionSelected.InvokeAsync(connection.Destination)">
-                            <img src="@Icon(connection.Code)" alt="" /><span>@connection.Label</span>
+                            <img src="@Icon(connection.Code)" alt="" /><span hidden="@CompactConnectionLabels">@connection.Label</span>
                         </button>
                     }
                     else
                     {
-                        <div><img src="@Icon(connection.Code)" alt="" /><span>@connection.Label</span></div>
+                        <div role="@(CompactConnectionLabels ? "img" : null)" aria-label="@(CompactConnectionLabels ? connection.Label : null)">
+                            <img src="@Icon(connection.Code)" alt="" /><span hidden="@CompactConnectionLabels">@connection.Label</span>
+                        </div>
                     }
                 </foreignObject>
             }
@@ -94,7 +95,7 @@
     </div>
     @if (CanPick)
     {
-        <p>Click the map or use the center crosshair to choose a location.</p>
+        <p>Click the map or choose Pick map center to place a marker.</p>
     }
     @if (connections.Count > 0)
     {
@@ -122,6 +123,9 @@
     private const int MinimumZoom = 2;
     private const int MaximumZoom = 19;
     private const int DefaultZoom = 13;
+    private const int CompactConnectionZoom = 10;
+    private const int CompactConnectionSize = 32;
+    private const int ConnectionCurveSpacing = 72;
     private const double MaximumLatitude = 85.05112878;
 
     private ElementReference viewport;
@@ -138,6 +142,7 @@
     private int zoom = DefaultZoom;
     private (double X, double Y) center = Project(45.5019m, -73.5674m);
     private int WorldSize => TileSize << zoom;
+    private bool CompactConnectionLabels => zoom <= CompactConnectionZoom;
     private (double X, double Y) Origin => (center.X * WorldSize - ViewportWidth / 2d, center.Y * WorldSize - ViewportHeight / 2d);
 
     private string CenterAction => CanPick ? "Pick map center" : "Fit stops";
@@ -275,7 +280,7 @@
             ViewportHeight / 2d + (point.Y - center.Y) * WorldSize);
     }
 
-    /** Separates lines and editable labels when a pair of places is visited more than once. */
+    /** Separates connections between repeated stops and positions zoomed-out badges on their curves. */
     private List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY)> ScreenConnections()
     {
         var result = new List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY)>();
@@ -306,13 +311,19 @@
                 var leg = Legs[index];
                 var from = ScreenPoint(Stops[index].Lat, Stops[index].Lon);
                 var to = ScreenPoint(Stops[index + 1].Lat, Stops[index + 1].Lon);
-                var curveX = x - 52 * slot * dy / length;
-                var curveY = y + 52 * slot * dx / length;
+                var curveX = x - ConnectionCurveSpacing * slot * dy / length;
+                var curveY = y + ConnectionCurveSpacing * slot * dx / length;
                 if (leg.Code == "plane")
                     curveY -= Math.Min(90, Math.Abs(dx) / 4);
                 var path = $"M {Number(from.X)} {Number(from.Y)} Q {Number(curveX)} {Number(curveY)} {Number(to.X)} {Number(to.Y)}";
+                var labelX = x + 10;
                 var labelY = count == 1 ? (y + curveY) / 2 - 36 : y + 38 * slot - 36;
-                result.Add((index + 1, leg.Code, leg.Label, path, x + 10, labelY));
+                if (CompactConnectionLabels)
+                {
+                    labelX = (x + curveX) / 2 - CompactConnectionSize / 2d;
+                    labelY = (y + curveY) / 2 - CompactConnectionSize / 2d;
+                }
+                result.Add((index + 1, leg.Code, leg.Label, path, labelX, labelY));
                 slot++;
             }
         }
@@ -322,26 +333,25 @@
     }
 
     /**
-     * Spreads markers at the same coordinates so each remains selectable on a return trip.
-     * @return Visible markers in itinerary order, with the selected marker drawn on top.
+     * Shares a pin between visits at identical coordinates and cycles through those visits on activation.
+     * @return Visible pins, with the selected pin drawn on top.
      */
-    private IEnumerable<(int Index, double X, double Y, double Offset)> ScreenMarkers()
+    private IEnumerable<(int FirstIndex, int Index, int NextIndex, bool Shared, double X, double Y)> ScreenMarkers()
     {
-        var markers = new List<(int Index, double X, double Y, double Offset)>();
+        var markers = new List<(int FirstIndex, int Index, int NextIndex, bool Shared, double X, double Y)>();
         foreach (var group in Stops.Select((stop, index) => (stop, index)).GroupBy(item => (item.stop.Lat, item.stop.Lon)))
         {
             var point = ScreenPoint(group.Key.Lat, group.Key.Lon);
             if (!IsVisible(point)) continue;
 
-            var items = group.ToArray();
-            for (var index = 0; index < items.Length; index++)
-            {
-                var offset = (index - (items.Length - 1) / 2d) * 40;
-                markers.Add((items[index].index, point.X + offset, point.Y, offset));
-            }
+            var visits = group.Select(item => item.index).ToArray();
+            var selection = Array.IndexOf(visits, SelectedIndex);
+            var current = visits[Math.Max(0, selection)];
+            var next = visits[(selection + 1) % visits.Length];
+            markers.Add((visits[0], current, next, visits.Length > 1, point.X, point.Y));
         }
 
-        return markers.OrderBy(marker => marker.Index == SelectedIndex).ThenBy(marker => marker.Index);
+        return markers.OrderBy(marker => marker.Index == SelectedIndex).ThenBy(marker => marker.FirstIndex);
     }
 
     /** Centers and zooms the viewport around the planned stops, including routes across the date line. */
@@ -425,7 +435,7 @@
      */
     private async Task PickFromPointerAsync(MouseEventArgs pointer)
     {
-        if (!CanPick) return;
+        if (!CanPick || pointer.Button != 0) return;
 
         // Capture the clicked viewport before the async interop call so a subsequent pan cannot move the pick.
         var origin = Origin;
@@ -435,7 +445,7 @@
         await PickAsync(((origin.X + point[0]) / worldSize, (origin.Y + point[1]) / worldSize));
     }
 
-    /** Picks the crosshair while placing a marker and fits the itinerary otherwise. */
+    /** Picks the map center while placing a marker and fits the itinerary otherwise. */
     private Task UseCenterAsync()
     {
         if (CanPick) return PickAsync(center);

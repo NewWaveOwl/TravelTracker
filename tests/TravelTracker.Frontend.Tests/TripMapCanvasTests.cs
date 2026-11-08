@@ -11,7 +11,7 @@ public sealed class TripMapCanvasTests : BunitContext
     public TripMapCanvasTests() => JSInterop.Mode = JSRuntimeMode.Loose;
 
     [Fact]
-    public void ReturnStopsAtTheSameCoordinatesStayIndividuallySelectable()
+    public void SharedPinCyclesBetweenReturnVisits()
     {
         var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
         var museum = new TripPlaceDto(Guid.NewGuid(), "attraction", "Museum", "", 45.4988m, -73.5796m);
@@ -21,13 +21,23 @@ public sealed class TripMapCanvasTests : BunitContext
             .Add(component => component.SelectedIndex, 0)
             .Add(component => component.StopSelected, index => selected = index));
 
+        Assert.Equal(2, map.FindAll(".trip-marker").Count);
         var start = map.Find("[aria-label='Stop 1: Hotel']");
-        var end = map.Find("[aria-label='Stop 3: Hotel']");
-        Assert.NotEqual(start.GetAttribute("transform"), end.GetAttribute("transform"));
+        var position = start.GetAttribute("transform");
         Assert.Equal("true", start.GetAttribute("aria-pressed"));
-        Assert.Equal("false", end.GetAttribute("aria-pressed"));
-        end.Click();
+        Assert.Contains("select stop 3", start.GetAttribute("aria-description"));
+        start.Click();
         Assert.Equal(2, selected);
+
+        map.Render(parameters => parameters.Add(component => component.SelectedIndex, selected));
+        var end = map.Find("[aria-label='Stop 3: Hotel']");
+        Assert.Equal(position, end.GetAttribute("transform"));
+        Assert.Equal("true", end.GetAttribute("aria-pressed"));
+        Assert.Equal("03+", end.QuerySelector("text")!.TextContent);
+        Assert.Equal(2, map.FindAll(".trip-marker").Count);
+
+        end.KeyDown("Enter");
+        Assert.Equal(0, selected);
         Assert.Empty(map.FindAll(".route-line, .route-halo"));
     }
 
@@ -143,6 +153,44 @@ public sealed class TripMapCanvasTests : BunitContext
         map.Find(".location-target").Click();
         Assert.Equal(original, selected);
         Assert.Equal(12, Assert.IsType<double[]>(viewport.VerifyInvoke("setCamera", 2)[1].Arguments[0])[2]);
+    }
+
+    [Fact]
+    public async Task ZoomedOutConnectionsKeepTheirTransportIconsAndCanStillBeEdited()
+    {
+        var west = new TripPlaceDto(Guid.NewGuid(), "transport_stop", "West", "", 0, -.15m);
+        var east = new TripPlaceDto(Guid.NewGuid(), "transport_stop", "East", "", 0, .15m);
+        var selected = -1;
+        var map = Render<TripMapCanvas>(parameters => parameters
+            .Add(component => component.Stops, [west, east, west])
+            .Add(component => component.Legs, [("train", "Train · 30 min"), ("bus", "Bus · 40 min")])
+            .Add(component => component.ConnectionSelected, index => selected = index));
+
+        Assert.Equal(2, map.FindAll(".map-leg-label span:not([hidden])").Count);
+        Assert.Empty(map.FindAll(".map-leg-badge"));
+
+        await map.InvokeAsync(() => map.Instance.ZoomAtPointer(-1, 384, 216));
+
+        var badges = map.FindAll(".map-leg-badge");
+        Assert.Equal(2, badges.Count);
+        Assert.All(badges, badge =>
+        {
+            Assert.Equal("368", badge.GetAttribute("x"));
+            Assert.Equal("32", badge.GetAttribute("width"));
+            Assert.Equal("32", badge.GetAttribute("height"));
+        });
+        Assert.Equal("182", badges[0].GetAttribute("y"));
+        Assert.Equal("218", badges[1].GetAttribute("y"));
+        Assert.Empty(map.FindAll(".map-leg-label span:not([hidden])"));
+        Assert.Equal("assets/trip-map/train.svg", badges[0].QuerySelector("img")!.GetAttribute("src"));
+        var train = map.Find(".map-leg-badge button[aria-label$='Train · 30 min']");
+        train.Click();
+        Assert.Equal(1, selected);
+
+        map.Find("button[aria-label='Zoom in']").Click();
+
+        Assert.Empty(map.FindAll(".map-leg-badge"));
+        Assert.Equal(2, map.FindAll(".map-leg-label span:not([hidden])").Count);
     }
 
     [Fact]

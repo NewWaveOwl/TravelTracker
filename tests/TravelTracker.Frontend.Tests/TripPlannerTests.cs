@@ -132,7 +132,7 @@ public sealed class TripPlannerTests : BunitContext
         page.Find("button[aria-label='Pick map center']").Click();
         Assert.Equal(3, page.FindAll(".trip-stop").Count);
         Assert.Empty(page.FindAll(".route-line, .route-halo"));
-        page.Find("[aria-label^='Stop 3:']").Click();
+        page.FindAll(".trip-stop")[2].Click();
         page.Find(".marker-remove").Click();
         Assert.Equal(2, page.FindAll(".trip-stop").Count);
         Assert.Empty(page.Find(".marker-panel").QuerySelectorAll("legend"));
@@ -238,14 +238,16 @@ public sealed class TripPlannerTests : BunitContext
         page.Find(".trip-marker[aria-label$=': Museum']").Click();
         Assert.Single(page.FindAll(".route-line"));
         page.Find(".trip-marker[aria-label='Stop 1: Hotel']").Click();
-        Assert.Equal(3, page.FindAll(".trip-marker").Count);
+        Assert.Equal(2, page.FindAll(".trip-marker").Count);
+        Assert.Equal(3, page.FindAll(".trip-stop").Count);
+        Assert.Empty(page.FindAll(".trip-stop-split"));
 
         var labels = page.FindAll(".map-leg-label");
         Assert.Equal(2, labels.Count);
         Assert.NotEqual(labels[0].GetAttribute("y"), labels[1].GetAttribute("y"));
         page.Find("button[aria-label^='Edit connection 2:']").Click();
         page.FindAll(".trip-panel input[type=datetime-local]")[0].Change("2026-11-14T12:00");
-        page.Find(".leg-panel input[type=number]").Change("60");
+        page.Find("input[aria-label='Duration hours']").Change("1");
 
         Click(page, "Review on map");
         Assert.Empty(page.FindAll("[role=alert]"));
@@ -320,16 +322,23 @@ public sealed class TripPlannerTests : BunitContext
         page.FindAll(".trip-stop")[0].Click();
         page.FindAll(".trip-stop")[1].Click();
         page.Find("button[aria-label^='Edit connection 1:']").Click();
-        page.Find(".leg-panel input[type=number]").Change("60");
+        page.Find("input[aria-label='Duration hours']").Change("1");
         page.FindAll(".trip-panel input[type=datetime-local]")[0].Change("2026-11-14T10:00:00");
         Assert.Contains("Train · 1 h 0 min", page.Find(".map-leg-label").TextContent);
         Assert.StartsWith("2026-11-14T11:00", page.FindAll(".trip-panel input[type=datetime-local]")[1].GetAttribute("value"));
 
+        page.Find("input[aria-label='Duration minutes']").Change("60");
+        Assert.Contains("Enter whole minutes from 0 to 59.", page.Find("[role=alert]").TextContent);
+        page.Find("input[aria-label='Duration minutes']").Change("20");
+        Assert.StartsWith("2026-11-14T11:20", page.FindAll(".trip-panel input[type=datetime-local]")[1].GetAttribute("value"));
+
         page.FindAll(".trip-panel input[type=datetime-local]")[1].Change("2026-11-14T11:15");
-        Assert.Equal("75", page.Find(".leg-panel input[type=number]").GetAttribute("value"));
+        Assert.Equal("1", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
+        Assert.Equal("15", page.Find("input[aria-label='Duration minutes']").GetAttribute("value"));
         Assert.Contains("Train · 1 h 15 min", page.Find(".map-leg-label").TextContent);
         page.FindAll(".trip-panel input[type=datetime-local]")[0].Change("2026-11-14T10:15");
-        Assert.Equal("60", page.Find(".leg-panel input[type=number]").GetAttribute("value"));
+        Assert.Equal("1", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
+        Assert.Equal("0", page.Find("input[aria-label='Duration minutes']").GetAttribute("value"));
         Assert.StartsWith("2026-11-14T11:15", page.FindAll(".trip-panel input[type=datetime-local]")[1].GetAttribute("value"));
         Click(page, "Review on map");
         Assert.True(page.FindAll("[role=alert]").Count == 0, string.Join(" ", page.FindAll("[role=alert]").Select(alert => alert.TextContent)));
@@ -368,11 +377,13 @@ public sealed class TripPlannerTests : BunitContext
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
 
         page.Find("button[aria-label^='Edit connection 1:']").Click();
-        Assert.Equal("60", page.Find(".leg-panel input[type=number]").GetAttribute("value"));
+        Assert.Equal("1", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
+        Assert.Equal("0", page.Find("input[aria-label='Duration minutes']").GetAttribute("value"));
         Assert.Contains("Train · 1 h 0 min", page.Find(".map-leg-label").TextContent);
 
         page.FindAll(".trip-panel input[type=datetime-local]")[1].Change("2026-03-08T04:00");
-        Assert.Equal("90", page.Find(".leg-panel input[type=number]").GetAttribute("value"));
+        Assert.Equal("1", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
+        Assert.Equal("30", page.Find("input[aria-label='Duration minutes']").GetAttribute("value"));
         Assert.Contains("Train · 1 h 30 min", page.Find(".map-leg-label").TextContent);
     }
 
@@ -413,7 +424,7 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Null(DurationAt(3));
 
         page.Find("button[aria-label^='Edit connection 1:']").Click();
-        page.Find(".leg-panel input[type=number]").Change("45");
+        page.Find("input[aria-label='Duration minutes']").Change("45");
         Assert.Equal("Time at stop · 45 min", DurationAt(1));
 
         page.Find("button[aria-label^='Edit connection 2:']").Click();
@@ -425,6 +436,44 @@ public sealed class TripPlannerTests : BunitContext
         page.Find("button[aria-label^='Edit connection 3:']").Click();
         page.FindAll(".leg-panel input[type=datetime-local]")[0].Change("2026-03-08T05:30");
         Assert.Equal("Stay · 1 h 30 min", DurationAt(2));
+    }
+
+    [Fact]
+    public void MapShowsAdjacentStopsAtTheSameCoordinatesInASplitCard()
+    {
+        var station = new TripPlaceDto(Guid.NewGuid(), "transport_stop", "Station", "", Hotel.Lat, Hotel.Lon);
+        var walk = new TripDto.Mode(Guid.NewGuid(), "pedestrian", "Walk");
+        var trip = Saved with
+        {
+            Legs =
+            [
+                new(1, Hotel, station, walk, Start, Start.AddMinutes(10)),
+                new(2, station, Museum, Train, Start.AddMinutes(10), Start.AddHours(2))
+            ]
+        };
+        Configure((request, _) =>
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            Assert.Equal($"/api/v1/trips/{TripId:D}", request.RequestUri!.AbsolutePath);
+            return Task.FromResult(Json(trip));
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+
+        var cards = page.FindAll(".trip-stop-split .trip-stop");
+        Assert.Equal(new[] { "Hotel", "Station" }, cards.Select(card => card.QuerySelector("strong")!.TextContent));
+        Assert.Contains("09:00", cards[0].TextContent);
+        Assert.Contains("09:10", cards[1].TextContent);
+        Assert.Contains("10 min", page.Find(".trip-local-connection").TextContent);
+        Assert.Equal(2, page.FindAll(".trip-marker").Count);
+
+        cards[1].Click();
+        Assert.Equal("true", page.Find(".trip-marker[aria-label='Stop 2: Station']").GetAttribute("aria-pressed"));
+        Assert.Equal(2, page.FindAll(".trip-marker").Count);
+
+        Click(page, "Review on map");
+        Assert.Equal(2, page.FindAll(".review-legs li").Count);
+        Assert.Empty(page.FindAll("[role=alert]"));
     }
 
     [Fact]

@@ -51,32 +51,38 @@
                 <p>Start with an accommodation. Add places to build your route.</p>
             }
             <ol aria-label="Ordered stops and transport connections">
-                @for (var index = 0; index < draft.Stops.Count; index++)
+                @foreach (var (first, end) in ItineraryRows())
                 {
-                    var stopIndex = index;
-                    var stop = draft.Stops[stopIndex];
-                    <li @key="stop">
-                        @if (stopIndex > 0)
+                    var shared = end - first > 1;
+                    <li @key="draft.Stops[first]">
+                        @if (first > 0)
                         {
-                            var leg = draft.LegTo(stopIndex);
+                            var leg = draft.LegTo(first);
                             <div class="trip-leg-time">
                                 <strong>@(leg.Mode?.Name ?? "Choose transport")</strong>
                                 <span>@TimeLabel(leg.Departure) → @TimeLabel(draft.ArrivalFor(leg))</span>
                             </div>
                         }
-                        <button type="button" class="trip-stop" aria-pressed="@Pressed(selected == stopIndex)" disabled="@busy" @onclick="() => SelectStop(stopIndex)">
-                            <span class="trip-number">@((stopIndex + 1).ToString("00"))</span>
-                            <span>
-                                <strong>@stop.Place.Name</strong>
-                                <small>@MarkerLabel(stop.Place.Type) @(!string.IsNullOrWhiteSpace(stop.Place.Address) ? $" · {stop.Place.Address}" : "")</small>
-                                @if (draft.DurationAtStop(stopIndex) is { } duration)
-                                {
-                                    <small class="trip-stop-duration">@(stop.Place.Type == "accommodation" ? "Stay" : "Time at stop") · @DurationLabel((long)Math.Ceiling(duration.TotalMinutes))</small>
-                                }
-                            </span>
-                        </button>
-                        @if (!review && selected == stopIndex)
+                        <div class="@(shared ? "trip-stop-split" : null)">
+                            @for (var index = first; index < end; index++)
+                            {
+                                @TripStopCard(index, shared)
+                            }
+                        </div>
+                        @for (var index = first + 1; index < end; index++)
                         {
+                            var leg = draft.LegTo(index);
+                            <div class="trip-leg-time trip-local-connection">
+                                @(leg.Mode?.Name ?? "Choose transport")
+                                @if (DisplayedDuration(leg) is { } minutes)
+                                {
+                                    <text> · @DurationLabel(minutes)</text>
+                                }
+                            </div>
+                        }
+                        @if (!review && selected >= first && selected < end)
+                        {
+                            var stopIndex = selected;
                             <div class="trip-stop-actions">
                                 <button type="button" class="secondary" disabled="@(busy || stopIndex == 0)" @onclick="() => MoveStop(stopIndex, -1)">Move up</button>
                                 <button type="button" class="secondary" disabled="@(busy || stopIndex == draft.Stops.Count - 1)" @onclick="() => MoveStop(stopIndex, 1)">Move down</button>
@@ -221,13 +227,28 @@
                         }
                         @if (pendingMode is null && CurrentLeg is { } leg)
                         {
+                            var duration = DisplayedDuration(leg);
                             <fieldset class="leg-fields trip-fields" disabled="@busy">
                                 <label>Departure <input type="datetime-local" step="1" value="@DateTimeValue(leg.Departure)"
                                                         @onchange="e => SetDateTime(e, value => leg.Departure = value)" /></label>
                                 <label>Arrival <input type="datetime-local" step="1" value="@DateTimeValue(draft.ArrivalFor(leg))"
                                                       @onchange="e => SetDateTime(e, value => { leg.Arrival = value; leg.DurationMinutes = null; })" /></label>
-                                <label>Duration (minutes) <input @ref="durationInput" type="number" min="1" step="1" value="@DisplayedDuration(leg)"
-                                                                 @onchange="e => SetDuration(leg, e)" /></label>
+                                <div class="trip-duration" role="group" aria-labelledby="connection-duration-label">
+                                    <span id="connection-duration-label">Duration</span>
+                                    <div class="trip-duration-inputs">
+                                        <label>
+                                            <span aria-hidden="true">h</span>
+                                            <input @ref="durationHoursInput" type="number" min="0" step="1" aria-label="Duration hours"
+                                                   value="@(duration / 60)" @onchange="e => SetDurationPart(leg, e, hours: true)" />
+                                        </label>
+                                        <span aria-hidden="true">:</span>
+                                        <label>
+                                            <span aria-hidden="true">m</span>
+                                            <input type="number" min="0" max="59" step="1" aria-label="Duration minutes"
+                                                   value="@(duration % 60)" @onchange="e => SetDurationPart(leg, e, hours: false)" />
+                                        </label>
+                                    </div>
+                                </div>
                             </fieldset>
                             @if (showMap)
                             {
@@ -255,6 +276,36 @@
 </div>
 
 @code {
+    RenderFragment TripStopCard(int index, bool shared) => @<button @key="draft.Stops[index]" type="button"
+            class="trip-stop @(shared ? "trip-stop-part" : null)" aria-pressed="@Pressed(selected == index)" disabled="@busy" @onclick="() => SelectStop(index)">
+        @{
+            var stop = draft.Stops[index];
+        }
+        <span class="trip-number">@((index + 1).ToString("00"))</span>
+        <span class="trip-stop-info">
+            <strong>@stop.Place.Name</strong>
+            <small>
+                @MarkerLabel(stop.Place.Type)
+                @if (shared && StopTime(index) is { } time)
+                {
+                    <text> · @time.ToString("HH:mm")</text>
+                }
+                @if (!shared && !string.IsNullOrWhiteSpace(stop.Place.Address))
+                {
+                    <text> · @stop.Place.Address</text>
+                }
+            </small>
+            @if (shared && !string.IsNullOrWhiteSpace(stop.Place.Address))
+            {
+                <small>@stop.Place.Address</small>
+            }
+            @if (draft.DurationAtStop(index) is { } duration)
+            {
+                <small class="trip-stop-duration">@(stop.Place.Type == "accommodation" ? "Stay" : "Time at stop") · @DurationLabel((long)Math.Ceiling(duration.TotalMinutes))</small>
+            }
+        </span>
+    </button>;
+
     RenderFragment OpenSavedTrip => @<div>
         <details class="trip-open">
             <summary>Open a saved trip</summary>
@@ -316,7 +367,7 @@
                     }
                     else
                     {
-                        <p>Choose a marker, then click the map or drag it onto the map.</p>
+                        <p>Choose a marker, then click the map or drag it onto the map. Drag with the right mouse button to pan.</p>
                     }
                     @if (markerType is { } activeMarker)
                     {

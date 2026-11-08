@@ -91,14 +91,14 @@ public partial class NewTrip : IDisposable
         focusDuration = true;
     }
 
-    ElementReference durationInput;
+    ElementReference durationHoursInput;
     bool focusDuration;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!focusDuration) return;
         focusDuration = false;
-        await durationInput.FocusAsync();
+        await durationHoursInput.FocusAsync();
     }
 
     static readonly string[] LocalDateTimeFormats = ["yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.FFFFFFF"];
@@ -125,19 +125,29 @@ public partial class NewTrip : IDisposable
     long? DisplayedDuration(TripPlannerDraft.Leg connection) =>
         draft.DurationFor(connection) is { } duration ? (long)Math.Ceiling(duration.TotalMinutes) : null;
 
-    void SetDuration(TripPlannerDraft.Leg connection, ChangeEventArgs change)
+    /** Updates one duration field and keeps the other part of the connection's elapsed time. */
+    void SetDurationPart(TripPlannerDraft.Leg connection, ChangeEventArgs change, bool hours)
     {
         var input = change.Value?.ToString();
-        if (string.IsNullOrEmpty(input))
-            connection.DurationMinutes = null;
-        else if (int.TryParse(input, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) && minutes > 0)
-            connection.DurationMinutes = minutes;
-        else
+        var part = 0;
+        if (!string.IsNullOrEmpty(input) &&
+            (!int.TryParse(input, NumberStyles.None, CultureInfo.InvariantCulture, out part) || (!hours && part >= 60)))
         {
-            errors = ["Enter a whole number of minutes greater than zero."];
+            errors = [hours ? "Enter whole hours, zero or greater." : "Enter whole minutes from 0 to 59."];
             saveFailed = false;
             return;
         }
+
+        var current = DisplayedDuration(connection) ?? 0;
+        var minutes = hours ? part * 60L + current % 60 : current / 60 * 60 + part;
+        if (minutes > int.MaxValue)
+        {
+            errors = ["Enter a shorter duration for this connection."];
+            saveFailed = false;
+            return;
+        }
+
+        connection.DurationMinutes = minutes == 0 ? null : (int)minutes;
         MarkEdited();
     }
 
@@ -630,5 +640,24 @@ public partial class NewTrip : IDisposable
     }
 
     static string MarkerLabel(string type) => Markers.First(option => option.Code == type).Label;
+    /** Groups adjacent itinerary entries at identical coordinates into a single display row. */
+    IEnumerable<(int First, int End)> ItineraryRows()
+    {
+        for (var first = 0; first < draft.Stops.Count;)
+        {
+            var place = draft.Stops[first].Place;
+            var end = first + 1;
+            while (end < draft.Stops.Count && (draft.Stops[end].Place.Lat, draft.Stops[end].Place.Lon) == (place.Lat, place.Lon))
+                end++;
+
+            yield return (first, end);
+            first = end;
+        }
+    }
+
+    DateTime? StopTime(int index) =>
+        (index > 0 ? draft.ArrivalFor(draft.LegTo(index)) : null)
+        ?? (index + 1 < draft.Stops.Count ? draft.LegTo(index + 1).Departure : null);
+
     static string TimeLabel(DateTime? value) => value?.ToString("MMM d, HH:mm") ?? "Time unset";
 }
