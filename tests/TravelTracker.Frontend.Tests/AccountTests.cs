@@ -103,6 +103,25 @@ public sealed class AccountTests : BunitContext
     }
 
     [Fact]
+    public void SessionExpiryWhileProfileIsOpenClearsProfileAndDraft()
+    {
+        Configure();
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        page.Find("button").Click();
+        page.Find("#profile-username").Change("unsaved_draft");
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        page.WaitForAssertion(() => Assert.Contains("Sign in to view your profile", page.Markup));
+        Assert.DoesNotContain("traveller_1", page.Markup);
+        Assert.DoesNotContain("traveller@example.test", page.Markup);
+        Assert.DoesNotContain("1 Main St", page.Markup);
+        Assert.DoesNotContain("unsaved_draft", page.Markup);
+    }
+
+    [Fact]
     public void SignedInProfileShowsReadOnlyRoleAndStatusAndOffersEdit()
     {
         Configure();
@@ -150,7 +169,7 @@ public sealed class AccountTests : BunitContext
             if (request.Method == HttpMethod.Patch)
             {
                 patched = request;
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"new_name","email":"traveller@example.test","address":null}""") });
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"new_name","email":"Traveller@example.test","address":null}""") });
             }
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) });
         });
@@ -159,6 +178,7 @@ public sealed class AccountTests : BunitContext
         var page = Render<Account>();
         page.Find("button").Click();
         page.Find("#profile-username").Change("new_name");
+        page.Find("#profile-email").Change("Traveller@example.test");
         page.Find("#profile-address").Change("");
         page.Find("button[type='submit']").Click();
         page.WaitForAssertion(() => Assert.Contains("Your profile has been updated", page.Markup));
@@ -166,6 +186,7 @@ public sealed class AccountTests : BunitContext
         Assert.Equal("/api/v1/users/me", patched.RequestUri!.AbsolutePath);
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
         Assert.Equal("new_name", body.RootElement.GetProperty("username").GetString());
+        Assert.Equal("Traveller@example.test", body.RootElement.GetProperty("email").GetString());
         Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("address").ValueKind);
         Assert.DoesNotContain("role", body.RootElement.GetRawText());
         Assert.DoesNotContain("status", body.RootElement.GetRawText());
@@ -188,6 +209,32 @@ public sealed class AccountTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("no longer permits profile changes", page.Markup));
         Assert.Equal("draft_username", page.Find("#profile-username").GetAttribute("value"));
         Assert.DoesNotContain("Your profile has been updated", page.Markup);
+    }
+
+    [Fact]
+    public void ForbiddenPatchFollowedByForbiddenReadClearsProfileAndShowsDeniedState()
+    {
+        var reads = 0;
+        var handler = new StubHandler((request, _) => Task.FromResult(request.Method switch
+        {
+            var method when method == HttpMethod.Patch => new HttpResponseMessage(HttpStatusCode.Forbidden),
+            _ when ++reads == 1 => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) },
+            _ => new HttpResponseMessage(HttpStatusCode.Forbidden)
+        }));
+        Configure(handler: handler);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.Find("button").Click();
+        page.Find("#profile-username").Change("draft_username");
+
+        page.Find("button[type='submit']").Click();
+
+        page.WaitForAssertion(() => Assert.Contains("Profile access denied", page.Markup));
+        Assert.DoesNotContain("traveller_1", page.Markup);
+        Assert.DoesNotContain("traveller@example.test", page.Markup);
+        Assert.DoesNotContain("1 Main St", page.Markup);
+        Assert.DoesNotContain("draft_username", page.Markup);
+        Assert.DoesNotContain("Edit profile", page.Markup);
     }
 
     [Fact]

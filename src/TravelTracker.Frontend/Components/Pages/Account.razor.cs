@@ -33,6 +33,7 @@ public partial class Account : IDisposable
     EditContext? editContext;
     ValidationMessageStore? serverValidation;
     CancellationTokenSource? request;
+    ITimer? expiryTimer;
     IReadOnlyDictionary<string, string[]> saveFieldErrors = new Dictionary<string, string[]>();
     string? sessionMessage, loadFailure, saveError, statusMessage;
     string loadFailureTitle = "Unable to load your profile";
@@ -67,6 +68,8 @@ public partial class Account : IDisposable
         var user = (await state).User;
         if (!Current(version)) return;
 
+        expiryTimer?.Dispose();
+        expiryTimer = null;
         var previouslySignedIn = signedIn;
         signedIn = Sessions.IsActive(user) && AccessTokenClaims.ActiveToken(user, Clock.GetUtcNow()) is not null;
         grantedScopes = GrantedScopes(user);
@@ -93,6 +96,7 @@ public partial class Account : IDisposable
         }
 
         sessionMessage = null;
+        ScheduleSessionExpiry(user, version);
         if (!HasScope("users.read"))
         {
             loadFailureTitle = "Profile permission required";
@@ -112,6 +116,33 @@ public partial class Account : IDisposable
         await ApplyAuthenticationStateAsync(state, version);
         if (!disposed) StateHasChanged();
     });
+
+    /**
+     * Schedules a fresh authentication check for the current access token's expiry.
+     * @param user The server-authenticated principal whose profile is displayed.
+     * @param version The authentication generation that owns this timer.
+     * @return Nothing; the timer updates the component when the token expires.
+     */
+    void ScheduleSessionExpiry(ClaimsPrincipal user, int version)
+    {
+        if (!long.TryParse(user.FindFirstValue(AccessTokenClaims.ExpiresAt), out var expiresAt)) return;
+        var delay = DateTimeOffset.FromUnixTimeSeconds(expiresAt) - Clock.GetUtcNow();
+        expiryTimer = Clock.CreateTimer(_ => _ = InvokeAsync(() => RevalidateExpiredSessionAsync(version)), null,
+            delay > TimeSpan.Zero ? delay : TimeSpan.Zero, Timeout.InfiniteTimeSpan);
+    }
+
+    /**
+     * Clears profile data when an idle page reaches the access token's expiry.
+     * @param version The authentication generation scheduled for expiry.
+     * @return Completion of the refreshed authentication and profile state.
+     */
+    async Task RevalidateExpiredSessionAsync(int version)
+    {
+        if (!Current(version)) return;
+        var nextVersion = ++generation;
+        await ApplyAuthenticationStateAsync(Authentication.GetAuthenticationStateAsync(), nextVersion);
+        if (!disposed) StateHasChanged();
+    }
 
     /**
      * Loads the server-confirmed own profile over the Users public HTTP contract.
@@ -257,6 +288,7 @@ public partial class Account : IDisposable
             {
                 writeDenied = true;
                 saveError = "Your account or session no longer permits profile changes. Your entered values are still here; copy them before leaving this form.";
+                await RecheckProfileReadAccessAsync(version, current.Token);
                 return;
             }
 
@@ -299,6 +331,62 @@ public partial class Account : IDisposable
             if (Current(version)) busy = false;
             EndRequest(current);
         }
+    }
+
+    /**
+     * Rechecks profile read access after the Users API refuses a write.
+     * @param version The authentication generation authorized to accept the result.
+     * @param cancellationToken Cancels the profile recheck with the original save request.
+     * @return Completion of the read-access check and any required denied-state update.
+     */
+    async Task RecheckProfileReadAccessAsync(int version, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var latest = await Users.GetMeAsync(cancellationToken);
+            if (!Current(version) || cancellationToken.IsCancellationRequested) return;
+            if (latest is null)
+            {
+                ClearDeniedProfile();
+                return;
+            }
+            profile = latest;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (ApiError failure) when (failure.Status == 403)
+        {
+            if (Current(version)) ClearDeniedProfile();
+        }
+        catch (ApiError failure) when (failure.Status == 401)
+        {
+            if (!Current(version)) return;
+            signedIn = false;
+            profile = null;
+            ClearEditContext();
+            editing = false;
+            sessionMessage = "Your session was rejected. Sign in again to continue.";
+        }
+        catch (Exception exception)
+        {
+            if (Current(version)) Logger.LogWarning(exception, "Users profile access recheck failed unexpectedly");
+        }
+    }
+
+    /**
+     * Removes profile and draft data after a fresh Users profile read is denied.
+     * @return Nothing; the page renders its denied state on the next component render.
+     */
+    void ClearDeniedProfile()
+    {
+        profile = null;
+        ClearEditContext();
+        editing = false;
+        writeDenied = false;
+        saveError = null;
+        statusMessage = null;
+        SetLoadFailure(FailureKind.Permission, "Your account no longer has access to this profile. Contact support if you believe this is an error.", 403);
+        loaded = true;
+        loadingProfile = false;
     }
 
     void SetLoadFailure(FailureKind kind, string message, int? status = null)
@@ -372,6 +460,7 @@ public partial class Account : IDisposable
     {
         disposed = true;
         generation++;
+        expiryTimer?.Dispose();
         Authentication.AuthenticationStateChanged -= AuthenticationChanged;
         request?.Cancel();
         request?.Dispose();

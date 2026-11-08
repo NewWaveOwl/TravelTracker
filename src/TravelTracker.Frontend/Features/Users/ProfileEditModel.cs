@@ -31,7 +31,7 @@ public sealed class ProfileEditModel
     public string Address { get; set; }
 
     public bool HasChanges => !string.Equals(Normalize(Username), Normalize(original.Username), StringComparison.Ordinal)
-        || !string.Equals(Normalize(Email), Normalize(original.Email), StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(Normalize(Email), Normalize(original.Email), StringComparison.Ordinal)
         || !string.Equals(string.IsNullOrWhiteSpace(Address) ? null : Address.Trim(), original.Address, StringComparison.Ordinal);
 
     /**
@@ -66,7 +66,7 @@ public sealed class ProfileEditModel
         var model = (ProfileEditModel)validationContext.ObjectInstance;
         var email = Normalize(value);
         var oldEmail = Normalize(model.original.Email);
-        if (!string.Equals(email, oldEmail, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(email, oldEmail, StringComparison.Ordinal))
         {
             if (email is null) return new ValidationResult("Contact email cannot be removed.", [nameof(Email)]);
             if (email.Length > 254) return new ValidationResult("Contact email must be 254 characters or fewer.", [nameof(Email)]);

@@ -26,6 +26,23 @@ dotnet user-secrets set "Auth0:ClientSecret" "only-for-a-regular-web-application
 
 `Auth0:Scope` defaults to `openid profile email catalogue.read users.read users.write`. If you already override this setting, include `users.read users.write` and sign in again. The account page uses `users.read` to load the Users profile and `users.write` to offer profile editing. Users without the write permission can still view the profile when they have `users.read`; the Users API independently enforces both permissions and account standing. Environment variables such as `Auth0__Domain` work too. The audience must exactly equal the API identifier. Restart the app after changing settings. Missing or malformed settings leave navigation usable, log a warning at startup, and show a setup-pending account page.
 
+### Run the Users API for the profile page
+
+The frontend's checked-in development configuration points `Services:Users` to `https://localhost:5101`. Start the Users API in a separate terminal from the repository root:
+
+```powershell
+dotnet run --project src/TravelTracker.Users.Api --launch-profile https
+```
+
+The Users API needs its local PostgreSQL connection and bearer settings configured as described in [Users local configuration](first-administrator-setup.md#local-configuration-and-operation), plus a trusted HTTPS development certificate. To explicitly set or override the frontend's server-side URL (for example, after changing the Users API port), use the actual API base URL and restart the frontend:
+
+```powershell
+dotnet user-secrets set "Services:Users" "https://localhost:5101" --project src/TravelTracker.Frontend
+dotnet run --project src/TravelTracker.Frontend --launch-profile http
+```
+
+Keep the Users API running while using `/account`. Successful Auth0 sign-in only establishes the frontend session; profile loading also requires the Users service to be reachable and the token to include `users.read`.
+
 ## Resource servers
 
 Set these for each API process, using the tenant's exact discovery issuer (Auth0 commonly includes a trailing slash):

@@ -20,7 +20,7 @@ public sealed class UpdateSelfProfileRequest(string? username, string? email, st
         var normalizedEmail = Normalize(email);
         var normalizedAddress = Normalize(address);
         if (!string.Equals(normalizedUsername, Normalize(current.Username), StringComparison.Ordinal)) fields["username"] = normalizedUsername;
-        if (!string.Equals(normalizedEmail, Normalize(current.Email), StringComparison.OrdinalIgnoreCase)) fields["email"] = normalizedEmail;
+        if (!string.Equals(normalizedEmail, Normalize(current.Email), StringComparison.Ordinal)) fields["email"] = normalizedEmail;
         if (!string.Equals(normalizedAddress, current.Address, StringComparison.Ordinal)) fields["address"] = normalizedAddress;
         return fields;
     }

@@ -54,6 +54,21 @@ public sealed class ProfileEditModelTests
         Assert.Null(fields["address"]);
     }
 
+    [Fact]
+    public void CaseOnlyContactEmailChangeIsDetectedAndIncludedInPatch()
+    {
+        var original = new SelfUserProfile(Guid.NewGuid(), "traveller", "active", "traveller", "traveller@example.test");
+        var model = new ProfileEditModel(original) { Email = "Traveller@example.test" };
+
+        Assert.True(model.HasChanges);
+        Assert.Empty(Validate(model));
+
+        var fields = new UpdateSelfProfileRequest(model.Username, model.Email, model.Address).ChangedFields(original);
+
+        Assert.Equal("Traveller@example.test", fields["email"]);
+        Assert.Single(fields);
+    }
+
     static List<ValidationResult> Validate(ProfileEditModel model)
     {
         var results = new List<ValidationResult>();
