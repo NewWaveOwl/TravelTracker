@@ -25,8 +25,6 @@ public partial class AccommodationQuickAdd
     string? failure;
     bool saving;
 
-    string? Message(string field) => errors.TryGetValue(field, out var messages) ? string.Join(" ", messages) : null;
-
     async Task SaveAsync()
     {
         if (saving) return;
