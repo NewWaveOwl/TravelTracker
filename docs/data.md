@@ -35,7 +35,7 @@ Enums: `TransportMode` (`car`, `bus`, `train`, `pedestrian`, `plane`), `TripType
 
 No tables yet for `TripLegs`, `Stays`, `Visits`, `TicketImports`, route points, scheduled transport routes or intermediate stops.
 
-Note: the historical `Trips` row above describes the legacy shape. The independent Trips service (`TravelTracker.Trips.Data`) stores trips in a `Trips` table with owner columns and a `TripLegs` table with ordered legs and snapshot columns; see [Trips service](trips-service.md).
+Note: the historical `Trips` row above describes the legacy shape. The independent Trips service (`TravelTracker.Trips.Data`) stores trips in a `Trips` table with owner columns and a `TripLegs` table with ordered legs and snapshot columns. It creates or replaces each owned trip and its legs in one PostgreSQL transaction. See [Trips service](trips-service.md).
 
 ## Repository interfaces
 
@@ -65,4 +65,4 @@ Historical in-memory repositories in `TravelTracker.Data` remain unused by runna
 
 ## Planned trip-point and route persistence
 
-The [relationship design](trip-points-and-routes.md) separates reusable locations and transport entries from scheduled journeys and ordered trip occurrences. A later reviewed migration would add route points, scheduled routes with start/end point references, ordered stop occurrences, and trip legs/point snapshots. Stops need their own arrival/departure data because the same physical point can occur on many journeys. A future trip save must commit its itinerary and snapshots atomically within the Trips store. No such migration or SQL change is included in this documentation update.
+The [relationship design](trip-points-and-routes.md) separates reusable locations and transport entries from scheduled journeys and ordered trip occurrences. Scheduled routes with start/end point references and separate stop occurrences remain future work. Stops need their own arrival/departure data because the same physical point can occur on many journeys. Today the Trips store commits each itinerary and its leg snapshots atomically.

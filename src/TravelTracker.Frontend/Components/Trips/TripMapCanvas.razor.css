@@ -1,0 +1,82 @@
+.trip-map-canvas {
+    min-width: 0;
+    color: var(--forest);
+}
+
+.map-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    margin-bottom: .45rem;
+}
+
+.map-controls button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: .2rem .5rem;
+    font: 1rem/1.2 'Atkinson Hyperlegible', sans-serif;
+}
+
+.map-controls button:disabled {
+    opacity: .55;
+    cursor: default;
+}
+
+.map-frame {
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #e2e7db;
+}
+
+.map-frame svg {
+    display: block;
+    width: 100%;
+}
+
+.location-target {
+    cursor: crosshair;
+}
+
+.route-line,
+.route-halo,
+.map-crosshair {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.route-line { stroke: #265873; stroke-width: 5; }
+.route-halo { stroke: white; stroke-width: 9; }
+.map-crosshair { stroke: #244332; stroke-width: 2; }
+.trip-marker { cursor: pointer; }
+.marker-tether { stroke: #265873; stroke-width: 3; pointer-events: none; }
+
+.marker-body,
+.pending-pin {
+    stroke: white;
+    stroke-width: 3;
+}
+
+.marker-body { fill: var(--forest); }
+.pending-pin { fill: #ffcbbe; stroke: var(--forest); }
+.trip-marker text { fill: white; font: bold 16px 'Atkinson Hyperlegible', sans-serif; }
+.trip-marker[aria-pressed="true"] .marker-body { fill: #ffcbbe; stroke: var(--forest); }
+.trip-marker[aria-pressed="true"] text { fill: var(--forest); }
+.trip-marker:focus-visible { outline: none; }
+.trip-marker:focus-visible .marker-body { stroke: #a65b16; stroke-width: 5; }
+
+.map-credit {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    padding: 2px 5px;
+    background: white;
+    color: #263d31;
+    font: 12px/16px 'Atkinson Hyperlegible', sans-serif;
+}
+
+.trip-map-canvas p {
+    margin: .35rem 0 0;
+    font: .8rem/1.4 'Atkinson Hyperlegible', sans-serif;
+}

@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace TravelTracker.Frontend.Api;
 
@@ -9,7 +10,7 @@ namespace TravelTracker.Frontend.Api;
  * @param httpClient The client used for outbound requests.
  * @param logger Receives failure categories, never tokens, request bodies or problem diagnostics.
  */
-public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> logger)
+public sealed partial class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> logger)
 {
     static readonly TimeSpan Timeout = TimeSpan.FromSeconds(8);
     static readonly HashSet<string> WritableFields = new(StringComparer.OrdinalIgnoreCase)
@@ -73,7 +74,9 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
             if (!response.IsSuccessStatusCode)
             {
                 var status = (int)response.StatusCode;
-                var errors = status is 400 or 422 ? await FieldErrorsAsync(response, bounded.Token) : null;
+                var trips = request.RequestUri!.AbsolutePath.StartsWith("/api/v1/trips", StringComparison.Ordinal);
+                var errors = status is 400 or 422 || (trips && status == 404)
+                    ? await FieldErrorsAsync(response, trips, bounded.Token) : null;
                 throw Fail(Classify(status), MessageFor(status), method, status, errors);
             }
             return new ServiceResponse<T>(await response.Content.ReadFromJsonAsync<T>(bounded.Token), response.Headers.ETag?.Tag);
@@ -89,7 +92,7 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
         }
     }
 
-    static async Task<IReadOnlyDictionary<string, string[]>> FieldErrorsAsync(HttpResponseMessage response, CancellationToken token)
+    static async Task<IReadOnlyDictionary<string, string[]>> FieldErrorsAsync(HttpResponseMessage response, bool trips, CancellationToken token)
     {
         var result = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
         try
@@ -97,13 +100,16 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
             using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(token), cancellationToken: token);
             if (json.RootElement.ValueKind == JsonValueKind.Object && json.RootElement.TryGetProperty("errors", out var fields) && fields.ValueKind == JsonValueKind.Object)
                 foreach (var field in fields.EnumerateObject())
-                    if (WritableFields.Contains(field.Name) && field.Value.ValueKind == JsonValueKind.Array)
+                    if ((WritableFields.Contains(field.Name) || (trips && TripField().IsMatch(field.Name))) && field.Value.ValueKind == JsonValueKind.Array)
                         result[char.ToLowerInvariant(field.Name[0]) + field.Name[1..]] = field.Value.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String)
                             .Take(4).Select(v => v.GetString()!).Where(s => s.Length <= 300).ToArray();
         }
         catch (JsonException) { /* Non-JSON failures still have a usable status-based message. */ }
         return result;
     }
+
+    [GeneratedRegex(@"\A(?:start|end|isRoundTrip|legs(?:\[\d+\](?:\.(?:sequence|from(?:\.(?:type|placeId))?|to(?:\.(?:type|placeId))?|transport(?:ModeId)?|departure|arrival))?)?)\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex TripField();
 
     static FailureKind Classify(int status) => status switch
     {

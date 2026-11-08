@@ -5,7 +5,7 @@ namespace TravelTracker.Trips.Data.Repositories;
 /**
  * Defines owner-scoped trip persistence. Every write names the validated owner, and every read
  * is filtered by that owner, so another user's trip is indistinguishable from an absent one.
- * History, edit and delete operations are not part of this contract yet.
+ * A replacement changes the trip and every leg together and preserves its owner and public identifier.
  */
 public interface ITripRepository
 {
@@ -19,6 +19,17 @@ public interface ITripRepository
      * @return A task that completes when the trip is committed.
      */
     Task AddAsync(Trip trip, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default);
+
+    /**
+     * Replaces a trip and all of its legs in one write, scoped to the owner.
+     *
+     * @param trip The validated replacement with the existing trip's identifier.
+     * @param ownerIssuer The caller's validated issuer.
+     * @param ownerSubject The caller's validated subject.
+     * @param cancellationToken Cancels database I/O.
+     * @return True if the owned trip was replaced, or false if it was absent.
+     */
+    Task<bool> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default);
 
     /**
      * Retrieves a trip only when it belongs to the given owner.

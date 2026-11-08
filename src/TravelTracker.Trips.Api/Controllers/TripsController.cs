@@ -8,7 +8,7 @@ using TravelTracker.Trips.Api.Contracts;
 namespace TravelTracker.Trips.Api.Controllers;
 
 /**
- * Exposes saving and own-trip retrieval. Every outcome maps to one documented status: 201 created, 400 invalid
+ * Exposes saving and own-trip retrieval. Every outcome maps to one documented status: 200 replaced, 201 created, 400 invalid
  * trip, 401 no valid caller, 403 account not permitted, 404 absent or not visible, 503 dependency unavailable.
  *
  * @param saveService Validates references and stores a ready trip.
@@ -67,7 +67,32 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Create(CreateTripRequest request)
+    public Task<IActionResult> Create(CreateTripRequest request) => SaveAsync(request, null);
+
+    /**
+     * Replaces a caller-owned trip, keeping its identifier and replacing the complete itinerary atomically.
+     *
+     * @param id Public identifier of the trip to replace.
+     * @param request Complete replacement using the same writable fields as create.
+     * @return 200 with the replacement, or the same validation and authorization outcomes as create.
+     */
+    [HttpPut("{id}")]
+    [Authorize(Policy = ScopePolicies.TripsWrite)]
+    [Authorize(Policy = ScopePolicies.CatalogueRead)]
+    [ProducesResponseType(typeof(TripResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<IActionResult> Replace(Guid id, CreateTripRequest request) => SaveAsync(request, id);
+
+    /**
+     * Binds both write operations to the same caller, validation and error mapping.
+     *
+     * @param request Caller-writable trip values.
+     * @param tripId Existing trip to replace, or null to create a new trip.
+     * @return The saved representation or a validation, permission or dependency failure.
+     */
+    private async Task<IActionResult> SaveAsync(CreateTripRequest request, Guid? tripId)
     {
         var caller = CallerFromToken();
         var bearerToken = BearerTokenFromHeader();
@@ -81,11 +106,14 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
         var draft = ToDraft(request);
         if (draft is null) return ValidationProblem(ModelState);
 
-        var outcome = await saveService.SaveAsync(caller, bearerToken, draft, HttpContext.RequestAborted);
+        var outcome = await saveService.SaveAsync(caller, bearerToken, draft, HttpContext.RequestAborted, tripId);
         switch (outcome.Status)
         {
             case TripReferenceStatus.Ready:
-                return CreatedAtAction(nameof(GetById), new { id = outcome.Trip!.TripId }, ToResponse(outcome.Trip));
+                var trip = ToResponse(outcome.Trip!);
+                return tripId is null ? CreatedAtAction(nameof(GetById), new { id = trip.TripId }, trip) : Ok(trip);
+            case TripReferenceStatus.TripNotFound:
+                return NotFound();
             case TripReferenceStatus.InvalidTrip:
                 foreach (var error in outcome.Errors) ModelState.AddModelError(error.Field, error.Message);
                 return ValidationProblem(ModelState);

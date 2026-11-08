@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using TravelTracker.Data.Repositories;
 using TravelTracker.Trips.Data.Repositories;
 using TravelTracker.Trips.Domain.Models;
 
@@ -21,17 +20,26 @@ public sealed class TripSaveService(TripReferenceValidator validator, ITripRepos
      * @param bearerToken The caller's access token.
      * @param draft The trip as submitted.
      * @param cancellationToken Cancels the outbound lookups and the write.
+     * @param tripId The owned trip to replace, or null to create a new trip.
      * @return The validation outcome; the trip is stored only when its status is Ready.
      */
-    public async Task<TripReferenceOutcome> SaveAsync(CallerIdentity caller, string bearerToken, TripDraft draft, CancellationToken cancellationToken) {
-        var outcome = await validator.ValidateAsync(caller, bearerToken, draft, cancellationToken);
+    public async Task<TripReferenceOutcome> SaveAsync(CallerIdentity caller, string bearerToken, TripDraft draft,
+        CancellationToken cancellationToken, Guid? tripId = null) {
+        if (tripId is Guid existingId &&
+            await trips.GetOwnedByIdAsync(existingId, caller.Issuer, caller.Subject, cancellationToken) is null)
+            return TripNotFound();
+
+        var outcome = await validator.ValidateAsync(caller, bearerToken, draft, cancellationToken, tripId);
         if (outcome.Status != TripReferenceStatus.Ready || outcome.Trip is null) {
             logger.LogWarning("trip not stored: validation ended as {Status}; nothing was written.", outcome.Status);
             return outcome;
         }
 
         try {
-            await trips.AddAsync(outcome.Trip, caller.Issuer, caller.Subject, cancellationToken);
+            if (tripId is null)
+                await trips.AddAsync(outcome.Trip, caller.Issuer, caller.Subject, cancellationToken);
+            else if (!await trips.ReplaceOwnedAsync(outcome.Trip, caller.Issuer, caller.Subject, cancellationToken))
+                return TripNotFound();
         }
         catch (Exception exception) {
             // log the exception type only; storage messages can carry connection details
@@ -41,4 +49,11 @@ public sealed class TripSaveService(TripReferenceValidator validator, ITripRepos
         logger.LogInformation("trip stored with {Count} snapshot leg(s).", outcome.Trip.Legs.Count);
         return outcome;
     }
+
+    /**
+     * Reports the same outcome for absent and inaccessible trips.
+     * @return A result with no trip data.
+     */
+    private static TripReferenceOutcome TripNotFound() =>
+        new(TripReferenceStatus.TripNotFound, null, [], "the owned trip is absent.");
 }

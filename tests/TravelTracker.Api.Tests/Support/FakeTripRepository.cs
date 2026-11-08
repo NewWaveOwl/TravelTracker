@@ -38,6 +38,26 @@ public sealed class FakeTripRepository : ITripRepository {
     }
 
     /**
+     * Replaces an existing trip only for its owner.
+     *
+     * @param trip The replacement trip.
+     * @param ownerIssuer The caller's issuer.
+     * @param ownerSubject The caller's subject.
+     * @param cancellationToken Ignored by this fake.
+     * @return Whether the replacement was stored.
+     */
+    public Task<bool> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default) {
+        if (!owners.TryGetValue(trip.TripId, out var owner) || owner != (ownerIssuer, ownerSubject))
+            return Task.FromResult(false);
+        if (NextWriteFailure is { } failure) {
+            NextWriteFailure = null;
+            return Task.FromException<bool>(failure);
+        }
+        stored[stored.FindIndex(candidate => candidate.TripId == trip.TripId)] = trip;
+        return Task.FromResult(true);
+    }
+
+    /**
      * Returns a stored trip only when the caller owns it.
      *
      * @param tripId The public trip identifier.

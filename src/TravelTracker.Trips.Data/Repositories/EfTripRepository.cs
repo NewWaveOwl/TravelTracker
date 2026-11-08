@@ -37,6 +37,46 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
     }
 
     /**
+     * Replaces the owned trip and itinerary in one transaction. Updating the parent row first
+     * serializes concurrent replacements before either writer touches the leg rows.
+     *
+     * @param trip The validated replacement with the existing trip identifier.
+     * @param ownerIssuer The caller's validated issuer.
+     * @param ownerSubject The caller's validated subject.
+     * @param cancellationToken Cancels database I/O.
+     * @return True after the replacement commits, or false if the owned trip is absent.
+     */
+    public async Task<bool> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default)
+    {
+        var replacement = ToRow(trip, ownerIssuer, ownerSubject);
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var updated = await database.Trips
+                .Where(row => row.TripId == trip.TripId && row.OwnerIssuer == ownerIssuer && row.OwnerSubject == ownerSubject)
+                .ExecuteUpdateAsync(set => set
+                    .SetProperty(row => row.Name, replacement.Name)
+                    .SetProperty(row => row.TimeZoneId, replacement.TimeZoneId)
+                    .SetProperty(row => row.StartAt, replacement.StartAt)
+                    .SetProperty(row => row.StartOffset, replacement.StartOffset)
+                    .SetProperty(row => row.EndAt, replacement.EndAt)
+                    .SetProperty(row => row.EndOffset, replacement.EndOffset)
+                    .SetProperty(row => row.IsRoundTrip, replacement.IsRoundTrip), cancellationToken);
+            if (updated == 0) return false;
+
+            await database.TripLegs.Where(leg => leg.TripId == trip.TripId).ExecuteDeleteAsync(cancellationToken);
+            database.TripLegs.AddRange(replacement.Legs);
+            await database.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
+        finally
+        {
+            database.ChangeTracker.Clear();
+        }
+    }
+
+    /**
      * Loads a trip with its legs in sequence order, only when the caller owns it.
      *
      * @param tripId The public trip identifier.

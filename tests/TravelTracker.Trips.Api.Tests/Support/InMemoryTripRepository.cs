@@ -49,6 +49,31 @@ internal sealed class InMemoryTripRepository : ITripRepository
     }
 
     /**
+     * Replaces the existing trip only when its owner matches.
+     *
+     * @param trip The validated replacement.
+     * @param ownerIssuer The caller's issuer.
+     * @param ownerSubject The caller's subject.
+     * @param cancellationToken Ignored by the test store.
+     * @return Whether an owned trip was replaced.
+     */
+    public Task<bool> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default)
+    {
+        lock (gate)
+        {
+            if (!trips.TryGetValue(trip.TripId, out var existing) || existing.Issuer != ownerIssuer || existing.Subject != ownerSubject)
+                return Task.FromResult(false);
+            if (NextWriteFailure is { } failure)
+            {
+                NextWriteFailure = null;
+                return Task.FromException<bool>(failure);
+            }
+            trips[trip.TripId] = (trip, ownerIssuer, ownerSubject);
+            return Task.FromResult(true);
+        }
+    }
+
+    /**
      * Returns the trip only when the caller is its owner.
      *
      * @param tripId The public trip identifier.

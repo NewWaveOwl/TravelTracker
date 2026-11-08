@@ -517,3 +517,4 @@ main:has(.accommodation-workspace) { max-width: 1536px; padding: 32px 48px 80px;
     .accommodation-modal>header { margin: -18px -18px 0; padding: 16px 18px; }
     .accommodation-modal>header h2 { font-size: 24px; }
 }
+main:has(.trip-planner) { max-width: 1520px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 56px) 56px; }

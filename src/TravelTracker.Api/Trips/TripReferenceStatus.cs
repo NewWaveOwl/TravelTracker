@@ -15,5 +15,7 @@ public enum TripReferenceStatus {
     /** A required dependency could not confirm the data; nothing may be saved. */
     DependencyUnavailable,
     /** The itinerary broke a trip rule. */
-    InvalidTrip
+    InvalidTrip,
+    /** The trip to replace does not exist or is not owned by the caller. */
+    TripNotFound
 }

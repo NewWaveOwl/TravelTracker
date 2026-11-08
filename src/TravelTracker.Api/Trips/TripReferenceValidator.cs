@@ -32,9 +32,11 @@ public sealed class TripReferenceValidator(AccommodationReferenceClient accommod
      * @param bearerToken The caller's access token, forwarded to the catalogue services.
      * @param draft The trip as submitted.
      * @param cancellationToken Cancels the outbound lookups.
+     * @param tripId Existing trip identifier for a replacement, or null for a new trip.
      * @return Ready with the snapshot trip, or the first blocking outcome with field-tied errors.
      */
-    public async Task<TripReferenceOutcome> ValidateAsync(CallerIdentity caller, string bearerToken, TripDraft draft, CancellationToken cancellationToken) {
+    public async Task<TripReferenceOutcome> ValidateAsync(CallerIdentity caller, string bearerToken, TripDraft draft,
+        CancellationToken cancellationToken, Guid? tripId = null) {
         if (string.IsNullOrWhiteSpace(caller.Issuer) || string.IsNullOrWhiteSpace(caller.Subject) || string.IsNullOrWhiteSpace(bearerToken)) {
             logger.LogWarning("trip check refused: the caller identity or access token is missing.");
             return Reject(TripReferenceStatus.Unauthorized, "a validated caller identity and access token are required.");
@@ -82,7 +84,7 @@ public sealed class TripReferenceValidator(AccommodationReferenceClient accommod
         }
 
         try {
-            var trip = Trip.Create(draft.Name, draft.TimeZone, draft.Start, draft.End, draft.IsRoundTrip, legs);
+            var trip = Trip.Create(draft.Name, draft.TimeZone, draft.Start, draft.End, draft.IsRoundTrip, legs, tripId);
             logger.LogInformation("trip check passed: {Count} leg(s) snapshotted and ready to save.", trip.Legs.Count);
             return new(TripReferenceStatus.Ready, trip, [], "trip snapshot is ready to save.");
         }

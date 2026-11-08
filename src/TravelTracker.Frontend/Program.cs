@@ -15,6 +15,8 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<SessionRegistry>();
 builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationStateProvider>();
 builder.Services.AddScoped<ProtectedClient>();
+builder.Services.AddScoped<TravelTracker.Frontend.Api.Trips.TripsClient>();
+builder.Services.AddScoped<TravelTracker.Frontend.Api.Trips.TripPlacesClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Transport.TransportClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Attractions.AttractionsClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Accommodations.AccommodationsClient>();
