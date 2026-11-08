@@ -13,7 +13,7 @@
     {
         <div class="map-surface">
             <TripMapCanvas Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())" SelectedIndex="selected"
-                           Legs="MapLegs" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<int>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
+                           Legs="MapLegs" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<(int, bool)>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
                            CanPick="@(!review && !busy && mapTool == MapTool.Markers && placing)"
                            StopMoved="@(!review && !busy ? EventCallback.Factory.Create<(int, decimal, decimal)>(this, MoveMarker) : default)"
                            StopRemoved="@(!review && !busy ? EventCallback.Factory.Create<int>(this, RemoveStop) : default)" AllowMarkerDrop="@(showMap && !review && !busy)" MarkerDropped="PlaceDroppedMarker" FullScreen="true" />
@@ -378,7 +378,7 @@
                     }
                     else
                     {
-                        <p>Choose a marker, then click the map or drag it onto the map. Drag with the right mouse button to pan.</p>
+                        <p>Choose a marker, then click the map or drag it onto the map. While placing a marker, right-drag to pan.</p>
                     }
                     @if (markerType is { } activeMarker)
                     {

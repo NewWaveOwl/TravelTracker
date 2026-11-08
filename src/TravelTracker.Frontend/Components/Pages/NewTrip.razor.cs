@@ -84,15 +84,19 @@ public partial class NewTrip : IDisposable
 
     string Icon(string code) => Assets[$"assets/trip-map/{code}.svg"];
 
-    /** Opens the clicked transport connection and focuses its duration field. */
-    void EditConnection(int destination)
+    /**
+     * Opens a connection and moves focus to the duration field for keyboard activation.
+     * @param activation The destination index and whether the activation came from the keyboard.
+     */
+    void EditConnection((int Destination, bool FromKeyboard) activation)
     {
+        var (destination, fromKeyboard) = activation;
         if (busy || review || destination <= 0 || destination >= draft.Stops.Count)
             return;
 
         ShowStops();
         selected = destination;
-        focusDuration = true;
+        focusDuration = fromKeyboard;
     }
 
     ElementReference durationHoursInput;

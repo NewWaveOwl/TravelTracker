@@ -20,7 +20,7 @@
     </div>
     <div class="map-frame">
         <div @ref="basemap" class="map-basemap"></div>
-        <svg @ref="viewport" viewBox="@($"0 0 {ViewportWidth} {ViewportHeight}")" role="group" data-marker-drop="@(AllowMarkerDrop ? "true" : null)" tabindex="0" aria-label="Map with numbered trip stops. Drag with the right mouse button or use arrow keys to pan. Scroll to zoom." @onkeydown="PanWithKey">
+        <svg @ref="viewport" viewBox="@($"0 0 {ViewportWidth} {ViewportHeight}")" role="group" data-marker-drop="@(AllowMarkerDrop ? "true" : null)" tabindex="0" aria-label="@MapInstructions" @onkeydown="PanWithKey">
             @foreach (var connection in connections)
             {
                 <path class="route-halo" d="@connection.Path" pointer-events="none" aria-hidden="true" />
@@ -61,22 +61,24 @@
             }
             @foreach (var connection in connections)
             {
-                <foreignObject class="map-leg-label @(CompactConnectionLabels ? "map-leg-badge" : null)"
+                var compact = connection.BadgeSize > 0;
+                var iconSize = compact ? connection.BadgeSize * 5 / 8 : 24;
+                <foreignObject class="map-leg-label @(compact ? "map-leg-badge" : null)"
                                x="@Number(connection.LabelX)" y="@Number(connection.LabelY)"
-                               width="@(CompactConnectionLabels ? CompactConnectionSize : 260)"
-                               height="@(CompactConnectionLabels ? CompactConnectionSize : 35)" pointer-events="none">
+                               width="@(compact ? connection.BadgeSize : 260)"
+                               height="@(compact ? connection.BadgeSize : 35)" pointer-events="none">
                     @if (ConnectionSelected.HasDelegate)
                     {
-                        <button type="button" title="@(CompactConnectionLabels ? connection.Label : "Edit connection duration")"
+                        <button type="button" title="@(compact ? connection.Label : "Edit connection duration")"
                                 aria-label="@($"Edit connection {connection.Destination}: {Stops[connection.Destination - 1].Name} to {Stops[connection.Destination].Name}, {connection.Label}")"
-                                @onclick="() => ConnectionSelected.InvokeAsync(connection.Destination)">
-                            <img src="@Icon(connection.Code)" alt="" /><span hidden="@CompactConnectionLabels">@connection.Label</span>
+                                @onclick="e => ConnectionSelected.InvokeAsync((connection.Destination, e.Detail == 0))">
+                            <img src="@Icon(connection.Code)" width="@iconSize" height="@iconSize" alt="" /><span hidden="@compact">@connection.Label</span>
                         </button>
                     }
                     else
                     {
-                        <div role="@(CompactConnectionLabels ? "img" : null)" aria-label="@(CompactConnectionLabels ? connection.Label : null)">
-                            <img src="@Icon(connection.Code)" alt="" /><span hidden="@CompactConnectionLabels">@connection.Label</span>
+                        <div role="@(compact ? "img" : null)" aria-label="@(compact ? connection.Label : null)">
+                            <img src="@Icon(connection.Code)" width="@iconSize" height="@iconSize" alt="" /><span hidden="@compact">@connection.Label</span>
                         </div>
                     }
                 </foreignObject>
@@ -107,7 +109,7 @@
     [Parameter] public IReadOnlyList<TripPlaceDto> Stops { get; set; } = [];
     [Parameter] public int SelectedIndex { get; set; } = -1;
     [Parameter] public EventCallback<int> StopSelected { get; set; }
-    [Parameter] public EventCallback<int> ConnectionSelected { get; set; }
+    [Parameter] public EventCallback<(int Destination, bool FromKeyboard)> ConnectionSelected { get; set; }
     [Parameter] public EventCallback<(decimal Lat, decimal Lon)> LocationPicked { get; set; }
     [Parameter] public bool CanPick { get; set; }
     [Parameter] public EventCallback<int> StopRemoved { get; set; }
@@ -123,8 +125,9 @@
     private const int MinimumZoom = 2;
     private const int MaximumZoom = 19;
     private const int DefaultZoom = 13;
-    private const int CompactConnectionZoom = 10;
-    private const int CompactConnectionSize = 32;
+    private const int FullConnectionLabelDistance = 160;
+    private const int MinimumConnectionBadgeSize = 24;
+    private const int MaximumConnectionBadgeSize = 32;
     private const int ConnectionCurveSpacing = 72;
     private const double MaximumLatitude = 85.05112878;
 
@@ -142,10 +145,12 @@
     private int zoom = DefaultZoom;
     private (double X, double Y) center = Project(45.5019m, -73.5674m);
     private int WorldSize => TileSize << zoom;
-    private bool CompactConnectionLabels => zoom <= CompactConnectionZoom;
     private (double X, double Y) Origin => (center.X * WorldSize - ViewportWidth / 2d, center.Y * WorldSize - ViewportHeight / 2d);
 
     private string CenterAction => CanPick ? "Pick map center" : "Fit stops";
+    private string MapInstructions => CanPick
+        ? "Map with numbered trip stops. Right-drag or use the arrow keys to pan. Scroll to zoom."
+        : "Map with numbered trip stops. Drag or use the arrow keys to pan. Scroll to zoom.";
 
     private string Icon(string code) => Assets[$"assets/trip-map/{code}.svg"];
     private string Pin(string type) => Icon($"pin-{type}");
@@ -280,10 +285,10 @@
             ViewportHeight / 2d + (point.Y - center.Y) * WorldSize);
     }
 
-    /** Separates connections between repeated stops and positions zoomed-out badges on their curves. */
-    private List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY)> ScreenConnections()
+    /** Separates repeated connections and sizes their labels according to the space between projected stops. */
+    private List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY, int BadgeSize)> ScreenConnections()
     {
-        var result = new List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY)>();
+        var result = new List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY, int BadgeSize)>();
         var groups = Enumerable.Range(0, Math.Min(Legs.Count, Math.Max(0, Stops.Count - 1)))
             .Where(index => !string.IsNullOrEmpty(Legs[index].Code))
             .GroupBy(index =>
@@ -300,7 +305,12 @@
             var end = ScreenPoint(last.Lat, last.Lon);
             var dx = end.X - start.X;
             var dy = end.Y - start.Y;
-            var length = Math.Max(1, Math.Sqrt(dx * dx + dy * dy));
+            var distance = Math.Sqrt(dx * dx + dy * dy);
+            var length = Math.Max(1, distance);
+            var badgeSize = distance < FullConnectionLabelDistance
+                ? MinimumConnectionBadgeSize + (int)Math.Round(
+                    (MaximumConnectionBadgeSize - MinimumConnectionBadgeSize) * distance / FullConnectionLabelDistance)
+                : 0;
             var x = (start.X + end.X) / 2;
             var y = (start.Y + end.Y) / 2;
             var count = group.Count();
@@ -318,12 +328,12 @@
                 var path = $"M {Number(from.X)} {Number(from.Y)} Q {Number(curveX)} {Number(curveY)} {Number(to.X)} {Number(to.Y)}";
                 var labelX = x + 10;
                 var labelY = count == 1 ? (y + curveY) / 2 - 36 : y + 38 * slot - 36;
-                if (CompactConnectionLabels)
+                if (badgeSize > 0)
                 {
-                    labelX = (x + curveX) / 2 - CompactConnectionSize / 2d;
-                    labelY = (y + curveY) / 2 - CompactConnectionSize / 2d;
+                    labelX = (x + curveX) / 2 - badgeSize / 2d;
+                    labelY = (y + curveY) / 2 - badgeSize / 2d;
                 }
-                result.Add((index + 1, leg.Code, leg.Label, path, labelX, labelY));
+                result.Add((index + 1, leg.Code, leg.Label, path, labelX, labelY, badgeSize));
                 slot++;
             }
         }

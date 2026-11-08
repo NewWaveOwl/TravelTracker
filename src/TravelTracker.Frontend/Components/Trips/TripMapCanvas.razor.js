@@ -166,7 +166,7 @@ export function watchViewport(svg, container, map, camera) {
         if (!rightMouse && event.target.closest(".marker-remove, .map-leg-label button")) return;
 
         const marker = rightMouse ? null : event.target.closest(".trip-marker[data-move-index]");
-        const canPan = rightMouse || event.pointerType !== "mouse";
+        const canPan = rightMouse || event.pointerType !== "mouse" || !event.target.closest(".location-target");
         pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, dragging: false, marker, canPan,
             transform: marker?.getAttribute("transform") };
     }, options);

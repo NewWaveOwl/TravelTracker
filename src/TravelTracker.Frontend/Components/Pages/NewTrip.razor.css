@@ -228,6 +228,7 @@
 }
 .trip-duration input::-webkit-inner-spin-button,
 .trip-duration input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.trip-duration input:focus-visible { outline: 2px solid #265873; outline-offset: 2px; }
 .leg-transport { display: grid; gap: 5px; }
 .leg-transport output {
     display: flex;

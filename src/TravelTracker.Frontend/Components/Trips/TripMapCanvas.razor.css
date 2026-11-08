@@ -43,6 +43,7 @@
     z-index: 1;
     display: block;
     width: 100%;
+    cursor: grab;
 }
 
 .location-target {
@@ -120,9 +121,8 @@
     border-radius: 50%;
     background: #8ac6e8;
 }
-.map-leg-badge img { width: 20px; height: 20px; }
 .map-leg-badge button:hover { background: #b2dff8; }
-.map-leg-label button:focus-visible { outline-offset: -3px; }
+.map-leg-label button:focus-visible { outline: 2px solid #265873; outline-offset: -3px; }
 .full-map, .full-map .map-frame, .full-map .map-frame > svg { width: 100%; height: 100%; }
 .full-map .map-frame { border-radius: 0; }
 .full-map .map-controls {
