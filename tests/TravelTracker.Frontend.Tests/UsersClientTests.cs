@@ -54,7 +54,7 @@ public sealed class UsersClientTests
         Assert.Equal("PATCH", handler.LastRequest!.Method.Method);
         Assert.Equal("/api/v1/users/me", handler.LastRequest.RequestUri!.AbsolutePath);
         Assert.Equal("Bearer test-access-token", handler.LastRequest.Headers.Authorization!.ToString());
-        using var json = JsonDocument.Parse(await handler.LastRequest.Content!.ReadAsStringAsync());
+        using var json = JsonDocument.Parse(handler.LastRequestBody!);
         Assert.Equal(2, json.RootElement.EnumerateObject().Count());
         Assert.Equal("new_name", json.RootElement.GetProperty("username").GetString());
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("address").ValueKind);

@@ -164,7 +164,7 @@ public sealed class AccountTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("Your profile has been updated", page.Markup));
         Assert.Equal("PATCH", patched!.Method.Method);
         Assert.Equal("/api/v1/users/me", patched.RequestUri!.AbsolutePath);
-        using var body = JsonDocument.Parse(await patched.Content!.ReadAsStringAsync());
+        using var body = JsonDocument.Parse(handler.LastRequestBody!);
         Assert.Equal("new_name", body.RootElement.GetProperty("username").GetString());
         Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("address").ValueKind);
         Assert.DoesNotContain("role", body.RootElement.GetRawText());

@@ -40,14 +40,15 @@ public sealed class SignInFlowTests
     {
         using var factory = new FrontendFactory();
         var browser = factory.CreateBrowser();
-        Assert.Contains("<h2>Sign in</h2>", await AccountHtmlAsync(browser));
+        Assert.Contains("Sign in to view your profile", await AccountHtmlAsync(browser));
 
         await factory.StartSignInAsync(browser);
         var callback = await factory.CompleteSignInAsync(browser);
 
         Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
         Assert.Equal("/account", callback.Headers.Location!.OriginalString);
-        Assert.Contains("You are signed in", await AccountHtmlAsync(browser));
+        Assert.Contains("Profile details", await AccountHtmlAsync(browser));
+        Assert.Contains("traveller_1", await AccountHtmlAsync(browser));
         Assert.Equal("authorization_code", Assert.Single(factory.Auth0.TokenRequests)["grant_type"]);
     }
 
@@ -61,7 +62,7 @@ public sealed class SignInFlowTests
         await factory.StartSignInAsync(browser);
         await factory.CompleteSignInAsync(browser);
 
-        Assert.DoesNotContain("You are signed in", await AccountHtmlAsync(browser));
+        Assert.Contains("Sign in to view your profile", await AccountHtmlAsync(browser));
     }
 
     [Fact]
@@ -75,7 +76,7 @@ public sealed class SignInFlowTests
         var callback = await factory.CompleteSignInAsync(browser);
 
         Assert.StartsWith("/account?signin=", callback.Headers.Location!.OriginalString);
-        Assert.DoesNotContain("You are signed in", await AccountHtmlAsync(browser));
+        Assert.Contains("Sign in to view your profile", await AccountHtmlAsync(browser));
     }
 
     [Fact]
@@ -89,7 +90,7 @@ public sealed class SignInFlowTests
         var callback = await factory.CompleteSignInAsync(stranger);
 
         Assert.StartsWith("/account?signin=", callback.Headers.Location!.OriginalString);
-        Assert.DoesNotContain("You are signed in", await AccountHtmlAsync(stranger));
+        Assert.Contains("Sign in to view your profile", await AccountHtmlAsync(stranger));
     }
 
     [Fact]
@@ -103,7 +104,7 @@ public sealed class SignInFlowTests
         var callback = await factory.CompleteSignInAsync(browser);
 
         Assert.StartsWith("/account?signin=", callback.Headers.Location!.OriginalString);
-        Assert.DoesNotContain("You are signed in", await AccountHtmlAsync(browser));
+        Assert.Contains("Sign in to view your profile", await AccountHtmlAsync(browser));
     }
 
     [Fact]
@@ -121,7 +122,7 @@ public sealed class SignInFlowTests
         Assert.Equal($"/account?signin={LoginFailure.NotAuthorized}", location);
         Assert.Contains("Ask the administrator to authorize its access", page);
         Assert.DoesNotContain("secret-client-name", page);
-        Assert.DoesNotContain("You are signed in", page);
+        Assert.Contains("Sign in to view your profile", page);
     }
 
     [Fact]
@@ -140,7 +141,7 @@ public sealed class SignInFlowTests
         Assert.Equal("tenant.example.test", destination.Host);
         Assert.Equal("/v2/logout", destination.AbsolutePath);
         Assert.Equal("test-client", HttpUtility.ParseQueryString(destination.Query)["client_id"]);
-        Assert.DoesNotContain("You are signed in", await AccountHtmlAsync(browser));
+        Assert.Contains("Sign in to view your profile", await AccountHtmlAsync(browser));
     }
 
     [Fact]
@@ -154,7 +155,7 @@ public sealed class SignInFlowTests
         var logout = await browser.PostAsync("/auth/logout", new FormUrlEncodedContent([]));
 
         Assert.Equal(HttpStatusCode.BadRequest, logout.StatusCode);
-        Assert.Contains("You are signed in", await AccountHtmlAsync(browser));
+        Assert.Contains("Profile details", await AccountHtmlAsync(browser));
     }
 
     [Fact]
@@ -176,7 +177,11 @@ public sealed class SignInFlowTests
         return await factory.CompleteSignInAsync(browser);
     }
 
-    static async Task<bool> SignedInAsync(HttpClient browser) => (await AccountHtmlAsync(browser)).Contains("You are signed in");
+    static async Task<bool> SignedInAsync(HttpClient browser)
+    {
+        var page = await AccountHtmlAsync(browser);
+        return page.Contains("Profile details") && page.Contains("traveller_1");
+    }
 
     // what live Auth0 can send that the handler must refuse
 
@@ -460,7 +465,8 @@ public sealed class SignInFlowTests
             }
             var pageResponse = await returning.SendAsync(WithSession(HttpMethod.Get, "/account"));
             var html = await pageResponse.Content.ReadAsStringAsync();
-            Assert.Contains("You are signed in", html);
+            Assert.Contains("Profile details", html);
+            Assert.Contains("traveller_1", html);
             var token = FrontendFactory.AntiforgeryTokenFrom(html);
 
             var logout = WithSession(HttpMethod.Post, "/auth/logout");
@@ -470,8 +476,8 @@ public sealed class SignInFlowTests
             Assert.Equal("/account?signedout=local", response.Headers.Location!.OriginalString);
             Assert.Contains(response.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith(".AspNetCore.Cookies=;"));
             var followUp = await (await returning.GetAsync("/account?signedout=local")).Content.ReadAsStringAsync();
-            Assert.Contains("Signed out locally", followUp);
-            Assert.DoesNotContain("You are signed in", followUp);
+            Assert.Contains("Your TravelTracker session has ended", followUp);
+            Assert.Contains("Sign in to view your profile", followUp);
         }
         finally
         {
@@ -556,7 +562,7 @@ public sealed class SignInFlowTests
 
         var refused = await replay.SendAsync(stale);
 
-        Assert.DoesNotContain("You are signed in", await refused.Content.ReadAsStringAsync());
+        Assert.Contains("Sign in to view your profile", await refused.Content.ReadAsStringAsync());
         Assert.Contains(refused.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith(".AspNetCore.Cookies=;"));
         factory.Auth0.AccessToken = "replacement-token";
         await SignInAsync(factory, browser);
@@ -629,7 +635,7 @@ public sealed class SignInFlowTests
 
             var response = await browser.SendAsync(request);
 
-            Assert.DoesNotContain("You are signed in", await response.Content.ReadAsStringAsync());
+            Assert.Contains("Sign in to view your profile", await response.Content.ReadAsStringAsync());
             Assert.Contains(response.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith(".AspNetCore.Cookies=;"));
         }
         finally
