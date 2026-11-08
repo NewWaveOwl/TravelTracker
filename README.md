@@ -27,6 +27,9 @@ TravelTracker currently provides the catalogue and location foundation for futur
 
 The following features are not yet available through the running application:
 
+- Administrator account-status management remains separate from the traveller profile editor. The independent Users service supports first-sign-in provisioning, self-profile reads and updates over HTTP, live standing, verified first-administrator setup and administrator role management. See [Users contracts](docs/api.md#users-contracts).
+- Accommodation management as a separate resource.
+- Trips, ordered itinerary legs, history, settings and map views.
 - Account status management and a frontend profile editor. The independent Users service supports first-sign-in provisioning, self-profile reads and updates over HTTP, live standing, verified first-administrator setup and administrator role management. See [Users contracts](docs/api.md#users-contracts).
 - Accommodation update/archive management and frontend lodging screens.
 - Trips, ordered itinerary legs, history and map views. Settings preferences are available through the independent Settings service ([docs/settings-service.md](docs/settings-service.md)).
@@ -208,7 +211,7 @@ The independent Users service now supplies the one-time, verified-identity admin
 
 An active Users-service administrator can open **Administrator Panel → All users** from the burger menu or account page. The list shows registered TravelTracker accounts, their email, role and standing. Promote/demote requires an explicit confirmation and a written audit reason; the server refuses stale requests, inactive promotions and removal of the last active administrator. Changes are persisted with an actor/target/before/after/reason audit in the same PostgreSQL transaction. These application roles do not grant Auth0 catalogue scopes or access to private trips.
 
-First authenticated profile access verifies an unregistered sign-in through the configured provider and creates an ordinary traveller account. Token role claims and request fields cannot select the initial role. Auth0 directory accounts that have never registered with TravelTracker do not appear automatically.
+First authenticated profile access verifies an unregistered sign-in through the configured provider and creates an ordinary traveller account. Token role claims and request fields cannot select the initial role. Auth0 directory accounts that have never registered with TravelTracker do not appear automatically. Signed-in travellers can view and edit their permitted profile fields; role and account status remain server-owned. The signed-out account page offers sign-in and does not claim that profile or trip data is stored locally.
 
 For Transport startup, set `ConnectionStrings__Transport`, apply migrations and optionally enable stable examples before running the service. See [Transport startup and selection](docs/transport-service.md).
 
