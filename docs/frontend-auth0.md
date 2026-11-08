@@ -14,7 +14,7 @@ Use manual dashboard setup; Auth0's optional AI-assisted/MCP onboarding is not r
 2. Copy the Domain (hostname only) and Client ID from **Settings**.
 3. Add the app origins to **Allowed Callback URLs** as `<origin>/signin-oidc`, and to **Allowed Logout URLs** as `<origin>/`. Development uses `http://localhost:5100/signin-oidc` and `http://localhost:5100/`. Register deployed HTTPS origins separately; do not use wildcards.
 4. Under **Applications → APIs**, create a custom API named `TravelTracker API`, identifier `traveltracker-api`, signing algorithm **RS256**. Add `catalogue.read` for catalogue reads and `users.read` for the signed-in profile. Grant `users.write` to clients that call the profile edit endpoint. Add `catalogue.write` when attraction writes are needed.
-5. Under this API's **Application Access**, select **Edit** for `TravelTracker frontend` and authorize **User-Delegated Access** with `catalogue.read` and `users.read`. Creating the application and API does not link them under per-app access policy. A missing grant causes "Client is not authorized to access resource server." If using RBAC, assign the read permissions to the intended test user through a role. The backend reads the OAuth `scope` claim, not the Auth0 `permissions` array. Successful login alone does not establish API authorization.
+5. Under this API's **Application Access**, select **Edit** for `TravelTracker frontend` and authorize **User-Delegated Access** with `catalogue.read`, `users.read` and `users.write`. Creating the application and API does not link them under per-app access policy. A missing grant causes "Client is not authorized to access resource server." If using RBAC, assign the read and profile-write permissions to the intended test user through a role. The backend reads the OAuth `scope` claim, not the Auth0 `permissions` array. Successful login alone does not establish API authorization.
 6. Store the settings outside git, from `src/TravelTracker.Frontend`:
 
 ```powershell
@@ -24,7 +24,7 @@ dotnet user-secrets set "Auth0:Audience" "traveltracker-api"
 dotnet user-secrets set "Auth0:ClientSecret" "only-for-a-regular-web-application"
 ```
 
-`Auth0:Scope` defaults to `openid profile email catalogue.read users.read`. If you already override this setting, add `users.read` to the configured scopes and sign in again. The account page uses this permission to load the Users profile and confirm administrator standing. Environment variables such as `Auth0__Domain` work too. The audience must exactly equal the API identifier. Restart the app after changing settings. Missing or malformed settings leave navigation usable, log a warning at startup, and show a setup-pending account page.
+`Auth0:Scope` defaults to `openid profile email catalogue.read users.read users.write`. If you already override this setting, include `users.read users.write` and sign in again. The account page uses `users.read` to load the Users profile and `users.write` to offer profile editing. Users without the write permission can still view the profile when they have `users.read`; the Users API independently enforces both permissions and account standing. Environment variables such as `Auth0__Domain` work too. The audience must exactly equal the API identifier. Restart the app after changing settings. Missing or malformed settings leave navigation usable, log a warning at startup, and show a setup-pending account page.
 
 ## Resource servers
 

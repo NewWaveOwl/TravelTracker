@@ -3,7 +3,7 @@
 Issue: [#45, M3-19](https://github.com/NewWaveOwl/TravelTracker/issues/45)  
 Branch: `authenticated-profile-view`  
 Dependencies: [#33, M3-07](https://github.com/NewWaveOwl/TravelTracker/issues/33), [#37, M3-11](https://github.com/NewWaveOwl/TravelTracker/issues/37)  
-Status: research complete; awaiting approval before implementation.
+Status: approved 2026-11-05; implementation complete pending final validation.
 
 ## Goal and user value
 
@@ -23,14 +23,15 @@ This is a frontend-only feature. The independent Users service already implement
 - The frontend currently requests `catalogue.read` and `users.read` by default. The Users API requires the separate `users.write` permission for profile changes. A missing permission must leave the form read-only and the API remains authoritative.
 - `NewTrip` is a draft form and `History` is a placeholder. There is no local guest profile or persisted local trip feature today.
 
-### Not part of this issue
+### Approved scope boundary
 
 - No Users API, Domain, Data, migration, authentication-provider password or administrator UI work.
-- No local guest profile editor, browser/local profile persistence, trip persistence or claim that a guest's profile/trips are saved on-device. The supplied guest Figma frame asks for device-only profile/trip messaging, but the current app has no such local data capability; adding it would expand this feature materially.
+- The signed-out Figma frame is explicitly a **local guest profile** and the issue note says profile changes and trips stay on-device. The current app has no local profile persistence and its trip editor keeps only an in-memory draft; History is a placeholder. Showing the frame's local-only persistence promise without adding storage would be inaccurate.
+- On 2026-11-05, Christel approved **authenticated cloud profile only** and chose to revise the signed-out guest copy. Do not implement local guest profile/trip persistence or claim that profile/trip data is saved on-device. Show a signed-out sign-in prompt in the app; the Figma guest frame needs its local-persistence copy revised by someone with design-file edit access.
 
 ## User experience and states
 
-- **Signed out:** retain an account/guest landing state with a clear sign-in action. Do not imply profile editing or trip data is stored locally. If product scope requires the guest Figma frame's local-data promise, decide and implement that as separate approved storage work first.
+- **Signed out:** retain an account landing state with a clear sign-in action and copy that promises cloud profile access only after sign-in. Do not imply profile editing or trip data is stored locally.
 - **Loading:** announce that the profile is loading and do not flash stale profile values.
 - **Active, read/write:** show profile overview, role/status as read-only metadata, and an edit action when the trusted session grant includes `users.write`.
 - **Active, read-only:** show profile when `users.read` is granted but omit edit controls when `users.write` is absent; explain that editing permission is unavailable.
@@ -56,6 +57,7 @@ Request only the additional least-privilege `users.write` scope needed for editi
 
 - `src/TravelTracker.Frontend/Components/Pages/Account.razor` — replace the temporary API-access button with accessible profile overview/edit states matching the supplied frames. Keep the existing sign-in, sign-out, session-expiry and sign-in failure behavior. Use an `EditForm`, labelled inputs, validation summary/field messages, loading/error/status announcements and a disabled save button while submitting. Keep role/status out of the editable request model.
 - `src/TravelTracker.Frontend/Components/Pages/Account.razor.cs` — move the growing page lifecycle and profile form orchestration out of inline Razor code. Load on direct `/account` navigation and after a valid authentication-state replacement; cancel stale calls, clear profile values on sign-out/revocation, preserve drafts on failed save, and apply only the server-confirmed PATCH response on success.
+- `src/TravelTracker.Frontend/Features/Users/ProfileEditModel.cs` — define the form-only validation model using the Users contract's field rules. Keep it separate from the HTTP response/request DTOs and exclude `PublicId`, provider identity, role and status.
 - `src/TravelTracker.Frontend/Api/Users/SelfUserProfile.cs` — expand the response DTO to all public self-profile fields, keeping only the public UUID and never adding provider issuer/subject or verified-email data.
 - `src/TravelTracker.Frontend/Api/Users/UpdateSelfProfileRequest.cs` — add a frontend request type limited to the editable fields. Ensure the client can omit unchanged fields while representing an explicit null address clear.
 - `src/TravelTracker.Frontend/Api/Users/UsersClient.cs` — add `UpdateMeAsync` using `ProtectedClient.SendJsonAsync` to the fixed Users `/api/v1/users/me` path. Return the server-confirmed self-profile DTO and retain categorized API errors for the UI.
@@ -66,7 +68,7 @@ Request only the additional least-privilege `users.write` scope needed for editi
 
 ### Tests
 
-- `tests/TravelTracker.Frontend.Tests/UsersProfileClientTests.cs` — cover fixed Users URL and bearer attachment, GET/PATCH public DTO mapping, field-presence/null-address request semantics, field-error filtering and categorized 401/403/409/503/network failures with a stub handler.
+- `tests/TravelTracker.Frontend.Tests/UsersClientTests.cs` — cover fixed Users URL and bearer attachment, GET/PATCH public DTO mapping, field-presence/null-address request semantics, field-error filtering and categorized API failures with a stub handler.
 - `tests/TravelTracker.Frontend.Tests/AccountTests.cs` — replace temporary Transport-check expectations with profile page states and cover direct route load, signed-out view, active view/edit, read-only grant, banned state, denied/deactivated state, 401 session expiry, validation/conflict/network feedback, duplicate-save prevention, retained input on failure, confirmed response refresh and removal of personal data on sign-out/revocation or account replacement.
 - `tests/TravelTracker.Frontend.Tests/Support/FrontendFactory.cs` — change only if the existing test host needs a Users endpoint or session fixture to prove direct-route behavior; prefer the existing BUnit service setup and stub handlers where sufficient.
 
@@ -87,9 +89,9 @@ No update to `docs/api.md` or Users backend code is planned because this feature
 5. Invalid fields, username conflict and concurrency conflict keep user input visible and show relevant field or general errors; no success announcement occurs.
 6. `401` ends the usable frontend session and removes personal profile data; `503`, timeout or network loss leaves the draft intact and offers retry without duplicate submission.
 7. A change/sign-out while a request is in flight cannot restore stale profile data or show a late success.
-8. Signed-out account state offers sign-in and does not falsely claim that profile/trip editing is locally persisted.
+8. Signed-out account state offers sign-in and does not falsely claim that profile/trip editing is locally persisted unless the separate guest-storage scope is approved and implemented.
 
-Run frontend tests and the required solution build/ordinary test suite after approval. Before completion, verify the rendered overview, edit, read-only, denied and expired states against their linked Figma frames. Figma links were not readable through the research browser during this planning pass; visually inspect the linked frames in Figma before UI implementation. No live user account should be modified for verification without the owner's explicit direction.
+Run frontend tests and the required solution build/ordinary test suite. The linked Figma file was reviewed in the in-app browser. Visual research found a cream `#F0EADF` page surface, a dark green TravelTracker header, separate **Your profile** and **Edit profile** views, a yellow read-only/expired notice, a red/pink access-denied treatment, and a device-only guest profile screen with a sign-in action. The guest frame's local-persistence copy conflicts with the approved cloud-only scope and must be revised by someone with design-file edit access; implement only the approved sign-in prompt in this branch. The issue also links a shared connection-error pattern. No live user account should be modified for verification without the owner's explicit direction.
 
 ## Figma references
 
@@ -103,4 +105,15 @@ Run frontend tests and the required solution build/ordinary test suite after app
 
 ## Approval gate
 
-This file is the file-by-file implementation plan required by M3-19. No production feature code is changed until the developer approves the plan. The signed-out guest frame's promise of local profile/trip persistence is the one scope question to settle before implementation; current code has no such local persistence.
+This file is the approved file-by-file implementation plan required by M3-19. Approval covers the authenticated cloud profile and a signed-out sign-in prompt; local guest profile/trip persistence is excluded. The Figma source file remains view-only in this session, so its copy revision is an external follow-up.
+
+## Implementation and validation record
+
+- Implemented the authenticated profile view/editor, scope-aware read-only behavior, validation and server-error display, session clearing, and the signed-out sign-in prompt. Updated Auth0 scope guidance and README feature status.
+- `dotnet build src/TravelTracker.Frontend/TravelTracker.Frontend.csproj --no-restore --configuration Release` — passed, 0 warnings and 0 errors.
+- `dotnet build tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj --no-restore --configuration Release` — passed, 0 warnings and 0 errors.
+- `dotnet test tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj --no-build --no-restore --configuration Release` — test assembly discovery began, but VSTest aborted after 90 seconds because it could not connect to the test host. No tests reported execution results; passing test counts remain unverified.
+- Full solution build was also attempted and failed without a reported warning or error diagnostic. The changed frontend and its test project build independently as listed above.
+- `git diff --check` passed. The read-only review found no remaining findings after adding page-level denied-profile and rejected-save coverage and documenting the new DTO constructor parameters.
+
+Implementation is present, but test execution and the full solution build still need to be rechecked in a working .NET test/build environment before this issue is declared validated.

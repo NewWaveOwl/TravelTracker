@@ -1,7 +1,7 @@
 namespace TravelTracker.Frontend.Api.Users;
 
 /**
- * Reads live Users roles and completes an operator-configured, one-time bootstrap.
+ * Reads and updates the signed-in caller's profile, reads live Users roles, and completes an operator-configured, one-time bootstrap.
  * @param client Uses only the authenticated session and a configured destination.
  * @param configuration Holds the setup secret on the server.
  */
@@ -18,6 +18,21 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
     {
         try { return await client.GetJsonAsync<SelfUserProfile>("Users", "/api/v1/users/me", cancellationToken); }
         catch (ApiError failure) when (failure.Status == 404) { return null; }
+    }
+
+    /**
+     * Updates only changed own-profile fields and returns the server-confirmed representation.
+     * @param current The latest server-confirmed profile used to omit unchanged values.
+     * @param update The caller-editable username, contact email and address values.
+     * @param cancellationToken Cancels the pending request.
+     * @return The updated profile returned by the Users API.
+     */
+    public async Task<SelfUserProfile> UpdateMeAsync(SelfUserProfile current, UpdateSelfProfileRequest update, CancellationToken cancellationToken = default)
+    {
+        var fields = update.ChangedFields(current);
+        if (fields.Count == 0) return current;
+        return await client.SendJsonAsync<SelfUserProfile>("Users", HttpMethod.Patch, "/api/v1/users/me", fields, cancellationToken)
+            ?? throw new ApiError(FailureKind.Unexpected, "The Users service did not confirm the profile update.");
     }
 
     /**

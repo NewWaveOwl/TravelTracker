@@ -28,7 +28,7 @@ namespace TravelTracker.Frontend.Tests.Support;
 public sealed partial class FrontendFactory(bool signInConfigured = true, string? clientSecret = null, string? keyDirectory = null, SessionRegistry? sessionRegistry = null) : WebApplicationFactory<Program>
 {
     public const string ProtectedReadPath = "/test/protected-read";
-    public const string RequestedScope = "openid profile email catalogue.read users.read";
+    public const string RequestedScope = "openid profile email catalogue.read users.read users.write";
 
     public FakeAuth0 Auth0 { get; } = new("test-client");
 

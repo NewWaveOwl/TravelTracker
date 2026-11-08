@@ -26,7 +26,7 @@ TravelTracker currently provides the catalogue and location foundation for futur
 
 The following features are not yet available through the running application:
 
-- Account status management and a frontend profile editor. The independent Users service supports first-sign-in provisioning, self-profile reads and updates over HTTP, live standing, verified first-administrator setup and administrator role management. See [Users contracts](docs/api.md#users-contracts).
+- Administrator account-status management remains separate from the traveller profile editor. The independent Users service supports first-sign-in provisioning, self-profile reads and updates over HTTP, live standing, verified first-administrator setup and administrator role management. See [Users contracts](docs/api.md#users-contracts).
 - Accommodation management as a separate resource.
 - Trips, ordered itinerary legs, history, settings and map views.
 - Scheduled journeys, departure and arrival times, and stop timing.
@@ -72,7 +72,7 @@ The historical SQL schema in `src/Database/schema.sql` is not applied automatica
 
 ## Getting started
 
-The independent Blazor Web App lives in [src/TravelTracker.Frontend](src/TravelTracker.Frontend). Run `dotnet run --project src/TravelTracker.Frontend --launch-profile http` and open http://localhost:5100. It runs in interactive Server mode and calls the services over HTTP from the server, so no browser CORS or proxy setup is needed; service URLs live under `Services` in its `appsettings.json` (Attractions 5104, Transport 5105). It provides the Figma-based shell, shared form/status displays and public service health checks; Auth0 sign-in and a protected Transport read are on the account page once the `Auth0` settings are provided (see [Auth0 setup](docs/frontend-auth0.md)); trip saving remains a separate feature. Its tests are in `tests/TravelTracker.Frontend.Tests`.
+The independent Blazor Web App lives in [src/TravelTracker.Frontend](src/TravelTracker.Frontend). Run `dotnet run --project src/TravelTracker.Frontend --launch-profile http` and open http://localhost:5100. It runs in interactive Server mode and calls the services over HTTP from the server, so no browser CORS or proxy setup is needed; service URLs live under `Services` in its `appsettings.json` (Attractions 5104, Transport 5105). It provides the Figma-based shell, shared form/status displays, public service health checks, Auth0 sign-in and an authenticated own-profile view/editor on the account page (see [Auth0 setup](docs/frontend-auth0.md)); trip saving remains a separate feature. Its tests are in `tests/TravelTracker.Frontend.Tests`.
 
 Install the **.NET 10 SDK**, then clone the repository:
 
@@ -183,7 +183,7 @@ The independent Users service now supplies the one-time, verified-identity admin
 
 An active Users-service administrator can open **Administrator Panel → All users** from the burger menu or account page. The list shows registered TravelTracker accounts, their email, role and standing. Promote/demote requires an explicit confirmation and a written audit reason; the server refuses stale requests, inactive promotions and removal of the last active administrator. Changes are persisted with an actor/target/before/after/reason audit in the same PostgreSQL transaction. These application roles do not grant Auth0 catalogue scopes or access to private trips.
 
-First authenticated profile access verifies an unregistered sign-in through the configured provider and creates an ordinary traveller account. Token role claims and request fields cannot select the initial role. Auth0 directory accounts that have never registered with TravelTracker do not appear automatically.
+First authenticated profile access verifies an unregistered sign-in through the configured provider and creates an ordinary traveller account. Token role claims and request fields cannot select the initial role. Auth0 directory accounts that have never registered with TravelTracker do not appear automatically. Signed-in travellers can view and edit their permitted profile fields; role and account status remain server-owned. The signed-out account page offers sign-in and does not claim that profile or trip data is stored locally.
 
 For Transport startup, set `ConnectionStrings__Transport`, apply migrations and optionally enable stable examples before running the service. See [Transport startup and selection](docs/transport-service.md).
 
