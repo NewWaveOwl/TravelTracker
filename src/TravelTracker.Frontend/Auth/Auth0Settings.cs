@@ -13,7 +13,7 @@ namespace TravelTracker.Frontend.Auth;
  */
 public sealed partial record Auth0Settings(string Domain, string ClientId, string? ClientSecret, string Audience, string Scope)
 {
-    public const string DefaultScope = "openid profile email catalogue.read users.read users.write";
+    public const string DefaultScope = "openid profile email catalogue.read users.read users.write settings.read";
 
     public string Authority => $"https://{Domain}/";
 

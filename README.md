@@ -2,23 +2,24 @@
 
 TravelTracker is a .NET 10 backend for a travel-planning application. The project aims to bring journeys, accommodation stays and attraction visits together in one itinerary, with trip history and a map view.
 
-**Attractions now runs independently on port 5104 with PostgreSQL persistence and creator-private/admin-shared access.** Transport entries and Route Points run in `TravelTracker.Transport.Api` on port 5105 with PostgreSQL storage. Both hosts provide Development Swagger. Full itinerary planning and the traveller-facing interface remain under development.
+**Accommodations now runs independently on port 5106 with PostgreSQL persistence and private/shared access.** Attractions runs on port 5104 and Transport entries/Route Points on port 5105; all three hosts provide Development Swagger and own separate PostgreSQL stores. Full itinerary planning and the traveller-facing interface remain under development.
 
 ## Current capabilities
 
 | Area | Current functionality |
 | --- | --- |
 | Attractions | Create, list (with case-insensitive name search), retrieve and partially update attractions with a name, address, coordinates, estimated visit duration, optional description and optional rating. |
+| Accommodations | Create private or administrator-shared lodging records, search visible records by name and retrieve visible details. |
 | Transport entries | Create, list and retrieve named transport entries using `car`, `bus`, `train`, `pedestrian`, `bike` or `plane`. |
 | Route points | Create, list and retrieve reusable locations of type `accommodation`, `attraction` or `transport_stop`. |
 | Validation | Validate required fields, supported codes and types, coordinate ranges, ratings and visit duration. |
 | API authentication | Validate bearer tokens and require separate catalogue read/write permissions. Health remains anonymous. |
-| API exploration | Use one Swagger page to inspect and execute all implemented endpoints. |
+| API exploration | Use each independent service's Development Swagger page to inspect and execute its endpoints. |
 | Health | Check the API’s status and service identity through `/health`. |
 
 New records receive public UUIDv7 identifiers. The identity system separates public identifiers from internal numeric keys.
 
-Attractions records survive restarts in its service-owned PostgreSQL database. Transport entries and Route Points survive restarts in their service-owned PostgreSQL database. See [Transport startup and selection](docs/transport-service.md). Protected requests need a validated access token; Attractions also requires a configured live Users access endpoint. See [independent Attractions startup, privacy rules and PostgreSQL testing](docs/attractions-service.md). Automated application tests use isolated EF InMemory stores, signing keys and Users HTTP stubs; relational tests use disposable PostgreSQL databases.
+Accommodations, Attractions, Users, Transport entries and Route Points survive restarts in their respective service-owned PostgreSQL databases. Protected catalogue requests need a validated access token and a configured live Users access endpoint. See the [Accommodations](docs/accommodations-service.md), [Attractions](docs/attractions-service.md) and [Transport](docs/transport-service.md) guides. Automated application tests use isolated EF InMemory stores, signing keys and Users HTTP stubs; relational tests use disposable PostgreSQL databases.
 
 ## Project status
 
@@ -29,12 +30,15 @@ The following features are not yet available through the running application:
 - Administrator account-status management remains separate from the traveller profile editor. The independent Users service supports first-sign-in provisioning, self-profile reads and updates over HTTP, live standing, verified first-administrator setup and administrator role management. See [Users contracts](docs/api.md#users-contracts).
 - Accommodation management as a separate resource.
 - Trips, ordered itinerary legs, history, settings and map views.
+- Account status management and a frontend profile editor. The independent Users service supports first-sign-in provisioning, self-profile reads and updates over HTTP, live standing, verified first-administrator setup and administrator role management. See [Users contracts](docs/api.md#users-contracts).
+- Accommodation update/archive management and frontend lodging screens.
+- Trips, ordered itinerary legs, history and map views. Settings preferences are available through the independent Settings service ([docs/settings-service.md](docs/settings-service.md)).
 - Scheduled journeys, departure and arrival times, and stop timing.
 - PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
-- Persistent database storage for the remaining service hosts.
+- Trip history, editing and deleting. Trips create and own-trip detail are implemented in the independent Trips service (see [Trips service](docs/trips-service.md)).
 - Complete traveller-facing feature screens (the Blazor navigation and HTTP foundation is in `src/TravelTracker.Frontend`).
 
-User and accommodation models and repository contracts exist. Trip/TripLeg domain rules are implemented, but their HTTP/persistence features remain unfinished. UserSettings and TripMapPoint remain placeholders.
+The historical shared user and `Accomodation` models remain for compatibility. The independent Accommodations service owns its own model, PostgreSQL store and HTTP endpoints. Trip/TripLeg domain rules are implemented and the independent Trips service (port 5108) saves and returns own trips with PostgreSQL; trip history, editing and deleting remain unfinished. The independent Settings service implements `UserSettings`; the shared placeholder and legacy settings interfaces were removed. TripMapPoint remains a placeholder.
 
 A route point describes a reusable location. A transport entry describes a transport option. Neither currently represents a scheduled journey.
 
@@ -43,36 +47,54 @@ A route point describes a reusable location. A transport entry describes a trans
 - Auth0 for hosted sign-in and logout, using the ASP.NET Core OpenID Connect handler with authorization-code flow and PKCE in the Blazor server. The APIs validate bearer access tokens. See [Auth0 setup and verification](docs/frontend-auth0.md).
 - .NET 10 and ASP.NET Core.
 - Swagger/OpenAPI through Swashbuckle.
-- Independent PostgreSQL persistence for Attractions, Users and Transport/Route Points.
-- PostgreSQL through EF Core/Npgsql (owner decision, 2026-10-28), implemented for Attractions, Users and Transport; other service persistence remains separate work.
+- Independent PostgreSQL persistence for Accommodations, Attractions, Users and Transport/Route Points.
+- PostgreSQL through EF Core/Npgsql (owner decision, 2026-10-28), implemented for Accommodations, Attractions, Users, Transport, Settings and Trips.
 - xUnit and ASP.NET Core test hosts.
 - GitHub Actions for pull-request testing.
 
 | Project | Responsibility |
 | --- | --- |
+| `src/TravelTracker.Accommodations.Api` | Independent lodging HTTP contracts, application rules and live Users access checks on port 5106. |
+| `src/TravelTracker.Accommodations.Data` | PostgreSQL context, migrations and visibility-scoped repository. |
+| `src/TravelTracker.Accommodations.Domain` | Accommodation model and location/ownership invariants without web/EF dependencies. |
 | `src/TravelTracker.Attractions.Api` | Independent attraction HTTP contracts, application rules and live Users access checks. |
 | `src/TravelTracker.Attractions.Data` | PostgreSQL context, migrations, repositories and application-issued identities. |
 | `src/TravelTracker.Attractions.Domain` | Attraction model, identifiers and invariants without web/EF dependencies. |
 | `src/TravelTracker.Security` | Shared bearer validation and OpenAPI security infrastructure. |
+| `src/TravelTracker.Settings.Api` | Independent own-settings HTTP contract, live Users standing checks and startup on port 5107. |
+| `src/TravelTracker.Settings.Data` | Settings-owned PostgreSQL context, migrations and per-account repository. |
+| `src/TravelTracker.Settings.Domain` | Preference model, defaults and validation rules without web/EF dependencies. |
 | `src/TravelTracker.Users.Api` | Independent HTTPS account provisioning, bootstrap, administrator role management and service access contracts. |
 | `src/TravelTracker.Users.Data` | Service-owned PostgreSQL accounts, migrations, transactional role changes and administrator audit. |
 | `src/TravelTracker.Users.Domain` | Account identity, role and standing model without web/EF dependencies. |
 | `src/TravelTracker.Transport.Api` | Independent Transport/Route Points HTTP operations and startup on 5105. |
 | `src/TravelTracker.Transport.Data` | Transport-owned PostgreSQL context, migrations and repositories. |
 | `src/TravelTracker.Transport.Domain` | Transport entities and identity types. |
-| `src/TravelTracker.Api` | Unimplemented service interfaces (library, no web host). |
+| `src/TravelTracker.Api` | Unimplemented service interfaces and the #40 trip reference clients, validator and save services (library, no web host). |
 | `src/TravelTracker.Data` | Repositories, sample data and identity generation. |
 | `src/TravelTracker.Domain` | Shared models and identifier types. |
-| `tests/TravelTracker.Api.Tests` | Shared trip-domain and historical identity tests. |
+| `src/TravelTracker.Trips.Api` | Independent Trips HTTP operations and startup on 5108. |
+| `src/TravelTracker.Trips.Data` | Trips-owned PostgreSQL context, migrations, repository port and implementation. |
+| `src/TravelTracker.Trips.Domain` | Trip, leg, place snapshot and itinerary rules without web/EF dependencies. |
+| `tests/TravelTracker.Api.Tests` | Trip reference validation, save/read services and historical identity tests. |
+| `tests/TravelTracker.Trips.Domain.Tests` | Pure itinerary rule tests. |
+| `tests/TravelTracker.Trips.Api.Tests` | Trips HTTP, bearer, ownership and status tests. |
+| `tests/TravelTracker.Trips.Data.Tests` | PostgreSQL trip persistence, rollback and restart tests (`Category=PostgreSQL`). |
+| `tests/TravelTracker.Accommodations.Domain.Tests` | Accommodation model validation and ownership invariants. |
+| `tests/TravelTracker.Accommodations.Data.Tests` | PostgreSQL migration, visibility queries and persistence tests. |
+| `tests/TravelTracker.Accommodations.Api.Tests` | Accommodation HTTP contracts, bearer scope and privacy tests. |
+| `tests/TravelTracker.Settings.Domain.Tests` | Settings defaults and preference validation rules. |
+| `tests/TravelTracker.Settings.Data.Tests` | PostgreSQL settings migration, per-account persistence and constraint tests. |
+| `tests/TravelTracker.Settings.Api.Tests` | Settings HTTP contract, scope matrix, signed bearer, ownership, standing and PostgreSQL restart tests. |
 | `tests/TravelTracker.Transport.Api.Tests` | Independent Transport HTTP, signed bearer, selection and PostgreSQL tests. |
 | `tests/TravelTracker.Attractions.Api.Tests` | Attraction HTTP, PostgreSQL durability/privacy and real-bearer integration tests. |
 | `tests/TravelTracker.Users.Tests` | Account domain, real-bearer HTTP and PostgreSQL bootstrap/role/audit tests. |
 
-The historical SQL schema in `src/Database/schema.sql` is not applied automatically. Attractions, Transport and Users use their committed EF migrations and separate service-owned databases.
+The historical SQL schema in `src/Database/schema.sql` is not applied automatically. Accommodations, Attractions, Transport, Users and Settings use their committed EF migrations and separate service-owned databases.
 
 ## Getting started
 
-The independent Blazor Web App lives in [src/TravelTracker.Frontend](src/TravelTracker.Frontend). Run `dotnet run --project src/TravelTracker.Frontend --launch-profile http` and open http://localhost:5100. It runs in interactive Server mode and calls the services over HTTP from the server, so no browser CORS or proxy setup is needed; service URLs live under `Services` in its `appsettings.json` (Attractions 5104, Transport 5105). It provides the Figma-based shell, shared form/status displays, public service health checks, Auth0 sign-in and an authenticated own-profile view/editor on the account page (see [Auth0 setup](docs/frontend-auth0.md)); trip saving remains a separate feature. Its tests are in `tests/TravelTracker.Frontend.Tests`.
+The independent Blazor Web App lives in [src/TravelTracker.Frontend](src/TravelTracker.Frontend). Run `dotnet run --project src/TravelTracker.Frontend --launch-profile http` and open http://localhost:5100. It runs in interactive Server mode and calls the services over HTTP from the server, so no browser CORS or proxy setup is needed; service URLs live under `Services` in its `appsettings.json` (Attractions 5104, Transport 5105, Settings 5107). It provides the Figma-based shell, shared form/status displays and public service health checks; Auth0 sign-in and a protected Transport read are on the account page once the `Auth0` settings are provided (see [Auth0 setup](docs/frontend-auth0.md)); trip saving remains a separate feature. Its tests are in `tests/TravelTracker.Frontend.Tests`.
 
 Install the **.NET 10 SDK**, then clone the repository:
 
@@ -120,12 +142,17 @@ Attractions base URL: `http://localhost:5104`; Transport/Route Points: `http://l
 | Transport entries | GET | `/api/v1/transport-modes/{id}` |
 | Route points | POST | `/api/v1/route-points` |
 | Route points | GET | `/api/v1/route-points/{id}` |
+| Accommodations | GET | `/api/v1/accommodations` (optional `name` filter) |
+| Accommodations | GET | `/api/v1/accommodations/{id}` |
+| Accommodations | POST | `/api/v1/accommodations` |
 
 In Swagger, select **Authorize** and enter an access token for this API. Reads require `catalogue.read`; writes require `catalogue.write`. Then expand an endpoint, select **Try it out**, enter the required values and select **Execute**. `/health` is anonymous. Missing or invalid tokens return `401`; missing permissions return `403`.
 
 Successful creation returns `201 Created`, the saved record and a `Location` header. Use the returned identifier to retrieve the record. Unknown identifiers return `404 Not Found`; invalid request input returns `400 Bad Request`.
 
 See the [API documentation](docs/api.md) and [HTTP examples](src/TravelTracker.Transport.Api/requests.http) for request bodies and response details.
+
+Accommodations runs at `http://localhost:5106` with its own Swagger page. Its public `/health` endpoint needs no token. Protected reads require `catalogue.read`; creation requires `catalogue.write` and a configured live Users check. See [Accommodations startup and access rules](docs/accommodations-service.md).
 
 ## Testing
 
@@ -138,7 +165,7 @@ dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --filter
 
 CI runs these commands plus the PostgreSQL group. Warnings fail the build (`Directory.Build.props`), and a boundary test fails if Domain gains references or Data becomes a web project. CI uploads the `.trx` results as a `test-results` artifact even when tests fail.
 
-The suite covers health, attraction and transport operations, route points, validation, concurrent identity generation, project dependency boundaries, and real bearer-token validation and scope policies. Attraction query coverage includes rejection of repeated `name` parameters and compatibility of single-value literal name search. Tests configure isolated signing keys and require no external identity provider. Application/domain/HTTP tests use EF InMemory and need no PostgreSQL. Relational tests marked `Category=PostgreSQL` require real PostgreSQL for constraints, migrations, locking, rollback and restart.
+The suite covers health, accommodation/attraction/transport operations, route points, validation, concurrent identity generation, project dependency boundaries, and real bearer-token validation and scope policies. Catalogue tests cover private/shared visibility and literal name search. Tests configure isolated signing keys and require no external identity provider. Application/domain/HTTP tests use EF InMemory and need no PostgreSQL. Relational tests marked `Category=PostgreSQL` require real PostgreSQL for constraints, migrations, locking, rollback and restart.
 
 Contracts for the planned multi-service architecture are in [milestone 3 contracts](docs/milestone-3-contracts.md).
 
@@ -149,6 +176,7 @@ Tests create isolated application hosts automatically. PostgreSQL suites require
 - [Auth0 sign-in, application registration and verification](docs/frontend-auth0.md)
 - [Product design and roadmap](docs/design.md)
 - [API contracts](docs/api.md)
+- [Accommodations startup, privacy and PostgreSQL tests](docs/accommodations-service.md)
 - [Domain models](docs/domain.md)
 - [Data layer and SQL schema](docs/data.md)
 - [Trip points, transport and route design](docs/trip-points-and-routes.md)

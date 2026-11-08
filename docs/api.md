@@ -1,10 +1,10 @@
 # API Layer
 
-HTTP contracts for the shared scaffold and the implemented combined API.
+HTTP contracts for the independent service APIs and the historical shared scaffold.
 
 ## Current state
 
-Attractions has dedicated [Api](../src/TravelTracker.Attractions.Api), [Data](../src/TravelTracker.Attractions.Data) and [Domain](../src/TravelTracker.Attractions.Domain) projects and runs on 5104 with PostgreSQL. [TravelTracker.Transport.Api](../src/TravelTracker.Transport.Api) owns Transport/Route Points on 5105. Both use shared bearer infrastructure; Attractions also applies the approved privacy/live-standing rules. See the [service contract and startup guide](attractions-service.md).
+Attractions and Accommodations each have dedicated Api/Data/Domain projects and independent PostgreSQL databases; they run on ports 5104 and 5106. Transport/Route Points run independently on 5105, and Users runs on HTTPS 5101. Catalogue APIs use shared bearer infrastructure, explicit scopes and live Users checks for account standing; creator-private/shared visibility is enforced by the owning service. See the [Attractions](attractions-service.md) and [Accommodations](accommodations-service.md) startup guides.
 
 ## Existing service interfaces
 
@@ -12,13 +12,12 @@ Attractions has dedicated [Api](../src/TravelTracker.Attractions.Api), [Data](..
 |---|---|---|
 | [IAttractionService](../src/TravelTracker.Attractions.Api/Services/IAttractionService.cs) | `Attraction` | `GetAllAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync` |
 | [ITransportModeService](../src/TravelTracker.Transport.Api/Services/ITransportModeService.cs) | `TransportMode` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `CreateAsync`, `UpdateAsync` |
-| [ISettingsService](../src/TravelTracker.Api/Services/ISettingsService.cs) | `UserSettings` (empty type declaration) | `GetOrCreateAsync`, `UpdateAsync` |
 | [ITripService](../src/TravelTracker.Api/Services/ITripService.cs) | `Trip`, `TripLeg` (empty type declarations) | `GetHistoryAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
 | [ITripMapService](../src/TravelTracker.Api/Services/ITripMapService.cs) | `TripMapPoint` (empty type declaration) | `GetMapPointsAsync` |
 
-The Attraction and TransportMode interfaces now have concrete implementations wired into Api controllers. Trips/Settings/map retain their existing contracts but have no runtime implementation or endpoint. Empty Domain declarations supply their referenced types for compilation. Every entity identity is an `EntityId<T>`: an internal `Id64` key plus a public uuidv7. The key is `internal` to Domain and Data, so the Api cannot name or expose it; edge-facing signatures take the public `Guid`. `ITripService.ReplaceLegsAsync` returns the saved legs, while its repository counterpart returns only task completion.
+The Attraction, Accommodation, TransportMode and Users profile interfaces have concrete implementations in their owning service APIs. Settings is implemented by the independent Settings service ([settings-service.md](settings-service.md)); the shared settings placeholder and its legacy interfaces were removed. Trips/map retain their existing contracts but have no runtime implementation or endpoint. The historical shared entity identity is an `EntityId<T>` with an internal `Id64` key and public uuidv7; the independent Accommodation service uses a public UUIDv7 as its database primary key. APIs expose only public GUIDs and DTOs, never persistence keys or owner identity.
 
-No `IUserService` or `IAccommodationService` exists yet. Their models and internal repositories are retained (see [Data](data.md)), but there are no user/accommodation endpoints to display in Swagger.
+The historical `Accomodation` model and `IAccomadationRepository` remain unchanged for compatibility; the Accommodations API owns a separate `Accommodation` model, repository and HTTP contract.
 
 ## Shared scaffold's planned REST contract
 
@@ -30,8 +29,8 @@ No `IUserService` or `IAccommodationService` exists yet. Their models and intern
 | Accommodations | `GET /accommodations`, `GET/POST/PATCH /accommodations/{id}` |
 | Transport | `GET /transport-modes`, `GET /transport-modes/{id}` |
 | Attractions | `GET/POST /attractions`, `GET/PATCH /attractions/{id}` |
-| Trips | `GET /trips` (the caller's own trips), `POST /trips`, `GET/PATCH/DELETE /trips/{id}`, `PUT /trips/{id}/legs`, `GET /trips/{id}/map-points` |
-| Settings | `GET/PUT /settings` (the caller's own settings) |
+| Trips (implemented on the Trips service: `POST /api/v1/trips`, `GET /api/v1/trips/{id}`; see [Trips service](trips-service.md)) | `GET /trips` (the caller's own trips), `GET/PATCH/DELETE /trips/{id}`, `PUT /trips/{id}/legs`, `GET /trips/{id}/map-points` remain future |
+| Settings | `GET/PUT /settings` (the caller's own settings; `settings.read` / `settings.write`; `ETag` and `If-Match` required on PUT; see [settings-service.md](settings-service.md)) |
 | Ticket import (future) | `POST /ticket-imports`, `GET /ticket-imports/{id}`, `POST /ticket-imports/{id}/confirm` |
 | All | `GET /health` |
 
@@ -46,9 +45,9 @@ Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: J
 
 ## Implemented APIs
 
-All resource operations now require a validated bearer access token and their exact catalogue scope: GET uses `catalogue.read`; POST and PATCH use `catalogue.write`. `/health` is explicitly anonymous. Authentication failures return `401` with a Bearer challenge; missing permissions return `403` before input validation. Read and write permissions are independent. Both fallback authorization (no attribute) and bare `[Authorize]` default to `catalogue.read`; mutations must still declare their write policy. See [configuration, identity rules and the complete policy map](authentication.md). This implements resource-server authentication, not sign-in or Users account-standing/ownership checks.
+Catalogue resource operations require a validated bearer access token and the exact scope: GET uses `catalogue.read`; POST and PATCH use `catalogue.write`. `/health` is explicitly anonymous. Authentication failures return `401` with a Bearer challenge; missing permissions return `403` before input validation. Read and write permissions are independent. Both fallback authorization (no attribute) and bare `[Authorize]` default to `catalogue.read`; mutations must still declare their write policy. Attractions and Accommodations also check account standing and ownership through the live Users HTTP boundary. See [authentication configuration](authentication.md) and the [Accommodations contract](accommodations-service.md).
 
-Attractions runs at http://localhost:5104 with its own Swagger document and `GET /health` returning `status: ok`, `service: Attractions`. Transport/Route Points remain at http://localhost:5105 with `service: TravelTracker.Transport`. Health is anonymous. Development Swagger is enabled per host. Attraction response fields remain compatible; creation adds optional `visibility` (`private` by default, `shared` only for administrators). See [privacy, account-standing and Users-dependency failures](attractions-service.md).
+Attractions runs at http://localhost:5104; Accommodations runs at http://localhost:5106; Transport/Route Points run at http://localhost:5105. Each host has a separate Development Swagger page and public anonymous `/health`. Users runs on HTTPS 5101. Attractions and Accommodations require explicit catalogue scopes and live Users standing checks. For Accommodations, omitted `visibility` defaults to private; shared creation requires a live active administrator. See the [Attractions](attractions-service.md) and [Accommodations](accommodations-service.md) service contracts.
 
 | Method and route | Service | Result |
 | --- | --- | --- |
@@ -62,8 +61,11 @@ Attractions runs at http://localhost:5104 with its own Swagger document and `GET
 | GET /api/v1/route-points | Transport | Saved selection, optional type/name filters |
 | GET /api/v1/route-points/{id} | Transport | Saved route point, or 404 |
 | POST /api/v1/route-points | Transport | 201, saved point and details Location |
+| GET /api/v1/accommodations | Accommodations | 200 ordered visible records; optional literal case-insensitive `name` substring filter |
+| GET /api/v1/accommodations/{id} | Accommodations | 200 visible record; malformed GUID -> 400; missing or another user's private record -> 404 |
+| POST /api/v1/accommodations | Accommodations | 201, saved record and details Location; invalid or unknown input fields -> 400 |
 
-All IDs are generated GUIDs; JSON fields use camelCase. Standard ASP.NET Core model binding and DataAnnotations produce 400 validation problem details for invalid input or malformed IDs. Unknown JSON fields follow the framework default and are ignored; request models do not expose server-owned IDs. GET never creates a missing record.
+Public IDs are GUIDs; JSON fields use camelCase. Standard ASP.NET Core model binding and DataAnnotations produce 400 validation problem details for invalid input or malformed IDs. Existing Attraction and Transport request behavior for unknown JSON fields is unchanged; the Accommodations create DTO rejects unknown fields. No request DTO exposes server-owned IDs. GET never creates a missing record.
 
 ### Attraction fields
 
@@ -83,7 +85,15 @@ Response: routePointId, type, name, address, lat, lon, sourceId. POST requires a
 
 Attractions owns its durable PostgreSQL store, scoped context/repository and application rules. Optional examples seed an empty store only; restarting retains records. Transport/Route Points use their own scoped PostgreSQL context and repositories. Each resource keeps cohesive controller/service/repository responsibilities. PostgreSQL row-locking transactions protect attraction PATCH validation and atomic updates.
 
-Attraction list/name search and attraction PATCH are implemented (see the route table). Transport and route-point PATCH/DELETE, scheduled transport routes, stops and timing calculations remain future work. The contract for the six-service target is in [milestone 3 contracts](milestone-3-contracts.md). [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md), [Attractions HTTP examples](../src/TravelTracker.Attractions.Api/requests.http).
+Attraction list/name search and PATCH plus Accommodation create/search/detail are implemented (see the route table). Transport and route-point PATCH/DELETE, accommodation update/archive, scheduled transport routes, stops and timing calculations remain future work. The contract for the six-service target is in [milestone 3 contracts](milestone-3-contracts.md). [Current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md), [Attractions HTTP examples](../src/TravelTracker.Attractions.Api/requests.http), [Accommodations HTTP examples](../src/TravelTracker.Accommodations.Api/requests.http).
+
+### Accommodation fields and access
+
+The response is `accommodationId`, `name`, `address`, `lat`, `lon`, and `visibility` (`private` or `shared`). `POST /api/v1/accommodations` accepts only `name`, `address`, `lat`, `lon`, and optional `visibility`. The server generates the UUIDv7 and assigns the owner from the validated bearer `(iss, sub)`; request identity, owner, role, status, or ID fields are rejected. Names are trimmed and must not be blank. Latitude must be between -90 and 90; longitude between -180 and 180. Omitted address becomes an empty string; explicit null is invalid. Omitted visibility is private; explicit null or unsupported values are invalid. Invalid fields and unknown JSON fields return `400` validation problem details and persist nothing.
+
+Collection search trims a single `name` query value and matches a literal, ordinal case-insensitive substring; missing or blank input returns all records visible to that caller. Results are ordered by name case-insensitively, then by public GUID. Repeated `name` query parameters return a field validation error. Another user's private record is excluded from collection results and appears as `404` on detail, even to administrators. Active callers can read shared records plus their own private records; banned callers can read only their own private records and cannot create; deactivated or missing accounts are denied with `403`. Creating a shared record requires `catalogue.write` and a live active Users administrator result; an ordinary traveller can create private records. Users lookup outages fail closed with `503`.
+
+Every resource route declares `catalogue.read` or `catalogue.write` explicitly. Missing/invalid bearer credentials return `401`; a valid token without the required scope returns `403` before request validation. `GET /health` is anonymous. The service has no PATCH, archive, or delete endpoint in M3-12. Configure its PostgreSQL store and Users service credential using [Accommodations startup instructions](accommodations-service.md).
 
 For future Trips integration, a trip point is an ordered occurrence of a reusable route point. A scheduled route connects route points using a transport entry; a trip leg selects that journey. Dates and boarding/stop timings belong to the scheduled route and occurrences, rather than the transport catalogue POST. See [trip points, transport and routes](trip-points-and-routes.md).
 

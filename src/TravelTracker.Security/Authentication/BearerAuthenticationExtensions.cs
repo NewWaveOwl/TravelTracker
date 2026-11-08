@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -107,11 +108,17 @@ public static class BearerAuthenticationExtensions
         services.AddAuthorization();
         services.AddOptions<AuthorizationOptions>().Configure<IOptions<BearerSettings>>((options, settings) =>
         {
-            foreach (var scope in new[] { ScopePolicies.CatalogueRead, ScopePolicies.CatalogueWrite })
+            foreach (var scope in new[] { ScopePolicies.CatalogueRead, ScopePolicies.CatalogueWrite, ScopePolicies.SettingsRead, ScopePolicies.SettingsWrite, ScopePolicies.TripsRead, ScopePolicies.TripsWrite })
                 options.AddPolicy(scope, policy => policy.RequireAuthenticatedUser()
                     .RequireAssertion(context => ScopePolicies.HasScope(context.User, settings.Value.ScopeClaimType, scope)));
             options.DefaultPolicy = options.GetPolicy(ScopePolicies.CatalogueRead)!;
-            options.FallbackPolicy = options.DefaultPolicy;
+            // the fallback guards endpoints that declare no policy. the framework also applies it to requests that match no route;
+            // for those the resource is the HttpContext with no endpoint. they pass through so routing answers 404 instead of 401/403.
+            // matched endpoints keep the scope requirement.
+            options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAssertion(context =>
+                context.Resource is HttpContext { } request && request.GetEndpoint() is null ||
+                context.User.Identity?.IsAuthenticated == true &&
+                ScopePolicies.HasScope(context.User, settings.Value.ScopeClaimType, ScopePolicies.CatalogueRead)).Build();
         });
         return services;
     }

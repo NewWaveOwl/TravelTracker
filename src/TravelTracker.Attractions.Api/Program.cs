@@ -1,3 +1,4 @@
+using TravelTracker.Security.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using TravelTracker.Api.Authentication;
@@ -23,7 +24,7 @@ public partial class AttractionsProgram
      */
     public static async Task Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = ApiHostBuilder.Create(args);
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddApiBearerAuthentication(builder.Configuration);

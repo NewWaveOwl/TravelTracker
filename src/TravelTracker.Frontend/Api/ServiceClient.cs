@@ -13,7 +13,7 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
 {
     static readonly TimeSpan Timeout = TimeSpan.FromSeconds(8);
     static readonly HashSet<string> WritableFields = new(StringComparer.OrdinalIgnoreCase)
-    { "name", "address", "lat", "lon", "estimatedVisitMinutes", "rating", "description", "visibility", "code", "type", "sourceId", "username", "email" };
+    { "name", "address", "lat", "lon", "estimatedVisitMinutes", "rating", "description", "visibility", "code", "type", "sourceId", "username", "email", "theme", "defaultMapLatitude", "defaultMapLongitude", "defaultMapZoom", "preferredTransportMode", "timeZone" };
 
     /**
      * Reads a public JSON contract.
@@ -27,7 +27,7 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
 
     /**
      * Sends one JSON request without retrying writes whose outcome may be unknown.
-     * @param method GET, POST or PATCH.
+     * @param method GET, POST, PUT or PATCH.
      * @param url Validated destination.
      * @param body Public writable contract, or null for a read.
      * @param cancellationToken Cancels work when the consuming view closes.
@@ -35,9 +35,23 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
      * @param bootstrapSecret Optional server-held first-administrator secret, restricted to the exact HTTPS bootstrap endpoint.
      * @return Parsed response; throws ApiError or caller cancellation.
      */
-    public async Task<T?> SendJsonAsync<T>(HttpMethod method, string url, object? body, CancellationToken cancellationToken = default, string? accessToken = null, string? bootstrapSecret = null)
+    public async Task<T?> SendJsonAsync<T>(HttpMethod method, string url, object? body, CancellationToken cancellationToken = default, string? accessToken = null, string? bootstrapSecret = null) =>
+        (await SendAsync<T>(method, url, body, cancellationToken, accessToken, bootstrapSecret)).Body;
+
+    /**
+     * Sends one JSON request and keeps the response entity tag, which optimistic-concurrency writes need.
+     * @param method GET, POST, PUT or PATCH.
+     * @param url Validated destination.
+     * @param body Public writable contract, or null for a read.
+     * @param cancellationToken Cancels work when the consuming view closes.
+     * @param accessToken Optional bearer supplied by ProtectedClient.
+     * @param bootstrapSecret Optional server-held first-administrator secret, restricted to the exact HTTPS bootstrap endpoint.
+     * @param ifMatch Optional entity tag the server must match before it applies a replace.
+     * @return Parsed body and entity tag; throws ApiError or caller cancellation.
+     */
+    public async Task<ServiceResponse<T>> SendAsync<T>(HttpMethod method, string url, object? body, CancellationToken cancellationToken = default, string? accessToken = null, string? bootstrapSecret = null, string? ifMatch = null)
     {
-        if (method != HttpMethod.Get && method != HttpMethod.Post && method != HttpMethod.Patch)
+        if (method != HttpMethod.Get && method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch)
             throw new ApiError(FailureKind.Unexpected, "Unsupported request method.");
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         bounded.CancelAfter(Timeout);
@@ -45,6 +59,7 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (body is not null) request.Content = JsonContent.Create(body);
         if (accessToken is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        if (ifMatch is not null) request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
         if (bootstrapSecret is not null)
         {
             var destination = new Uri(url);
@@ -61,7 +76,7 @@ public sealed class ServiceClient(HttpClient httpClient, ILogger<ServiceClient> 
                 var errors = status is 400 or 422 ? await FieldErrorsAsync(response, bounded.Token) : null;
                 throw Fail(Classify(status), MessageFor(status), method, status, errors);
             }
-            return await response.Content.ReadFromJsonAsync<T>(bounded.Token);
+            return new ServiceResponse<T>(await response.Content.ReadFromJsonAsync<T>(bounded.Token), response.Headers.ETag?.Tag);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException)

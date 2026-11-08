@@ -5,6 +5,7 @@ using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Features.Transport;
+using TravelTracker.Frontend.Services;
 
 namespace TravelTracker.Frontend.Components.Transport;
 
@@ -15,6 +16,7 @@ public partial class TransportWorkspace : IDisposable
     [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
     [Inject] SessionRegistry Sessions { get; set; } = default!;
     [Inject] TimeProvider Clock { get; set; } = default!;
+    [Inject] UserPreferences Preferences { get; set; } = default!;
     [Parameter] public EventCallback<IReadOnlyList<TransportSelection>> SelectionChanged { get; set; }
 
     static readonly string[] Modes = ["car", "bus", "train", "pedestrian", "bike", "plane"];
@@ -44,7 +46,11 @@ public partial class TransportWorkspace : IDisposable
     {
         Authentication.AuthenticationStateChanged += AuthenticationChanged;
         await UpdateAccessAsync(await Authentication.GetAuthenticationStateAsync());
-        if (signedIn) await LoadAsync();
+        if (signedIn)
+        {
+            await ApplyPreferredModeAsync();
+            await LoadAsync();
+        }
     }
 
     /**
@@ -61,6 +67,7 @@ public partial class TransportWorkspace : IDisposable
         editingIndex = null; error = status = null;
         await UpdateAccessAsync(await task);
         await SelectionChanged.InvokeAsync(selections.ToArray());
+        if (signedIn) await ApplyPreferredModeAsync();
         if (signedIn && !busy) await LoadAsync();
         StateHasChanged();
     });
@@ -72,6 +79,12 @@ public partial class TransportWorkspace : IDisposable
         canWrite = signedIn && state.User.FindAll(AccessTokenClaims.GrantedScope).SelectMany(c => c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Contains("catalogue.write", StringComparer.Ordinal);
         return Task.CompletedTask;
     }
+
+    /**
+     * Makes the traveller's saved transport mode the default for new entries; a failed read is logged and the car default stays.
+     * @return Completion of the preference lookup.
+     */
+    async Task ApplyPreferredModeAsync() => newCode = (await Preferences.LoadAsync())?.PreferredTransportMode ?? "car";
 
     /**
      * Refreshes catalogue filters while retaining pending forms and draft choices on failure.
@@ -164,7 +177,7 @@ public partial class TransportWorkspace : IDisposable
             showMap = true;
             transports = new[] { saved }.Concat(transports.Where(v => v.TransportModeId != saved.TransportModeId)).ToArray();
             transportName = description = "";
-            newCode = "car";
+            newCode = Preferences.Current?.PreferredTransportMode ?? "car";
             status = "Transport entry saved.";
         });
     }

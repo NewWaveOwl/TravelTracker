@@ -1,3 +1,4 @@
+using TravelTracker.Security.Hosting;
 using Microsoft.EntityFrameworkCore;
 using TravelTracker.Transport.Api.Errors;
 using Microsoft.OpenApi;
@@ -22,7 +23,7 @@ public partial class TransportProgram
      */
     public static async Task Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = ApiHostBuilder.Create(args);
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddApiBearerAuthentication(builder.Configuration);
