@@ -565,6 +565,7 @@ public sealed class SignInFlowTests
         Assert.Contains("Sign in to view your profile", await refused.Content.ReadAsStringAsync());
         Assert.Contains(refused.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith(".AspNetCore.Cookies=;"));
         factory.Auth0.AccessToken = "replacement-token";
+        factory.Transport.RespondWith(200, FrontendFactory.SelfProfileJson);
         await SignInAsync(factory, browser);
         Assert.True(await SignedInAsync(browser));
         factory.Transport.RespondWith(200, "{}");

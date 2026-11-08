@@ -12,7 +12,7 @@ namespace TravelTracker.Frontend.Tests;
 
 public sealed class UsersClientTests
 {
-    static readonly string Profile = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller","email":"traveller@example.test","address":null}""";
+    static readonly string Profile = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller","email":"traveller@example.test","address":"1 Main St"}""";
 
     static (UsersClient Client, StubHandler Handler) Create(int status = 200, string? body = null)
     {

@@ -29,14 +29,14 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
 {
     public const string ProtectedReadPath = "/test/protected-read";
     public const string RequestedScope = "openid profile email catalogue.read users.read users.write";
-    const string SelfProfile = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller_1","email":"traveller@example.test","address":"1 Main St"}""";
+    public const string SelfProfileJson = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller_1","email":"traveller@example.test","address":"1 Main St"}""";
 
     public FakeAuth0 Auth0 { get; } = new("test-client");
 
     /** Answers protected transport and Users profile reads; its LastRequest shows what the app sent. */
     public StubHandler Transport { get; } = new((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
     {
-        Content = new StringContent(request.RequestUri?.AbsolutePath == "/api/v1/users/me" ? SelfProfile : """{"name":"Example Bus"}""")
+        Content = new StringContent(request.RequestUri?.AbsolutePath == "/api/v1/users/me" ? SelfProfileJson : """{"name":"Example Bus"}""")
     }));
 
     /** Drives cookie expiry and the token expiry check without waiting. */

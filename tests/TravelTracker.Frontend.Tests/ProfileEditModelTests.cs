@@ -31,6 +31,18 @@ public sealed class ProfileEditModelTests
     }
 
     [Fact]
+    public void InvalidUsernameProducesFieldAssociatedError()
+    {
+        var model = new ProfileEditModel(new SelfUserProfile(Guid.NewGuid(), "traveller", "active", "traveller", "traveller@example.test"));
+        model.Username = "x!";
+
+        var errors = Validate(model);
+
+        Assert.Contains(errors, error => error.MemberNames.Contains(nameof(model.Username))
+            && error.ErrorMessage!.StartsWith("Use only letters", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void UpdateRequestPreservesOmittedValuesAndClearsOnlyAddressExplicitly()
     {
         var original = new SelfUserProfile(Guid.NewGuid(), "traveller", "active", "traveller", "traveller@example.test", "1 Main St");
