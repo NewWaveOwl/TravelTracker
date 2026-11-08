@@ -441,13 +441,13 @@ transfers stay below each card. */
 .settings-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .settings-page label { font-size: 24px; line-height: 36px; }
 .settings-page input, .settings-page select { width: 100%; max-width: 100%; min-height: 56px; padding: 12px 16px; font-size: 24px; line-height: 36px; color: hsl(0, 0%, 0%); background: hsl(0, 0%, 100%); border-width: 2px; border-style: solid; border-color: hsl(120, 25%, 75%); border-radius: 0; }
-.settings-page input[aria-invalid=true], .settings-page select[aria-invalid=true] { border-color: hsl(0, 75%, 25%); }
+.settings-page input[aria-invalid=true], .settings-page select[aria-invalid=true] { border-color: hsl(30, 100%, 25%); }
 .settings-hint { display: block; font-size: 20px; line-height: 26px; color: hsl(120, 25%, 25%); }
-.settings-page .field-error { display: block; font-size: 20px; line-height: 26px; color: hsl(0, 75%, 25%); }
+.settings-page .field-error { display: block; font-size: 20px; line-height: 26px; color: hsl(30, 100%, 25%); }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 16px; }
-.settings-alert { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 24px; background: hsl(0, 25%, 75%); color: hsl(0, 75%, 25%); border-width: 2px; border-style: solid; border-color: hsl(0, 75%, 25%); }
-.settings-alert h2, .settings-alert p { color: hsl(0, 75%, 25%); margin: 0; }
-.settings-alert a { color: hsl(0, 75%, 25%); }
+.settings-alert { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 24px; background: hsl(30, 100%, 75%); color: hsl(30, 100%, 25%); border-width: 2px; border-style: solid; border-color: hsl(30, 100%, 25%); }
+.settings-alert h2, .settings-alert p { color: hsl(30, 100%, 25%); margin: 0; }
+.settings-alert a { color: hsl(30, 100%, 25%); }
 .settings-status { margin: 0; padding: 16px 24px; background: hsl(120, 25%, 75%); }
 
 /* M3-20 accommodation workspace */
@@ -525,11 +525,11 @@ main:has(.accommodation-workspace) { max-width: 1536px; padding: 32px 48px 80px;
 .trip-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .trip-page label { font-size: 24px; line-height: 36px; }
 .trip-page input:not([type=radio]), .trip-page select { width: 100%; max-width: 100%; min-height: 56px; padding: 12px 16px; font-size: 24px; line-height: 36px; color: hsl(0, 0%, 0%); background: hsl(0, 0%, 100%); border-width: 2px; border-style: solid; border-color: hsl(120, 25%, 75%); border-radius: 0; }
-.trip-page input[aria-invalid=true], .trip-page select[aria-invalid=true] { border-color: hsl(0, 75%, 25%); }
+.trip-page input[aria-invalid=true], .trip-page select[aria-invalid=true] { border-color: hsl(30, 100%, 25%); }
 .trip-page fieldset { display: flex; flex-direction: column; gap: 12px; min-width: 0; margin: 0; padding: 0; border-width: 0; border-style: none; }
 .trip-kind label { display: flex; flex-direction: row; align-items: center; gap: 12px; }
 .trip-hint { color: hsl(120, 25%, 25%); }
-.trip-page .field-error { display: block; font-size: 20px; line-height: 26px; color: hsl(0, 75%, 25%); }
+.trip-page .field-error { display: block; font-size: 20px; line-height: 26px; color: hsl(30, 100%, 25%); }
 .trip-leg { display: flex; flex-direction: column; gap: 20px; padding: 24px; background: hsl(0, 0%, 100%); border-width: 2px; border-style: solid; border-color: hsl(120, 25%, 75%); }
 .trip-leg h3 { margin: 0; font-size: 32px; line-height: 40px; }
 .place-selector { padding: 0; }
@@ -537,8 +537,8 @@ main:has(.accommodation-workspace) { max-width: 1536px; padding: 32px 48px 80px;
 .place-results { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .place-results li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .trip-actions { display: flex; flex-wrap: wrap; gap: 16px; }
-.trip-alert { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 24px; background: hsl(0, 25%, 75%); color: hsl(0, 75%, 25%); border-width: 2px; border-style: solid; border-color: hsl(0, 75%, 25%); }
-.trip-alert h2, .trip-alert p, .trip-alert a { margin: 0; color: hsl(0, 75%, 25%); }
+.trip-alert { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 24px; background: hsl(30, 100%, 75%); color: hsl(30, 100%, 25%); border-width: 2px; border-style: solid; border-color: hsl(30, 100%, 25%); }
+.trip-alert h2, .trip-alert p, .trip-alert a { margin: 0; color: hsl(30, 100%, 25%); }
 .trip-status { margin: 0; padding: 16px 24px; background: hsl(120, 25%, 75%); }
 .trip-dialog { display: flex; flex-direction: column; gap: 16px; padding: 24px; background: hsl(0, 0%, 100%); border-width: 2px; border-style: solid; border-color: hsl(120, 25%, 25%); }
 .trip-dialog h2, .trip-dialog p { margin: 0; }
