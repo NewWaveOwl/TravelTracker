@@ -1,0 +1,130 @@
+@using TravelTracker.Frontend.Api.Accommodations
+
+<section class="accommodation-workspace" aria-labelledby="accommodation-heading">
+    <header class="accommodation-heading">
+        <div>
+            <small>YOUR TRIP / LODGING</small>
+            <h1 id="accommodation-heading" tabindex="-1" @ref="workspaceHeading">Find a place to stay</h1>
+            <p>Search visible stays or add a place to your trip draft.</p>
+        </div>
+        @if (canWrite && signedIn)
+        {
+            <button type="button" @onclick="OpenCreate" @ref="addButton" disabled="@saving">+ Add accommodation</button>
+        }
+    </header>
+
+    @if (!signedIn && loaded)
+    {
+        <div class="accommodation-feedback" role="status"><h2>Sign in to find accommodations</h2><p><a href="/account">Go to your account</a> to sign in and search places visible to you.</p></div>
+    }
+    else if (signedIn && !canRead)
+    {
+        <div class="accommodation-feedback" role="alert"><h2>Accommodation read access required</h2><p>Your session does not have <code>catalogue.read</code>. Sign in with the approved catalogue read grant to browse accommodations.</p></div>
+        @if (status is not null) { <p class="accommodation-status" role="status">@status</p> }
+    }
+    else if (signedIn)
+    {
+        @if (status is not null) { <p class="accommodation-status" role="status">@status</p> }
+        @if (error is not null)
+        {
+            <section class="accommodation-error" role="alert" tabindex="-1" @ref="errorSummary">
+                <h2>@ErrorHeading</h2><p>@error.Message</p>
+                @if (errors.Count > 0)
+                {
+                    <ul>@foreach (var field in errors) { <li><a href="@("#accommodation-" + field.Key)">@string.Join(" ", field.Value)</a></li> }</ul>
+                }
+                @if (retrySearch) { <button class="secondary" type="button" @onclick="SearchAsync" disabled="@busy">Retry search</button> }
+            </section>
+        }
+        <div class="accommodation-columns">
+            <section class="accommodation-catalogue" aria-labelledby="accommodation-results-heading" aria-busy="@searching.ToString().ToLowerInvariant()">
+                <h2 id="accommodation-results-heading">Search accommodations</h2>
+                <form class="accommodation-search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+                    <label for="accommodation-query">Place name<input id="accommodation-query" @bind="query" placeholder="Search by name" disabled="@busy" /></label>
+                    <div class="actions"><button type="submit" class="secondary" disabled="@busy">Search</button><button type="button" class="secondary" @onclick="ClearSearchAsync" disabled="@busy">Clear</button></div>
+                </form>
+                @if (searching) { <p role="status">Searching accommodations…</p> }
+                else if (!loaded) { <p role="status">Loading visible accommodations…</p> }
+                else if (results.Count == 0)
+                {
+                    <div class="accommodation-empty" role="status"><h3>No accommodations found</h3><p>Try a different name or clear your search to browse all visible places.</p></div>
+                }
+                else
+                {
+                    <p class="accommodation-count" role="status">@results.Count VISIBLE PLACES / NAME A–Z</p>
+                    <div class="accommodation-results">
+                        @foreach (var item in results)
+                        {
+                            <article @key="item.AccommodationId" class="accommodation-card @(selected?.AccommodationId == item.AccommodationId ? "selected" : "")">
+                                <span class="accommodation-visibility">@VisibilityLabel(item.Visibility)</span>
+                                <h3>@item.Name</h3>
+                                <p>@(string.IsNullOrWhiteSpace(item.Address) ? "Address not provided" : item.Address)</p>
+                                <button type="button" class="secondary" disabled="@busy" @onclick="() => ShowDetailsAsync(item.AccommodationId)">View details<span class="visually-hidden"> for @item.Name</span></button>
+                            </article>
+                        }
+                    </div>
+                }
+                @if (!canWrite) { <p class="accommodation-readonly" role="status">Read-only catalogue. Adding places requires <code>catalogue.write</code>.</p> }
+            </section>
+
+            <section class="accommodation-details" aria-labelledby="accommodation-details-heading" aria-busy="@loadingDetails.ToString().ToLowerInvariant()">
+                @if (loadingDetails)
+                {
+                    <h2 id="accommodation-details-heading">Loading accommodation…</h2><p role="status">Fetching saved details.</p>
+                }
+                else if (selected is not null)
+                {
+                    <small>PLACE DETAILS</small><h2 id="accommodation-details-heading" tabindex="-1" @ref="detailsHeading">@selected.Name</h2>
+                    <span class="accommodation-visibility">@VisibilityLabel(selected.Visibility)</span>
+                    <p>@(string.IsNullOrWhiteSpace(selected.Address) ? "Address not provided" : selected.Address)</p>
+                    <dl><dt>Latitude</dt><dd>@selected.Lat</dd><dt>Longitude</dt><dd>@selected.Lon</dd></dl>
+                    @if (selected.AccommodationId == SelectedAccommodationId)
+                    {
+                        <p class="accommodation-status" role="status">Saved place selected for this trip draft.</p>
+                    }
+                    else
+                    {
+                        <button type="button" @onclick="SelectCurrentAsync" disabled="@busy">Select this place</button>
+                    }
+                }
+                else
+                {
+                    <h2 id="accommodation-details-heading">Choose where to stay</h2><p>Select a result to review its address and location before adding it to your draft.</p>
+                }
+            </section>
+        </div>
+    }
+
+    @if (showCreate && signedIn)
+    {
+        <div class="accommodation-modal-backdrop" @onclick="CloseCreate">
+            <section class="accommodation-modal" role="dialog" aria-modal="true" aria-labelledby="accommodation-create-heading" @onclick:stopPropagation @onkeydown="HandleModalKeyDown">
+                <span class="visually-hidden" tabindex="0" @onfocus="FocusLastModalControl"></span>
+                <header><div><small>ADD TO YOUR CATALOGUE</small><h2 id="accommodation-create-heading">Add an accommodation</h2></div><button type="button" class="secondary" aria-label="Close add accommodation form" @onclick="CloseCreate" disabled="@saving">Close</button></header>
+                <p>Your place is private by default. Shared places are available to all travellers.</p>
+                @if (formError is not null) { <div class="accommodation-error" role="alert" tabindex="-1" @ref="createErrorSummary"><h3>@ErrorHeading</h3><p>@formError</p></div> }
+                <form @onsubmit="CreateAsync" @onsubmit:preventDefault>
+                    <fieldset disabled="@saving">
+                        <label for="accommodation-name">Name *<input id="accommodation-name" @bind="draft.Name" @ref="firstModalControl" required aria-invalid="@(FieldError("name") is null ? null : "true")" aria-describedby="accommodation-name-error" /></label>
+                        @if (FieldError("name") is { } nameError) { <small class="field-error" id="accommodation-name-error">@nameError</small> }
+                        <label for="accommodation-address">Address<input id="accommodation-address" @bind="draft.Address" aria-invalid="@(FieldError("address") is null ? null : "true")" aria-describedby="accommodation-address-error" /></label>
+                        @if (FieldError("address") is { } addressError) { <small class="field-error" id="accommodation-address-error">@addressError</small> }
+                        <div class="accommodation-coordinate-grid">
+                            <div><label for="accommodation-lat">Latitude *<input id="accommodation-lat" @bind="draft.Lat" inputmode="decimal" required aria-invalid="@(FieldError("lat") is null ? null : "true")" aria-describedby="accommodation-lat-error" /></label>@if (FieldError("lat") is { } latError) { <small class="field-error" id="accommodation-lat-error">@latError</small> }</div>
+                            <div><label for="accommodation-lon">Longitude *<input id="accommodation-lon" @bind="draft.Lon" inputmode="decimal" required aria-invalid="@(FieldError("lon") is null ? null : "true")" aria-describedby="accommodation-lon-error" /></label>@if (FieldError("lon") is { } lonError) { <small class="field-error" id="accommodation-lon-error">@lonError</small> }</div>
+                        </div>
+                        @if (canShare)
+                        {
+                            <label for="accommodation-visibility">Visibility<select id="accommodation-visibility" @bind="draft.Visibility" aria-invalid="@(FieldError("visibility") is null ? null : "true")" aria-describedby="accommodation-visibility-error"><option value="private">Private</option><option value="shared">Shared catalogue</option></select></label>
+                            @if (FieldError("visibility") is { } visibilityError) { <small class="field-error" id="accommodation-visibility-error">@visibilityError</small> }
+                        }
+                        else { <p class="accommodation-private-note">Private place · visible only to you.</p> }
+                        <small>Fields marked * are required. Enter coordinates for the place you want to stay.</small>
+                        <div class="actions"><button type="submit" disabled="@(!canWrite || saving)">@(saving ? "Saving…" : "Save place")</button><button type="button" class="secondary" @onclick="CloseCreate" @ref="lastModalControl" disabled="@saving">Cancel</button></div>
+                    </fieldset>
+                </form>
+                <span class="visually-hidden" tabindex="0" @onfocus="FocusFirstModalControl"></span>
+            </section>
+        </div>
+    }
+</section>

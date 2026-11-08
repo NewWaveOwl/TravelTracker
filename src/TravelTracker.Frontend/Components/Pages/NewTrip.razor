@@ -1,9 +1,16 @@
 @page "/new-trip"
+@using TravelTracker.Frontend.Api.Accommodations
+@using TravelTracker.Frontend.Components.Accommodations
 @using TravelTracker.Frontend.Components.Transport
 @using TravelTracker.Frontend.Features.Transport
 <PageTitle>New Trip | TravelTracker</PageTitle>
 
 <TransportWorkspace SelectionChanged="SelectionUpdated" />
+<AccommodationWorkspace SelectionChanged="AccommodationSelectionUpdated" SelectedAccommodationId="@accommodation?.AccommodationId" />
+@if (accommodation is not null)
+{
+    <p role="status">@accommodation.Name is selected for this trip draft. Trip and stay saving are not connected yet.</p>
+}
 <p>Add the details below. Fields marked * are required.</p>
 <TripForm />
 
@@ -11,5 +18,7 @@
 
 @code {
     IReadOnlyList<TransportSelection> selection = [];
+    AccommodationDto? accommodation;
     void SelectionUpdated(IReadOnlyList<TransportSelection> value) => selection = value;
+    void AccommodationSelectionUpdated(AccommodationDto? value) => accommodation = value;
 }
