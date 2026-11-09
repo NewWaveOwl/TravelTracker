@@ -28,28 +28,37 @@ internal sealed class JourneyEnvironment : IDisposable
     /** creates every host and its database; hosts start on first use. */
     internal JourneyEnvironment()
     {
-        var router = new HostRouter();
-        router.Route("issuer.journey.test", () => Identity);
-        router.Route("users.journey.test", () => users);
-        disposables.Add(Identity);
-
-        Settings = Add(new JourneyHost<SettingsProgram>(Own("Settings", UsersAccess()), router));
-        Accommodations = Add(new JourneyHost<AccommodationsProgram>(Own("Accommodations", UsersAccess()), router));
-        Attractions = Add(new JourneyHost<AttractionsProgram>(Own("Attractions", UsersAccess()), router));
-        Transport = Add(new JourneyHost<TransportProgram>(Own("Transport", []), router));
-        Trips = Add(new JourneyHost<TripsProgram>(Own("Trips", new()
+        try
         {
-            ["TripReferences:AccommodationsBaseUrl"] = "https://accommodations.journey.test/",
-            ["TripReferences:AttractionsBaseUrl"] = "https://attractions.journey.test/",
-            ["TripReferences:TransportBaseUrl"] = "https://transport.journey.test/",
-            ["TripReferences:UsersBaseUrl"] = UsersBase,
-            ["TripReferences:UsersServiceAccessToken"] = UsersService.ServiceToken,
-            ["TripReferences:Timeout"] = "00:00:10"
-        }), router));
+            var router = new HostRouter();
+            router.Route("issuer.journey.test", () => Identity);
+            router.Route("users.journey.test", () => users);
+            disposables.Add(Identity);
 
-        router.Route("accommodations.journey.test", () => Accommodations.Server.CreateHandler());
-        router.Route("attractions.journey.test", () => Attractions.Server.CreateHandler());
-        router.Route("transport.journey.test", () => Transport.Server.CreateHandler());
+            Settings = Add(new JourneyHost<SettingsProgram>(Own("Settings", UsersAccess()), router));
+            Accommodations = Add(new JourneyHost<AccommodationsProgram>(Own("Accommodations", UsersAccess()), router));
+            Attractions = Add(new JourneyHost<AttractionsProgram>(Own("Attractions", UsersAccess()), router));
+            Transport = Add(new JourneyHost<TransportProgram>(Own("Transport", []), router));
+            Trips = Add(new JourneyHost<TripsProgram>(Own("Trips", new()
+            {
+                ["TripReferences:AccommodationsBaseUrl"] = "https://accommodations.journey.test/",
+                ["TripReferences:AttractionsBaseUrl"] = "https://attractions.journey.test/",
+                ["TripReferences:TransportBaseUrl"] = "https://transport.journey.test/",
+                ["TripReferences:UsersBaseUrl"] = UsersBase,
+                ["TripReferences:UsersServiceAccessToken"] = UsersService.ServiceToken,
+                ["TripReferences:Timeout"] = "00:00:10"
+            }), router));
+
+            router.Route("accommodations.journey.test", () => Accommodations.Server.CreateHandler());
+            router.Route("attractions.journey.test", () => Attractions.Server.CreateHandler());
+            router.Route("transport.journey.test", () => Transport.Server.CreateHandler());
+        }
+        catch
+        {
+            // xUnit does not call Dispose when a constructor throws, so drop any database already created
+            Dispose();
+            throw;
+        }
     }
 
     private readonly UsersService users = new();

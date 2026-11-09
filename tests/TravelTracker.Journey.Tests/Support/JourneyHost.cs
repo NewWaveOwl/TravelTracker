@@ -42,6 +42,7 @@ internal sealed class JourneyHost<TProgram>(Dictionary<string, string?> settings
                 ["Database:ApplyMigrations"] = "true",
                 ["Database:SeedExamples"] = "false"
             });
+            // added last so the host's own settings win over the shared defaults above
             configuration.AddInMemoryCollection(settings);
         });
         builder.ConfigureTestServices(services =>
