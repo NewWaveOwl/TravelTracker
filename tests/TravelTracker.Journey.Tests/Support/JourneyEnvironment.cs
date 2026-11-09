@@ -15,6 +15,7 @@ internal sealed class JourneyEnvironment : IDisposable
 {
     private const string UsersBase = "https://users.journey.test/";
     private readonly List<IDisposable> disposables = [];
+    private readonly UsersService users = new();
 
     /** the shared identity provider that signs every token. */
     internal JourneyIdentity Identity { get; } = new();
@@ -30,10 +31,10 @@ internal sealed class JourneyEnvironment : IDisposable
     {
         try
         {
+            disposables.Add(Identity);
             var router = new HostRouter();
             router.Route("issuer.journey.test", () => Identity);
             router.Route("users.journey.test", () => users);
-            disposables.Add(Identity);
 
             Settings = Add(new JourneyHost<SettingsProgram>(Own("Settings", UsersAccess()), router));
             Accommodations = Add(new JourneyHost<AccommodationsProgram>(Own("Accommodations", UsersAccess()), router));
@@ -53,15 +54,20 @@ internal sealed class JourneyEnvironment : IDisposable
             router.Route("attractions.journey.test", () => Attractions.Server.CreateHandler());
             router.Route("transport.journey.test", () => Transport.Server.CreateHandler());
         }
-        catch
+        catch (Exception failure)
         {
             // xUnit does not call Dispose when a constructor throws, so drop any database already created
-            Dispose();
+            try
+            {
+                Dispose();
+            }
+            catch (Exception cleanupFailure)
+            {
+                throw new AggregateException("journey environment setup failed and cleanup also failed", failure, cleanupFailure);
+            }
             throw;
         }
     }
-
-    private readonly UsersService users = new();
 
     /**
      * creates a client for one host that carries a signed token for a subject.
@@ -101,9 +107,20 @@ internal sealed class JourneyEnvironment : IDisposable
         return host;
     }
 
-    /** stops every host, then drops every database. */
+    /** stops every host, then drops every database; one failing disposal never skips the rest. */
     public void Dispose()
     {
-        for (var index = disposables.Count - 1; index >= 0; index--) disposables[index].Dispose();
+        var failures = new List<Exception>();
+        for (var index = disposables.Count - 1; index >= 0; index--)
+            try
+            {
+                disposables[index].Dispose();
+            }
+            catch (Exception failure)
+            {
+                failures.Add(failure);
+            }
+        disposables.Clear();
+        if (failures.Count > 0) throw new AggregateException("journey environment cleanup failed", failures);
     }
 }

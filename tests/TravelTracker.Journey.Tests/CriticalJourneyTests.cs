@@ -43,7 +43,8 @@ public sealed class CriticalJourneyTests : IDisposable
 
         using var bobSettings = environment.ClientFor(environment.Settings, "bob", TravellerScopes);
         using var bobSettingsRead = await bobSettings.GetAsync("/api/v1/settings");
-        Assert.NotEqual("train", (await bobSettingsRead.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("preferredTransportMode").GetString());
+        // "car" is the UserSettings default (docs/settings-service.md)
+        Assert.Equal("car", (await bobSettingsRead.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("preferredTransportMode").GetString());
 
         var hotel = await CreateAsync(environment.ClientFor(environment.Accommodations, "alice", TravellerScopes),
             "/api/v1/accommodations", new { name = "Hotel Lumiere", lat = 48.85m, lon = 2.35m }, "accommodationId");

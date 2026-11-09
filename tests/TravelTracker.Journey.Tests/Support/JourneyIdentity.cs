@@ -12,7 +12,7 @@ namespace TravelTracker.Journey.Tests.Support;
  * plays the identity provider for the whole journey: one signing key, issuer discovery and signed tokens.
  * every host validates against this same issuer through its production bearer handler.
  */
-internal sealed class JourneyIdentity : HttpMessageHandler, IDisposable
+internal sealed class JourneyIdentity : HttpMessageHandler
 {
     internal const string Issuer = "https://issuer.journey.test";
     internal const string Audience = "traveltracker-journey";
@@ -68,11 +68,14 @@ internal sealed class JourneyIdentity : HttpMessageHandler, IDisposable
         }));
     }
 
-    /** releases the signing key. */
-    public new void Dispose()
+    /**
+     * releases the signing key.
+     * @param disposing true when called from Dispose rather than a finalizer.
+     */
+    protected override void Dispose(bool disposing)
     {
-        signingKey.Dispose();
-        base.Dispose();
+        if (disposing) signingKey.Dispose();
+        base.Dispose(disposing);
     }
 
     private static HttpResponseMessage Json(object body) => new(HttpStatusCode.OK) { Content = JsonContent.Create(body) };
