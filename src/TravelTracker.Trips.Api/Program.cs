@@ -5,6 +5,7 @@ using Microsoft.OpenApi;
 using TravelTracker.Api.Authentication;
 using TravelTracker.Api.References;
 using TravelTracker.Api.Trips;
+using TravelTracker.Security.Hosting;
 using TravelTracker.Trips.Api.Errors;
 using TravelTracker.Trips.Data;
 using TravelTracker.Trips.Data.Repositories;
@@ -22,7 +23,7 @@ public partial class TripsProgram
      */
     public static async Task Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = ApiHostBuilder.Create(args);
         builder.Services.AddControllers();
         builder.Services.Configure<ApiBehaviorOptions>(options =>
         {
