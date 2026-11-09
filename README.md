@@ -191,6 +191,18 @@ Wait for **All services are listening**, then open
 Keep PowerShell open and press Enter there when you want to stop the stack.
 After an Auth0 grant change, sign out and back in to refresh your sign-in token.
 
+The Windows launcher uses the team Auth0 domain and Azure PostgreSQL host by
+default. To point it at another development environment, update the Auth0
+settings in user secrets for that environment and pass both hostnames.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Start-AzureTripSmokeTest.ps1 -RunOnly -Auth0Domain my-dev.us.auth0.com -PostgresHost my-dev.postgres.database.azure.com
+```
+
+The launcher prints the backend token's expiry time and warns when it expires
+in the PowerShell console. It keeps the stack running so you can finish your
+work. Stop and rerun the launcher for a fresh backend token.
+
 For the Azure persistence check, run the same command without `-RunOnly`.
 Save a trip, press Enter to restart Trips, and reopen the saved trip URL.
 The launcher uses the existing database schemas with automatic migrations off.

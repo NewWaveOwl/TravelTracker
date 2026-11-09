@@ -1,9 +1,20 @@
 param(
     [string]$Repository = $PSScriptRoot,
     [switch]$RunOnly,
-    [switch]$SkipNuGetAudit
+    [switch]$SkipNuGetAudit,
+    [string]$Auth0Domain = 'dev-d523qhusnp72gtz5.us.auth0.com',
+    [string]$PostgresHost = 'traveltracker-jac-dev-pg.postgres.database.azure.com'
 )
 $ErrorActionPreference = 'Stop'
+if ($env:OS -ne 'Windows_NT') {
+    throw 'This launcher requires Windows PowerShell on Windows.'
+}
+if ([Uri]::CheckHostName($Auth0Domain) -ne [UriHostNameType]::Dns) {
+    throw 'Enter an Auth0 domain without https:// or a path.'
+}
+if ([Uri]::CheckHostName($PostgresHost) -ne [UriHostNameType]::Dns) {
+    throw 'Enter a PostgreSQL DNS hostname without a port or path.'
+}
 Set-Location -LiteralPath $Repository
 $ports = [ordered]@{ Users=5101; Attractions=5104; Transport=5105; Accommodations=5106; Settings=5107; Trips=5108; Frontend=5100 }
 if (Get-NetTCPConnection -State Listen -LocalPort ([int[]]@($ports.Values)) -ErrorAction SilentlyContinue) {
@@ -30,12 +41,12 @@ if ($clientSecret.Length -eq 0) { throw 'The Auth0 client secret is required.' }
 $tokenRequest = @{
     client_id     = $testApplicationId
     client_secret = [pscredential]::new('auth0', $clientSecret).GetNetworkCredential().Password
-    audience      = 'traveltracker-api'
+    audience      = $settings.'Authentication:Bearer:Audience'
     grant_type    = 'client_credentials'
     scope         = 'users.access'
 }
 try {
-    $response = Invoke-RestMethod -Method Post -Uri 'https://dev-d523qhusnp72gtz5.us.auth0.com/oauth/token' -ContentType 'application/json' -Body ($tokenRequest | ConvertTo-Json -Compress)
+    $response = Invoke-RestMethod -Method Post -Uri "https://$Auth0Domain/oauth/token" -MaximumRedirection 0 -ContentType 'application/json' -Body ($tokenRequest | ConvertTo-Json -Compress)
 }
 catch {
     $status = $_.Exception.Response.StatusCode
@@ -57,8 +68,9 @@ $claims = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload))
 if (-not $claims.sub -or $claims.exp -le [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -or 'users.access' -notin ($claims.scope -split ' ')) {
     throw 'The backend JWT must be current and include users.access.'
 }
+$backendTokenExpiresAt = [DateTimeOffset]::FromUnixTimeSeconds([long]$claims.exp)
 $connection = [System.Data.Common.DbConnectionStringBuilder]::new()
-$connection['Host'] = 'traveltracker-jac-dev-pg.postgres.database.azure.com'
+$connection['Host'] = $PostgresHost
 $connection['Port'] = 5432
 $connection['Username'] = $databaseUser
 $connection['Password'] = [pscredential]::new($databaseUser, $databasePassword).GetNetworkCredential().Password
@@ -71,6 +83,9 @@ dotnet restore @restoreArguments
 if ($LASTEXITCODE) { throw 'Restore failed.' }
 dotnet build TravelTracker.slnx --no-restore
 if ($LASTEXITCODE) { throw 'Build failed.' }
+if ([DateTimeOffset]::UtcNow -ge $backendTokenExpiresAt) {
+    throw 'The Auth0 backend token expired during the build. Rerun the launcher to get a fresh token.'
+}
 
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
 $env:Database__ApplyMigrations = 'false'
@@ -141,24 +156,51 @@ function Wait-TestService([string]$Service, $Process) {
     throw "$Service did not respond successfully at $url ($probeResult). Check its logs in $logs."
 }
 
+$script:backendTokenExpiryReported = $false
+function Write-BackendTokenExpiryWarning {
+    if (-not $script:backendTokenExpiryReported -and [DateTimeOffset]::UtcNow -ge $backendTokenExpiresAt) {
+        Write-Warning 'The Auth0 backend token expired. Operations that check account access may fail. Use Save map draft for any unsaved trip edits, then stop the stack and rerun the launcher for a fresh token.'
+        $script:backendTokenExpiryReported = $true
+    }
+}
+
+function Wait-LauncherEnter([string]$Prompt) {
+    Write-BackendTokenExpiryWarning
+    if ($Host.Name -ne 'ConsoleHost' -or [Console]::IsInputRedirected) {
+        [void](Read-Host $Prompt)
+        Write-BackendTokenExpiryWarning
+        return
+    }
+
+    Write-Host $Prompt
+    while ($true) {
+        if ([Console]::KeyAvailable -and [Console]::ReadKey($true).Key -eq [ConsoleKey]::Enter) {
+            return
+        }
+        Write-BackendTokenExpiryWarning
+        Start-Sleep -Milliseconds 250
+    }
+}
+
 $processes = @{}
 try {
     foreach ($service in $ports.Keys) { $processes[$service] = Start-TestService $service }
     foreach ($service in $ports.Keys) { Wait-TestService $service $processes[$service] }
     Write-Host "All services are listening. Logs: $logs"
+    Write-Host "Auth0 backend token expires at $($backendTokenExpiresAt.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss zzz')). Rerun the launcher to renew it."
     if ($RunOnly) {
         Write-Host 'Open http://localhost:5100 in your browser and sign in.'
-        [void](Read-Host 'Press Enter to stop TravelTracker')
+        Wait-LauncherEnter 'Press Enter to stop TravelTracker'
         return
     }
     Write-Host 'Open http://localhost:5100, sign in, save a trip, and copy its URL.'
-    [void](Read-Host 'Press Enter after saving to restart Trips')
+    Wait-LauncherEnter 'Press Enter after saving to restart Trips'
     Stop-Process -InputObject $processes.Trips
     $processes.Trips.WaitForExit()
     $processes.Trips = Start-TestService 'Trips'
     Wait-TestService 'Trips' $processes.Trips
     Write-Host 'Trips restarted. Reload the saved trip URL and check the itinerary.'
-    [void](Read-Host 'Press Enter to stop the test stack')
+    Wait-LauncherEnter 'Press Enter to stop the test stack'
 }
 finally {
     $healthClient.Dispose()
