@@ -154,7 +154,10 @@ Press `Ctrl+C` in the terminal to stop the app.
    to check the ordered itinerary. If it contains new locations or unresolved
    transport modes, choose **Save catalogue entries** before **Save trip**.
    Catalogue entries are saved separately and remain available if the trip is
-   discarded or its save fails. Reopen a saved trip by its link or ID.
+   discarded or its save fails. If a catalogue save cannot be confirmed, retry
+   **Save catalogue entries** in the same planner session to look up the
+   result. If it is still unclear, the planner asks you to check the catalogue
+   before proceeding. Reopen a saved trip by its link or ID.
    The draft is shared between **Map View** and **New Trip**. Leaving or reloading
    the planner with unsaved changes prompts for confirmation.
 

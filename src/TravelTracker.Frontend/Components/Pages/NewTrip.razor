@@ -181,7 +181,7 @@
                         @if (HasPendingCatalogueEntries)
                         {
                             <p>Save new locations and any missing transport modes to the catalogue first. They stay in the catalogue even if you discard this trip.</p>
-                            <button type="button" disabled="@busy" @onclick="SaveCatalogueEntriesAsync">@(busy ? "Saving catalogue entries" : "Save catalogue entries")</button>
+                            <button type="button" disabled="@(busy || savingCatalogue)" @onclick="SaveCatalogueEntriesAsync">@(savingCatalogue ? "Saving catalogue entries" : "Save catalogue entries")</button>
                         }
                         else
                         {

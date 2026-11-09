@@ -119,6 +119,9 @@ public sealed class TripPlannerTests : BunitContext
             var path = request.RequestUri!.AbsolutePath;
             if (path == "/api/v1/attractions")
             {
+                if (request.Method == HttpMethod.Get)
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) };
+
                 Assert.Equal(HttpMethod.Post, request.Method);
                 catalogueWrites++;
                 return new HttpResponseMessage(HttpStatusCode.Created)
@@ -159,6 +162,126 @@ public sealed class TripPlannerTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
         Assert.Equal(2, tripWrites);
         Assert.Equal(1, catalogueWrites);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LostPlaceResponseRetriesLookupWithoutCreatingAnotherRecord(bool committed)
+    {
+        var previous = new AttractionDto(Guid.NewGuid(), Museum.Name, null, null, "", 45.52m, -73.59m, 30);
+        var created = previous with { AttractionId = Guid.NewGuid() };
+        var nearMatch = created with { AttractionId = Guid.NewGuid(), Lon = -73.58m };
+        var catalogueWrites = 0;
+        var tripWrites = 0;
+        Configure(async (request, token) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/api/v1/attractions")
+            {
+                if (request.Method == HttpMethod.Get)
+                {
+                    Assert.Contains("name=Museum", request.RequestUri.Query);
+                    AttractionDto[] results = committed && catalogueWrites > 0 ? [previous, nearMatch, created] : [previous];
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(results) };
+                }
+
+                Assert.Equal(HttpMethod.Post, request.Method);
+                catalogueWrites++;
+                throw new HttpRequestException("Response lost after the create request.");
+            }
+
+            Assert.Equal($"/api/v1/trips/{TripId:D}", path);
+            if (request.Method == HttpMethod.Get)
+                return Json(Saved);
+
+            Assert.Equal(HttpMethod.Put, request.Method);
+            tripWrites++;
+            var body = (await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token))!;
+            Assert.Equal(created.AttractionId, Assert.Single(body.Legs).To.PlaceId);
+            return Json(Saved);
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, previous.Lat, previous.Lon)));
+
+        Click(page, "Review on map");
+        Click(page, "Save catalogue entries");
+        page.WaitForAssertion(() => Assert.Contains("could not be confirmed", page.Find("[role=alert]").TextContent));
+        Click(page, "Save catalogue entries");
+
+        if (committed)
+        {
+            Click(page, "Save trip");
+            page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
+            Assert.Equal(1, tripWrites);
+        }
+        else
+        {
+            page.WaitForAssertion(() => Assert.Contains("catalogue save for Museum could not be confirmed", page.Find("[role=alert]").TextContent));
+            Assert.DoesNotContain(page.FindAll(".trip-review button"), button => button.TextContent == "Save trip");
+            Assert.Equal(0, tripWrites);
+        }
+
+        Assert.Equal(1, catalogueWrites);
+    }
+
+    [Fact]
+    public async Task CatalogueSaveRemainsSingleFlightAcrossTripRoutes()
+    {
+        var otherTrip = Saved with { TripId = Guid.NewGuid(), Name = "Other trip" };
+        var catalogueWrites = 0;
+        var writeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reply = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Configure(async (request, token) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == $"/api/v1/trips/{TripId:D}")
+                return Json(Saved);
+            if (path == $"/api/v1/trips/{otherTrip.TripId:D}")
+                return Json(otherTrip);
+
+            Assert.Equal("/api/v1/attractions", path);
+            if (request.Method == HttpMethod.Get)
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) };
+
+            Assert.Equal(HttpMethod.Post, request.Method);
+            catalogueWrites++;
+            writeStarted.TrySetResult();
+            return await reply.Task.WaitAsync(token);
+        });
+        JSInterop.Setup<bool>("confirm", _ => true).SetResult(true);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo($"/map/{TripId:D}");
+        var routes = Render<Routes>();
+        var page = routes.FindComponent<NewTrip>();
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, 45.52m, -73.59m)));
+        Click(page, "Review on map");
+        var firstClick = page.Find(".trip-review button").TriggerEventAsync("onclick", new MouseEventArgs());
+
+        try
+        {
+            await writeStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            await routes.InvokeAsync(() => navigation.NavigateTo($"/map/{otherTrip.TripId:D}"));
+            page = routes.FindComponent<NewTrip>();
+            canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+            await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, 45.53m, -73.60m)));
+            Click(page, "Review on map");
+            var save = page.Find(".trip-review button");
+            Assert.True(save.HasAttribute("disabled"));
+            await save.TriggerEventAsync("onclick", new MouseEventArgs()).WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal(1, catalogueWrites);
+        }
+        finally
+        {
+            reply.TrySetResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        }
+
+        await firstClick;
+        page.WaitForAssertion(() => Assert.False(page.Find(".trip-review button").HasAttribute("disabled")));
+        Assert.Empty(page.FindAll("[role=alert]"));
     }
 
     [Fact]
@@ -540,10 +663,13 @@ public sealed class TripPlannerTests : BunitContext
             });
     }
 
-    [Fact]
-    public void MapPlannerCreatesATripFromSavedPlacesAndReusesTheReturnedId()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MapPlannerCreatesATripFromSavedPlacesAndReusesTheReturnedId(bool loseModeResponse)
     {
         SaveTripRequest? created = null;
+        var modeWrites = 0;
         Configure(async (request, token) =>
         {
             var path = request.RequestUri!.AbsolutePath;
@@ -557,8 +683,17 @@ public sealed class TripPlannerTests : BunitContext
                     return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(
                         new[] { new { AttractionId = Museum.PlaceId, Museum.Name, Museum.Address, Museum.Lat, Museum.Lon, EstimatedVisitMinutes = 30 } }) };
                 case "/api/v1/transport-modes":
-                    Assert.Contains("code=train", request.RequestUri.Query);
-                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new[] { Train }) };
+                    if (request.Method == HttpMethod.Get)
+                    {
+                        Assert.Contains("code=train", request.RequestUri.Query);
+                        var modes = loseModeResponse && modeWrites == 0 ? Array.Empty<TripDto.Mode>() : [Train];
+                        return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(modes) };
+                    }
+
+                    Assert.True(loseModeResponse);
+                    Assert.Equal(HttpMethod.Post, request.Method);
+                    modeWrites++;
+                    throw new HttpRequestException("Response lost after creating the transport mode.");
                 case "/api/v1/trips":
                     Assert.Equal(HttpMethod.Post, request.Method);
                     created = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
@@ -609,9 +744,15 @@ public sealed class TripPlannerTests : BunitContext
         Click(page, "Review on map");
         Assert.True(page.FindAll("[role=alert]").Count == 0, string.Join(" ", page.FindAll("[role=alert]").Select(alert => alert.TextContent)));
         Click(page, "Save catalogue entries");
+        if (loseModeResponse)
+        {
+            page.WaitForAssertion(() => Assert.Contains("could not be confirmed", page.Find("[role=alert]").TextContent));
+            Click(page, "Save catalogue entries");
+        }
         Click(page, "Save trip");
 
         page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
+        Assert.Equal(loseModeResponse ? 1 : 0, modeWrites);
         Assert.NotNull(created);
         Assert.Equal(Start, created.Start);
         var leg = Assert.Single(created.Legs);

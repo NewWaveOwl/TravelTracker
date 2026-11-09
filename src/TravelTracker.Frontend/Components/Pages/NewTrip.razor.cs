@@ -31,6 +31,8 @@ public partial class NewTrip : IAsyncDisposable
 
     readonly CancellationTokenSource closed = new();
     readonly List<Action> undoHistory = [];
+    readonly Dictionary<TripPlaceDto, HashSet<Guid>> pendingPlaceCreates = [];
+    readonly HashSet<string> pendingModeCreates = new(StringComparer.OrdinalIgnoreCase);
     ElementReference plannerElement;
     Task<IJSObjectReference?>? undoShortcut;
     TripPlannerDraft draft = new();
@@ -49,6 +51,7 @@ public partial class NewTrip : IAsyncDisposable
     int insertAfter;
     bool review;
     bool busy;
+    bool savingCatalogue;
     bool dirty;
     bool searched;
     bool placing;
@@ -771,7 +774,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Confirms catalogue references independently of saving the itinerary. */
     async Task SaveCatalogueEntriesAsync()
     {
-        if (busy || !HasPendingCatalogueEntries)
+        if (busy || savingCatalogue || !HasPendingCatalogueEntries)
             return;
 
         var (request, problems) = draft.Build();
@@ -781,6 +784,7 @@ public partial class NewTrip : IAsyncDisposable
             return;
 
         busy = true;
+        savingCatalogue = true;
         var version = routeVersion;
         var token = closed.Token;
         try
@@ -796,6 +800,7 @@ public partial class NewTrip : IAsyncDisposable
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         finally
         {
+            savingCatalogue = false;
             if (version == routeVersion)
                 busy = false;
         }
@@ -809,10 +814,13 @@ public partial class NewTrip : IAsyncDisposable
      */
     async Task ResolveCatalogueAsync(TripPlannerDraft savingDraft, int version, CancellationToken token)
     {
-        var pendingPlaces = savingDraft.Stops.Where(stop => stop.Place.PlaceId == Guid.Empty).GroupBy(stop => stop.Place);
+        var pendingPlaces = savingDraft.Stops.Where(stop => stop.Place.PlaceId == Guid.Empty)
+            .GroupBy(stop => PlaceDetails(stop.Place));
         foreach (var group in pendingPlaces)
         {
-            var place = await PlaceCatalogue.CreateAsync(group.Key, token);
+            var place = await ResolvePlaceAsync(group.Key, version, token);
+            if (place is null)
+                return;
             foreach (var stop in group)
                 stop.Place = place;
 
@@ -827,20 +835,106 @@ public partial class NewTrip : IAsyncDisposable
             .Where(leg => leg.Mode is { TransportModeId: var id } && id == Guid.Empty).GroupBy(leg => leg.Mode!.Code);
         foreach (var group in pendingModes)
         {
-            var label = group.First().Mode!.Name;
-            var entries = await Transport.SearchTransportAsync("", group.Key, token);
-            if (version != routeVersion)
+            var mode = await ResolveModeAsync(group.First().Mode!, version, token);
+            if (mode is null)
                 return;
-            var mode = entries.FirstOrDefault() ?? await Transport.CreateTransportAsync(
-                new() { ["code"] = group.Key, ["name"] = label }, token);
             foreach (var leg in group)
-                leg.Mode = new(mode.TransportModeId, mode.Code, mode.Name);
+                leg.Mode = mode;
             if (ReferenceEquals(draft, savingDraft))
                 undoHistory.Clear();
             if (version != routeVersion)
                 return;
         }
     }
+
+    /**
+     * Creates a place once or looks for its confirmed record after an ambiguous response.
+     * @param place New location with normalized fields and an empty ID.
+     * @param version The planner route version at the start of the operation.
+     * @param token Cancels pending work.
+     * @return A confirmed location, or null if navigation superseded the lookup.
+     */
+    async Task<TripPlaceDto?> ResolvePlaceAsync(TripPlaceDto place, int version, CancellationToken token)
+    {
+        var entries = await PlaceCatalogue.SearchAsync(place.Type, place.Name, token);
+        if (version != routeVersion)
+            return null;
+
+        var matches = entries.Where(entry => entry.PlaceId != Guid.Empty && PlaceDetails(entry) == place)
+            .DistinctBy(entry => entry.PlaceId);
+        if (pendingPlaceCreates.TryGetValue(place, out var existingIds))
+        {
+            var recovered = matches.Where(entry => !existingIds.Contains(entry.PlaceId)).Take(2).ToArray();
+            if (recovered.Length != 1)
+                throw UnconfirmedCatalogueEntry(place.Name);
+            pendingPlaceCreates.Remove(place);
+            return recovered[0];
+        }
+
+        // An existing identical record cannot confirm the outcome of this POST.
+        pendingPlaceCreates.Add(place, matches.Select(entry => entry.PlaceId).ToHashSet());
+        try
+        {
+            var created = await PlaceCatalogue.CreateAsync(place, token);
+            if (created.PlaceId == Guid.Empty)
+                throw UnconfirmedCatalogueEntry(place.Name);
+            pendingPlaceCreates.Remove(place);
+            return created;
+        }
+        catch (ApiError error) when (CatalogueWriteRejected(error))
+        {
+            pendingPlaceCreates.Remove(place);
+            throw;
+        }
+    }
+
+    /**
+     * Looks up a mode by its exact code before creating it or recovering an uncertain creation.
+     * @param mode Mode to resolve with its draft code and label.
+     * @param version The planner route version at the start of the operation.
+     * @param token Cancels pending work.
+     * @return A confirmed mode, or null if navigation superseded the lookup.
+     */
+    async Task<TripDto.Mode?> ResolveModeAsync(TripDto.Mode mode, int version, CancellationToken token)
+    {
+        var entries = await Transport.SearchTransportAsync("", mode.Code, token);
+        if (version != routeVersion)
+            return null;
+
+        var saved = entries.FirstOrDefault(entry => entry.TransportModeId != Guid.Empty &&
+            string.Equals(entry.Code, mode.Code, StringComparison.OrdinalIgnoreCase));
+        if (saved is not null)
+        {
+            pendingModeCreates.Remove(mode.Code);
+            return new(saved.TransportModeId, saved.Code, saved.Name);
+        }
+
+        if (!pendingModeCreates.Add(mode.Code))
+            throw UnconfirmedCatalogueEntry(mode.Name);
+
+        try
+        {
+            var created = await Transport.CreateTransportAsync(
+                new() { ["code"] = mode.Code, ["name"] = mode.Name }, token);
+            if (created.TransportModeId == Guid.Empty)
+                throw UnconfirmedCatalogueEntry(mode.Name);
+            pendingModeCreates.Remove(mode.Code);
+            return new(created.TransportModeId, created.Code, created.Name);
+        }
+        catch (ApiError error) when (CatalogueWriteRejected(error))
+        {
+            pendingModeCreates.Remove(mode.Code);
+            throw;
+        }
+    }
+
+    static TripPlaceDto PlaceDetails(TripPlaceDto place) =>
+        place with { PlaceId = Guid.Empty, Name = place.Name?.Trim() ?? "", Address = place.Address?.Trim() ?? "" };
+
+    static bool CatalogueWriteRejected(ApiError error) => error.Status is >= 400 and < 500 and not (408 or 409 or 429);
+
+    static ApiError UnconfirmedCatalogueEntry(string name) =>
+        new(FailureKind.Unexpected, $"The catalogue save for {name} could not be confirmed. Check the catalogue before retrying.");
 
     void UpdateLink(Guid id)
     {
