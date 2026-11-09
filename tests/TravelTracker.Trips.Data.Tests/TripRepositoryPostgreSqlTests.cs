@@ -84,8 +84,8 @@ public sealed class TripRepositoryPostgreSqlTests
             await TripsDatabase.InitializeAsync(context);
             var repository = new EfTripRepository(context);
             await repository.AddAsync(original, OwnerIssuer, "alice");
-            Assert.False(await repository.ReplaceOwnedAsync(replacement, OwnerIssuer, "bob"));
-            Assert.True(await repository.ReplaceOwnedAsync(replacement, OwnerIssuer, "alice"));
+            Assert.Equal(TripReplacementStatus.NotFound, await repository.ReplaceOwnedAsync(replacement, OwnerIssuer, "bob", original.Revision));
+            Assert.Equal(TripReplacementStatus.Replaced, await repository.ReplaceOwnedAsync(replacement, OwnerIssuer, "alice", original.Revision));
         }
 
         await using var check = CreateContext(database.ConnectionString);
@@ -93,6 +93,7 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.NotNull(saved);
         Assert.Equal(original.TripId, saved.TripId);
         Assert.Equal(replacement.Name, saved.Name);
+        Assert.Equal(original.Revision + 1, saved.Revision);
         Assert.False(saved.IsRoundTrip);
         Assert.Equal(replacement.Legs[0], Assert.Single(saved.Legs));
     }
@@ -109,7 +110,7 @@ public sealed class TripRepositoryPostgreSqlTests
             await TripsDatabase.InitializeAsync(context);
             var repository = new EfTripRepository(context);
             await repository.AddAsync(original, OwnerIssuer, "alice");
-            var exception = await Assert.ThrowsAsync<DbUpdateException>(() => repository.ReplaceOwnedAsync(replacement, OwnerIssuer, "alice"));
+            var exception = await Assert.ThrowsAsync<DbUpdateException>(() => repository.ReplaceOwnedAsync(replacement, OwnerIssuer, "alice", original.Revision));
             Assert.Equal(PostgresErrorCodes.StringDataRightTruncation, Assert.IsType<PostgresException>(exception.InnerException).SqlState);
         }
 
@@ -117,11 +118,12 @@ public sealed class TripRepositoryPostgreSqlTests
         var saved = await new EfTripRepository(check).GetOwnedByIdAsync(original.TripId, OwnerIssuer, "alice");
         Assert.NotNull(saved);
         Assert.Equal(original.Name, saved.Name);
+        Assert.Equal(original.Revision, saved.Revision);
         Assert.Equal(original.Legs, saved.Legs);
     }
 
     [Fact]
-    public async Task ReplaceOwned_ConcurrentWritesLeaveOneCompleteItinerary()
+    public async Task ReplaceOwned_ConcurrentWritesAcceptOnlyOneCompleteItinerary()
     {
         await using var database = new PostgresTestDatabase();
         var original = SampleTrip();
@@ -137,13 +139,15 @@ public sealed class TripRepositoryPostgreSqlTests
         await using var first = CreateContext(database.ConnectionString);
         await using var second = CreateContext(database.ConnectionString);
         var writes = await Task.WhenAll(
-            new EfTripRepository(first).ReplaceOwnedAsync(oneWay, OwnerIssuer, "alice"),
-            new EfTripRepository(second).ReplaceOwnedAsync(roundTrip, OwnerIssuer, "alice"));
+            new EfTripRepository(first).ReplaceOwnedAsync(oneWay, OwnerIssuer, "alice", original.Revision),
+            new EfTripRepository(second).ReplaceOwnedAsync(roundTrip, OwnerIssuer, "alice", original.Revision));
 
-        Assert.All(writes, saved => Assert.True(saved));
+        Assert.Single(writes, status => status == TripReplacementStatus.Replaced);
+        Assert.Single(writes, status => status == TripReplacementStatus.Stale);
         var persisted = await repository.GetOwnedByIdAsync(original.TripId, OwnerIssuer, "alice");
         Assert.NotNull(persisted);
-        var expected = persisted.IsRoundTrip ? roundTrip : oneWay;
+        var expected = writes[0] == TripReplacementStatus.Replaced ? oneWay : roundTrip;
+        Assert.Equal(original.Revision + 1, persisted.Revision);
         Assert.Equal(expected.Name, persisted.Name);
         Assert.Equal(expected.Legs, persisted.Legs);
     }

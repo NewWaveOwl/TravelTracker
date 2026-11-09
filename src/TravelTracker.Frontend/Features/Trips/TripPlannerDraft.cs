@@ -7,22 +7,28 @@ internal sealed class TripPlannerDraft
 {
     readonly List<Stop> stops = [];
     readonly Dictionary<(Stop From, Stop To), Leg> legs = [];
-    DateTimeOffset? savedStart;
-    DateTimeOffset? savedEnd;
     string? savedZone;
     bool? roundTrip;
 
     internal Guid? Id { get; set; }
+    internal string? ETag { get; private set; }
     internal string Name { get; set; } = "";
     internal string TimeZone { get; set; } = "America/Toronto";
     internal DateTime? Start { get; set; }
     internal DateTime? End { get; set; }
+    internal DateTimeOffset? SavedStart { get; private set; }
+    internal DateTimeOffset? SavedEnd { get; private set; }
+    internal OffsetChoice? StartOffset { get; set; }
+    internal OffsetChoice? EndOffset { get; set; }
     internal bool RoundTrip
     {
         get => roundTrip ?? ReturnsToStart;
         set => roundTrip = value;
     }
     internal IReadOnlyList<Stop> Stops => stops;
+
+    /** An explicit offset selection scoped to its local time and trip time zone. */
+    internal sealed record OffsetChoice(DateTime Time, string Zone, TimeSpan Offset);
 
     /** A distinct occurrence of a place in the itinerary. */
     internal sealed class Stop
@@ -56,6 +62,8 @@ internal sealed class TripPlannerDraft
         internal int? DurationMinutes { get; set; }
         internal DateTimeOffset? SavedDeparture { get; init; }
         internal DateTimeOffset? SavedArrival { get; init; }
+        internal OffsetChoice? DepartureOffset { get; set; }
+        internal OffsetChoice? ArrivalOffset { get; set; }
 
         internal Leg Copy() => (Leg)MemberwiseClone();
     }
@@ -65,11 +73,11 @@ internal sealed class TripPlannerDraft
     {
         var places = stops.Select(stop => (Stop: stop, stop.Place)).ToArray();
         var connections = legs.Select(pair => (pair.Key, Value: pair.Value.Copy())).ToArray();
-        var basics = (Name, TimeZone, Start, End, roundTrip);
+        var basics = (Name, TimeZone, Start, End, StartOffset, EndOffset, roundTrip);
 
         return () =>
         {
-            (Name, TimeZone, Start, End, roundTrip) = basics;
+            (Name, TimeZone, Start, End, StartOffset, EndOffset, roundTrip) = basics;
             stops.Clear();
             foreach (var (stop, place) in places)
             {
@@ -88,6 +96,34 @@ internal sealed class TripPlannerDraft
         var index = after is { } previous ? Math.Clamp(previous + 1, 0, stops.Count) : stops.Count;
         stops.Insert(index, new Stop(place));
         return index;
+    }
+
+    /**
+     * Appends another visit to the starting accommodation with the same editable location.
+     * @return The index of the return visit.
+     */
+    internal int AddReturnToStart()
+    {
+        RoundTrip = true;
+        stops.Add(stops[0].Revisit());
+        return stops.Count - 1;
+    }
+
+    /**
+     * Edits the location of a visit and keeps matching round-trip endpoints synchronized.
+     * @param stop The occurrence being edited.
+     * @param place The new location details.
+     */
+    internal void UpdatePlace(Stop stop, TripPlaceDto place)
+    {
+        if (RoundTrip && stops.Count > 1 && SamePlace(stops[0].Place, stops[^1].Place))
+        {
+            if (stop == stops[0])
+                stops[^1].Place = place;
+            else if (stop == stops[^1])
+                stops[0].Place = place;
+        }
+        stop.Place = place;
     }
 
     /** Removes the stop and its associated leg edits. */
@@ -187,17 +223,19 @@ internal sealed class TripPlannerDraft
     }
 
     /** Restores the shared draft from the stored trip and its ordered snapshots. */
-    internal static TripPlannerDraft FromSaved(TripDto trip)
+    internal static TripPlannerDraft FromSaved(TripRevision revision)
     {
+        var trip = revision.Trip;
         var draft = new TripPlannerDraft
         {
             Id = trip.TripId,
+            ETag = revision.ETag,
             Name = trip.Name,
             TimeZone = trip.TimeZone,
             Start = trip.Start.DateTime,
             End = trip.End.DateTime,
-            savedStart = trip.Start,
-            savedEnd = trip.End,
+            SavedStart = trip.Start,
+            SavedEnd = trip.End,
             savedZone = trip.TimeZone
         };
         var places = new Dictionary<TripPlaceDto, Stop>();
@@ -243,7 +281,7 @@ internal sealed class TripPlannerDraft
         if (!TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone))
             return null;
 
-        var start = ResolveLocal(leg.Departure, leg.SavedDeparture, zone);
+        var start = ResolveLocal(leg.Departure, leg.SavedDeparture, leg.DepartureOffset, zone);
         var end = ArrivalInZone(leg, zone);
         return end - start is { Ticks: > 0 } duration ? duration : null;
     }
@@ -265,25 +303,50 @@ internal sealed class TripPlannerDraft
             return null;
 
         var arrival = ArrivalInZone(inbound, zone);
-        var departure = ResolveLocal(outbound.Departure, outbound.SavedDeparture, zone);
+        var departure = ResolveLocal(outbound.Departure, outbound.SavedDeparture, outbound.DepartureOffset, zone);
         return departure - arrival is { Ticks: >= 0 } duration ? duration : null;
     }
 
     DateTimeOffset? ArrivalInZone(Leg leg, TimeZoneInfo zone) => leg.DurationMinutes is { } minutes
-        ? ArrivalAfter(ResolveLocal(leg.Departure, leg.SavedDeparture, zone), minutes, zone)
-        : ResolveLocal(leg.Arrival, leg.SavedArrival, zone);
+        ? ArrivalAfter(ResolveLocal(leg.Departure, leg.SavedDeparture, leg.DepartureOffset, zone), minutes, zone)
+        : ResolveLocal(leg.Arrival, leg.SavedArrival, leg.ArrivalOffset, zone);
 
-    DateTimeOffset? ResolveLocal(DateTime? time, DateTimeOffset? savedTime, TimeZoneInfo zone)
+    /**
+     * Finds the two valid offsets and any saved or explicitly selected offset for a repeated local time.
+     * @param time Local wall-clock time.
+     * @param savedTime Original server-confirmed date and offset for the field.
+     * @param choice Current explicit selection.
+     * @return The offsets in occurrence order and the selection, or no offsets outside a repeated hour.
+     */
+    internal (TimeSpan[] Options, TimeSpan? Selected) RepeatedTime(DateTime? time, DateTimeOffset? savedTime, OffsetChoice? choice)
+    {
+        if (time is not { } value || !TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone))
+            return ([], null);
+
+        var local = DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
+        return zone.IsAmbiguousTime(local)
+            ? (zone.GetAmbiguousTimeOffsets(local).OrderDescending().ToArray(), ResolveLocal(local, savedTime, choice, zone)?.Offset)
+            : ([], null);
+    }
+
+    DateTimeOffset? ResolveLocal(DateTime? time, DateTimeOffset? savedTime, OffsetChoice? choice, TimeZoneInfo zone)
     {
         if (time is not { } value)
             return null;
 
         var local = DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
-        if (TimeZone.Trim() == savedZone && savedTime is { } saved && local == saved.DateTime)
-            return saved;
-        if (zone.IsInvalidTime(local) || zone.IsAmbiguousTime(local))
+        if (zone.IsInvalidTime(local))
             return null;
         var offset = zone.GetUtcOffset(local);
+        if (zone.IsAmbiguousTime(local))
+        {
+            var zoneId = TimeZone.Trim();
+            var selected = choice is not null && choice.Time == local && choice.Zone == zoneId ? choice.Offset
+                : zoneId == savedZone && savedTime is { } saved && local == saved.DateTime ? saved.Offset : (TimeSpan?)null;
+            if (selected is not { } chosen || !zone.GetAmbiguousTimeOffsets(local).Contains(chosen))
+                return null;
+            offset = chosen;
+        }
         var utcTicks = local.Ticks - offset.Ticks;
         return utcTicks >= DateTime.MinValue.Ticks && utcTicks <= DateTime.MaxValue.Ticks
             ? new DateTimeOffset(local, offset) : null;
@@ -308,8 +371,8 @@ internal sealed class TripPlannerDraft
         var zoneId = TimeZone.Trim();
         if (!TimeZoneInfo.TryFindSystemTimeZoneById(zoneId, out var zone))
             errors.Add("Enter a valid time zone, such as America/Toronto.");
-        var start = Resolve(Start, savedStart, "Trip start");
-        var end = Resolve(End, savedEnd, "Trip end");
+        var start = Resolve(Start, SavedStart, StartOffset, "Trip start");
+        var end = Resolve(End, SavedEnd, EndOffset, "Trip end");
         if (start > end)
             errors.Add("Trip end must be at or after trip start.");
 
@@ -339,7 +402,7 @@ internal sealed class TripPlannerDraft
             var leg = LegTo(index);
             if (leg.Mode is null)
                 errors.Add($"Select transport for connection {index}.");
-            var departure = Resolve(leg.Departure, leg.SavedDeparture, $"Connection {index} departure");
+            var departure = Resolve(leg.Departure, leg.SavedDeparture, leg.DepartureOffset, $"Connection {index} departure");
             DateTimeOffset? arrival;
             if (leg.DurationMinutes is { } minutes)
             {
@@ -349,7 +412,7 @@ internal sealed class TripPlannerDraft
             }
             else
             {
-                arrival = Resolve(leg.Arrival, leg.SavedArrival, $"Connection {index} arrival");
+                arrival = Resolve(leg.Arrival, leg.SavedArrival, leg.ArrivalOffset, $"Connection {index} arrival");
             }
             if (departure < start || arrival > end)
                 errors.Add($"Connection {index} must be within the trip dates.");
@@ -367,7 +430,7 @@ internal sealed class TripPlannerDraft
             ? (new(Name.Trim(), zoneId, start.Value, end.Value, RoundTrip, requestLegs), errors)
             : (null, errors);
 
-        DateTimeOffset? Resolve(DateTime? localTime, DateTimeOffset? savedTime, string field)
+        DateTimeOffset? Resolve(DateTime? localTime, DateTimeOffset? savedTime, OffsetChoice? choice, string field)
         {
             if (localTime is null)
             {
@@ -377,9 +440,11 @@ internal sealed class TripPlannerDraft
             if (zone is null)
                 return null;
 
-            var resolved = ResolveLocal(localTime.Value, savedTime, zone);
+            var resolved = ResolveLocal(localTime.Value, savedTime, choice, zone);
             if (resolved is null)
-                errors.Add($"{field} needs a valid, unambiguous local time.");
+                errors.Add(zone.IsAmbiguousTime(DateTime.SpecifyKind(localTime.Value, DateTimeKind.Unspecified))
+                    ? $"Choose a UTC offset for {field.ToLowerInvariant()}."
+                    : $"{field} needs a valid local time.");
             return resolved;
         }
 

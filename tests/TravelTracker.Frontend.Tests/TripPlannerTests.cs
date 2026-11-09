@@ -44,11 +44,12 @@ public sealed class TripPlannerTests : BunitContext
                 return Json(Saved);
 
             Assert.Equal(HttpMethod.Put, request.Method);
+            Assert.Equal(writes.Count < 2 ? "\"1\"" : "\"2\"", Assert.Single(request.Headers.IfMatch).Tag);
             var body = (await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token))!;
             writes.Add(body);
             return writes.Count == 1
                 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
-                : Json(Saved with { Name = body.Name });
+                : Json(Saved with { Name = body.Name }, "\"2\"");
         });
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo($"/map/{TripId:D}");
@@ -66,9 +67,17 @@ public sealed class TripPlannerTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("entries are retained", page.Find("[role=alert]").TextContent));
         Click(page, "Retry save");
         page.WaitForAssertion(() => Assert.Contains("Saved Updated weekend", page.Find("[role=status]").TextContent));
+        Assert.EndsWith($"/new-trip/{TripId:D}", navigation.Uri);
         Assert.Equal(2, writes.Count);
         Assert.Equal(writes[0].Legs.Single(), writes[1].Legs.Single());
         Assert.Equal(Train.TransportModeId, writes[1].Legs.Single().TransportModeId);
+
+        Click(page, "Back to editor");
+        page.Find(".trip-basics input").Change("Edited again");
+        Click(page, "Review on map");
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.Contains("Saved Edited again", page.Find("[role=status]").TextContent));
+        Assert.Equal(3, writes.Count);
 
         navigation.NavigateTo("/new-trip");
         routes.WaitForAssertion(() =>
@@ -77,6 +86,35 @@ public sealed class TripPlannerTests : BunitContext
             Assert.Empty(routes.FindAll(".trip-stop"));
             Assert.Equal("", routes.Find(".trip-basics input").GetAttribute("value"));
         });
+    }
+
+    [Fact]
+    public void StaleSaveKeepsTheDraftAndItsOriginalRevision()
+    {
+        var attempts = 0;
+        Configure(async (request, token) =>
+        {
+            if (request.Method == HttpMethod.Get)
+                return Json(Saved, "\"original\"");
+
+            Assert.Equal(HttpMethod.Put, request.Method);
+            Assert.Equal("\"original\"", Assert.Single(request.Headers.IfMatch).Tag);
+            var body = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
+            Assert.Equal("My edit", body!.Name);
+            attempts++;
+            return new HttpResponseMessage(HttpStatusCode.PreconditionFailed);
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/new-trip/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+
+        page.Find(".trip-basics input").Change("My edit");
+        Click(page, "Review on map");
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.Contains("Reopen the trip", page.Find("[role=alert]").TextContent));
+        Assert.Equal(1, attempts);
+        Assert.Contains("My edit", page.Find("[aria-label='Trip review details']").TextContent);
+        Click(page, "Back to stops");
+        Assert.Equal("My edit", page.Find(".trip-basics input").GetAttribute("value"));
     }
 
     [Fact]
@@ -170,7 +208,7 @@ public sealed class TripPlannerTests : BunitContext
     public async Task LostPlaceResponseRetriesLookupWithoutCreatingAnotherRecord(bool committed)
     {
         var previous = new AttractionDto(Guid.NewGuid(), Museum.Name, null, null, "", 45.52m, -73.59m, 30);
-        var created = previous with { AttractionId = Guid.NewGuid() };
+        var created = previous with { AttractionId = Guid.NewGuid(), Name = " MUSEUM " };
         var nearMatch = created with { AttractionId = Guid.NewGuid(), Lon = -73.58m };
         var catalogueWrites = 0;
         var tripWrites = 0;
@@ -204,7 +242,7 @@ public sealed class TripPlannerTests : BunitContext
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
-        await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, previous.Lat, previous.Lon)));
+        await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, previous.Lat + 0.000003m, previous.Lon - 0.000004m)));
 
         Click(page, "Review on map");
         Click(page, "Save catalogue entries");
@@ -663,6 +701,31 @@ public sealed class TripPlannerTests : BunitContext
             });
     }
 
+    [Fact]
+    public async Task MovingStartingAccommodationUpdatesItsReturnVisitAndUndoRestoresBoth()
+    {
+        Configure((request, _) =>
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            return Task.FromResult(Json(Saved));
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        Click(page, "+ Return to starting accommodation");
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        var changed = (Lat: Hotel.Lat + 0.01m, Lon: Hotel.Lon - 0.01m);
+        await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((0, changed.Lat, changed.Lon)));
+
+        var stops = canvas.Instance.Stops;
+        Assert.Equal(changed, (stops[0].Lat, stops[0].Lon));
+        Assert.Equal(stops[0], stops[^1]);
+        Assert.NotEqual(stops[0], stops[1]);
+
+        Click(page, "Undo last edit");
+        Assert.Equal(Hotel, canvas.Instance.Stops[0]);
+        Assert.Equal(Hotel, canvas.Instance.Stops[^1]);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -793,6 +856,54 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal("1", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
         Assert.Equal("30", page.Find("input[aria-label='Duration minutes']").GetAttribute("value"));
         Assert.Contains("Train · 1 h 30 min", page.Find(".map-leg-label").TextContent);
+    }
+
+    [Fact]
+    public void RepeatedLocalTimesSaveWithTheirExplicitOffsets()
+    {
+        var trip = Saved with
+        {
+            Start = DateTimeOffset.Parse("2026-11-01T00:30:00-04:00"),
+            End = DateTimeOffset.Parse("2026-11-01T02:30:00-05:00"),
+            Legs = [new(1, Hotel, Museum, Train, DateTimeOffset.Parse("2026-11-01T00:45:00-04:00"),
+                DateTimeOffset.Parse("2026-11-01T02:00:00-05:00"))]
+        };
+        SaveTripRequest? updated = null;
+        Configure(async (request, token) =>
+        {
+            if (request.Method == HttpMethod.Get)
+                return Json(trip);
+
+            Assert.Equal(HttpMethod.Put, request.Method);
+            updated = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
+            return Json(trip, "\"2\"");
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+
+        page.FindAll(".trip-basics input[type=datetime-local]")[0].Change("2026-11-01T01:00");
+        page.FindAll(".trip-basics input[type=datetime-local]")[1].Change("2026-11-01T01:45");
+        page.FindAll(".trip-basics select")[0].Change("-04:00:00");
+        page.FindAll(".trip-basics select")[1].Change("-05:00:00");
+
+        page.Find("button[aria-label^='Edit connection 1:']").Click();
+        page.FindAll(".leg-panel input[type=datetime-local]")[0].Change("2026-11-01T01:30");
+        page.FindAll(".leg-panel input[type=datetime-local]")[1].Change("2026-11-01T01:30");
+        page.FindAll(".leg-panel select")[0].Change("-04:00:00");
+        page.FindAll(".leg-panel select")[1].Change("-05:00:00");
+
+        Assert.Equal("1", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
+        Click(page, "Review on map");
+        Assert.Empty(page.FindAll("[role=alert]"));
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
+        Assert.NotNull(updated);
+        Assert.Equal(TimeSpan.FromHours(-4), updated.Start.Offset);
+        Assert.Equal(TimeSpan.FromHours(-5), updated.End.Offset);
+        var leg = Assert.Single(updated.Legs);
+        Assert.Equal(TimeSpan.FromHours(-4), leg.Departure.Offset);
+        Assert.Equal(TimeSpan.FromHours(-5), leg.Arrival.Offset);
+        Assert.Equal(TimeSpan.FromHours(1), leg.Arrival - leg.Departure);
     }
 
     [Fact]
@@ -941,7 +1052,11 @@ public sealed class TripPlannerTests : BunitContext
         }
     }
 
-    static HttpResponseMessage Json(TripDto value) => new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };
+    static HttpResponseMessage Json(TripDto value, string etag = "\"1\"") => new(HttpStatusCode.OK)
+    {
+        Content = JsonContent.Create(value),
+        Headers = { ETag = new(etag) }
+    };
 
     static void Click(IRenderedComponent<NewTrip> page, string label) =>
         page.FindAll("button").Single(button => button.TextContent.Trim() == label).Click();

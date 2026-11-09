@@ -55,6 +55,8 @@ Requests and responses use camelCase JSON and public GUIDs only. The owner comes
 ### Create and replace body
 
 Send all trip fields and every leg when replacing a trip. The route identifier selects the trip to edit.
+Successful reads, creates, and replacements include a strong `ETag` header. Send that tag as
+`If-Match` on replacement. When the tag is stale, reopen the trip and review the changes before saving.
 
 ```json
 {
@@ -93,6 +95,8 @@ Send all trip fields and every leg when replacing a trip. The route identifier s
 | Users or a catalogue service unavailable or unconfirmed (fail closed) | `503` | No |
 | Storage write failed (rolled back) | `503` | No |
 | Trip absent or owned by someone else (read or replace), including administrators | `404` | No change |
+| Existing owned trip is missing `If-Match` (replace) | `428` | No change |
+| `If-Match` does not match the current revision (replace) | `412` | No change |
 | Banned owner reads own trip | `200` | Not applicable |
 | Deactivated or unknown account (read) | `403` | Not applicable |
 | Malformed trip identifier | `400` | Not applicable |
@@ -102,9 +106,9 @@ The `404` for a reference uses one message for absent and private places, so the
 ## Checks before a save
 
 1. The validated caller identity and the forwarded access token must be present.
-2. The time zone and place types are checked before any outbound call.
-3. A replacement checks that the trip already belongs to the caller before looking up catalogue records. The database write checks ownership again.
-4. Account standing is read live from Users with the backend credential, which holds `users.access`. Only an `active` account may save. The caller's own token is never sent to Users.
+2. The request is bound and its time zone and leg entries are checked. For replacements, action-level field errors are returned after the standing check.
+3. Account standing is read live from Users with the backend credential, which holds `users.access`. Only an `active` account may save. The caller's own token is never sent to Users.
+4. A replacement checks ownership and the supplied revision before looking up catalogue records. The database write checks both again. Place types are checked before calling the catalogue.
 5. Every place is read from its owning service with the caller's token: accommodations, attractions and transport stops (route points), and transport modes. A private record owned by someone else appears absent.
 6. The trip rules run on the snapshot values, and the trip is saved only when every check passes.
 
@@ -112,7 +116,7 @@ Each refusal and each fail-closed path is logged with its reason, without tokens
 
 ## Persistence
 
-The `Trips` table holds the trip, its owner (issuer and subject), its time zone id, and its start and end instants with the offsets the traveller entered. The `TripLegs` table holds the ordered legs. Each leg row stores snapshots of its departure place, arrival place and transport mode, so later catalogue edits never change a stored trip. A save writes the trip row and every leg row in one explicit transaction. A replacement locks the owned trip row before deleting its old legs and inserting the new ones. A failure leaves the previous trip and legs intact.
+The `Trips` table holds the trip, its owner (issuer and subject), its time zone id, and its start and end instants with the offsets the traveller entered. The `TripLegs` table holds the ordered legs. Each leg row stores snapshots of its departure place, arrival place and transport mode, so later catalogue edits never change a stored trip. A save writes the trip row and every leg row in one explicit transaction. A replacement updates the owned trip row only at the expected revision and advances that revision before replacing its legs. A failure leaves the previous revision, trip and legs intact.
 
 Instants are written in UTC because Npgsql refuses a non-zero offset for `timestamptz`; the entered offsets are stored beside them and restored on read. Owner scoping is part of every read query, so another owner's trip is indistinguishable from an absent one.
 
@@ -155,7 +159,6 @@ Verified by `tests/TravelTracker.Frontend.Tests` (`TripDraftTests`, `NewTripPage
 
 ## Limits
 
-- Concurrent edits to the same trip commit whole itineraries in sequence. The later successful replacement becomes the saved trip.
 - Trip time zone ids are resolved on the host that reads them; a stored id that the host's time zone database no longer knows fails the read with a server error.
 - Place and transport snapshots are copied from the owning services at save time; a catalogue outage after saving does not affect a stored trip.
 - The Trips host does not cache account standing. Each save and each detail read asks Users.

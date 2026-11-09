@@ -257,8 +257,13 @@
                             <fieldset class="leg-fields trip-fields" disabled="@busy">
                                 <label>Departure <input type="datetime-local" step="1" value="@DateTimeValue(leg.Departure)"
                                                         @onchange="e => SetDateTime(e, leg.Departure, value => leg.Departure = value)" /></label>
+                                @OffsetPicker("Departure UTC offset", leg.Departure, leg.SavedDeparture, leg.DepartureOffset, value => leg.DepartureOffset = value)
                                 <label>Arrival <input type="datetime-local" step="1" value="@DateTimeValue(draft.ArrivalFor(leg))"
                                                       @onchange="e => SetDateTime(e, draft.ArrivalFor(leg), value => { leg.Arrival = value; leg.DurationMinutes = null; })" /></label>
+                                @if (leg.DurationMinutes is null)
+                                {
+                                    @OffsetPicker("Arrival UTC offset", leg.Arrival, leg.SavedArrival, leg.ArrivalOffset, value => leg.ArrivalOffset = value)
+                                }
                                 <div class="trip-duration" role="group" aria-labelledby="connection-duration-label">
                                     <span id="connection-duration-label">Duration</span>
                                     <div class="trip-duration-inputs">
@@ -358,7 +363,9 @@
             <label>Time zone <input type="text" @bind:get="draft.TimeZone"
                                     @bind:set="value => EditTripValue(draft.TimeZone, value ?? string.Empty, next => draft.TimeZone = next)" placeholder="America/Toronto" /></label>
             <label>Trip starts <input type="datetime-local" step="1" value="@DateTimeValue(draft.Start)" @onchange="e => SetDateTime(e, draft.Start, value => draft.Start = value)" /></label>
+            @OffsetPicker("Trip start UTC offset", draft.Start, draft.SavedStart, draft.StartOffset, value => draft.StartOffset = value)
             <label>Trip ends <input type="datetime-local" step="1" value="@DateTimeValue(draft.End)" @onchange="e => SetDateTime(e, draft.End, value => draft.End = value)" /></label>
+            @OffsetPicker("Trip end UTC offset", draft.End, draft.SavedEnd, draft.EndOffset, value => draft.EndOffset = value)
             <label class="trip-checkbox"><input type="checkbox" @bind:get="draft.RoundTrip"
                                                 @bind:set="value => EditTripValue(draft.RoundTrip, value, next => draft.RoundTrip = next)" /> Return to start</label>
             @if (showMap)
@@ -385,6 +392,36 @@
                         }
                     </div>
     </div>;
+
+    /**
+     * Renders an offset choice only when the local clock time occurs twice in the trip's zone.
+     * @param label Field-specific label for the selector.
+     * @param time Local wall-clock time.
+     * @param savedTime Original value loaded from the trip service.
+     * @param choice Current explicit offset selection.
+     * @param apply Stores the chosen offset on the draft field.
+     * @return The selector fragment, empty outside the repeated hour.
+     */
+    RenderFragment OffsetPicker(string label, DateTime? time, DateTimeOffset? savedTime,
+        TripPlannerDraft.OffsetChoice? choice, Action<TripPlannerDraft.OffsetChoice?> apply)
+    {
+        var (options, selectedOffset) = draft.RepeatedTime(time, savedTime, choice);
+        return @<text>
+            @if (time is { } local && options.Length > 0)
+            {
+                <label>@label
+                    <select value="@(selectedOffset is { } offset ? OffsetValue(offset) : "")"
+                            @onchange="change => SetOffset(change, local, options, choice, apply)">
+                        <option value="" disabled>Choose an occurrence</option>
+                        @foreach (var option in options)
+                        {
+                            <option value="@OffsetValue(option)">@(option == options[0] ? "First occurrence" : "Second occurrence") (@OffsetLabel(option))</option>
+                        }
+                    </select>
+                </label>
+            }
+        </text>;
+    }
 
     RenderFragment MarkerEditor => @<div>
                 <section class="trip-panel marker-panel" aria-labelledby="marker-panel-title">

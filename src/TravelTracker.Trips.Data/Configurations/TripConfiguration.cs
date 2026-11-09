@@ -22,6 +22,7 @@ internal sealed class TripConfiguration : IEntityTypeConfiguration<TripRow>
         });
         builder.HasKey(row => row.TripId);
         builder.Property(row => row.TripId).ValueGeneratedNever();
+        builder.Property(row => row.Revision).HasDefaultValue(1L);
         builder.Property(row => row.Name).IsRequired();
         builder.Property(row => row.TimeZoneId).IsRequired();
         builder.Property(row => row.OwnerIssuer).IsRequired();

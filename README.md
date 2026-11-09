@@ -111,8 +111,9 @@ dotnet run --project src/TravelTracker.Frontend --launch-profile http
 When the terminal shows `Now listening on: http://localhost:5100`, open the
 [home page](http://localhost:5100) or [Map View](http://localhost:5100/map).
 The frontend can preview Map View, manual marker placement and the itinerary
-editor on its own. The browser loads MapLibre GL JS and the OpenFreeMap Liberty
-vector basemap over the internet. The planner shows a retry button if the
+editor on its own. The browser verifies the pinned MapLibre GL JS 6.17.0 library,
+worker and stylesheet against SHA-256 integrity hashes and loads the OpenFreeMap
+Liberty vector basemap over the internet. The planner shows a retry button if the
 basemap fails to load. Connection lines show the itinerary approximately.
 Sign-in, catalogue search and saving use the services below.
 Press `Ctrl+C` in the terminal to stop the app.

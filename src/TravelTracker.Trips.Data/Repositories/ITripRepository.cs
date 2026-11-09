@@ -27,9 +27,22 @@ public interface ITripRepository
      * @param ownerIssuer The caller's validated issuer.
      * @param ownerSubject The caller's validated subject.
      * @param cancellationToken Cancels database I/O.
-     * @return True if the owned trip was replaced, or false if it was absent.
+     * @param expectedRevision Revision named by the client.
+     * @return Whether the replacement committed, the owned trip was absent, or its revision had changed.
      */
-    Task<bool> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default);
+    Task<TripReplacementStatus> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, long expectedRevision,
+        CancellationToken cancellationToken = default);
+
+    /**
+     * Reads the revision of a trip without loading its legs.
+     *
+     * @param tripId Public trip identifier.
+     * @param ownerIssuer The caller's validated issuer.
+     * @param ownerSubject The caller's validated subject.
+     * @param cancellationToken Cancels the read.
+     * @return The current revision, or null when the trip is absent or owned by someone else.
+     */
+    Task<long?> GetOwnedRevisionAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default);
 
     /**
      * Retrieves a trip only when it belongs to the given owner.

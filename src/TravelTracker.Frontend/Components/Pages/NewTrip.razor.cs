@@ -146,6 +146,27 @@ public partial class NewTrip : IAsyncDisposable
     static string DateTimeValue(DateTime? value) =>
         value?.ToString("yyyy-MM-ddTHH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture) ?? "";
 
+    static string OffsetValue(TimeSpan offset) => offset.ToString("c", CultureInfo.InvariantCulture);
+
+    static string OffsetLabel(TimeSpan offset) =>
+        $"UTC{(offset < TimeSpan.Zero ? "-" : "+")}{offset.Duration().ToString(@"hh\:mm", CultureInfo.InvariantCulture)}";
+
+    /**
+     * Records which occurrence of a repeated time the traveller chose.
+     * @param change Selected option value from the offset picker.
+     * @param time Local time associated with this picker.
+     * @param options Valid offsets for this local time.
+     * @param previous Existing choice for undo and change detection.
+     * @param apply Updates the associated draft field.
+     */
+    void SetOffset(ChangeEventArgs change, DateTime time, TimeSpan[] options,
+        TripPlannerDraft.OffsetChoice? previous, Action<TripPlannerDraft.OffsetChoice?> apply)
+    {
+        if (TimeSpan.TryParseExact(change.Value?.ToString(), "c", CultureInfo.InvariantCulture, out var offset) &&
+            options.Contains(offset))
+            EditTripValue(previous, new TripPlannerDraft.OffsetChoice(time, draft.TimeZone.Trim(), offset), apply);
+    }
+
     void SetDateTime(ChangeEventArgs change, DateTime? previous, Action<DateTime?> apply)
     {
         var input = change.Value?.ToString();
@@ -481,17 +502,10 @@ public partial class NewTrip : IAsyncDisposable
 
         RememberEdit();
         var updated = previous with { PlaceId = Guid.Empty, Lat = move.Lat, Lon = move.Lon, Address = "" };
-        var lastIndex = draft.Stops.Count - 1;
-        if (draft.RoundTrip && lastIndex > 0 && (move.Index == 0 || move.Index == lastIndex))
-        {
-            var other = draft.Stops[move.Index == 0 ? lastIndex : 0];
-            if (other.Place == previous || (previous.PlaceId != Guid.Empty && other.Place.PlaceId == previous.PlaceId))
-                other.Place = updated;
-        }
-        stop.Place = updated;
+        draft.UpdatePlace(stop, updated);
         selected = move.Index;
         CancelConnection();
-        if (editingMarker == stop)
+        if (ReferenceEquals(editingMarker?.Place, updated))
             (latitude, longitude, placeAddress) = (move.Lat, move.Lon, "");
         MarkEdited();
     }
@@ -514,9 +528,7 @@ public partial class NewTrip : IAsyncDisposable
     void AddStop(TripPlaceDto place, int? after = null, bool returnToStart = false)
     {
         RememberEdit();
-        if (returnToStart)
-            draft.RoundTrip = true;
-        selected = draft.Add(place, after);
+        selected = returnToStart ? draft.AddReturnToStart() : draft.Add(place, after);
         insertAfter = selected;
         placing = false;
         editingMarker = null;
@@ -650,7 +662,7 @@ public partial class NewTrip : IAsyncDisposable
         if (showMap && editingMarker is { } marker)
         {
             var place = marker.Place with { Name = placeName.Trim(), Address = placeAddress.Trim(), Lat = position.Lat, Lon = position.Lon };
-            EditTripValue(marker.Place, place, value => marker.Place = value);
+            EditTripValue(marker.Place, place, value => draft.UpdatePlace(marker, value));
             return;
         }
         AddStop(new(Guid.Empty, type, placeName.Trim(), placeAddress.Trim(), position.Lat, position.Lon), showMap ? insertAfter : null);
@@ -695,10 +707,11 @@ public partial class NewTrip : IAsyncDisposable
         var token = closed.Token;
         try
         {
-            var saved = await Trips.GetAsync(id, token);
+            var revision = await Trips.GetRevisionAsync(id, token);
             if (version != routeVersion)
                 return;
-            draft = TripPlannerDraft.FromSaved(saved);
+            var saved = revision.Trip;
+            draft = TripPlannerDraft.FromSaved(revision);
             undoHistory.Clear();
             selected = draft.Stops.Count > 0 ? 0 : -1;
             placing = false;
@@ -743,10 +756,11 @@ public partial class NewTrip : IAsyncDisposable
         var version = routeVersion;
         try
         {
-            var saved = await Trips.SaveAsync(draft.Id, request, token);
+            var revision = await Trips.SaveAsync(draft.Id, request, draft.ETag, token);
             if (version != routeVersion)
                 return;
-            draft = TripPlannerDraft.FromSaved(saved);
+            var saved = revision.Trip;
+            draft = TripPlannerDraft.FromSaved(revision);
             undoHistory.Clear();
             dirty = false;
             savedReview = true;
@@ -755,6 +769,13 @@ public partial class NewTrip : IAsyncDisposable
         }
         catch (ApiError error) when (version == routeVersion)
         {
+            if (error.Status is 412 or 428)
+            {
+                errors = ["The saved trip version changed. Your edits are still here. Reopen the trip before saving again."];
+                saveFailed = false;
+                return;
+            }
+
             errors = error.Errors.Count == 0
                 ? [error.Message]
                 : error.Errors.Values.SelectMany(messages => messages).Where(message => message.Length > 0).DefaultIfEmpty(error.Message)
@@ -856,15 +877,19 @@ public partial class NewTrip : IAsyncDisposable
      */
     async Task<TripPlaceDto?> ResolvePlaceAsync(TripPlaceDto place, int version, CancellationToken token)
     {
-        var entries = await PlaceCatalogue.SearchAsync(place.Type, place.Name, token);
+        // Search by a single token so normalizing whitespace between words doesn't hide the saved record.
+        var searchName = place.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+        var entries = await PlaceCatalogue.SearchAsync(place.Type, searchName, token);
+        var normalizedName = searchName.Normalize();
+        if (version == routeVersion && normalizedName != searchName)
+            entries = entries.Concat(await PlaceCatalogue.SearchAsync(place.Type, normalizedName, token)).ToArray();
         if (version != routeVersion)
             return null;
 
-        var matches = entries.Where(entry => entry.PlaceId != Guid.Empty && PlaceDetails(entry) == place)
-            .DistinctBy(entry => entry.PlaceId);
         if (pendingPlaceCreates.TryGetValue(place, out var existingIds))
         {
-            var recovered = matches.Where(entry => !existingIds.Contains(entry.PlaceId)).Take(2).ToArray();
+            var recovered = entries.Where(entry => entry.PlaceId != Guid.Empty && !existingIds.Contains(entry.PlaceId) &&
+                MatchesCreatedPlace(place, entry)).DistinctBy(entry => entry.PlaceId).Take(2).ToArray();
             if (recovered.Length != 1)
                 throw UnconfirmedCatalogueEntry(place.Name);
             pendingPlaceCreates.Remove(place);
@@ -872,7 +897,7 @@ public partial class NewTrip : IAsyncDisposable
         }
 
         // An existing identical record cannot confirm the outcome of this POST.
-        pendingPlaceCreates.Add(place, matches.Select(entry => entry.PlaceId).ToHashSet());
+        pendingPlaceCreates.Add(place, entries.Select(entry => entry.PlaceId).ToHashSet());
         try
         {
             var created = await PlaceCatalogue.CreateAsync(place, token);
@@ -931,6 +956,16 @@ public partial class NewTrip : IAsyncDisposable
     static TripPlaceDto PlaceDetails(TripPlaceDto place) =>
         place with { PlaceId = Guid.Empty, Name = place.Name?.Trim() ?? "", Address = place.Address?.Trim() ?? "" };
 
+    /** Matches a catalogue echo after text normalization or coordinate rounding to five decimal places. */
+    static bool MatchesCreatedPlace(TripPlaceDto submitted, TripPlaceDto stored) =>
+        submitted.Type == stored.Type &&
+        string.Equals(NormalizePlaceText(submitted.Name), NormalizePlaceText(stored.Name), StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(NormalizePlaceText(submitted.Address), NormalizePlaceText(stored.Address), StringComparison.OrdinalIgnoreCase) &&
+        Math.Abs(submitted.Lat - stored.Lat) <= 0.000005m && Math.Abs(submitted.Lon - stored.Lon) <= 0.000005m;
+
+    static string NormalizePlaceText(string? value) =>
+        string.Join(' ', (value ?? "").Normalize().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
     static bool CatalogueWriteRejected(ApiError error) => error.Status is >= 400 and < 500 and not (408 or 409 or 429);
 
     static ApiError UnconfirmedCatalogueEntry(string name) =>
@@ -939,7 +974,7 @@ public partial class NewTrip : IAsyncDisposable
     void UpdateLink(Guid id)
     {
         routeId = id;
-        NavigateToPlanner(showMap || review, id, replace: true);
+        NavigateToPlanner(showMap, id, replace: true);
     }
 
     /** Keeps the URL and navigation links aligned with the displayed editor. */

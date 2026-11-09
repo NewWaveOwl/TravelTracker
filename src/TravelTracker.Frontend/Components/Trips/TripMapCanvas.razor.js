@@ -1,23 +1,50 @@
 const mapLibreDist = "https://unpkg.com/maplibre-gl@6.17.0/dist/";
 const basemapStyle = "https://tiles.openfreemap.org/styles/liberty";
 let mapLibreAssets;
-let assetAttempt = 0;
+
+// SHA-256 digests for the pinned release, including the separately loaded worker.
+const mapLibreIntegrity = {
+    "maplibre-gl.css": "sha256-qQeYoZUwF3kOWQ9+G9Nf8QOopCY5cstHKQt4rfhvjCA=",
+    "maplibre-gl.mjs": "sha256-4CywjFcv0JUKdTQ81VgJnCodu69n8msMlvEVQxli0a4=",
+    "maplibre-gl-worker.mjs": "sha256-c9egJKTv4aRuSdsZPhjP4zJx4+zGUux1QsKBpO9fDwQ="
+};
+
+async function fetchVerifiedModule(name) {
+    const response = await fetch(mapLibreDist + name, { integrity: mapLibreIntegrity[name], credentials: "omit" });
+    if (!response.ok) throw new Error(`MapLibre asset unavailable: ${name}`);
+    return response.blob();
+}
+
+async function loadVerifiedModules() {
+    const [module, worker] = await Promise.all([
+        fetchVerifiedModule("maplibre-gl.mjs"),
+        fetchVerifiedModule("maplibre-gl-worker.mjs")
+    ]);
+    const moduleUrl = URL.createObjectURL(module);
+    try {
+        const library = await import(moduleUrl);
+        // MapLibre's default worker URL is relative to the main module, which is now a blob.
+        library.setWorkerUrl(URL.createObjectURL(worker));
+        return library;
+    } finally {
+        URL.revokeObjectURL(moduleUrl);
+    }
+}
 
 function loadMapLibre() {
     if (!mapLibreAssets) {
         const stylesheet = document.createElement("link");
         stylesheet.rel = "stylesheet";
         stylesheet.href = mapLibreDist + "maplibre-gl.css";
+        stylesheet.integrity = mapLibreIntegrity["maplibre-gl.css"];
+        stylesheet.crossOrigin = "anonymous";
         const css = new Promise((resolve, reject) => {
             stylesheet.onload = resolve;
             stylesheet.onerror = reject;
         });
         document.head.append(stylesheet);
 
-        const moduleUrl = new URL("maplibre-gl.mjs", mapLibreDist);
-        if (assetAttempt++ > 0) moduleUrl.searchParams.set("retry", assetAttempt);
-        mapLibreAssets = Promise.all([import(moduleUrl.href), css])
-            .then(([library]) => library)
+        mapLibreAssets = css.then(loadVerifiedModules)
             .catch(error => {
                 stylesheet.remove();
                 mapLibreAssets = undefined;

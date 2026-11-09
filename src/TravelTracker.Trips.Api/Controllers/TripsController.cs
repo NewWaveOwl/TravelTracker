@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TravelTracker.Api.Authentication;
@@ -37,9 +38,11 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
         if (caller is null) return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "A validated issuer and subject are required.");
 
         var outcome = await readService.GetOwnedAsync(caller, id, HttpContext.RequestAborted);
+        if (outcome.Status == TripReadStatus.Found)
+            return Ok(TripWithEntityTag(outcome.Trip!));
+
         return outcome.Status switch
         {
-            TripReadStatus.Found => Ok(ToResponse(outcome.Trip!)),
             TripReadStatus.NotFound => NotFound(),
             TripReadStatus.AccountRejected => Problem(statusCode: StatusCodes.Status403Forbidden,
                 title: "Account is not permitted to read trips."),
@@ -74,7 +77,9 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
      *
      * @param id Public identifier of the trip to replace.
      * @param request Complete replacement using the same writable fields as create.
-     * @return 200 with the replacement, or the same validation and authorization outcomes as create.
+     * @param ifMatch The strong ETag from the trip the caller is editing.
+     * @return 200 with the replacement and its ETag, 428 when If-Match is absent, 412 when it does not match,
+     * or the same validation and authorization outcomes as create.
      */
     [HttpPut("{id}")]
     [Authorize(Policy = ScopePolicies.TripsWrite)]
@@ -83,37 +88,45 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public Task<IActionResult> Replace(Guid id, CreateTripRequest request) => SaveAsync(request, id);
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status412PreconditionFailed)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status428PreconditionRequired)]
+    public Task<IActionResult> Replace(Guid id, CreateTripRequest request, [FromHeader(Name = "If-Match")] string? ifMatch) =>
+        SaveAsync(request, id, ParseEntityTag(ifMatch));
 
     /**
      * Binds both write operations to the same caller, validation and error mapping.
      *
      * @param request Caller-writable trip values.
      * @param tripId Existing trip to replace, or null to create a new trip.
+     * @param expectedRevision The requested revision, or null when If-Match is absent.
      * @return The saved representation or a validation, permission or dependency failure.
      */
-    private async Task<IActionResult> SaveAsync(CreateTripRequest request, Guid? tripId)
+    private async Task<IActionResult> SaveAsync(CreateTripRequest request, Guid? tripId, long? expectedRevision = null)
     {
         var caller = CallerFromToken();
         var bearerToken = BearerTokenFromHeader();
-        if (caller is null || bearerToken is null)
+        if (caller is null || string.IsNullOrWhiteSpace(bearerToken))
             return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "A validated issuer, subject and access token are required.");
 
         for (var index = 0; index < request.Legs!.Count; index++)
             if (request.Legs[index] is null) ModelState.AddModelError($"legs[{index}]", "Each leg must be an object.");
-        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        var draft = ModelState.IsValid ? ToDraft(request) : null;
+        if (draft is null && tripId is null) return ValidationProblem(ModelState);
 
-        var draft = ToDraft(request);
-        if (draft is null) return ValidationProblem(ModelState);
-
-        var outcome = await saveService.SaveAsync(caller, bearerToken, draft, HttpContext.RequestAborted, tripId);
+        var outcome = await saveService.SaveAsync(caller, bearerToken, draft, HttpContext.RequestAborted, tripId, expectedRevision);
         switch (outcome.Status)
         {
             case TripReferenceStatus.Ready:
-                var trip = ToResponse(outcome.Trip!);
+                var trip = TripWithEntityTag(outcome.Trip!);
                 return tripId is null ? CreatedAtAction(nameof(GetById), new { id = trip.TripId }, trip) : Ok(trip);
             case TripReferenceStatus.TripNotFound:
                 return NotFound();
+            case TripReferenceStatus.RevisionRequired:
+                return Problem(statusCode: StatusCodes.Status428PreconditionRequired,
+                    title: "An If-Match header naming the trip ETag is required to replace a trip.");
+            case TripReferenceStatus.StaleRevision:
+                return Problem(statusCode: StatusCodes.Status412PreconditionFailed,
+                    title: "This trip changed since you opened it. Reopen it, review the changes and save again.");
             case TripReferenceStatus.InvalidTrip:
                 foreach (var error in outcome.Errors) ModelState.AddModelError(error.Field, error.Message);
                 return ValidationProblem(ModelState);
@@ -185,6 +198,35 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
                 leg.TransportModeId!.Value,
                 leg.Departure!.Value,
                 leg.Arrival!.Value)).ToList());
+    }
+
+    /**
+     * Parses the exact strong ETag issued by the Trips API.
+     * @param value Raw If-Match value.
+     * @return The revision, null for an absent header, or a sentinel revision that never matches.
+     */
+    private static long? ParseEntityTag(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var tag = value.Trim();
+        if (tag.Length < 3 || tag[0] != '"' || tag[^1] != '"' ||
+            !long.TryParse(tag.AsSpan(1, tag.Length - 2), NumberStyles.None, CultureInfo.InvariantCulture, out var revision) ||
+            revision <= 0 || tag != ToEntityTag(revision))
+            return -1;
+        return revision;
+    }
+
+    private static string ToEntityTag(long revision) => $"\"{revision.ToString(CultureInfo.InvariantCulture)}\"";
+
+    /**
+     * Returns the public shape of the trip and sets the ETag for the same committed revision.
+     * @param trip The saved trip.
+     * @return The response without owner identity or revision in the body.
+     */
+    private TripResponse TripWithEntityTag(Trip trip)
+    {
+        Response.Headers.ETag = ToEntityTag(trip.Revision);
+        return ToResponse(trip);
     }
 
     /**
