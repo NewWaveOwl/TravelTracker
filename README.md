@@ -151,7 +151,10 @@ Press `Ctrl+C` in the terminal to stop the app.
    transport mode, then select any starting pin and destination pin. To plan a
    return, choose a mode again and select the pins in the opposite direction.
    Select a connection on the map to edit its times. Choose **Review on map**
-   to check and save the ordered itinerary. Reopen a saved trip by its link or ID.
+   to check the ordered itinerary. If it contains new locations or unresolved
+   transport modes, choose **Save catalogue entries** before **Save trip**.
+   Catalogue entries are saved separately and remain available if the trip is
+   discarded or its save fails. Reopen a saved trip by its link or ID.
    The draft is shared between **Map View** and **New Trip**. Leaving or reloading
    the planner with unsaved changes prompts for confirmation.
 

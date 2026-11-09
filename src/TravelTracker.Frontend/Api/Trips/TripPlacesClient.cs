@@ -31,7 +31,7 @@ public sealed class TripPlacesClient(AttractionsClient attractions, TransportCli
         };
 
     /**
-     * Saves a picked map location in its own catalogue before it enters the draft.
+     * Saves a draft map location in its own catalogue so Trips can reference it.
      * @param place New location with the selected marker type and coordinates.
      * @param token Cancels pending work.
      * @return The location with its confirmed public identifier.

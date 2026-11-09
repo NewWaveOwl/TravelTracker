@@ -77,6 +77,9 @@ public partial class NewTrip : IAsyncDisposable
 
     bool MapVisible => showMap || review;
     bool CanUndo => !busy && undoHistory.Count > 0;
+    bool HasPendingCatalogueEntries => draft.Stops.Any(stop => stop.Place.PlaceId == Guid.Empty) ||
+        Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(draft.LegTo)
+            .Any(leg => leg.Mode?.TransportModeId == Guid.Empty);
     string ConnectionHint => pendingMode is null ? "Choose a mode, then select a starting stop and a destination."
         : connectionFrom is { } from ? $"From {draft.Stops[from].Place.Name}. Select any other stop as the destination."
         : "Select the starting stop.";
@@ -220,7 +223,7 @@ public partial class NewTrip : IAsyncDisposable
         if (tripId is { } id)
         {
             if (id != routeId || draft.Id != id)
-                await OpenTripAsync(id);
+                await OpenTripAsync(id, restoreRouteOnFailure: true);
         }
         else if (previousPath is not null && draft.Id is not null)
         {
@@ -674,7 +677,12 @@ public partial class NewTrip : IAsyncDisposable
             await OpenTripAsync(id);
     }
 
-    async Task OpenTripAsync(Guid id)
+    /**
+     * Loads a saved trip and restores the current draft's link if opening a planner route fails.
+     * @param id The saved trip to load.
+     * @param restoreRouteOnFailure Whether the URL already points at the requested trip.
+     */
+    async Task OpenTripAsync(Guid id, bool restoreRouteOnFailure = false)
     {
         var version = routeVersion;
         busy = true;
@@ -700,6 +708,11 @@ public partial class NewTrip : IAsyncDisposable
         {
             errors = [error.Status == 404 ? "That saved trip is unavailable." : error.Message];
             saveFailed = true;
+            if (restoreRouteOnFailure)
+            {
+                routeId = draft.Id;
+                NavigateToPlanner(showMap, draft.Id, replace: true);
+            }
         }
         catch (ApiError) when (version != routeVersion) { }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -710,9 +723,10 @@ public partial class NewTrip : IAsyncDisposable
         }
     }
 
+    /** Saves the itinerary using confirmed catalogue references only. */
     async Task SaveAsync()
     {
-        if (busy)
+        if (busy || HasPendingCatalogueEntries)
             return;
 
         var (request, problems) = draft.Build();
@@ -724,14 +738,9 @@ public partial class NewTrip : IAsyncDisposable
         busy = true;
         var token = closed.Token;
         var version = routeVersion;
-        var savingDraft = draft;
         try
         {
-            await ResolveCatalogueAsync(savingDraft, token);
-            if (version != routeVersion)
-                return;
-            var resolved = savingDraft.Build().Request ?? throw new ApiError(FailureKind.Validation, "Check your trip details and try again.");
-            var saved = await Trips.SaveAsync(savingDraft.Id, resolved, token);
+            var saved = await Trips.SaveAsync(draft.Id, request, token);
             if (version != routeVersion)
                 return;
             draft = TripPlannerDraft.FromSaved(saved);
@@ -759,17 +768,59 @@ public partial class NewTrip : IAsyncDisposable
         }
     }
 
-    async Task ResolveCatalogueAsync(TripPlannerDraft savingDraft, CancellationToken token)
+    /** Confirms catalogue references independently of saving the itinerary. */
+    async Task SaveCatalogueEntriesAsync()
+    {
+        if (busy || !HasPendingCatalogueEntries)
+            return;
+
+        var (request, problems) = draft.Build();
+        errors = problems;
+        saveFailed = false;
+        if (request is null)
+            return;
+
+        busy = true;
+        var version = routeVersion;
+        var token = closed.Token;
+        try
+        {
+            await ResolveCatalogueAsync(draft, version, token);
+        }
+        catch (ApiError error) when (version == routeVersion)
+        {
+            errors = [error.Message];
+            saveFailed = true;
+        }
+        catch (ApiError) when (version != routeVersion) { }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        finally
+        {
+            if (version == routeVersion)
+                busy = false;
+        }
+    }
+
+    /**
+     * Resolves temporary references and retains confirmed IDs for catalogue retries.
+     * @param savingDraft The itinerary being prepared.
+     * @param version The planner route version at the start of the operation.
+     * @param token Cancels pending work.
+     */
+    async Task ResolveCatalogueAsync(TripPlannerDraft savingDraft, int version, CancellationToken token)
     {
         var pendingPlaces = savingDraft.Stops.Where(stop => stop.Place.PlaceId == Guid.Empty).GroupBy(stop => stop.Place);
         foreach (var group in pendingPlaces)
         {
             var place = await PlaceCatalogue.CreateAsync(group.Key, token);
+            foreach (var stop in group)
+                stop.Place = place;
+
             // Older snapshots contain temporary IDs for the now-persisted locations.
             if (ReferenceEquals(draft, savingDraft))
                 undoHistory.Clear();
-            foreach (var stop in group)
-                stop.Place = place;
+            if (version != routeVersion)
+                return;
         }
 
         var pendingModes = Enumerable.Range(1, savingDraft.Stops.Count - 1).Select(savingDraft.LegTo)
@@ -778,10 +829,16 @@ public partial class NewTrip : IAsyncDisposable
         {
             var label = group.First().Mode!.Name;
             var entries = await Transport.SearchTransportAsync("", group.Key, token);
+            if (version != routeVersion)
+                return;
             var mode = entries.FirstOrDefault() ?? await Transport.CreateTransportAsync(
                 new() { ["code"] = group.Key, ["name"] = label }, token);
             foreach (var leg in group)
                 leg.Mode = new(mode.TransportModeId, mode.Code, mode.Name);
+            if (ReferenceEquals(draft, savingDraft))
+                undoHistory.Clear();
+            if (version != routeVersion)
+                return;
         }
     }
 

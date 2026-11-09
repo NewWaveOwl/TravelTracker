@@ -80,6 +80,88 @@ public sealed class TripPlannerTests : BunitContext
     }
 
     [Fact]
+    public async Task FailedRouteLoadRestoresTheCurrentTripsLink()
+    {
+        var unavailable = Guid.Parse("d5155a18-c22d-46f6-911a-3558b4e3985c");
+        var response = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Configure((request, _) =>
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            var path = request.RequestUri!.AbsolutePath;
+            return path == $"/api/v1/trips/{TripId:D}" ? Task.FromResult(Json(Saved))
+                : path == $"/api/v1/trips/{unavailable:D}" ? response.Task
+                : throw new InvalidOperationException($"Unexpected request path {path}.");
+        });
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo($"/new-trip/{TripId:D}");
+        var routes = Render<Routes>();
+
+        await routes.InvokeAsync(() => navigation.NavigateTo($"/new-trip/{unavailable:D}"));
+        Assert.True(routes.Find(".trip-basic-fields").HasAttribute("disabled"));
+        response.SetResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+
+        routes.WaitForAssertion(() =>
+        {
+            Assert.EndsWith($"/new-trip/{TripId:D}", navigation.Uri);
+            Assert.Contains("That saved trip is unavailable.", routes.Find("[role=alert]").TextContent);
+            Assert.Equal(Saved.Name, routes.Find(".trip-basics input").GetAttribute("value"));
+        });
+    }
+
+    [Fact]
+    public async Task FailedTripSaveAndRetryDoNotWriteToTheCatalogue()
+    {
+        var catalogueWrites = 0;
+        var tripWrites = 0;
+        var newPlace = Museum with { PlaceId = Guid.NewGuid() };
+        Configure(async (request, token) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/api/v1/attractions")
+            {
+                Assert.Equal(HttpMethod.Post, request.Method);
+                catalogueWrites++;
+                return new HttpResponseMessage(HttpStatusCode.Created)
+                {
+                    Content = JsonContent.Create(new
+                    {
+                        AttractionId = newPlace.PlaceId, newPlace.Name, newPlace.Address,
+                        newPlace.Lat, newPlace.Lon, EstimatedVisitMinutes = 30
+                    })
+                };
+            }
+
+            Assert.Equal($"/api/v1/trips/{TripId:D}", path);
+            if (request.Method == HttpMethod.Get)
+                return Json(Saved);
+
+            Assert.Equal(HttpMethod.Put, request.Method);
+            var body = (await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token))!;
+            Assert.Equal(newPlace.PlaceId, Assert.Single(body.Legs).To.PlaceId);
+            return ++tripWrites == 1 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : Json(Saved);
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.MoveMarker(1, 15, 10));
+
+        Click(page, "Review on map");
+        Assert.Contains("They stay in the catalogue even if you discard this trip.", page.Find(".trip-review").TextContent);
+        Assert.DoesNotContain(page.FindAll(".trip-review button"), button => button.TextContent == "Save trip");
+        Assert.Equal(0, catalogueWrites);
+        Click(page, "Save catalogue entries");
+        page.WaitForAssertion(() => Assert.Equal(1, catalogueWrites));
+        Assert.Equal(0, tripWrites);
+
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.Contains("entries are retained", page.Find("[role=alert]").TextContent));
+        Click(page, "Retry save");
+        page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
+        Assert.Equal(2, tripWrites);
+        Assert.Equal(1, catalogueWrites);
+    }
+
+    [Fact]
     public async Task SaveIgnoresASecondClickUntilTheApiConfirms()
     {
         var writes = 0;
@@ -434,6 +516,7 @@ public sealed class TripPlannerTests : BunitContext
 
         Click(page, "Review on map");
         Assert.Empty(page.FindAll("[role=alert]"));
+        Click(page, "Save catalogue entries");
         Click(page, "Save trip");
         page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
         Assert.NotNull(updated);
@@ -525,6 +608,7 @@ public sealed class TripPlannerTests : BunitContext
         Assert.StartsWith("2026-11-14T11:15", page.FindAll(".trip-panel input[type=datetime-local]")[1].GetAttribute("value"));
         Click(page, "Review on map");
         Assert.True(page.FindAll("[role=alert]").Count == 0, string.Join(" ", page.FindAll("[role=alert]").Select(alert => alert.TextContent)));
+        Click(page, "Save catalogue entries");
         Click(page, "Save trip");
 
         page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));

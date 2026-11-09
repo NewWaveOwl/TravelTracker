@@ -178,7 +178,15 @@
                     </ol>
                     @if (!savedReview)
                     {
-                        <button type="button" disabled="@busy" @onclick="SaveAsync">@(busy ? "Saving…" : saveFailed ? "Retry save" : "Save trip")</button>
+                        @if (HasPendingCatalogueEntries)
+                        {
+                            <p>Save new locations and any missing transport modes to the catalogue first. They stay in the catalogue even if you discard this trip.</p>
+                            <button type="button" disabled="@busy" @onclick="SaveCatalogueEntriesAsync">@(busy ? "Saving catalogue entries" : "Save catalogue entries")</button>
+                        }
+                        else
+                        {
+                            <button type="button" disabled="@busy" @onclick="SaveAsync">@(busy ? "Saving trip" : saveFailed ? "Retry save" : "Save trip")</button>
+                        }
                     }
                     <button type="button" class="secondary" disabled="@busy" @onclick="BackFromReview">@(savedReview ? "Back to editor" : "Back to stops")</button>
                 </section>
