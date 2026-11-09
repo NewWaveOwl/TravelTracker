@@ -517,11 +517,19 @@ main:has(.accommodation-workspace) { max-width: 1536px; padding: 32px 48px 80px;
     .accommodation-modal>header { margin: -18px -18px 0; padding: 16px 18px; }
     .accommodation-modal>header h2 { font-size: 24px; }
 }
+main:has(.trip-planner) { max-width: 1520px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 56px) 56px; }
+
+main:has(.map-workspace) { max-width: none; margin: 0; padding: 0; }
+body:has(.map-workspace) > header { z-index: 3; }
+@media (max-width: 700px) {
+    .primary-navigation { display: flex; }
+    .primary-navigation a:not(.map-navigation-link) { display: none; }
+}
 .trip-page { display: flex; flex-direction: column; gap: 24px; width: 100%; color: hsl(0, 0%, 0%); font-size: 20px; line-height: 30px; }
 .trip-steps { display: flex; flex-wrap: wrap; gap: 24px; margin: 0; padding: 0; list-style: none; }
 .trip-steps li { padding-bottom: 5px; border-bottom-width: 4px; border-bottom-style: solid; border-bottom-color: transparent; }
 .trip-steps li[aria-current] { border-bottom-color: hsl(120, 25%, 25%); }
-.trip-form, .trip-review { display: flex; flex-direction: column; gap: 24px; }
+.trip-page .trip-form, .trip-page .trip-review { display: flex; flex-direction: column; gap: 24px; }
 .trip-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .trip-page label { font-size: 24px; line-height: 36px; }
 .trip-page input:not([type=radio]), .trip-page select { width: 100%; max-width: 100%; min-height: 56px; padding: 12px 16px; font-size: 24px; line-height: 36px; color: hsl(0, 0%, 0%); background: hsl(0, 0%, 100%); border-width: 2px; border-style: solid; border-color: hsl(120, 25%, 75%); border-radius: 0; }
@@ -542,7 +550,7 @@ main:has(.accommodation-workspace) { max-width: 1536px; padding: 32px 48px 80px;
 .trip-status { margin: 0; padding: 16px 24px; background: hsl(120, 25%, 75%); }
 .trip-dialog { display: flex; flex-direction: column; gap: 16px; padding: 24px; background: hsl(0, 0%, 100%); border-width: 2px; border-style: solid; border-color: hsl(120, 25%, 25%); }
 .trip-dialog h2, .trip-dialog p { margin: 0; }
-.trip-summary, .trip-review dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0; }
-.trip-summary dd, .trip-review dd { margin: 0; }
+.trip-summary, .trip-page .trip-review dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0; }
+.trip-summary dd, .trip-page .trip-review dd { margin: 0; }
 .trip-legs { display: flex; flex-direction: column; gap: 16px; margin: 0; padding-left: 30px; }
 .trip-legs small { display: block; }

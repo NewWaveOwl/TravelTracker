@@ -134,6 +134,11 @@ namespace TravelTracker.Trips.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<long>("Revision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
                     b.Property<DateTimeOffset>("StartAt")
                         .HasColumnType("timestamp with time zone");
 

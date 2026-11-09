@@ -37,6 +37,57 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
     }
 
     /**
+     * Replaces the owned trip and itinerary in one transaction. The revision check and increment
+     * are part of the parent update, before the old leg rows are touched.
+     *
+     * @param trip The validated replacement with the existing trip identifier.
+     * @param ownerIssuer The caller's validated issuer.
+     * @param ownerSubject The caller's validated subject.
+     * @param cancellationToken Cancels database I/O.
+     * @param expectedRevision Revision named by the client.
+     * @return Whether the replacement committed, the owned trip was absent, or its revision had changed.
+     */
+    public async Task<TripReplacementStatus> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, long expectedRevision,
+        CancellationToken cancellationToken = default)
+    {
+        var replacement = ToRow(trip, ownerIssuer, ownerSubject);
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var updated = await database.Trips
+                .Where(row => row.TripId == trip.TripId && row.OwnerIssuer == ownerIssuer &&
+                    row.OwnerSubject == ownerSubject && row.Revision == expectedRevision)
+                .ExecuteUpdateAsync(set => set
+                    .SetProperty(row => row.Revision, row => row.Revision + 1)
+                    .SetProperty(row => row.Name, replacement.Name)
+                    .SetProperty(row => row.TimeZoneId, replacement.TimeZoneId)
+                    .SetProperty(row => row.StartAt, replacement.StartAt)
+                    .SetProperty(row => row.StartOffset, replacement.StartOffset)
+                    .SetProperty(row => row.EndAt, replacement.EndAt)
+                    .SetProperty(row => row.EndOffset, replacement.EndOffset)
+                    .SetProperty(row => row.IsRoundTrip, replacement.IsRoundTrip), cancellationToken);
+            if (updated == 0)
+                return await GetOwnedRevisionAsync(trip.TripId, ownerIssuer, ownerSubject, cancellationToken) is null
+                    ? TripReplacementStatus.NotFound : TripReplacementStatus.Stale;
+
+            await database.TripLegs.Where(leg => leg.TripId == trip.TripId).ExecuteDeleteAsync(cancellationToken);
+            database.TripLegs.AddRange(replacement.Legs);
+            await database.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return TripReplacementStatus.Replaced;
+        }
+        finally
+        {
+            database.ChangeTracker.Clear();
+        }
+    }
+
+    /** {@inheritDoc} */
+    public Task<long?> GetOwnedRevisionAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default) =>
+        database.Trips.Where(row => row.TripId == tripId && row.OwnerIssuer == ownerIssuer && row.OwnerSubject == ownerSubject)
+            .Select(row => (long?)row.Revision).SingleOrDefaultAsync(cancellationToken);
+
+    /**
      * Loads a trip with its legs in sequence order, only when the caller owns it.
      *
      * @param tripId The public trip identifier.
@@ -73,7 +124,7 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
             new TripTransport(leg.TransportModeId, leg.TransportCode, leg.TransportName),
             leg.DepartureAt.ToOffset(leg.DepartureOffset),
             leg.ArrivalAt.ToOffset(leg.ArrivalOffset))),
-        row.TripId);
+        row.TripId, row.Revision);
 
     /**
      * Maps a validated trip, its owner and its snapshots to persistence rows. Instants are written in UTC because
@@ -87,6 +138,7 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
     private static TripRow ToRow(Trip trip, string ownerIssuer, string ownerSubject) => new()
     {
         TripId = trip.TripId,
+        Revision = trip.Revision,
         OwnerIssuer = ownerIssuer,
         OwnerSubject = ownerSubject,
         Name = trip.Name,

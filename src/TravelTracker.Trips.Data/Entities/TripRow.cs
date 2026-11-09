@@ -7,6 +7,7 @@ namespace TravelTracker.Trips.Data.Entities;
 internal sealed class TripRow
 {
     public Guid TripId { get; set; }
+    public long Revision { get; set; }
     public string OwnerIssuer { get; set; } = string.Empty;
     public string OwnerSubject { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

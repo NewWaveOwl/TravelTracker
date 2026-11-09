@@ -15,7 +15,7 @@ Attractions and Accommodations each have dedicated Api/Data/Domain projects and 
 | [ITripService](../src/TravelTracker.Api/Services/ITripService.cs) | `Trip`, `TripLeg` (empty type declarations) | `GetHistoryAsync`, `GetByIdAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ReplaceLegsAsync` |
 | [ITripMapService](../src/TravelTracker.Api/Services/ITripMapService.cs) | `TripMapPoint` (empty type declaration) | `GetMapPointsAsync` |
 
-The Attraction, Accommodation, TransportMode and Users profile interfaces have concrete implementations in their owning service APIs. Settings is implemented by the independent Settings service ([settings-service.md](settings-service.md)); the shared settings placeholder and its legacy interfaces were removed. Trips/map retain their existing contracts but have no runtime implementation or endpoint. The historical shared entity identity is an `EntityId<T>` with an internal `Id64` key and public uuidv7; the independent Accommodation service uses a public UUIDv7 as its database primary key. APIs expose only public GUIDs and DTOs, never persistence keys or owner identity.
+The Attraction, Accommodation, TransportMode and Users profile interfaces have concrete implementations in their owning service APIs. Settings is implemented by the independent Settings service ([settings-service.md](settings-service.md)); the shared settings placeholder and its legacy interfaces were removed. The independent Trips service implements creating, opening and replacing an owner's complete trip. The historical shared entity identity is an `EntityId<T>` with an internal `Id64` key and public uuidv7; the independent Accommodation service uses a public UUIDv7 as its database primary key. APIs expose only public GUIDs and DTOs, never persistence keys or owner identity.
 
 The historical `Accomodation` model and `IAccomadationRepository` remain unchanged for compatibility; the Accommodations API owns a separate `Accommodation` model, repository and HTTP contract.
 
@@ -29,14 +29,14 @@ The historical `Accomodation` model and `IAccomadationRepository` remain unchang
 | Accommodations | `GET /accommodations`, `GET/POST/PATCH /accommodations/{id}` |
 | Transport | `GET /transport-modes`, `GET /transport-modes/{id}` |
 | Attractions | `GET/POST /attractions`, `GET/PATCH /attractions/{id}` |
-| Trips (implemented on the Trips service: `POST /api/v1/trips`, `GET /api/v1/trips/{id}`; see [Trips service](trips-service.md)) | `GET /trips` (the caller's own trips), `GET/PATCH/DELETE /trips/{id}`, `PUT /trips/{id}/legs`, `GET /trips/{id}/map-points` remain future |
+| Trips (implemented on the Trips service: `POST /api/v1/trips`, `GET /api/v1/trips/{id}`, `PUT /api/v1/trips/{id}`; see [Trips service](trips-service.md)) | `GET /trips` (the caller's own trips), `DELETE /trips/{id}`, and separate legs or map-point endpoints remain future |
 | Settings | `GET/PUT /settings` (the caller's own settings; `settings.read` / `settings.write`; `ETag` and `If-Match` required on PUT; see [settings-service.md](settings-service.md)) |
 | Ticket import (future) | `POST /ticket-imports`, `GET /ticket-imports/{id}`, `POST /ticket-imports/{id}/confirm` |
 | All | `GET /health` |
 
 Response codes: `201` create, `404` not found, `400` invalid trip direction/times, `403` forbidden (e.g. banned user write), `503` dependency unavailable.
 
-The planned Trips service will validate referenced user/place/transport IDs via HTTP calls to the owning service at write time; each service will own its own store. This integration is not implemented by the current catalogue demo.
+The Trips service validates account standing and referenced place and transport IDs over HTTP against the owning services at write time. Each service owns its own store.
 
 ## Ownership
 

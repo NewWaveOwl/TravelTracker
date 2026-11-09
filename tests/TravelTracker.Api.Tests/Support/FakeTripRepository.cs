@@ -1,4 +1,3 @@
-using TravelTracker.Data.Repositories;
 using TravelTracker.Trips.Data.Repositories;
 using TravelTracker.Trips.Domain.Models;
 
@@ -36,6 +35,34 @@ public sealed class FakeTripRepository : ITripRepository {
         owners[trip.TripId] = (ownerIssuer, ownerSubject);
         return Task.CompletedTask;
     }
+
+    /**
+     * Replaces an existing trip only for its owner.
+     *
+     * @param trip The replacement trip.
+     * @param ownerIssuer The caller's issuer.
+     * @param ownerSubject The caller's subject.
+     * @param expectedRevision The revision named by the client.
+     * @param cancellationToken Ignored by this fake.
+     * @return Whether it was stored, absent, or stale.
+     */
+    public Task<TripReplacementStatus> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, long expectedRevision, CancellationToken cancellationToken = default) {
+        if (!owners.TryGetValue(trip.TripId, out var owner) || owner != (ownerIssuer, ownerSubject))
+            return Task.FromResult(TripReplacementStatus.NotFound);
+        var index = stored.FindIndex(candidate => candidate.TripId == trip.TripId);
+        if (stored[index].Revision != expectedRevision)
+            return Task.FromResult(TripReplacementStatus.Stale);
+        if (NextWriteFailure is { } failure) {
+            NextWriteFailure = null;
+            return Task.FromException<TripReplacementStatus>(failure);
+        }
+        stored[index] = trip;
+        return Task.FromResult(TripReplacementStatus.Replaced);
+    }
+
+    /** {@inheritDoc} */
+    public async Task<long?> GetOwnedRevisionAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default) =>
+        (await GetOwnedByIdAsync(tripId, ownerIssuer, ownerSubject, cancellationToken))?.Revision;
 
     /**
      * Returns a stored trip only when the caller owns it.

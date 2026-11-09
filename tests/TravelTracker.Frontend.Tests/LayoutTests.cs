@@ -36,7 +36,9 @@ public sealed class LayoutTests : BunitContext
         })));
 
         layout.WaitForAssertion(() => Assert.Equal("Service unavailable", layout.Find("h2").TextContent));
-        Assert.Equal("history", layout.Find("nav[aria-label='Main navigation'] a:nth-child(2)").GetAttribute("href"));
+        var links = layout.FindAll("nav[aria-label='Main navigation'] a");
+        Assert.Equal(new[] { "map", "new-trip", "history" }, links.Select(link => link.GetAttribute("href")));
+        Assert.Equal("Map", links[0].TextContent);
     }
 
     [Fact]

@@ -1,6 +1,8 @@
 using System.Globalization;
 using TravelTracker.Frontend.Features.Settings;
 
+using TravelTracker.Frontend.Api.Trips;
+
 namespace TravelTracker.Frontend.Features.Trips;
 
 /**
@@ -103,27 +105,14 @@ public sealed class TripDraft
      * Builds the public create body from a draft that passed both validations.
      * @return The camelCase request with each time carrying its offset in the trip zone; no owner is included.
      */
-    public object ToRequest()
+    public SaveTripRequest ToRequest()
     {
         var zone = FindZone() ?? throw new InvalidOperationException("The draft has no valid time zone.");
         DateTimeOffset At(string local) => ToOffset(local, zone, out var instant, out _) ? instant : throw new InvalidOperationException("The draft has an unusable time.");
-        return new
-        {
-            name = Name.Trim(),
-            timeZone = TimeZone.Trim(),
-            start = At(Start),
-            end = At(End),
-            isRoundTrip = IsRoundTrip,
-            legs = Legs.Select((leg, index) => new
-            {
-                sequence = index + 1,
-                from = new { placeId = leg.From!.PlaceId, type = leg.From.Type },
-                to = new { placeId = leg.To!.PlaceId, type = leg.To.Type },
-                transportModeId = leg.TransportModeId!.Value,
-                departure = At(leg.Departure),
-                arrival = At(leg.Arrival),
-            }).ToList(),
-        };
+        return new SaveTripRequest(Name.Trim(), TimeZone.Trim(), At(Start), At(End), IsRoundTrip,
+            Legs.Select((leg, index) => new SaveTripRequest.Leg(index + 1,
+                new(leg.From!.PlaceId, leg.From.Type), new(leg.To!.PlaceId, leg.To.Type),
+                leg.TransportModeId!.Value, At(leg.Departure), At(leg.Arrival))).ToArray());
     }
 
     TimeZoneInfo? FindZone()

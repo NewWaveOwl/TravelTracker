@@ -1,0 +1,147 @@
+.trip-map-canvas {
+    min-width: 0;
+    color: var(--forest);
+}
+
+.map-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    width: max-content;
+    background: white;
+    border-radius: 16px;
+}
+
+.map-controls button {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+}
+
+.map-controls button:disabled { opacity: .55; cursor: default; }
+.map-controls button:not(:disabled):hover { background: #f0eadf; }
+
+.map-frame {
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #e2e7db;
+}
+
+.map-basemap { position: absolute; inset: 0; }
+.map-basemap ::deep .maplibregl-canvas { pointer-events: none; }
+.map-basemap ::deep .maplibregl-ctrl-bottom-right { z-index: 2; }
+
+.map-frame > svg {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    cursor: grab;
+}
+
+.location-target {
+    cursor: crosshair;
+}
+
+.route-line,
+.route-halo {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.route-line { stroke: #265873; stroke-width: 5; }
+.route-halo { stroke: white; stroke-width: 9; }
+.trip-marker { cursor: pointer; }
+
+.marker-body { fill: transparent; }
+.marker-badge { fill: #ffc075; stroke: white; stroke-width: 1; }
+.trip-marker[aria-pressed="true"] .marker-badge { stroke: var(--forest); stroke-width: 2; }
+.trip-marker:focus-visible .marker-badge { stroke: #265873; stroke-width: 3; }
+.marker-number { fill: #fffdf5; }
+.trip-marker:hover .marker-number { fill: #ffecd9; }
+.trip-marker[aria-pressed="true"] .marker-number { fill: var(--trip-peach, #ffcbbe); }
+.trip-marker text { fill: var(--forest); font: bold 16px 'Atkinson Hyperlegible', sans-serif; }
+.trip-marker:focus-visible { outline: none; }
+.trip-marker:focus-visible .marker-number { stroke: var(--forest); stroke-width: 2; }
+
+.map-status {
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: #fffdf5;
+    font: .9rem/1.4 'Atkinson Hyperlegible', sans-serif;
+}
+
+.map-status button { min-height: 0; padding: 4px 8px; font-size: inherit; }
+
+.trip-map-canvas p {
+    margin: .35rem 0 0;
+    font: .8rem/1.4 'Atkinson Hyperlegible', sans-serif;
+}
+
+.route-line { stroke: #327dab; }
+.route-line.pedestrian { stroke: #3b7866; stroke-dasharray: 5 5; }
+.route-line.train { stroke: #35795f; }
+.route-line.bus { stroke: #a05a39; }
+.map-leg-label div, .map-leg-label button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #84bdc2;
+    border-radius: 18px;
+    padding: 4px 10px;
+    color: #273d30;
+    font: 16px/24px 'Atkinson Hyperlegible', sans-serif;
+    white-space: nowrap;
+    min-height: 0;
+    max-width: 100%;
+}
+.map-leg-label button { pointer-events: auto; cursor: pointer; }
+.map-leg-label button:hover { background: #a5d0d4; }
+.map-leg-label span { overflow: hidden; text-overflow: ellipsis; }
+.map-leg-badge div, .map-leg-badge button {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 1px solid white;
+    border-radius: 50%;
+    background: #8ac6e8;
+}
+.map-leg-badge button:hover { background: #b2dff8; }
+.map-leg-label button:focus-visible { outline: 2px solid #265873; outline-offset: -3px; }
+.full-map, .full-map .map-frame, .full-map .map-frame > svg { width: 100%; height: 100%; }
+.full-map .map-frame { border-radius: 0; }
+.full-map .map-controls {
+    position: absolute;
+    right: clamp(12px, 1.65vw, 32px);
+    bottom: clamp(28px, 7.4vh, 80px);
+    z-index: 3;
+}
+.full-map .map-frame > svg { touch-action: none; }
+.full-map svg[data-dragging], .full-map svg[data-dragging] .location-target { cursor: grabbing; }
+.full-map p { display: none; }
+.marker-remove { cursor: pointer; }
+.marker-remove circle { fill: white; stroke: #3e4f3d; stroke-width: 1; }
+.marker-remove path { fill: none; stroke: #3e4f3d; stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+.marker-remove:focus-visible circle, .marker-remove:hover circle { stroke-width: 2; }
+
+.trip-marker[data-move-index] { cursor: grab; }
+.full-map svg[data-dragging] .trip-marker[data-move-index] { cursor: grabbing; }
+.full-map svg[data-dragging] .marker-remove { visibility: hidden; }

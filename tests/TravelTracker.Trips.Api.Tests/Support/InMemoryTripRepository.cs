@@ -1,4 +1,3 @@
-using TravelTracker.Data.Repositories;
 using TravelTracker.Trips.Data.Repositories;
 using TravelTracker.Trips.Domain.Models;
 
@@ -47,6 +46,38 @@ internal sealed class InMemoryTripRepository : ITripRepository
             return Task.CompletedTask;
         }
     }
+
+    /**
+     * Replaces the existing trip only when its owner matches.
+     *
+     * @param trip The validated replacement.
+     * @param ownerIssuer The caller's issuer.
+     * @param ownerSubject The caller's subject.
+     * @param expectedRevision The revision named by the client.
+     * @param cancellationToken Ignored by the test store.
+     * @return Whether it was stored, absent, or stale.
+     */
+    public Task<TripReplacementStatus> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, long expectedRevision, CancellationToken cancellationToken = default)
+    {
+        lock (gate)
+        {
+            if (!trips.TryGetValue(trip.TripId, out var existing) || existing.Issuer != ownerIssuer || existing.Subject != ownerSubject)
+                return Task.FromResult(TripReplacementStatus.NotFound);
+            if (existing.Trip.Revision != expectedRevision)
+                return Task.FromResult(TripReplacementStatus.Stale);
+            if (NextWriteFailure is { } failure)
+            {
+                NextWriteFailure = null;
+                return Task.FromException<TripReplacementStatus>(failure);
+            }
+            trips[trip.TripId] = (trip, ownerIssuer, ownerSubject);
+            return Task.FromResult(TripReplacementStatus.Replaced);
+        }
+    }
+
+    /** {@inheritDoc} */
+    public async Task<long?> GetOwnedRevisionAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default) =>
+        (await GetOwnedByIdAsync(tripId, ownerIssuer, ownerSubject, cancellationToken))?.Revision;
 
     /**
      * Returns the trip only when the caller is its owner.

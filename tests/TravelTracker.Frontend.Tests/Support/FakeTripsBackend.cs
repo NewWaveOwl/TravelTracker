@@ -85,9 +85,9 @@ public sealed class FakeTripsBackend : HttpMessageHandler
         if (CreateGate is { } gate) await gate.Task;
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
-        var legs = root.GetProperty("legs").EnumerateArray().Select(leg => new TripLegDto(
+        var legs = root.GetProperty("legs").EnumerateArray().Select(leg => new TripDto.Leg(
             leg.GetProperty("sequence").GetInt32(), Place(leg.GetProperty("from")), Place(leg.GetProperty("to")),
-            new TripTransportDto(Bus, "bus", "City bus"), leg.GetProperty("departure").GetDateTimeOffset(), leg.GetProperty("arrival").GetDateTimeOffset())).ToList();
+            new TripDto.Mode(Bus, "bus", "City bus"), leg.GetProperty("departure").GetDateTimeOffset(), leg.GetProperty("arrival").GetDateTimeOffset())).ToList();
         var trip = new TripDto(Guid.CreateVersion7(), root.GetProperty("name").GetString()!, root.GetProperty("timeZone").GetString()!,
             root.GetProperty("start").GetDateTimeOffset(), root.GetProperty("end").GetDateTimeOffset(), root.GetProperty("isRoundTrip").GetBoolean(), legs);
         stored[trip.TripId] = trip;

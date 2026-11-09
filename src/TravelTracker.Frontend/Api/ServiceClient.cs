@@ -74,7 +74,9 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
             if (!response.IsSuccessStatusCode)
             {
                 var status = (int)response.StatusCode;
-                var errors = status is 400 or 404 or 422 ? await FieldErrorsAsync(response, bounded.Token) : null;
+                var trips = request.RequestUri!.AbsolutePath.StartsWith("/api/v1/trips", StringComparison.Ordinal);
+                var errors = status is 400 or 422 || (trips && status == 404)
+                    ? await FieldErrorsAsync(response, trips, bounded.Token) : null;
                 throw Fail(Classify(status), MessageFor(status), method, status, errors);
             }
             return new ServiceResponse<T>(await response.Content.ReadFromJsonAsync<T>(bounded.Token), response.Headers.ETag?.Tag);
@@ -90,7 +92,7 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
         }
     }
 
-    static async Task<IReadOnlyDictionary<string, string[]>> FieldErrorsAsync(HttpResponseMessage response, CancellationToken token)
+    static async Task<IReadOnlyDictionary<string, string[]>> FieldErrorsAsync(HttpResponseMessage response, bool trips, CancellationToken token)
     {
         var result = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
         try
@@ -98,7 +100,7 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
             using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(token), cancellationToken: token);
             if (json.RootElement.ValueKind == JsonValueKind.Object && json.RootElement.TryGetProperty("errors", out var fields) && fields.ValueKind == JsonValueKind.Object)
                 foreach (var field in fields.EnumerateObject())
-                    if ((WritableFields.Contains(field.Name) || TripField().IsMatch(field.Name)) && field.Value.ValueKind == JsonValueKind.Array)
+                    if ((WritableFields.Contains(field.Name) || (trips && TripField().IsMatch(field.Name))) && field.Value.ValueKind == JsonValueKind.Array)
                         result[char.ToLowerInvariant(field.Name[0]) + field.Name[1..]] = field.Value.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String)
                             .Take(4).Select(v => v.GetString()!).Where(s => s.Length <= 300).ToArray();
         }
@@ -106,7 +108,7 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
         return result;
     }
 
-    [GeneratedRegex(@"^legs(\[\d{1,3}\](\.(sequence|from|to|transport|transportModeId|departure|arrival))?)?$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\A(?:start|end|isRoundTrip|legs(?:\[\d+\](?:\.(?:sequence|from(?:\.(?:type|placeId))?|to(?:\.(?:type|placeId))?|transport(?:ModeId)?|departure|arrival))?)?)\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TripField();
 
     static FailureKind Classify(int status) => status switch
