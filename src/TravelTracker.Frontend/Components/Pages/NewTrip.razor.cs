@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -295,6 +296,16 @@ public partial class NewTrip : IAsyncDisposable
     static bool IsBrowserDraftFailure(Exception error) =>
         error is JSException or CryptographicException or JsonException or InvalidOperationException or InvalidDataException;
 
+    static string? AccountDraftPrefix(ClaimsPrincipal user)
+    {
+        if (user.Identity?.IsAuthenticated != true || user.FindFirst("sub") is not { } subject)
+            return null;
+
+        var identity = JsonSerializer.Serialize(new[] { user.FindFirst("iss")?.Value ?? subject.Issuer, subject.Value });
+        var owner = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
+        return $"traveltracker-map-draft-v1-{owner}";
+    }
+
     void ResetBrowserDraftTracking()
     {
         newBrowserDraft = null;
@@ -319,19 +330,16 @@ public partial class NewTrip : IAsyncDisposable
         {
             var auth = await Services.GetRequiredService<AuthenticationStateProvider>().GetAuthenticationStateAsync();
             var user = auth.User;
-            var subject = user.FindFirst("sub");
-            if (user.Identity?.IsAuthenticated == true && subject is null)
+            var accountPrefix = AccountDraftPrefix(user);
+            if (user.Identity?.IsAuthenticated == true && accountPrefix is null)
             {
                 browserDraftNotice = "Sign in again to use your browser draft.";
                 return;
             }
-            var identity = user.Identity?.IsAuthenticated == true && subject is not null
-                ? JsonSerializer.Serialize(new[] { user.FindFirst("iss")?.Value ?? subject.Issuer, subject.Value })
-                : "anonymous";
-            var owner = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
-            var prefix = $"traveltracker-map-draft-v1-{owner}";
-            key = BrowserDraftKey(prefix, draft.Id);
-            var storage = Services.GetRequiredService<ProtectedLocalStorage>();
+            key = BrowserDraftKey(accountPrefix ?? "traveltracker-map-draft-v1-anonymous", draft.Id);
+            ProtectedBrowserStorage storage = accountPrefix is null
+                ? Services.GetRequiredService<ProtectedSessionStorage>()
+                : Services.GetRequiredService<ProtectedLocalStorage>();
             if (version != routeVersion || token.IsCancellationRequested)
                 return;
 
@@ -344,7 +352,7 @@ public partial class NewTrip : IAsyncDisposable
                 if (version == routeVersion && !token.IsCancellationRequested)
                 {
                     if (snapshot.Map.Id is null)
-                        newBrowserDraft = (prefix, snapshot);
+                        newBrowserDraft = accountPrefix is null ? null : (accountPrefix, snapshot);
                     browserDraftNotice = "Map draft saved in this browser.";
                 }
                 return;
@@ -377,8 +385,8 @@ public partial class NewTrip : IAsyncDisposable
 
             draft = restored;
             ResetBrowserDraftTracking();
-            if (draft.Id is null)
-                newBrowserDraft = (prefix, saved);
+            if (draft.Id is null && accountPrefix is not null)
+                newBrowserDraft = (accountPrefix, saved);
             restoredPlaces.UnionWith(draft.Stops.Where(stop => stop.Place.PlaceId == Guid.Empty)
                 .Select(stop => PlaceDetails(stop.Place)));
             markerNumber = saved.MarkerNumber;
@@ -944,6 +952,10 @@ public partial class NewTrip : IAsyncDisposable
         var key = BrowserDraftKey(prefix, id);
         try
         {
+            var auth = await Services.GetRequiredService<AuthenticationStateProvider>().GetAuthenticationStateAsync();
+            if (version != routeVersion || closed.IsCancellationRequested || AccountDraftPrefix(auth.User) != prefix)
+                return;
+
             var storage = Services.GetRequiredService<ProtectedLocalStorage>();
             await storage.SetAsync(key, snapshot with { Map = snapshot.Map with { Id = id, ETag = etag } });
         }

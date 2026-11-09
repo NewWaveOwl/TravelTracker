@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json.Nodes;
 using Bunit;
 using Microsoft.AspNetCore.Components;
@@ -36,11 +37,14 @@ public sealed class TripPlannerTests : BunitContext
     static readonly TripDto Saved = new(TripId, "Weekend", "America/Toronto", Start, Start.AddHours(4),
         false, [new(1, Hotel, Museum, Train, Start.AddHours(1), Start.AddHours(2))]);
 
-    [Fact]
-    public async Task MapNameAndIncompleteDraftCanBeSavedAndRestoredWithoutTripsApi()
+    [Theory]
+    [InlineData(false, "sessionStorage", "localStorage")]
+    [InlineData(true, "localStorage", "sessionStorage")]
+    public async Task MapNameAndIncompleteDraftCanBeSavedAndRestoredWithoutTripsApi(
+        bool signedIn, string storage, string unusedStorage)
     {
         Configure((_, _) => throw new InvalidOperationException("A browser draft must not call the Trips API."));
-        ConfigureBrowserDraftStorage();
+        ConfigureBrowserDraftStorage(signedIn);
         Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
         var page = Render<NewTrip>();
         page.Find(".map-trip-name").Change("Unfinished weekend");
@@ -49,16 +53,18 @@ public sealed class TripPlannerTests : BunitContext
         await page.InvokeAsync(() => canvas.Instance.MarkerDropped.InvokeAsync(("transport_stop", 45.52m, -73.59m)));
 
         Click(page, "Save map draft");
-        var saved = Assert.Single(JSInterop.Invocations["localStorage.setItem"]);
+        var saved = Assert.Single(JSInterop.Invocations[$"{storage}.setItem"]);
+        Assert.Empty(JSInterop.Invocations[$"{unusedStorage}.setItem"]);
         var key = Assert.IsType<string>(saved.Arguments[0]);
         var value = Assert.IsType<string>(saved.Arguments[1]);
         Assert.Contains("Map draft saved in this browser.", page.Markup);
         Assert.True(page.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
         Assert.False(page.Find("[data-trip-undo]").HasAttribute("disabled"));
 
-        JSInterop.Setup<string>("localStorage.getItem", call => Equals(call.Arguments[0], key)).SetResult(value);
+        JSInterop.Setup<string>($"{storage}.getItem", call => Equals(call.Arguments[0], key)).SetResult(value);
         var reopened = Render<NewTrip>();
         Click(reopened, "Restore map draft");
+        Assert.Empty(JSInterop.Invocations[$"{unusedStorage}.getItem"]);
         Assert.Equal("Unfinished weekend", reopened.Find(".map-trip-name").GetAttribute("value"));
         Assert.Equal(new[] { 45.51m, 45.52m }, reopened
             .FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>().Instance.Stops.Select(stop => stop.Lat));
@@ -1139,11 +1145,20 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Contains("export function watchUndo", await browser.GetStringAsync("/Components/Pages/NewTrip.razor.js"));
     }
 
-    void ConfigureBrowserDraftStorage()
+    void ConfigureBrowserDraftStorage(bool signedIn = true)
     {
-        Services.AddSingleton<AuthenticationStateProvider>(new SwitchableAuthentication(new SessionRegistry(TimeProvider.System)));
+        var authentication = new SwitchableAuthentication(new SessionRegistry(TimeProvider.System));
+        if (signedIn)
+        {
+            authentication.SignIn("test-token", DateTimeOffset.UtcNow.AddHours(1));
+            var identity = (ClaimsIdentity)authentication.User.Identity!;
+            identity.AddClaim(new Claim("iss", "https://traveltracker.test/"));
+            identity.AddClaim(new Claim("sub", "auth0|test-user"));
+        }
+        Services.AddSingleton<AuthenticationStateProvider>(authentication);
         Services.AddSingleton<IDataProtectionProvider, EphemeralDataProtectionProvider>();
         Services.AddScoped<ProtectedLocalStorage>();
+        Services.AddScoped<ProtectedSessionStorage>();
     }
 
     void Configure(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond,

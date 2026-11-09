@@ -150,8 +150,10 @@ The Blazor client (`TravelTracker.Frontend`) talks to the Trips, Accommodations,
 
 In Map View, **Save map draft** stores a browser copy and keeps the undo history
 and unsaved-changes warning. Restoring a browser draft brings its edits back into
-the planner. When a new trip receives a saved link, the browser copy is also
-available from that link. Dragging a pin in Map View review returns to editing
+the planner. Signed-out drafts stay in the current tab's session. Signed-in
+drafts stay in this browser under the account that saved them. When a signed-in
+draft receives a saved trip link, its browser copy is also available from that
+link. Dragging a pin in Map View review returns to editing
 and records an unsaved change.
 
 In the form-only planner:
