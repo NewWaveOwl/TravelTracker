@@ -31,6 +31,6 @@ else if (trip is not null)
             </li>
         }
     </ol>
-    <div class="trip-actions"><a class="button secondary" href="new-trip">Plan another trip</a></div>
+    <div class="trip-actions"><a class="button secondary" href="@($"new-trip/{trip.TripId:D}")">Edit trip</a><a class="button secondary" href="new-trip">Plan another trip</a></div>
 }
 </div>

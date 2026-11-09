@@ -15,6 +15,7 @@ using TravelTracker.Frontend.Api.Settings;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
 using TravelTracker.Frontend.Auth;
+using TravelTracker.Frontend.Components;
 using TravelTracker.Frontend.Components.Pages;
 using TravelTracker.Frontend.Services;
 using TravelTracker.Frontend.Tests.Support;
@@ -48,9 +49,12 @@ public sealed class NewTripPageTests : BunitContext
         Services.AddSingleton<TimeProvider>(clock);
         Services.AddSingleton(sessions);
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
+        var attractions = new AttractionsClient(client);
+        var transport = new TransportClient(client);
         Services.AddSingleton(new AccommodationsClient(client));
-        Services.AddSingleton(new AttractionsClient(client));
-        Services.AddSingleton(new TransportClient(client));
+        Services.AddSingleton(attractions);
+        Services.AddSingleton(transport);
+        Services.AddSingleton(new TripPlacesClient(attractions, transport, client));
         Services.AddSingleton(new TripsClient(client));
         Services.AddSingleton(new SettingsClient(client));
         Services.AddScoped<UserPreferences>();
@@ -58,23 +62,23 @@ public sealed class NewTripPageTests : BunitContext
         return authentication;
     }
 
-    static void Search(IRenderedComponent<NewTrip> page, string id, string query)
+    static void Search(IRenderedComponent<TripFormPlanner> page, string id, string query)
     {
         page.Find($"#{id}-search").Input(query);
         page.Find($"#{id}-search-button").Click();
         page.WaitForAssertion(() => Assert.NotEmpty(page.Find($"#{id}-search").Closest("fieldset")!.QuerySelectorAll("ul.place-results button")));
     }
 
-    static void Pick(IRenderedComponent<NewTrip> page, string id, string query, int result = 0)
+    static void Pick(IRenderedComponent<TripFormPlanner> page, string id, string query, int result = 0)
     {
         Search(page, id, query);
         page.Find($"#{id}-search").Closest("fieldset")!.QuerySelectorAll("ul.place-results button")[result].Click();
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll($"p#{id}")));
     }
 
-    IRenderedComponent<NewTrip> FillBasics(IRenderedComponent<NewTrip>? existing = null)
+    IRenderedComponent<TripFormPlanner> FillBasics(IRenderedComponent<TripFormPlanner>? existing = null)
     {
-        var page = existing ?? Render<NewTrip>();
+        var page = existing ?? Render<TripFormPlanner>();
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#trip-name")));
         page.Find("#trip-name").Input("Paris weekend");
         page.Find("#trip-timezone").Change("Europe/Paris");
@@ -85,7 +89,7 @@ public sealed class NewTripPageTests : BunitContext
         return page;
     }
 
-    static void FillLeg(IRenderedComponent<NewTrip> page, string departure = "2026-06-01T09:00", string arrival = "2026-06-01T10:00")
+    static void FillLeg(IRenderedComponent<TripFormPlanner> page, string departure = "2026-06-01T09:00", string arrival = "2026-06-01T10:00")
     {
         Pick(page, "leg-0-from", "Hotel");
         page.Find("#leg-0-to-type").Change("attraction");
@@ -95,13 +99,33 @@ public sealed class NewTripPageTests : BunitContext
         page.Find("#leg-0-arrival").Change(arrival);
     }
 
-    static void GoToReview(IRenderedComponent<NewTrip> page)
+    static void GoToReview(IRenderedComponent<TripFormPlanner> page)
     {
         page.Find("form[aria-label=Itinerary]").Submit();
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#review-heading")));
     }
 
-    static IElement SaveButton(IRenderedComponent<NewTrip> page) => page.FindAll("button").Single(button => button.TextContent.StartsWith("Save", StringComparison.Ordinal) || button.TextContent == "Saving…");
+    static IElement SaveButton(IRenderedComponent<TripFormPlanner> page) => page.FindAll("button").Single(button => button.TextContent.StartsWith("Save", StringComparison.Ordinal) || button.TextContent == "Saving…");
+
+    [Fact]
+    public async Task TripEditorLinksToTheStepByStepFormAndBack()
+    {
+        Configure();
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("new-trip");
+        var routes = Render<Routes>();
+        var formLink = routes.Find("a[href='new-trip/form']");
+        Assert.Equal("Step-by-step form", formLink.TextContent);
+
+        await routes.InvokeAsync(() => navigation.NavigateTo(formLink.GetAttribute("href")!));
+        routes.WaitForAssertion(() => Assert.Single(routes.FindAll("#trip-name")));
+        var editorLink = routes.Find("main a[href='new-trip']");
+
+        await routes.InvokeAsync(() => navigation.NavigateTo(editorLink.GetAttribute("href")!));
+        routes.WaitForAssertion(() => Assert.Equal("Trip editor", routes.Find("h1").TextContent));
+        Assert.Single(routes.FindComponents<NewTrip>());
+    }
 
     [Fact]
     public void SavesACompleteTripOnlyAfterConfirmationAndReopensItAfterReload()
@@ -254,7 +278,7 @@ public sealed class NewTripPageTests : BunitContext
     public void LeavingAnEmptyTripNeverAsks()
     {
         Configure();
-        var page = Render<NewTrip>();
+        var page = Render<TripFormPlanner>();
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#trip-name")));
         var navigation = Services.GetRequiredService<NavigationManager>();
         page.InvokeAsync(() => navigation.NavigateTo("/history"));
@@ -265,7 +289,7 @@ public sealed class NewTripPageTests : BunitContext
     public void SignedOutVisitorIsAskedToSignInAndNothingIsRequested()
     {
         Configure(signedIn: false);
-        var page = Render<NewTrip>();
+        var page = Render<TripFormPlanner>();
         page.WaitForAssertion(() => Assert.Contains("Sign in to plan a trip", page.Markup));
         Assert.Empty(page.FindAll("#trip-name"));
         Assert.Empty(backend.Requests);

@@ -34,18 +34,52 @@ public sealed class TripReferenceValidator(AccommodationReferenceClient accommod
      * @param cancellationToken Cancels the outbound lookups.
      * @return Ready with the snapshot trip, or the first blocking outcome with field-tied errors.
      */
-    public async Task<TripReferenceOutcome> ValidateAsync(CallerIdentity caller, string bearerToken, TripDraft draft, CancellationToken cancellationToken) {
+    public async Task<TripReferenceOutcome> ValidateAsync(CallerIdentity caller, string bearerToken, TripDraft draft,
+        CancellationToken cancellationToken) {
+        var refusal = CheckCredentials(caller, bearerToken) ?? CheckTypes(draft)
+            ?? await CheckStandingAsync(caller, cancellationToken);
+        return refusal ?? await ResolveDraftAsync(bearerToken, draft, cancellationToken);
+    }
+
+    /**
+     * Checks that the caller is active before exposing any trip data.
+     * @param caller The identity taken from the validated token.
+     * @param bearerToken The token forwarded to catalogue services.
+     * @param cancellationToken Cancels the live account check.
+     * @return A blocking outcome, or null if the caller can save trips.
+     */
+    internal async Task<TripReferenceOutcome?> CheckCallerAsync(CallerIdentity caller, string bearerToken, CancellationToken cancellationToken) =>
+        CheckCredentials(caller, bearerToken) ?? await CheckStandingAsync(caller, cancellationToken);
+
+    /**
+     * Validates the replacement draft after authorization and revision checks.
+     * @param bearerToken The access token forwarded to the catalogue services.
+     * @param draft The submitted replacement.
+     * @param cancellationToken Cancels the outbound lookups.
+     * @param tripId The trip's existing identifier.
+     * @param revision The revision to assign if the replacement commits.
+     * @return The validated replacement or the first blocking outcome.
+     */
+    internal async Task<TripReferenceOutcome> ValidateReplacementAsync(string bearerToken, TripDraft draft,
+        CancellationToken cancellationToken, Guid tripId, long revision) =>
+        CheckTypes(draft) ?? await ResolveDraftAsync(bearerToken, draft, cancellationToken, tripId, revision);
+
+    private TripReferenceOutcome? CheckCredentials(CallerIdentity caller, string bearerToken) {
         if (string.IsNullOrWhiteSpace(caller.Issuer) || string.IsNullOrWhiteSpace(caller.Subject) || string.IsNullOrWhiteSpace(bearerToken)) {
             logger.LogWarning("trip check refused: the caller identity or access token is missing.");
             return Reject(TripReferenceStatus.Unauthorized, "a validated caller identity and access token are required.");
         }
+        return null;
+    }
 
+    private TripReferenceOutcome? CheckTypes(TripDraft draft) {
         var typeErrors = CheckPlaceTypes(draft);
-        if (typeErrors.Count > 0) {
-            logger.LogWarning("trip check refused before any lookup: {Count} leg endpoint(s) name an unsupported place type.", typeErrors.Count);
-            return new(TripReferenceStatus.InvalidTrip, null, typeErrors, "a leg names an unsupported place type.");
-        }
+        if (typeErrors.Count == 0) return null;
+        logger.LogWarning("trip check refused before catalogue lookups: {Count} leg endpoint(s) name an unsupported place type.", typeErrors.Count);
+        return new(TripReferenceStatus.InvalidTrip, null, typeErrors, "a leg names an unsupported place type.");
+    }
 
+    private async Task<TripReferenceOutcome?> CheckStandingAsync(CallerIdentity caller, CancellationToken cancellationToken) {
         var standing = await usersStanding.GetStandingAsync(caller, cancellationToken);
         if (standing.Status == ReferenceStatus.NotFound) {
             logger.LogInformation("trip check refused: no account matches this sign-in.");
@@ -59,7 +93,11 @@ public sealed class TripReferenceValidator(AccommodationReferenceClient accommod
             logger.LogWarning("trip check refused: account standing is {Status}, so trips cannot be saved.", standing.Value.Status);
             return Reject(TripReferenceStatus.AccountRejected, "banned and deactivated accounts cannot save trips.");
         }
+        return null;
+    }
 
+    private async Task<TripReferenceOutcome> ResolveDraftAsync(string bearerToken, TripDraft draft,
+        CancellationToken cancellationToken, Guid? tripId = null, long revision = 1) {
         var errors = new List<TripError>();
         var legs = new List<TripLeg>();
         for (var index = 0; index < draft.Legs.Count; index++) {
@@ -82,7 +120,7 @@ public sealed class TripReferenceValidator(AccommodationReferenceClient accommod
         }
 
         try {
-            var trip = Trip.Create(draft.Name, draft.TimeZone, draft.Start, draft.End, draft.IsRoundTrip, legs);
+            var trip = Trip.Create(draft.Name, draft.TimeZone, draft.Start, draft.End, draft.IsRoundTrip, legs, tripId, revision);
             logger.LogInformation("trip check passed: {Count} leg(s) snapshotted and ready to save.", trip.Legs.Count);
             return new(TripReferenceStatus.Ready, trip, [], "trip snapshot is ready to save.");
         }

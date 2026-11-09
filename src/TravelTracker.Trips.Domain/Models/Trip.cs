@@ -9,6 +9,8 @@ namespace TravelTracker.Trips.Domain.Models;
 public sealed class Trip {
     /** Public identifier, assigned when the trip is first created and kept when a stored trip is rebuilt. */
     public Guid TripId { get; }
+    /** Stored revision, starting at one and advancing with each committed replacement. */
+    public long Revision { get; }
     /** Trip name. */
     public string Name { get; }
     /** Zone the traveller enters times in. */
@@ -22,8 +24,9 @@ public sealed class Trip {
     /** Ordered legs. */
     public IReadOnlyList<TripLeg> Legs { get; }
 
-    private Trip(Guid tripId, string name, TimeZoneInfo timeZone, DateTimeOffset start, DateTimeOffset end, bool isRoundTrip, IReadOnlyList<TripLeg> legs) {
+    private Trip(Guid tripId, string name, TimeZoneInfo timeZone, DateTimeOffset start, DateTimeOffset end, bool isRoundTrip, IReadOnlyList<TripLeg> legs, long revision) {
         TripId = tripId;
+        Revision = revision;
         Name = name;
         TimeZone = timeZone;
         Start = start;
@@ -42,16 +45,17 @@ public sealed class Trip {
      * @param isRoundTrip Whether the trip must return to its starting point.
      * @param legs Ordered legs; at least one.
      * @param tripId Existing identifier when rebuilding a stored trip; a new version 7 identifier is assigned when omitted.
+     * @param revision The persisted revision, or one for a new trip.
      * @return The valid trip.
      * @throws TripValidationException when any rule is broken.
      */
     public static Trip Create(string name, TimeZoneInfo timeZone, DateTimeOffset start, DateTimeOffset end, bool isRoundTrip, IEnumerable<TripLeg> legs,
-        Guid? tripId = null) {
+        Guid? tripId = null, long revision = 1) {
         var snapshot = legs.ToList();
         var errors = Validate(name, timeZone, start, end, isRoundTrip, snapshot);
         return errors.Count > 0
             ? throw new TripValidationException(errors)
-            : new(tripId ?? Guid.CreateVersion7(), name, timeZone, start, end, isRoundTrip, snapshot.AsReadOnly());
+            : new(tripId ?? Guid.CreateVersion7(), name, timeZone, start, end, isRoundTrip, snapshot.AsReadOnly(), revision);
     }
 
     /**
@@ -61,7 +65,7 @@ public sealed class Trip {
      * @return A new valid trip; this trip is never modified.
      * @throws TripValidationException when the new legs break a rule.
      */
-    public Trip WithLegs(IEnumerable<TripLeg> legs) => Create(Name, TimeZone, Start, End, IsRoundTrip, legs, TripId);
+    public Trip WithLegs(IEnumerable<TripLeg> legs) => Create(Name, TimeZone, Start, End, IsRoundTrip, legs, TripId, Revision);
 
     private static List<TripError> Validate(string name, TimeZoneInfo zone, DateTimeOffset start, DateTimeOffset end, bool isRoundTrip, List<TripLeg> legs) {
         var errors = new List<TripError>();

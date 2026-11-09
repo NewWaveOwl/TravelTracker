@@ -12,6 +12,7 @@ TravelTracker is a .NET 10 backend for a travel-planning application. The projec
 | Accommodations | Create private or administrator-shared lodging records, search visible records by name and retrieve visible details. |
 | Transport entries | Create, list and retrieve named transport entries using `car`, `bus`, `train`, `pedestrian`, `bike` or `plane`. |
 | Route points | Create, list and retrieve reusable locations of type `accommodation`, `attraction` or `transport_stop`. |
+| Trips | Create, retrieve and replace an owner's complete itinerary with ordered place and transport snapshots. See the [Trips service](docs/trips-service.md). |
 | Validation | Validate required fields, supported codes and types, coordinate ranges, ratings and visit duration. |
 | API authentication | Validate bearer tokens and require separate catalogue read/write permissions. Health remains anonymous. |
 | API exploration | Use each independent service's Development Swagger page to inspect and execute its endpoints. |
@@ -29,16 +30,13 @@ The following features are not yet available through the running application:
 
 - Administrator account-status management remains separate from the traveller profile editor. The independent Users service supports first-sign-in provisioning, self-profile reads and updates over HTTP, live standing, verified first-administrator setup and administrator role management. See [Users contracts](docs/api.md#users-contracts).
 - Accommodation management as a separate resource.
-- Trips, ordered itinerary legs, history, settings and map views.
-- Account status management and a frontend profile editor. The independent Users service supports first-sign-in provisioning, self-profile reads and updates over HTTP, live standing, verified first-administrator setup and administrator role management. See [Users contracts](docs/api.md#users-contracts).
 - Accommodation update/archive management and frontend lodging screens.
-- Trips, ordered itinerary legs, history and map views. Settings preferences are available through the independent Settings service ([docs/settings-service.md](docs/settings-service.md)).
+- A browsable trip history. Settings preferences are available through the independent Settings service ([docs/settings-service.md](docs/settings-service.md)).
 - Scheduled journeys, departure and arrival times, and stop timing.
 - PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
-- Trip history, editing and deleting. Trips create and own-trip detail are implemented in the independent Trips service (see [Trips service](docs/trips-service.md)).
 - Complete traveller-facing feature screens (the Blazor navigation and HTTP foundation is in `src/TravelTracker.Frontend`).
 
-The historical shared user and `Accomodation` models remain for compatibility. The independent Accommodations service owns its own model, PostgreSQL store and HTTP endpoints. Trip/TripLeg domain rules are implemented and the independent Trips service (port 5108) saves and returns own trips with PostgreSQL; trip history, editing and deleting remain unfinished. The independent Settings service implements `UserSettings`; the shared placeholder and legacy settings interfaces were removed. TripMapPoint remains a placeholder.
+The historical shared user and `Accomodation` models remain for compatibility. The independent Accommodations service owns its own model, PostgreSQL store and HTTP endpoints. The independent Trips service (port 5108) applies Trip/TripLeg domain rules when it creates or replaces an owner's trip in PostgreSQL. The independent Settings service implements `UserSettings`; the shared placeholder and legacy settings interfaces were removed. TripMapPoint remains a placeholder.
 
 A route point describes a reusable location. A transport entry describes a transport option. Neither currently represents a scheduled journey.
 
@@ -94,16 +92,82 @@ The historical SQL schema in `src/Database/schema.sql` is not applied automatica
 
 ## Getting started
 
-The independent Blazor Web App lives in [src/TravelTracker.Frontend](src/TravelTracker.Frontend). Run `dotnet run --project src/TravelTracker.Frontend --launch-profile http` and open http://localhost:5100. It runs in interactive Server mode and calls the services over HTTP from the server, so no browser CORS or proxy setup is needed; service URLs live under `Services` in its `appsettings.json` (Accommodations 5106, Attractions 5104, Transport 5105, Settings 5107). It provides the Figma-based shell, shared form/status displays and public service health checks; Auth0 sign-in and protected service calls need the `Auth0` settings (see [Auth0 setup](docs/frontend-auth0.md)); trip saving remains a separate feature. Its tests are in `tests/TravelTracker.Frontend.Tests`.
-
-Install the **.NET 10 SDK**, then clone the repository:
+Install the **.NET 10 SDK**. If you already have the repository, open PowerShell in
+the TravelTracker folder. For a new checkout, run these commands first.
 
 ```powershell
 git clone https://github.com/NewWaveOwl/TravelTracker.git
 cd TravelTracker
 ```
 
-Build the solution:
+### Preview the website
+
+From the repository root, start the Blazor frontend and leave the terminal open.
+
+```powershell
+dotnet run --project src/TravelTracker.Frontend --launch-profile http
+```
+
+When the terminal shows `Now listening on: http://localhost:5100`, open the
+[home page](http://localhost:5100) or [Map View](http://localhost:5100/map).
+The frontend can preview Map View, manual marker placement and the itinerary
+editor on its own. The browser verifies the pinned MapLibre GL JS 6.17.0 library,
+worker and stylesheet against SHA-256 integrity hashes and loads the OpenFreeMap
+Liberty vector basemap over the internet. The planner shows a retry button if the
+basemap fails to load. Connection lines show the itinerary approximately.
+Sign-in, catalogue search and saving use the services below.
+Press `Ctrl+C` in the terminal to stop the app.
+
+### Run with sign-in and trip saving
+
+1. Configure the frontend and API bearer settings using the [Auth0 setup guide](docs/frontend-auth0.md).
+   Grant `users.read` for the account profile, `trips.read` to reopen saved trips,
+   and `trips.write` with `catalogue.read`
+   to create or edit them. Add `catalogue.write` to save newly picked locations or create missing transport modes.
+2. Start PostgreSQL and configure each API's database, migrations and service
+   credentials using the guides below. The Users API uses HTTPS. Trust the .NET
+   localhost development certificate and point the frontend at Users.
+
+   ```powershell
+   dotnet dev-certs https --trust
+   dotnet user-secrets set "Services:Users" "https://localhost:5101" --project src/TravelTracker.Frontend
+   ```
+
+3. Run each required API command in its own terminal from the repository root.
+   Start Users first. Apply any environment variables from its setup guide in
+   the same terminal as the corresponding command.
+
+   | Service | Local address | Command | Setup |
+   | --- | --- | --- | --- |
+   | Users | `https://localhost:5101` | `dotnet run --project src/TravelTracker.Users.Api --launch-profile https` | [Users database](docs/data.md#users-persistence), [bearer settings](docs/authentication.md) |
+   | Attractions | `http://localhost:5104` | `dotnet run --project src/TravelTracker.Attractions.Api --launch-profile http` | [Attractions setup](docs/attractions-service.md) |
+   | Transport and Route Points | `http://localhost:5105` | `dotnet run --project src/TravelTracker.Transport.Api --launch-profile http` | [Transport setup](docs/transport-service.md) |
+   | Accommodations | `http://localhost:5106` | `dotnet run --project src/TravelTracker.Accommodations.Api --launch-profile http` | [Accommodations setup](docs/accommodations-service.md) |
+   | Trips | `http://localhost:5108` | `dotnet run --project src/TravelTracker.Trips.Api --launch-profile http` | [Trips setup](docs/trips-service.md) |
+   | Settings (optional for trip planning) | `http://localhost:5107` | `dotnet run --project src/TravelTracker.Settings.Api --launch-profile http` | [Settings setup](docs/settings-service.md) |
+
+4. Start or restart the frontend with the preview command above. Sign in from
+   [Account](http://localhost:5100/account), then open [Map View](http://localhost:5100/map).
+   Use the Markers palette to search saved locations or pick a point. Choose a
+   transport mode, then select any starting pin and destination pin. To plan a
+   return, choose a mode again and select the pins in the opposite direction.
+   Select a connection on the map to edit its times. Choose **Review on map**
+   to check the ordered itinerary. If it contains new locations or unresolved
+   transport modes, choose **Save catalogue entries** before **Save trip**.
+   Catalogue entries are saved separately and remain available if the trip is
+   discarded or its save fails. If a catalogue save cannot be confirmed, retry
+   **Save catalogue entries** in the same planner session to look up the
+   result. If it is still unclear, the planner asks you to check the catalogue
+   before proceeding. Reopen a saved trip by its link or ID.
+   The draft is shared between **Map View** and **New Trip**. Leaving or reloading
+   the planner with unsaved changes prompts for confirmation.
+
+Newly picked Stop markers go into the shared transport-stop catalogue. New
+attractions and accommodations are private by default.
+
+### Build the solution or explore Swagger
+
+Build all projects from the repository root.
 
 ```powershell
 dotnet build TravelTracker.slnx --configuration Release
@@ -228,6 +292,7 @@ Open **New Trip** (`/new-trip`) and sign in with `catalogue.read`. Choose a save
 
 Sessions granted `catalogue.write` can create transport entries and destinations. New locations require valid coordinates and a confirmed server-issued public ID before selection. Pending inputs remain available after rejected or failed saves. A separate selected-route summary contains optional travel and change-after-this-transport duration fields in minutes. These are traveller-entered planning estimates retained in the draft and shown in the tracker, not catalogue schedules or calculated route estimates. The existing trip form remains a placeholder: the selection callback retains public catalogue records and entered durations in the page draft, without saving a trip. See [implementation and verification](docs/issue-44-implementation.md) and the [implementation plan](docs/issue-44-plan.md).
 
+
 ## Accommodation search and selection (#46)
 
-Open **New Trip** (`/new-trip`) and search the Accommodations catalogue using `catalogue.read`. Search results show only shared places and your own private places; selecting a result loads its details. Users with the optional `catalogue.write` grant can add a place with a name, address and coordinates. New places are private by default; active administrators may choose shared visibility, which the Accommodations API verifies against the live Users service. The confirmed public accommodation ID is retained in the New Trip draft for selection. Trip/stay persistence is not connected, so this does not save a trip. See [Accommodations service](docs/accommodations-service.md) and [Auth0 scope setup](docs/frontend-auth0.md#accommodation-write-grant-46).
+Open **New Trip** (`/new-trip`) and choose **Browse accommodations**. With `catalogue.read`, search results show shared places and your own private places. Open a result to review its details, then choose **Select this place** to add it to the itinerary shared by the standard editor and Map View. Users with `catalogue.write` can also create a place. New places are private by default, and the Accommodations API verifies shared visibility against the live Users service. Save the completed itinerary from **Review on map**. See [Accommodations service](docs/accommodations-service.md) and [Auth0 scope setup](docs/frontend-auth0.md#accommodation-write-grant-46).

@@ -43,13 +43,11 @@ The independent [Settings domain](../src/TravelTracker.Settings.Domain/Models/Us
 
 [Trip](../src/TravelTracker.Trips.Domain/Models/Trip.cs) and [TripLeg](../src/TravelTracker.Trips.Domain/Models/TripLeg.cs) are immutable. `Trip.Create` / `WithLegs` throw [TripValidationException](../src/TravelTracker.Trips.Domain/Models/TripValidationException.cs) listing every [TripError](../src/TravelTracker.Trips.Domain/Models/TripError.cs) (field path plus message), so a rejected edit leaves the old trip unchanged. Enforced: first leg starts at an accommodation; one-way ends at an attraction; round trip returns to its start and visits an attraction; legs are sequenced 1..n, connected, arrive after departing, do not overlap, and sit inside the trip start/end. Leg times carry an offset that must match the trip time zone; [TripTime.Resolve](../src/TravelTracker.Trips.Domain/Models/TripTime.cs) rejects impossible local times and requires an explicit offset for ambiguous ones. Nothing is corrected silently. Trip ownership, ids and persistence are not part of this layer.
 
-## Planned trip rules
+## Trip snapshots and ownership
 
-- One-way trip: accommodation to attraction; round trip includes a return leg.
-- Legs are ordered, connected, and advance in time without sequence gaps.
 - Supported transport codes are car, bus, train, pedestrian, bike and plane.
-- Trips retain location/transport snapshots and enforce ownership/privacy and account status.
+- The [Trips service](trips-service.md) validates account standing, ownership and catalogue visibility. A create or complete replacement stores ordered location and transport snapshots.
 
-The [trip-point/transport/route design](trip-points-and-routes.md) distinguishes reusable locations/entries from scheduled journeys and ordered trip occurrences. These trip/schedule rules are future work; Transport and Route Points expose create/detail/collection selection; Attractions also supports PATCH.
+The [trip-point/transport/route design](trip-points-and-routes.md) distinguishes reusable locations and entries from future scheduled journeys and ordered stop occurrences. Transport and Route Points expose create, detail and collection selection. Attractions also supports PATCH.
 
 Transport owns dedicated service domain models and identity types in `src/TravelTracker.Transport.Domain`; the historical shared RoutePoint is retained for existing Trip snapshots and does not cross the new service HTTP boundary.

@@ -1,6 +1,6 @@
 # Independent Trips service (#41)
 
-The Trips service saves a complete itinerary and returns it only to its owner. It is hosted by `TravelTracker.Trips.Api`, stores its trips in its own PostgreSQL database (`TravelTracker.Trips.Data`), and runs on port **5108**. The trip domain rules live in `TravelTracker.Trips.Domain`, the repository port and PostgreSQL implementation in `TravelTracker.Trips.Data`, and the reference validator and save and read services in `TravelTracker.Api/Trips` (from #40).
+The Trips service creates and replaces complete itineraries and returns them only to their owners. It is hosted by `TravelTracker.Trips.Api`, stores its trips in its own PostgreSQL database (`TravelTracker.Trips.Data`), and runs on port **5108**. The trip domain rules live in `TravelTracker.Trips.Domain`, the repository port and PostgreSQL implementation in `TravelTracker.Trips.Data`, and the reference validator and save and read services in `TravelTracker.Api/Trips` (from #40).
 
 ## Project layout and dependency direction
 
@@ -15,7 +15,7 @@ Dependency direction stays Api to Data to Domain. `TravelTracker.Data` no longer
 
 It does not read the catalogue services' tables. Before saving, it asks the Accommodations, Attractions and Transport services over HTTP, forwarding the caller's token, and asks Users for live account standing with a backend credential.
 
-Not implemented: trip history listing (`GET /trips`), editing, replacing legs, deleting, map points and Settings. Those remain future work.
+Trip history listing, deleting, individual leg writes and separate map-point resources remain future work. The complete trip representation includes the ordered place and transport snapshots needed by Map View.
 
 ## Start independently
 
@@ -48,10 +48,15 @@ Swagger is available at `/swagger` in the Development environment.
 | `GET /health` | Anonymous | `200` with `{"status":"ok","service":"Trips"}`. Liveness only. |
 | `POST /api/v1/trips` | `trips.write` and `catalogue.read` | `201` with the saved trip and `Location: /api/v1/trips/{tripId}`. |
 | `GET /api/v1/trips/{tripId}` | `trips.read` | `200` for the caller's own trip. |
+| `PUT /api/v1/trips/{tripId}` | `trips.write` and `catalogue.read` | `200` with the updated trip. The identifier and owner are preserved. |
 
 Requests and responses use camelCase JSON and public GUIDs only. The owner comes from the validated token (`iss` and `sub`); the body cannot name an owner, and unknown properties are refused with `400`.
 
-### Create body
+### Create and replace body
+
+Send all trip fields and every leg when replacing a trip. The route identifier selects the trip to edit.
+Successful reads, creates, and replacements include a strong `ETag` header. Send that tag as
+`If-Match` on replacement. When the tag is stale, reopen the trip and review the changes before saving.
 
 ```json
 {
@@ -79,7 +84,8 @@ Requests and responses use camelCase JSON and public GUIDs only. The owner comes
 
 | Outcome | Status | Stored |
 | --- | --- | --- |
-| Saved | `201` | Trip, legs and snapshots, in one transaction |
+| Created | `201` | Trip, legs and snapshots, in one transaction |
+| Replaced | `200` | Updated trip, legs and snapshots, in one transaction |
 | Malformed or unknown field, missing required field, unknown time zone | `400` | No |
 | Itinerary breaks a trip rule (for example a one-way trip not ending at an attraction) | `400` with field errors | No |
 | Referenced place or transport mode absent, or private to someone else | `404` with `errors` keyed by field | No |
@@ -88,7 +94,9 @@ Requests and responses use camelCase JSON and public GUIDs only. The owner comes
 | No or invalid bearer token; catalogue rejected the forwarded token | `401` | No |
 | Users or a catalogue service unavailable or unconfirmed (fail closed) | `503` | No |
 | Storage write failed (rolled back) | `503` | No |
-| Trip absent or owned by someone else (read), including administrators | `404` | Not applicable |
+| Trip absent or owned by someone else (read or replace), including administrators | `404` | No change |
+| Existing owned trip is missing `If-Match` (replace) | `428` | No change |
+| `If-Match` does not match the current revision (replace) | `412` | No change |
 | Banned owner reads own trip | `200` | Not applicable |
 | Deactivated or unknown account (read) | `403` | Not applicable |
 | Malformed trip identifier | `400` | Not applicable |
@@ -98,16 +106,17 @@ The `404` for a reference uses one message for absent and private places, so the
 ## Checks before a save
 
 1. The validated caller identity and the forwarded access token must be present.
-2. The time zone and place types are checked before any outbound call.
+2. The request is bound and its time zone and leg entries are checked. For replacements, action-level field errors are returned after the standing check.
 3. Account standing is read live from Users with the backend credential, which holds `users.access`. Only an `active` account may save. The caller's own token is never sent to Users.
-4. Every place is read from its owning service with the caller's token: accommodations, attractions and transport stops (route points), and transport modes. A private record owned by someone else appears absent.
-5. The trip rules run on the snapshot values, and the trip is saved only when every check passes.
+4. A replacement checks ownership and the supplied revision before looking up catalogue records. The database write checks both again. Place types are checked before calling the catalogue.
+5. Every place is read from its owning service with the caller's token: accommodations, attractions and transport stops (route points), and transport modes. A private record owned by someone else appears absent.
+6. The trip rules run on the snapshot values, and the trip is saved only when every check passes.
 
 Each refusal and each fail-closed path is logged with its reason, without tokens, identities or upstream response bodies.
 
 ## Persistence
 
-The `Trips` table holds the trip, its owner (issuer and subject), its time zone id, and its start and end instants with the offsets the traveller entered. The `TripLegs` table holds the ordered legs. Each leg row stores snapshots of its departure place, arrival place and transport mode, so later catalogue edits never change a stored trip. A save writes the trip row and every leg row in one explicit transaction; a failure at any row rolls the whole trip back.
+The `Trips` table holds the trip, its owner (issuer and subject), its time zone id, and its start and end instants with the offsets the traveller entered. The `TripLegs` table holds the ordered legs. Each leg row stores snapshots of its departure place, arrival place and transport mode, so later catalogue edits never change a stored trip. A save writes the trip row and every leg row in one explicit transaction. A replacement updates the owned trip row only at the expected revision and advances that revision before replacing its legs. A failure leaves the previous revision, trip and legs intact.
 
 Instants are written in UTC because Npgsql refuses a non-zero offset for `timestamptz`; the entered offsets are stored beside them and restored on read. Owner scoping is part of every read query, so another owner's trip is indistinguishable from an absent one.
 
@@ -118,7 +127,7 @@ Instants are written in UTC because Npgsql refuses a non-zero offset for `timest
 | `tests/TravelTracker.Trips.Domain.Tests` | Itinerary rules: ordering, connections, endpoints, time zone offsets | None |
 | `tests/TravelTracker.Api.Tests` | Reference validation, save service and logs | None |
 | `tests/TravelTracker.Trips.Api.Tests` | Real signed-JWT validation, scope matrix, status mapping, ownership, standing rules, fail-closed paths, public DTO shape, health | None (owner-aware in-memory store and scripted upstream) |
-| `tests/TravelTracker.Trips.Data.Tests` | PostgreSQL migration, atomic rollback when a leg write fails, restart preservation with offsets, owner scoping, database check constraints | `TRAVELTRACKER_TEST_POSTGRES` with CREATEDB; tests are marked `Category=PostgreSQL` |
+| `tests/TravelTracker.Trips.Data.Tests` | PostgreSQL migration, replacement, atomic rollback when a leg write fails, restart preservation with offsets, owner scoping, database check constraints | `TRAVELTRACKER_TEST_POSTGRES` with CREATEDB; tests are marked `Category=PostgreSQL` |
 
 ```powershell
 dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"
@@ -134,20 +143,22 @@ The Blazor client (`TravelTracker.Frontend`) talks to the Trips, Accommodations,
 
 | Route | What it does |
 | --- | --- |
-| `/new-trip` | Three steps: basics (name, time zone, start and end, one-way or round trip), itinerary (one card per leg), review and save. |
+| `/new-trip` and `/map` | Share a planner draft, including map markers and connections. Append a trip ID to open a saved itinerary for editing. |
+| `/new-trip/form` | Form-only trip creation with basics, itinerary cards, and a review before saving. Open it from the standard planner. |
 | `/trips/{tripId}` | Reopens a saved trip from the service. `?saved=true` only adds a "Trip saved." line once the trip itself has loaded. |
+
+In the form-only planner:
 
 - Places are picked from their owning catalogue and sent by public id: accommodations (`AccommodationsClient`), attractions (`AttractionsClient`) and transport stops (`TransportClient`, route points of type `transport_stop`). The first leg starts at an accommodation; a new leg starts where the previous one ended, and the traveller can change that, which shows the disconnected-leg error instead of repairing it. With the optional `catalogue.write` grant, the accommodation picker also offers "Add a new accommodation": a private place saved through the Accommodations service, then selected by the id the service confirms. Shared places stay on the accommodation workspace (#46).
 - Times are entered as local times in the trip time zone. The client attaches the zone's offset. A time that does not exist (clocks skip forward) or happens twice (clocks go back) is refused with a message; the client never picks an offset. The service stays authoritative and its field errors (`legs[1].arrival`) are shown on the matching field.
 - The draft lives only in memory. A failed save (validation, permission, network or unavailable dependency) keeps every entry and shows what happened. The save button is disabled while a request is in flight and the handler ignores a second click, so one click sequence creates at most one request. The create has no idempotency key, so after a network failure the outcome is unknown; the message says so.
 - Leaving with entries asks first (in-app dialog for links, the browser's own prompt for closing the tab). The draft is dropped when the signed-in identity changes.
-- Not included, as agreed for the minimum slice: stays and visits, scheduled routes, the map, history listing, editing and deleting. `/history` says that listing is not available yet.
+- Stays and visits, scheduled routes, history listing, and deletion remain outside these planner flows. `/history` explains that the service cannot list trips yet.
 
 Verified by `tests/TravelTracker.Frontend.Tests` (`TripDraftTests`, `NewTripPageTests`, `TripsContractTests`), which drive the real pages through the real protected HTTP stack against in-process services. They are not a run against live hosts or a live Auth0 tenant.
 
 ## Limits
 
-- Trip history, edit, replace-legs, delete, map points and Settings are not implemented.
 - Trip time zone ids are resolved on the host that reads them; a stored id that the host's time zone database no longer knows fails the read with a server error.
 - Place and transport snapshots are copied from the owning services at save time; a catalogue outage after saving does not affect a stored trip.
 - The Trips host does not cache account standing. Each save and each detail read asks Users.

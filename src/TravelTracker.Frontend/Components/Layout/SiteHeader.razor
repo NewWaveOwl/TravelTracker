@@ -4,6 +4,7 @@
 <header>
     <a class="brand" href="/">TravelTracker<img src="assets/logo.svg" alt="" /></a>
     <nav class="primary-navigation" aria-label="Main navigation">
+        <a class="map-navigation-link" aria-current="@CurrentWhenAt("map")" href="map">Map</a>
         <a aria-current="@CurrentWhenAt("new-trip")" href="new-trip">New Trip</a>
         <a aria-current="@CurrentWhenAt("history")" href="history">History</a>
     </nav>
@@ -41,5 +42,6 @@
      * @param relativePath The route the link points at, without a leading slash.
      * @return "page" when the browser is on that route; otherwise null so the attribute is omitted.
      */
-    string? CurrentWhenAt(string relativePath) => Navigation.ToBaseRelativePath(Navigation.Uri).TrimEnd('/') == relativePath ? "page" : null;
+    string? CurrentWhenAt(string relativePath) =>
+        Navigation.ToBaseRelativePath(Navigation.Uri).Split('/', '?', '#')[0] == relativePath ? "page" : null;
 }
