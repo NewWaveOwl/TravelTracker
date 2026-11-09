@@ -32,6 +32,7 @@ public partial class NewTrip : IAsyncDisposable
     [Inject] TransportClient Transport { get; set; } = default!;
     [Inject] IJSRuntime JavaScript { get; set; } = default!;
     [Inject] IServiceProvider Services { get; set; } = default!;
+    [Inject] ILogger<NewTrip> Logger { get; set; } = default!;
     [Parameter] public Guid? TripId { get; set; }
     [CascadingParameter] Microsoft.AspNetCore.Components.RouteData? ActiveRoute { get; set; }
 
@@ -70,6 +71,8 @@ public partial class NewTrip : IAsyncDisposable
     Guid? pendingOpen;
     string? notice;
     string? browserDraftNotice;
+    (string Prefix, BrowserDraft Snapshot)? newBrowserDraft;
+    readonly HashSet<TripPlaceDto> restoredPlaces = [];
     string? markerType;
     string searchValue = "";
     string placeName = "";
@@ -261,6 +264,7 @@ public partial class NewTrip : IAsyncDisposable
         else if (previousPath is not null && draft.Id is not null)
         {
             draft = new();
+            ResetBrowserDraftTracking();
             undoHistory.Clear();
             routeId = null;
             selected = -1;
@@ -286,6 +290,17 @@ public partial class NewTrip : IAsyncDisposable
 
     sealed record PendingPlace(TripPlaceDto Place, Guid[] ExistingIds);
 
+    static string BrowserDraftKey(string prefix, Guid? id) => $"{prefix}-{id?.ToString("D") ?? "new"}";
+
+    static bool IsBrowserDraftFailure(Exception error) =>
+        error is JSException or CryptographicException or JsonException or InvalidOperationException or InvalidDataException;
+
+    void ResetBrowserDraftTracking()
+    {
+        newBrowserDraft = null;
+        restoredPlaces.Clear();
+    }
+
     /**
      * Saves or restores a protected browser copy of the current map.
      * @param restore Whether to load the browser copy instead of saving it.
@@ -297,6 +312,7 @@ public partial class NewTrip : IAsyncDisposable
 
         var version = routeVersion;
         var token = closed.Token;
+        string? key = null;
         busy = true;
         browserDraftNotice = null;
         try
@@ -313,20 +329,22 @@ public partial class NewTrip : IAsyncDisposable
                 ? JsonSerializer.Serialize(new[] { user.FindFirst("iss")?.Value ?? subject.Issuer, subject.Value })
                 : "anonymous";
             var owner = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
-            var key = $"traveltracker-map-draft-v1-{owner}-{draft.Id?.ToString("D") ?? "new"}";
+            var prefix = $"traveltracker-map-draft-v1-{owner}";
+            key = BrowserDraftKey(prefix, draft.Id);
             var storage = Services.GetRequiredService<ProtectedLocalStorage>();
             if (version != routeVersion || token.IsCancellationRequested)
                 return;
 
             if (!restore)
             {
-                await storage.SetAsync(key, new BrowserDraft(draft.CaptureBrowserSnapshot(), markerNumber,
+                var snapshot = new BrowserDraft(draft.CaptureBrowserSnapshot(), markerNumber,
                     pendingPlaceCreates.Select(pair => new PendingPlace(pair.Key, pair.Value.ToArray())).ToArray(),
-                    pendingModeCreates.ToArray()));
+                    pendingModeCreates.ToArray());
+                await storage.SetAsync(key, snapshot);
                 if (version == routeVersion && !token.IsCancellationRequested)
                 {
-                    dirty = false;
-                    undoHistory.Clear();
+                    if (snapshot.Map.Id is null)
+                        newBrowserDraft = (prefix, snapshot);
                     browserDraftNotice = "Map draft saved in this browser.";
                 }
                 return;
@@ -346,22 +364,38 @@ public partial class NewTrip : IAsyncDisposable
             if (version != routeVersion || token.IsCancellationRequested)
                 return;
 
-            draft = TripPlannerDraft.FromBrowserSnapshot(saved.Map);
+            if (saved.Map is null || saved.Map.Id != draft.Id || saved.PendingPlaces is null || saved.PendingModes is null)
+                throw new InvalidDataException("The browser draft does not match this trip or is missing catalogue data.");
+            var restored = TripPlannerDraft.FromBrowserSnapshot(saved.Map);
+            var pendingPlaces = new Dictionary<TripPlaceDto, HashSet<Guid>>();
+            foreach (var place in saved.PendingPlaces)
+                if (place?.Place is null || place.ExistingIds is null ||
+                    !pendingPlaces.TryAdd(place.Place, place.ExistingIds.ToHashSet()))
+                    throw new InvalidDataException("The browser draft contains invalid pending catalogue places.");
+            if (saved.PendingModes.Any(string.IsNullOrWhiteSpace))
+                throw new InvalidDataException("The browser draft contains invalid pending transport modes.");
+
+            draft = restored;
+            ResetBrowserDraftTracking();
+            if (draft.Id is null)
+                newBrowserDraft = (prefix, saved);
+            restoredPlaces.UnionWith(draft.Stops.Where(stop => stop.Place.PlaceId == Guid.Empty)
+                .Select(stop => PlaceDetails(stop.Place)));
             markerNumber = saved.MarkerNumber;
             selected = draft.Stops.Count > 0 ? 0 : -1;
             pendingPlaceCreates.Clear();
-            foreach (var place in saved.PendingPlaces)
-                pendingPlaceCreates.Add(place.Place, place.ExistingIds.ToHashSet());
+            foreach (var place in pendingPlaces)
+                pendingPlaceCreates.Add(place.Key, place.Value);
             pendingModeCreates.Clear();
             pendingModeCreates.UnionWith(saved.PendingModes);
             undoHistory.Clear();
             ShowBasics();
             MarkEdited();
-            dirty = false;
             browserDraftNotice = "Map draft restored from this browser.";
         }
-        catch (Exception error) when (error is JSException or CryptographicException or JsonException)
+        catch (Exception error) when (IsBrowserDraftFailure(error))
         {
+            Logger.LogWarning(error, "Could not {Operation} browser map draft {DraftKey}.", restore ? "restore" : "save", key);
             if (version == routeVersion)
                 browserDraftNotice = restore ? "The browser draft could not be restored." : "The browser draft could not be saved.";
         }
@@ -592,7 +626,7 @@ public partial class NewTrip : IAsyncDisposable
         MarkEdited();
     }
 
-    /** Changes the draft location without editing a shared catalogue record. */
+    /** Moves a pin in Map View, returning from review to editing when necessary. */
     void MoveMarker((int Index, decimal Lat, decimal Lon) move)
     {
         if (busy || (review && !showMap) || move.Index < 0 || move.Index >= draft.Stops.Count)
@@ -817,6 +851,7 @@ public partial class NewTrip : IAsyncDisposable
                 return;
             var saved = revision.Trip;
             draft = TripPlannerDraft.FromSaved(revision);
+            ResetBrowserDraftTracking();
             undoHistory.Clear();
             selected = draft.Stops.Count > 0 ? 0 : -1;
             placing = false;
@@ -865,12 +900,16 @@ public partial class NewTrip : IAsyncDisposable
             if (version != routeVersion)
                 return;
             var saved = revision.Trip;
+            var checkpoint = draft.Id is null ? newBrowserDraft : null;
             draft = TripPlannerDraft.FromSaved(revision);
+            ResetBrowserDraftTracking();
             undoHistory.Clear();
             dirty = false;
             savedReview = true;
             notice = $"Saved {saved.Name}.";
             UpdateLink(saved.TripId);
+            if (checkpoint is { } local)
+                await CopyBrowserDraftToSavedTripAsync(local.Prefix, local.Snapshot, saved.TripId, revision.ETag, version);
         }
         catch (ApiError error) when (version == routeVersion)
         {
@@ -896,6 +935,23 @@ public partial class NewTrip : IAsyncDisposable
         {
             if (version == routeVersion)
                 busy = false;
+        }
+    }
+
+    /** Keeps the local checkpoint reachable from the assigned trip URL after its first server save. */
+    async Task CopyBrowserDraftToSavedTripAsync(string prefix, BrowserDraft snapshot, Guid id, string etag, int version)
+    {
+        var key = BrowserDraftKey(prefix, id);
+        try
+        {
+            var storage = Services.GetRequiredService<ProtectedLocalStorage>();
+            await storage.SetAsync(key, snapshot with { Map = snapshot.Map with { Id = id, ETag = etag } });
+        }
+        catch (Exception error) when (IsBrowserDraftFailure(error))
+        {
+            Logger.LogWarning(error, "Could not copy the browser map draft to {DraftKey}.", key);
+            if (version == routeVersion)
+                browserDraftNotice = "The trip was saved, but the browser draft could not be copied to its new link.";
         }
     }
 
@@ -1001,6 +1057,17 @@ public partial class NewTrip : IAsyncDisposable
                 throw UnconfirmedCatalogueEntry(place.Name);
             pendingPlaceCreates.Remove(place);
             return recovered[0];
+        }
+
+        if (restoredPlaces.Contains(place))
+        {
+            var matches = entries.Where(entry => entry.PlaceId != Guid.Empty && MatchesCreatedPlace(place, entry))
+                .DistinctBy(entry => entry.PlaceId).Take(2).ToArray();
+            if (matches.Length > 1)
+                throw new ApiError(FailureKind.Validation,
+                    $"Several catalogue entries match {place.Name}. Select the intended entry before saving.");
+            if (matches.Length == 1)
+                return matches[0];
         }
 
         // An existing identical record cannot confirm the outcome of this POST.

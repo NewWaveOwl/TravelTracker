@@ -148,6 +148,12 @@ The Blazor client (`TravelTracker.Frontend`) talks to the Trips, Accommodations,
 | `/new-trip/form` | Form-only trip creation with basics, itinerary cards, and a review before saving. Open it from the standard planner. |
 | `/trips/{tripId}` | Reopens a saved trip from the service. `?saved=true` only adds a "Trip saved." line once the trip itself has loaded. |
 
+In Map View, **Save map draft** stores a browser copy and keeps the undo history
+and unsaved-changes warning. Restoring a browser draft brings its edits back into
+the planner. When a new trip receives a saved link, the browser copy is also
+available from that link. Dragging a pin in Map View review returns to editing
+and records an unsaved change.
+
 In the form-only planner:
 
 - Places are picked from their owning catalogue and sent by public id: accommodations (`AccommodationsClient`), attractions (`AttractionsClient`) and transport stops (`TransportClient`, route points of type `transport_stop`). The first leg starts at an accommodation; a new leg starts where the previous one ended, and the traveller can change that, which shows the disconnected-leg error instead of repairing it. With the optional `catalogue.write` grant, the accommodation picker also offers "Add a new accommodation": a private place saved through the Accommodations service, then selected by the id the service confirms. Shared places stay on the accommodation workspace (#46).

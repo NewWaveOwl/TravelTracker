@@ -99,6 +99,9 @@ internal sealed class TripPlannerDraft
     /** Reconstructs the editable map without applying completed-trip validation. */
     internal static TripPlannerDraft FromBrowserSnapshot(BrowserSnapshot snapshot)
     {
+        if (snapshot.Stops is null || snapshot.Legs is null || snapshot.Name is null || snapshot.TimeZone is null)
+            throw new InvalidDataException("The browser draft is missing required fields.");
+
         var restored = new TripPlannerDraft
         {
             Id = snapshot.Id, ETag = snapshot.ETag, Name = snapshot.Name, TimeZone = snapshot.TimeZone,
@@ -107,15 +110,27 @@ internal sealed class TripPlannerDraft
             roundTrip = snapshot.RoundTrip
         };
         foreach (var stop in snapshot.Stops)
+        {
+            if (stop?.Place is null || stop.Location < 0 || stop.Location > restored.stops.Count)
+                throw new InvalidDataException("The browser draft contains an invalid stop reference.");
+            if (stop.Location < restored.stops.Count && restored.stops[stop.Location].Place != stop.Place)
+                throw new InvalidDataException("The browser draft has inconsistent details for a shared stop.");
             restored.stops.Add(stop.Location < restored.stops.Count ? restored.stops[stop.Location].Revisit() : new(stop.Place));
+        }
 
         foreach (var leg in snapshot.Legs)
-            restored.legs.Add((restored.stops[leg.From], restored.stops[leg.To]), new Leg
+        {
+            if (leg is null || leg.From == leg.To || (uint)leg.From >= (uint)restored.stops.Count ||
+                (uint)leg.To >= (uint)restored.stops.Count)
+                throw new InvalidDataException("The browser draft contains an invalid connection reference.");
+            if (!restored.legs.TryAdd((restored.stops[leg.From], restored.stops[leg.To]), new Leg
             {
                 Mode = leg.Mode, Departure = leg.Departure, Arrival = leg.Arrival, DurationMinutes = leg.DurationMinutes,
                 SavedDeparture = leg.SavedDeparture, SavedArrival = leg.SavedArrival,
                 DepartureOffset = leg.DepartureOffset, ArrivalOffset = leg.ArrivalOffset
-            });
+            }))
+                throw new InvalidDataException("The browser draft contains a duplicate connection.");
+        }
         return restored;
     }
 
