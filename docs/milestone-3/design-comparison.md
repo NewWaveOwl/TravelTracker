@@ -5,6 +5,7 @@ Compared on 2026-11-08 by reading the Figma nodes (design context, metadata and 
 ## Frames used
 
 - Settings: [TT V4 / Settings / B · Grouped preferences](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=136-1133).
+- Settings states: [save confirmation](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=143-4799), [failed save](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=143-4938) and [expired session](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=143-5077).
 - Trip views have no dedicated frame. They follow the reusable pages: [03 Reusable form page](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=92-3488), [06 Validation error](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=92-3509), [04 Loading](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=92-3495), [07 Permission denied](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=92-3516), [08 Network error](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=92-3523) and [09 Service unavailable](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=92-3530). Place selection follows the [Issue 44 side-by-side concept](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=119-1028).
 
 ## Settings (#48)
