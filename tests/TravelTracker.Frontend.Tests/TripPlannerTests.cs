@@ -4,7 +4,9 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -32,6 +34,34 @@ public sealed class TripPlannerTests : BunitContext
     static readonly DateTimeOffset Start = DateTimeOffset.Parse("2026-11-14T09:00:00-05:00");
     static readonly TripDto Saved = new(TripId, "Weekend", "America/Toronto", Start, Start.AddHours(4),
         false, [new(1, Hotel, Museum, Train, Start.AddHours(1), Start.AddHours(2))]);
+
+    [Fact]
+    public async Task MapNameAndIncompleteDraftCanBeSavedAndRestoredWithoutTripsApi()
+    {
+        Configure((_, _) => throw new InvalidOperationException("A browser draft must not call the Trips API."));
+        Services.AddSingleton<AuthenticationStateProvider>(new SwitchableAuthentication(new SessionRegistry(TimeProvider.System)));
+        Services.AddSingleton<IDataProtectionProvider, EphemeralDataProtectionProvider>();
+        Services.AddScoped<ProtectedLocalStorage>();
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
+        var page = Render<NewTrip>();
+        page.Find(".map-trip-name").Change("Unfinished weekend");
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.MarkerDropped.InvokeAsync(("attraction", 45.51m, -73.58m)));
+        await page.InvokeAsync(() => canvas.Instance.MarkerDropped.InvokeAsync(("transport_stop", 45.52m, -73.59m)));
+
+        Click(page, "Save map draft");
+        var saved = Assert.Single(JSInterop.Invocations["localStorage.setItem"]);
+        var key = Assert.IsType<string>(saved.Arguments[0]);
+        var value = Assert.IsType<string>(saved.Arguments[1]);
+        Assert.Contains("Map draft saved in this browser.", page.Markup);
+
+        JSInterop.Setup<string>("localStorage.getItem", call => Equals(call.Arguments[0], key)).SetResult(value);
+        var reopened = Render<NewTrip>();
+        Click(reopened, "Restore map draft");
+        Assert.Equal("Unfinished weekend", reopened.Find(".map-trip-name").GetAttribute("value"));
+        Assert.Equal(new[] { 45.51m, 45.52m }, reopened
+            .FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>().Instance.Stops.Select(stop => stop.Lat));
+    }
 
     [Fact]
     public void FailedUpdateKeepsDraftForRetryAndFreshTripDoesNotReuseSavedId()
@@ -183,8 +213,10 @@ public sealed class TripPlannerTests : BunitContext
         });
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        Click(page, "Review on map");
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
         await page.InvokeAsync(() => canvas.Instance.MoveMarker(1, 15, 10));
+        Assert.Empty(page.FindAll(".trip-review"));
 
         Click(page, "Review on map");
         Assert.Contains("They stay in the catalogue even if you discard this trip.", page.Find(".trip-review").TextContent);

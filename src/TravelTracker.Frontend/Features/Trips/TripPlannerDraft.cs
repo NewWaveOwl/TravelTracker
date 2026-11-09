@@ -46,6 +46,7 @@ internal sealed class TripPlannerDraft
         }
 
         internal Stop Revisit() => new(location);
+        internal object LocationIdentity => location;
 
         sealed class Location(TripPlaceDto place)
         {
@@ -66,6 +67,56 @@ internal sealed class TripPlannerDraft
         internal OffsetChoice? ArrivalOffset { get; set; }
 
         internal Leg Copy() => (Leg)MemberwiseClone();
+    }
+
+    internal sealed record BrowserSnapshot(Guid? Id, string? ETag, string Name, string TimeZone,
+        DateTime? Start, DateTime? End, DateTimeOffset? SavedStart, DateTimeOffset? SavedEnd, string? SavedZone,
+        OffsetChoice? StartOffset, OffsetChoice? EndOffset, bool? RoundTrip, BrowserStop[] Stops, BrowserLeg[] Legs);
+
+    internal sealed record BrowserStop(TripPlaceDto Place, int Location);
+
+    internal sealed record BrowserLeg(int From, int To, TripDto.Mode? Mode, DateTime? Departure, DateTime? Arrival,
+        int? DurationMinutes, DateTimeOffset? SavedDeparture, DateTimeOffset? SavedArrival,
+        OffsetChoice? DepartureOffset, OffsetChoice? ArrivalOffset);
+
+    /** Captures the editable map, including disconnected stops and unfinished legs. */
+    internal BrowserSnapshot CaptureBrowserSnapshot()
+    {
+        var indices = stops.Select((stop, index) => (stop, index)).ToDictionary(pair => pair.stop, pair => pair.index);
+        var locations = new Dictionary<object, int>();
+        var savedStops = stops.Select((stop, index) =>
+        {
+            locations.TryAdd(stop.LocationIdentity, index);
+            return new BrowserStop(stop.Place, locations[stop.LocationIdentity]);
+        }).ToArray();
+        var savedLegs = legs.Select(pair => new BrowserLeg(indices[pair.Key.From], indices[pair.Key.To], pair.Value.Mode,
+            pair.Value.Departure, pair.Value.Arrival, pair.Value.DurationMinutes, pair.Value.SavedDeparture,
+            pair.Value.SavedArrival, pair.Value.DepartureOffset, pair.Value.ArrivalOffset)).ToArray();
+        return new(Id, ETag, Name, TimeZone, Start, End, SavedStart, SavedEnd, savedZone,
+            StartOffset, EndOffset, roundTrip, savedStops, savedLegs);
+    }
+
+    /** Reconstructs the editable map without applying completed-trip validation. */
+    internal static TripPlannerDraft FromBrowserSnapshot(BrowserSnapshot snapshot)
+    {
+        var restored = new TripPlannerDraft
+        {
+            Id = snapshot.Id, ETag = snapshot.ETag, Name = snapshot.Name, TimeZone = snapshot.TimeZone,
+            Start = snapshot.Start, End = snapshot.End, SavedStart = snapshot.SavedStart, SavedEnd = snapshot.SavedEnd,
+            savedZone = snapshot.SavedZone, StartOffset = snapshot.StartOffset, EndOffset = snapshot.EndOffset,
+            roundTrip = snapshot.RoundTrip
+        };
+        foreach (var stop in snapshot.Stops)
+            restored.stops.Add(stop.Location < restored.stops.Count ? restored.stops[stop.Location].Revisit() : new(stop.Place));
+
+        foreach (var leg in snapshot.Legs)
+            restored.legs.Add((restored.stops[leg.From], restored.stops[leg.To]), new Leg
+            {
+                Mode = leg.Mode, Departure = leg.Departure, Arrival = leg.Arrival, DurationMinutes = leg.DurationMinutes,
+                SavedDeparture = leg.SavedDeparture, SavedArrival = leg.SavedArrival,
+                DepartureOffset = leg.DepartureOffset, ArrivalOffset = leg.ArrivalOffset
+            });
+        return restored;
     }
 
     /** @return A one-time restore of the current draft, including shared locations and leg details. */

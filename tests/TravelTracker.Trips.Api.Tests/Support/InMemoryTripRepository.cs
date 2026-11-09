@@ -98,6 +98,19 @@ internal sealed class InMemoryTripRepository : ITripRepository
         }
     }
 
+    /** {@inheritDoc} */
+    public Task<IReadOnlyList<TripHistoryEntry>> ListOwnedAsync(string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default)
+    {
+        lock (gate)
+        {
+            return Task.FromResult<IReadOnlyList<TripHistoryEntry>>(trips.Values
+                .Where(entry => entry.Issuer == ownerIssuer && entry.Subject == ownerSubject)
+                .Select(entry => entry.Trip)
+                .OrderByDescending(trip => trip.Start).ThenBy(trip => trip.TripId)
+                .Select(trip => new TripHistoryEntry(trip.TripId, trip.Name, trip.Start, trip.End)).ToArray());
+        }
+    }
+
     /**
      * Returns the stored trip for a test that needs to inspect it regardless of owner.
      *

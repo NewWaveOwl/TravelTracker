@@ -14,7 +14,7 @@ else if (failure is not null)
 }
 else if (trip is not null)
 {
-    @if (justSaved) { <p class="trip-status" role="status">Trip saved.</p> }
+    @if (justSaved) { <p class="trip-status" role="status">Trip saved. <a href="history">Find it in Trip history</a>.</p> }
     <dl class="trip-summary">
         <dt>Time zone</dt><dd>@trip.TimeZone</dd>
         <dt>Starts</dt><dd>@When(trip.Start)</dd>

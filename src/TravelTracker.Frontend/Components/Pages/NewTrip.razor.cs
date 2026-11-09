@@ -1,7 +1,12 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.JSInterop;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Accommodations;
@@ -26,6 +31,7 @@ public partial class NewTrip : IAsyncDisposable
     [Inject] TripPlacesClient PlaceCatalogue { get; set; } = default!;
     [Inject] TransportClient Transport { get; set; } = default!;
     [Inject] IJSRuntime JavaScript { get; set; } = default!;
+    [Inject] IServiceProvider Services { get; set; } = default!;
     [Parameter] public Guid? TripId { get; set; }
     [CascadingParameter] Microsoft.AspNetCore.Components.RouteData? ActiveRoute { get; set; }
 
@@ -63,6 +69,7 @@ public partial class NewTrip : IAsyncDisposable
     int routeVersion;
     Guid? pendingOpen;
     string? notice;
+    string? browserDraftNotice;
     string? markerType;
     string searchValue = "";
     string placeName = "";
@@ -79,6 +86,7 @@ public partial class NewTrip : IAsyncDisposable
     static string Pressed(bool active) => active ? "true" : "false";
 
     bool MapVisible => showMap || review;
+    string TripTitle => string.IsNullOrWhiteSpace(draft.Name) ? "Untitled trip" : draft.Name;
     bool CanUndo => !busy && undoHistory.Count > 0;
     bool HasPendingCatalogueEntries => draft.Stops.Any(stop => stop.Place.PlaceId == Guid.Empty) ||
         Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(draft.LegTo)
@@ -238,6 +246,7 @@ public partial class NewTrip : IAsyncDisposable
         var previousPath = observedPath;
         observedPath = path;
         routeVersion++;
+        browserDraftNotice = null;
         busy = false;
         showMap = path.Split('/')[0].Equals("map", StringComparison.OrdinalIgnoreCase);
         ShowBasics();
@@ -271,6 +280,98 @@ public partial class NewTrip : IAsyncDisposable
      */
     string PlannerPath(string location) =>
         Navigation.ToBaseRelativePath(Navigation.ToAbsoluteUri(location).AbsoluteUri).Split('?', '#')[0].TrimEnd('/');
+
+    sealed record BrowserDraft(TripPlannerDraft.BrowserSnapshot Map, int MarkerNumber,
+        PendingPlace[] PendingPlaces, string[] PendingModes);
+
+    sealed record PendingPlace(TripPlaceDto Place, Guid[] ExistingIds);
+
+    /**
+     * Saves or restores a protected browser copy of the current map.
+     * @param restore Whether to load the browser copy instead of saving it.
+     */
+    async Task UseBrowserDraftAsync(bool restore)
+    {
+        if (busy)
+            return;
+
+        var version = routeVersion;
+        var token = closed.Token;
+        busy = true;
+        browserDraftNotice = null;
+        try
+        {
+            var auth = await Services.GetRequiredService<AuthenticationStateProvider>().GetAuthenticationStateAsync();
+            var user = auth.User;
+            var subject = user.FindFirst("sub");
+            if (user.Identity?.IsAuthenticated == true && subject is null)
+            {
+                browserDraftNotice = "Sign in again to use your browser draft.";
+                return;
+            }
+            var identity = user.Identity?.IsAuthenticated == true && subject is not null
+                ? JsonSerializer.Serialize(new[] { user.FindFirst("iss")?.Value ?? subject.Issuer, subject.Value })
+                : "anonymous";
+            var owner = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
+            var key = $"traveltracker-map-draft-v1-{owner}-{draft.Id?.ToString("D") ?? "new"}";
+            var storage = Services.GetRequiredService<ProtectedLocalStorage>();
+            if (version != routeVersion || token.IsCancellationRequested)
+                return;
+
+            if (!restore)
+            {
+                await storage.SetAsync(key, new BrowserDraft(draft.CaptureBrowserSnapshot(), markerNumber,
+                    pendingPlaceCreates.Select(pair => new PendingPlace(pair.Key, pair.Value.ToArray())).ToArray(),
+                    pendingModeCreates.ToArray()));
+                if (version == routeVersion && !token.IsCancellationRequested)
+                {
+                    dirty = false;
+                    undoHistory.Clear();
+                    browserDraftNotice = "Map draft saved in this browser.";
+                }
+                return;
+            }
+
+            var result = await storage.GetAsync<BrowserDraft>(key);
+            if (version != routeVersion || token.IsCancellationRequested)
+                return;
+            if (!result.Success || result.Value is not { } saved)
+            {
+                browserDraftNotice = "There is no saved map draft in this browser.";
+                return;
+            }
+            if (dirty && !await JavaScript.InvokeAsync<bool>("confirm", token,
+                    "Replace your unsaved map edits with the browser draft?"))
+                return;
+            if (version != routeVersion || token.IsCancellationRequested)
+                return;
+
+            draft = TripPlannerDraft.FromBrowserSnapshot(saved.Map);
+            markerNumber = saved.MarkerNumber;
+            selected = draft.Stops.Count > 0 ? 0 : -1;
+            pendingPlaceCreates.Clear();
+            foreach (var place in saved.PendingPlaces)
+                pendingPlaceCreates.Add(place.Place, place.ExistingIds.ToHashSet());
+            pendingModeCreates.Clear();
+            pendingModeCreates.UnionWith(saved.PendingModes);
+            undoHistory.Clear();
+            ShowBasics();
+            MarkEdited();
+            dirty = false;
+            browserDraftNotice = "Map draft restored from this browser.";
+        }
+        catch (Exception error) when (error is JSException or CryptographicException or JsonException)
+        {
+            if (version == routeVersion)
+                browserDraftNotice = restore ? "The browser draft could not be restored." : "The browser draft could not be saved.";
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        finally
+        {
+            if (version == routeVersion)
+                busy = false;
+        }
+    }
 
     /**
      * Confirms navigation that would abandon the current draft.
@@ -386,7 +487,9 @@ public partial class NewTrip : IAsyncDisposable
     void MarkEdited()
     {
         dirty = true;
+        savedReview = false;
         notice = null;
+        browserDraftNotice = null;
         errors = [];
         saveFailed = false;
     }
@@ -492,7 +595,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Changes the draft location without editing a shared catalogue record. */
     void MoveMarker((int Index, decimal Lat, decimal Lon) move)
     {
-        if (busy || review || move.Index < 0 || move.Index >= draft.Stops.Count)
+        if (busy || (review && !showMap) || move.Index < 0 || move.Index >= draft.Stops.Count)
             return;
 
         var stop = draft.Stops[move.Index];
@@ -501,6 +604,8 @@ public partial class NewTrip : IAsyncDisposable
             return;
 
         RememberEdit();
+        if (review)
+            ShowStops();
         var updated = previous with { PlaceId = Guid.Empty, Lat = move.Lat, Lon = move.Lon, Address = "" };
         draft.UpdatePlace(stop, updated);
         selected = move.Index;
@@ -776,7 +881,9 @@ public partial class NewTrip : IAsyncDisposable
                 return;
             }
 
-            errors = error.Errors.Count == 0
+            errors = error.Status == 403
+                ? ["The Trips API denied this save. Check that your sign-in has trips.write and catalogue.read, then sign out and back in after any permission change. You can still save a map draft in this browser."]
+                : error.Errors.Count == 0
                 ? [error.Message]
                 : error.Errors.Values.SelectMany(messages => messages).Where(message => message.Length > 0).DefaultIfEmpty(error.Message)
                     .Select(message => Regex.Replace(message, @"\blegs?\b", match => match.Value.ToLowerInvariant() == "legs"

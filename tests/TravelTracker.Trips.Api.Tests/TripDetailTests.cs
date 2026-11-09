@@ -11,6 +11,34 @@ namespace TravelTracker.Trips.Api.Tests;
 public sealed class TripDetailTests
 {
     [Fact]
+    public async Task History_ReturnsOnlyOwnedSummaries_AndRequiresReadAccess()
+    {
+        using var factory = new TripsApiFactory();
+        TripTestData.SeedAccounts(factory.Upstream);
+        var aliceTrip = TripTestData.SeedTrip(factory, "alice");
+        TripTestData.SeedTrip(factory, "bob");
+        using var client = factory.CreateClientFor("alice", "trips.read");
+        using var denied = factory.CreateClientFor("alice", "trips.write");
+        using var deactivated = factory.CreateClientFor("deactivated", "trips.read");
+
+        using var response = await client.GetAsync("/api/v1/trips");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var summary = Assert.Single(json.RootElement.EnumerateArray());
+        Assert.Equal(aliceTrip.TripId, summary.GetProperty("tripId").GetGuid());
+        Assert.Equal(aliceTrip.Name, summary.GetProperty("name").GetString());
+        Assert.Equal(aliceTrip.Start, summary.GetProperty("start").GetDateTimeOffset());
+        Assert.Equal(aliceTrip.End, summary.GetProperty("end").GetDateTimeOffset());
+        Assert.False(summary.TryGetProperty("legs", out _));
+        Assert.False(summary.TryGetProperty("ownerSubject", out _));
+
+        using var wrongScope = await denied.GetAsync("/api/v1/trips");
+        using var wrongStanding = await deactivated.GetAsync("/api/v1/trips");
+        Assert.Equal(HttpStatusCode.Forbidden, wrongScope.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, wrongStanding.StatusCode);
+    }
+
+    [Fact]
     public async Task Detail_OwnerReadsTheSnapshotTrip_WithoutOwnerIdentity()
     {
         using var factory = new TripsApiFactory();

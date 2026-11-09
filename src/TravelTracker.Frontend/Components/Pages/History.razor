@@ -1,5 +1,45 @@
 @page "/history"
 
+<PageTitle>Trip history | TravelTracker</PageTitle>
 <PageHeading Title="History" />
-<p>View and manage your saved trips.</p>
-<Feedback Kind="FeedbackKind.Empty">The Trips service cannot list trips yet. A trip you just saved opens at its own link.</Feedback>
+
+@if (loading)
+{
+    <Feedback Kind="FeedbackKind.Loading">Loading your saved trips…</Feedback>
+}
+else if (!signedIn)
+{
+    <Feedback Kind="FeedbackKind.Permission" Title="Sign in to see your trips">
+        <a href="account">Go to your account</a> to sign in.
+    </Feedback>
+}
+else if (failure is { Status: 403 })
+{
+    <Feedback Kind="FeedbackKind.Permission" Title="Trip history access required">
+        Viewing saved trips requires <code>trips.read</code>. <a href="account">Go to your account</a> and sign in again after access is granted.
+    </Feedback>
+}
+else if (failure is not null)
+{
+    <Feedback Kind="@FailureFeedback" Title="Unable to load your saved trips" Retry="ReloadAsync">@failure.Message</Feedback>
+}
+else if (trips.Count == 0)
+{
+    <Feedback Kind="FeedbackKind.Empty" Title="No saved trips yet">
+        <a href="new-trip">Plan a trip</a> and save it to see it here.
+    </Feedback>
+}
+else
+{
+    <p>Open a saved trip to view its map and copy its address from your browser.</p>
+    <ul aria-label="Saved trips">
+        @foreach (var trip in trips)
+        {
+            <li @key="trip.TripId">
+                <a href="@($"map/{trip.TripId:D}")">@trip.Name</a>
+                <p><time datetime="@trip.Start.ToString("O")">@trip.Start.ToString("d")</time>
+                    to <time datetime="@trip.End.ToString("O")">@trip.End.ToString("d")</time></p>
+            </li>
+        }
+    </ul>
+}

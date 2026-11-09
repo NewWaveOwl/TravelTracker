@@ -78,4 +78,11 @@ public sealed class FakeTripRepository : ITripRepository {
         var owned = trip is not null && owners.TryGetValue(tripId, out var owner) && owner == (ownerIssuer, ownerSubject);
         return Task.FromResult(owned ? trip : null);
     }
+
+    /** {@inheritDoc} */
+    public Task<IReadOnlyList<TripHistoryEntry>> ListOwnedAsync(string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<TripHistoryEntry>>(stored
+            .Where(trip => owners[trip.TripId] == (ownerIssuer, ownerSubject))
+            .OrderByDescending(trip => trip.Start).ThenBy(trip => trip.TripId)
+            .Select(trip => new TripHistoryEntry(trip.TripId, trip.Name, trip.Start, trip.End)).ToArray());
 }

@@ -15,7 +15,7 @@ Dependency direction stays Api to Data to Domain. `TravelTracker.Data` no longer
 
 It does not read the catalogue services' tables. Before saving, it asks the Accommodations, Attractions and Transport services over HTTP, forwarding the caller's token, and asks Users for live account standing with a backend credential.
 
-Trip history listing, deleting, individual leg writes and separate map-point resources remain future work. The complete trip representation includes the ordered place and transport snapshots needed by Map View.
+History lists the caller's saved trips from PostgreSQL, including trips saved before the list endpoint was added. Deleting trips, individual leg writes and separate map-point resources remain future work. The complete trip representation includes the ordered place and transport snapshots needed by Map View.
 
 ## Start independently
 
@@ -47,6 +47,7 @@ Swagger is available at `/swagger` in the Development environment.
 | --- | --- | --- |
 | `GET /health` | Anonymous | `200` with `{"status":"ok","service":"Trips"}`. Liveness only. |
 | `POST /api/v1/trips` | `trips.write` and `catalogue.read` | `201` with the saved trip and `Location: /api/v1/trips/{tripId}`. |
+| `GET /api/v1/trips` | `trips.read` | `200` with an array of the caller's trip summaries (`tripId`, `name`, `start`, `end`), ordered by latest start first. |
 | `GET /api/v1/trips/{tripId}` | `trips.read` | `200` for the caller's own trip. |
 | `PUT /api/v1/trips/{tripId}` | `trips.write` and `catalogue.read` | `200` with the updated trip. The identifier and owner are preserved. |
 
@@ -153,7 +154,7 @@ In the form-only planner:
 - Times are entered as local times in the trip time zone. The client attaches the zone's offset. A time that does not exist (clocks skip forward) or happens twice (clocks go back) is refused with a message; the client never picks an offset. The service stays authoritative and its field errors (`legs[1].arrival`) are shown on the matching field.
 - The draft lives only in memory. A failed save (validation, permission, network or unavailable dependency) keeps every entry and shows what happened. The save button is disabled while a request is in flight and the handler ignores a second click, so one click sequence creates at most one request. The create has no idempotency key, so after a network failure the outcome is unknown; the message says so.
 - Leaving with entries asks first (in-app dialog for links, the browser's own prompt for closing the tab). The draft is dropped when the signed-in identity changes.
-- Stays and visits, scheduled routes, history listing, and deletion remain outside these planner flows. `/history` explains that the service cannot list trips yet.
+- Open **History** to recover a saved trip link. Stays and visits, scheduled routes, and deletion remain outside these planner flows.
 
 Verified by `tests/TravelTracker.Frontend.Tests` (`TripDraftTests`, `NewTripPageTests`, `TripsContractTests`), which drive the real pages through the real protected HTTP stack against in-process services. They are not a run against live hosts or a live Auth0 tenant.
 

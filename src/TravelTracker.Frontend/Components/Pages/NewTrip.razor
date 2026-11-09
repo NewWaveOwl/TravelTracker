@@ -6,7 +6,7 @@
 @using TravelTracker.Frontend.Components.Trips
 @using TravelTracker.Frontend.Features.Trips
 
-<PageTitle>@(showMap ? "Map View" : "Trip Editor") | TravelTracker</PageTitle>
+<PageTitle>@(showMap ? TripTitle : "Trip Editor") | TravelTracker</PageTitle>
 <NavigationLock ConfirmExternalNavigation="dirty" OnBeforeInternalNavigation="ConfirmDraftNavigationAsync" />
 
 <div @ref="plannerElement" class="trip-planner @(MapVisible ? "map-workspace" : null)">
@@ -16,7 +16,7 @@
             <TripMapCanvas Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())" SelectedIndex="selected"
                            Legs="MapLegs" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<(int, bool)>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
                            CanPick="@(!review && !busy && mapTool == MapTool.Markers && placing)"
-                           StopMoved="@(!review && !busy ? EventCallback.Factory.Create<(int, decimal, decimal)>(this, MoveMarker) : default)"
+                           StopMoved="@(!busy && (showMap || !review) ? EventCallback.Factory.Create<(int, decimal, decimal)>(this, MoveMarker) : default)"
                            StopRemoved="@(!review && !busy ? EventCallback.Factory.Create<int>(this, RemoveStop) : default)" AllowMarkerDrop="@(showMap && !review && !busy)" MarkerDropped="PlaceDroppedMarker" FullScreen="true" />
         </div>
     }
@@ -53,12 +53,23 @@
             @if (MapVisible)
             {
                 <small class="trip-eyebrow">Map view / Trip planning</small>
-                <h1>@(string.IsNullOrWhiteSpace(draft.Name) ? "Map View" : draft.Name)</h1>
+                <h1>
+                    <input class="map-trip-name" aria-label="Map trip name" placeholder="Untitled trip" disabled="@busy"
+                           @bind:get="draft.Name" @bind:set="value => EditTripValue(draft.Name, value ?? string.Empty, next => draft.Name = next)" />
+                </h1>
                 <div class="trip-actions trip-steps" aria-label="Planning steps">
                     <button type="button" class="secondary" aria-pressed="@Pressed(!review && !stopsStep)" disabled="@busy" @onclick="ShowBasics">Basics</button>
                     <button type="button" class="secondary" aria-pressed="@Pressed(!review && stopsStep)" disabled="@busy" @onclick="ShowStops">Stops</button>
                     <button type="button" class="secondary" aria-pressed="@Pressed(review)" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review on map</button>
                 </div>
+                <div class="trip-actions" aria-label="Browser draft">
+                    <button type="button" class="secondary" disabled="@busy" @onclick="() => UseBrowserDraftAsync(restore: false)">Save map draft</button>
+                    <button type="button" class="secondary" disabled="@busy" @onclick="() => UseBrowserDraftAsync(restore: true)">Restore map draft</button>
+                </div>
+                @if (browserDraftNotice is not null)
+                {
+                    <small role="status">@browserDraftNotice</small>
+                }
             }
             <h2 id="trip-chain-title">@(MapVisible ? savedReview ? "Saved itinerary" : "Your itinerary" : "All selected transports")</h2>
             <p>@draft.Stops.Count @(draft.Stops.Count == 1 ? "stop" : "stops")</p>
@@ -152,6 +163,7 @@
             @if (draft.Id is { } savedId)
             {
                 <a href="@($"map/{savedId:D}")">Saved trip link</a>
+                <a href="history">Trip history</a>
             }
         </div>
     }
