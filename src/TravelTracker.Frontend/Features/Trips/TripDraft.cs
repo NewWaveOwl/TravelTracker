@@ -172,7 +172,14 @@ public sealed class TripDraft
             problem = $"{parsed:yyyy-MM-dd HH:mm} happens twice in {zone.Id} because the clocks go back. Choose a time outside the repeated hour.";
             return false;
         }
-        instant = new DateTimeOffset(parsed, zone.GetUtcOffset(parsed));
+        var offset = zone.GetUtcOffset(parsed);
+        var utcTicks = parsed.Ticks - offset.Ticks;
+        if (utcTicks < DateTime.MinValue.Ticks || utcTicks > DateTime.MaxValue.Ticks)
+        {
+            problem = "Enter a date the calendar can represent in this time zone.";
+            return false;
+        }
+        instant = new DateTimeOffset(parsed, offset);
         return true;
     }
 

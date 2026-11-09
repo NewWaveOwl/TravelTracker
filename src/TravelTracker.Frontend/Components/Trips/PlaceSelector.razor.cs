@@ -74,14 +74,18 @@ public partial class PlaceSelector : IDisposable
         if (busy) return;
         busy = true;
         failure = null;
+        var requested = type;
         try
         {
-            results = type switch
+            var found = requested switch
             {
-                "accommodation" => (await Accommodations.SearchAsync(query, lifetime.Token)).Select(item => new TripPlaceChoice(item.AccommodationId, type, item.Name, item.Address)).ToList(),
-                "attraction" => (await Attractions.SearchAsync(query, lifetime.Token)).Select(item => new TripPlaceChoice(item.AttractionId, type, item.Name, item.Address)).ToList(),
-                _ => (await Transport.SearchPointsAsync(query, "transport_stop", lifetime.Token)).Select(item => new TripPlaceChoice(item.RoutePointId, type, item.Name, item.Address)).ToList(),
+                "accommodation" => (await Accommodations.SearchAsync(query, lifetime.Token)).Select(item => new TripPlaceChoice(item.AccommodationId, requested, item.Name, item.Address)).ToList(),
+                "attraction" => (await Attractions.SearchAsync(query, lifetime.Token)).Select(item => new TripPlaceChoice(item.AttractionId, requested, item.Name, item.Address)).ToList(),
+                _ => (await Transport.SearchPointsAsync(query, "transport_stop", lifetime.Token)).Select(item => new TripPlaceChoice(item.RoutePointId, requested, item.Name, item.Address)).ToList(),
             };
+            // the selector moved on while the request was in flight, so these results are for the wrong kind
+            if (requested != type) return;
+            results = found;
             searched = true;
         }
         catch (ApiError error)

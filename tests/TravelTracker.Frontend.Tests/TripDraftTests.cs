@@ -116,6 +116,16 @@ public sealed class TripDraftTests
         Assert.Contains("valid date", unreadable);
     }
 
+    [Theory]
+    [InlineData("Asia/Tokyo", "0001-01-01T00:00")]
+    [InlineData("America/New_York", "9999-12-31T23:59")]
+    public void RefusesTimesWhoseUtcInstantIsOutOfRangeInsteadOfThrowing(string zoneId, string local)
+    {
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId);
+        Assert.False(TripDraft.ToOffset(local, zone, out _, out var problem));
+        Assert.Contains("represent", problem);
+    }
+
     [Fact]
     public void BuildsTheCreateBodyWithOffsetsAndNoOwner()
     {
