@@ -105,21 +105,7 @@
                 @if (formError is not null) { <div class="accommodation-error" role="alert" tabindex="-1" @ref="createErrorSummary"><h3>@ErrorHeading</h3><p>@formError</p></div> }
                 <form @onsubmit="CreateAsync" @onsubmit:preventDefault>
                     <fieldset disabled="@saving">
-                        <label for="accommodation-name">Name *<input id="accommodation-name" @bind="draft.Name" @ref="firstModalControl" required aria-invalid="@(FieldError("name") is null ? null : "true")" aria-describedby="accommodation-name-error" /></label>
-                        @if (FieldError("name") is { } nameError) { <small class="field-error" id="accommodation-name-error">@nameError</small> }
-                        <label for="accommodation-address">Address<input id="accommodation-address" @bind="draft.Address" aria-invalid="@(FieldError("address") is null ? null : "true")" aria-describedby="accommodation-address-error" /></label>
-                        @if (FieldError("address") is { } addressError) { <small class="field-error" id="accommodation-address-error">@addressError</small> }
-                        <div class="accommodation-coordinate-grid">
-                            <div><label for="accommodation-lat">Latitude *<input id="accommodation-lat" @bind="draft.Lat" inputmode="decimal" required aria-invalid="@(FieldError("lat") is null ? null : "true")" aria-describedby="accommodation-lat-error" /></label>@if (FieldError("lat") is { } latError) { <small class="field-error" id="accommodation-lat-error">@latError</small> }</div>
-                            <div><label for="accommodation-lon">Longitude *<input id="accommodation-lon" @bind="draft.Lon" inputmode="decimal" required aria-invalid="@(FieldError("lon") is null ? null : "true")" aria-describedby="accommodation-lon-error" /></label>@if (FieldError("lon") is { } lonError) { <small class="field-error" id="accommodation-lon-error">@lonError</small> }</div>
-                        </div>
-                        @if (canShare)
-                        {
-                            <label for="accommodation-visibility">Visibility<select id="accommodation-visibility" @bind="draft.Visibility" aria-invalid="@(FieldError("visibility") is null ? null : "true")" aria-describedby="accommodation-visibility-error"><option value="private">Private</option><option value="shared">Shared catalogue</option></select></label>
-                            @if (FieldError("visibility") is { } visibilityError) { <small class="field-error" id="accommodation-visibility-error">@visibilityError</small> }
-                        }
-                        else { <p class="accommodation-private-note">Private place · visible only to you.</p> }
-                        <small>Fields marked * are required. Enter coordinates for the place you want to stay.</small>
+                        <AccommodationFormFields @ref="fields" Draft="draft" Errors="errors" Prefix="accommodation" CanShare="canShare" />
                         <div class="actions"><button type="submit" disabled="@(!canWrite || saving)">@(saving ? "Saving…" : "Save place")</button><button type="button" class="secondary" @onclick="CloseCreate" @ref="lastModalControl" disabled="@saving">Cancel</button></div>
                     </fieldset>
                 </form>
