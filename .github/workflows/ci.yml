@@ -43,6 +43,17 @@ jobs:
         env:
           SMOKE_LOGS: smoke-logs
         run: scripts/smoke-hosts.sh
+      - name: Bootstrap and migrate the six service databases
+        env:
+          SMOKE_LOGS: smoke-logs/supabase-layout
+          SMOKE_POSTGRES: Host=127.0.0.1;Port=5432;Username=postgres
+        run: |
+          psql -X -h 127.0.0.1 -U postgres -d postgres -f src/Database/supabase-bootstrap.sql
+          scripts/smoke-hosts.sh
+          for service in users attractions transport accommodations settings trips; do
+            count=$(psql -X -h 127.0.0.1 -U postgres -d "traveltracker_$service" -Atc 'SELECT count(*) FROM public."__EFMigrationsHistory"')
+            test "$count" -gt 0
+          done
       - name: Application and domain tests (EF InMemory, no PostgreSQL connection)
         env:
           TRAVELTRACKER_TEST_POSTGRES: ""
