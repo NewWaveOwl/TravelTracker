@@ -104,7 +104,7 @@
   <rect class="app" x="740" y="565" width="260" height="110"/><text class="box-title" x="870" y="594">Application service</text><text class="box-line" x="870" y="620">ITransportModeService</text><text class="box-line" x="870" y="645">catalogue + code lookup</text>
   <rect class="app" x="1075" y="565" width="260" height="110"/><text class="box-title" x="1205" y="594">Application service</text><text class="box-line" x="1205" y="620">IAttractionService</text><text class="box-line" x="1205" y="645">catalogue + place validation</text>
   <rect class="app-trip" x="1410" y="565" width="260" height="110"/><text class="box-title" x="1540" y="594">Application services</text><text class="box-line" x="1540" y="620">ITripService + ITripMapService</text><text class="box-line" x="1540" y="645">direction, sequence, time rules</text>
-  <rect class="app" x="1745" y="565" width="260" height="110"/><text class="box-title" x="1875" y="594">Application service</text><text class="box-line" x="1875" y="620">ISettingsService</text><text class="box-line" x="1875" y="645">get-or-create + update defaults</text>
+  <rect class="app" x="1745" y="565" width="260" height="110"/><text class="box-title" x="1875" y="594">Application service</text><text class="box-line" x="1875" y="620">ISettingsService</text><text class="box-line" x="1875" y="645">defaults on read + If-Match replace</text>
 
   <!-- Repositories -->
   <rect class="repo" x="70" y="715" width="260" height="110"/><text class="box-title" x="200" y="744">Data access</text><text class="box-line" x="200" y="770">IUserRepository</text><text x="200" y="795" text-anchor="middle" font-size="12" fill="#B45309">current interface is internal</text>
@@ -112,7 +112,7 @@
   <rect class="repo" x="740" y="715" width="260" height="110"/><text class="box-title" x="870" y="744">Data access</text><text class="box-line" x="870" y="770">ITransportModeRepository</text><text class="box-note" x="870" y="795">get all / by ID / by code</text>
   <rect class="repo" x="1075" y="715" width="260" height="110"/><text class="box-title" x="1205" y="744">Data access</text><text class="box-line" x="1205" y="770">IAttractionRepository</text><text class="box-note" x="1205" y="795">CRUD contract</text>
   <rect class="repo-trip" x="1410" y="715" width="260" height="110"/><text class="box-title" x="1540" y="744">Data access</text><text class="box-line" x="1540" y="770">ITripRepository</text><text class="box-note" x="1540" y="795">history + CRUD + ReplaceLegs</text>
-  <rect class="repo" x="1745" y="715" width="260" height="110"/><text class="box-title" x="1875" y="744">Data access</text><text class="box-line" x="1875" y="770">ISettingsRepository</text><text class="box-note" x="1875" y="795">get by user + upsert</text>
+  <rect class="repo" x="1745" y="715" width="260" height="110"/><text class="box-title" x="1875" y="744">Data access</text><text class="box-line" x="1875" y="770">ISettingsRepository</text><text class="box-note" x="1875" y="795">get by owner + revision-checked replace</text>
 
   <!-- Database cylinders -->
   <g><path class="db" d="M70 875 C70 856 330 856 330 875 V965 C330 984 70 984 70 965 Z"/><ellipse class="db" cx="200" cy="875" rx="130" ry="16"/><text class="box-title" x="200" y="906">Users store</text><text class="box-line" x="200" y="932">Users</text><text class="box-note" x="200" y="956">profile, credentials, role, status</text></g>
