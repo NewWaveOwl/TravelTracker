@@ -4,8 +4,6 @@
 
 **Owner:** James
 
-*Draft written from the repository state; the owner should review it before submission.*
-
 Six backend services run independently, each with its own Domain, Data and Api project: Attractions (port 5104), Transport (5105), Accommodations (5106), Settings (5107), Trips (5108) and Users (5101). Dependencies point one way, Api to Data to Domain. A boundary test fails the build if a Domain project gains a reference or a Data project becomes a web project. Each service owns its PostgreSQL database and never reads another service's tables. Services talk to each other only over versioned HTTP contracts: for example, Trips confirms every place and transport mode with the owning service before it saves, and asks Users for the live account standing. If any of them is unavailable, the save fails closed and stores nothing.
 
 The frontend is a Blazor Web App in interactive Server mode (`src/TravelTracker.Frontend`). It has no project reference to any backend project, so it can only use the public HTTP DTOs. It replaced an earlier same-day React choice by owner decision on 2026-11-03. It calls the services from the server, so the browser needs no CORS configuration or proxy, and the access token stays in a server-owned session. The decision is recorded in `docs/milestone-3-contracts.md`.
@@ -18,9 +16,7 @@ Trade-offs: the Trips save has no idempotency key, so a network failure after a 
 
 ## 2. How work was divided across the team
 
-**Owner:** [name]
-
-*Draft from the owners recorded on the GitHub issues; the owner should add how conflicts and drift were handled.*
+**Owner:** Artiom
 
 | Member | Services | Frontend work | Shared work |
 |---|---|---|---|
@@ -29,6 +25,12 @@ Trade-offs: the Trips save has no idempotency key, so a network failure after a 
 | James | Trips, Settings | Settings view (M3-22), trip creation and details (M3-21) | Architecture and contracts (M3-01), testing guidance (M3-04), CI and validation (M3-23) |
 
 Each member owns two independently runnable services, as the milestone requires. The matching verification for each frontend view lives in `tests/TravelTracker.Frontend.Tests`.
+
+I coordinated what the team worked on next, assigned issues, and tracked progress. When teammates had too much on their plate, I took over some of their issues to balance the workload. After each PR, I ran the application locally and checked the affected UI workflows and backend behavior.
+
+We made design and technology decisions as a team. We discussed the UI layout and colour palette, as well as database and persistence options such as PostgreSQL, MariaDB, and using SQL directly. When two teammates favoured different approaches, the third teammate heard both proposals and made the final call. That gave each proposal a hearing and let us move forward with a decision.
+
+Merge conflicts usually came from teammates editing the same part of the application in parallel. We used coding agents to help reconcile the overlapping changes. When both branches offered a design for the same problem, we generally kept the newer solution if it was simpler and still met the requirements. After integrating the changes, I ran the app locally and checked the affected UI and backend behavior.
 
 ---
 
@@ -67,16 +69,18 @@ We did not time the work, so the speed benefit is qualitative. The clearest gain
 - **Agents take design decisions if nobody stops them.** The rating exception is an example. A human still has to decide what belongs in each layer.
 - **Agent definitions need maintenance.** They are part of the codebase, and they go stale when the architecture, the stack or the test layout changes.
 - **Boundaries work best when they are enforced by checks and not only by instructions.** The agent instructions are not enforced by tooling, so the trial prompts and the review process were what confirmed that scope held.
+- **UI design needed manual iteration.** Artiom refined the Transport workspace against the selected Figma design and screenshots. A walkthrough showed that searching for a transport mode added an unnecessary step. The revised flow lets travellers choose a saved mode directly, then opens the map so they can pick both departure and destination. [Transport implementation record](../issue-44-implementation.md)
 
  
 ## 4. Effectiveness of the human validation gates
  
-**Owner:** [name]
- 
-TODO. Suggested points to cover:
- 
-- Which gates existed: plan approval, diff inspection, build and test requirements, agent review, teammate approval.
-- Defects each gate caught, with examples.
-- Defects that slipped through a gate, and why.
-- What we would change.
-[Write here]
+**Owner:** Artiom
+
+We reviewed the plan against the issue and the service contracts before coding. During implementation we inspected the diff and ran a Release build and tests. We also asked coding agents to review PRs independently, read through their findings, and decided which ones warranted a change. We then asked the agents to implement those fixes, which gave teammates concrete changes to check before approving the PR. [Validation workflow](../../.github/skills/validation/SKILL.md) · [Transport review record](../issue-44-review.md)
+
+- **Visual checks in the running app.** When I ran the app locally, I noticed that some UI boxes were misaligned. I gave the coding agent the exact dimensions, described how the boxes should line up, and linked the relevant Figma design so it could make a targeted correction.
+- **Walkthrough and scope review.** The first Transport flow made travellers search for a mode they could already choose from the catalogue. Reviewing the workflow led us to make modes directly selectable, open the map on selection, and require both endpoints. We added tests for the revised flow, including distinct saved IDs for departure and destination. [Transport implementation record](../issue-44-implementation.md)
+- **Diff review and regression tests.** The Transport review found that a confirmation could finish after sign-out and publish the previous account's draft. We cancelled the pending operation on session changes and added a regression test that delays the confirmation until after sign-out. The Attractions review also caught that valid JSON with a non-object root could escape the expected validation-error handling. We added tests for arrays, strings and `null`. [Transport review](../issue-44-review.md) · [Attractions review](../issue-43-review.md)
+- **What the earlier gates missed.** The initial Accommodations review reported no open findings. A later PR review found that a session with only `catalogue.write` could still trigger a catalogue read after creating an accommodation, and that closing a denied-create dialog could try to restore focus to a button that had been removed. The implementation added fixes and regression tests for both cases. The Transport record separately documents a clean Release build and passing application tests, while the signed-in browser smoke check remained unverified at that checkpoint. [Accommodations review](../m3-20-review.md) · [Transport verification](../issue-44-implementation.md#verification)
+
+In the next sprint, I would spend more time reviewing the plan before implementation. During this sprint, I found important gaps in the AI-generated plan only after development had started. I would start with a shared goals board and have the team discuss which goals are essential and which are urgent. Once we agree on priorities, we can give the agent clearer instructions and review the resulting plan for missing requirements before anyone starts coding. I would also start implementation and reviews earlier so fewer tasks pile up at the end of the sprint.
