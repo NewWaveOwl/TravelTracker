@@ -13,7 +13,7 @@ namespace TravelTracker.Trips.Api.Controllers;
  * trip, 401 no valid caller, 403 account not permitted, 404 absent or not visible, 503 dependency unavailable.
  *
  * @param saveService Validates references and stores a ready trip.
- * @param readService Returns one trip to its owner after the live standing check.
+ * @param readService Returns saved trips to their owner after the live standing check.
  * @param logger Records request-level refusals that the services do not already log.
  */
 [ApiController]
@@ -21,6 +21,25 @@ namespace TravelTracker.Trips.Api.Controllers;
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
 public sealed class TripsController(TripSaveService saveService, TripReadService readService, ILogger<TripsController> logger) : ControllerBase
 {
+    /**
+     * Lists saved trips owned by the caller.
+     * @return 200 with the trip summaries, 401 or 403 for the caller's account, or 503.
+     */
+    [HttpGet]
+    [Authorize(Policy = ScopePolicies.TripsRead)]
+    [ProducesResponseType(typeof(TripSummaryResponse[]), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> List()
+    {
+        var caller = CallerFromToken();
+        if (caller is null) return TripReadFailure(TripReadStatus.Unauthorized);
+
+        var (status, trips) = await readService.ListOwnedAsync(caller, HttpContext.RequestAborted);
+        return status == TripReadStatus.Found
+            ? Ok(trips.Select(trip => new TripSummaryResponse(trip.TripId, trip.Name, trip.Start, trip.End)).ToArray())
+            : TripReadFailure(status);
+    }
+
     /**
      * Retrieves one trip owned by the caller.
      *
@@ -35,13 +54,17 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
     public async Task<IActionResult> GetById(Guid id)
     {
         var caller = CallerFromToken();
-        if (caller is null) return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "A validated issuer and subject are required.");
+        if (caller is null) return TripReadFailure(TripReadStatus.Unauthorized);
 
         var outcome = await readService.GetOwnedAsync(caller, id, HttpContext.RequestAborted);
         if (outcome.Status == TripReadStatus.Found)
             return Ok(TripWithEntityTag(outcome.Trip!));
 
-        return outcome.Status switch
+        return TripReadFailure(outcome.Status);
+    }
+
+    private IActionResult TripReadFailure(TripReadStatus status) =>
+        status switch
         {
             TripReadStatus.NotFound => NotFound(),
             TripReadStatus.AccountRejected => Problem(statusCode: StatusCodes.Status403Forbidden,
@@ -50,7 +73,6 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
                 title: "A validated issuer and subject are required."),
             _ => Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Account access could not be verified.")
         };
-    }
 
     /**
      * Validates every reference and trip rule, then stores the snapshot trip only when all of them pass.

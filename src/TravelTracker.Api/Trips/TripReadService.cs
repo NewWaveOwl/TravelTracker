@@ -2,11 +2,12 @@ using TravelTracker.Trips.Data.Repositories;
 using Microsoft.Extensions.Logging;
 using TravelTracker.Api.References;
 using TravelTracker.Data.Repositories;
+using TravelTracker.Trips.Domain.Models;
 
 namespace TravelTracker.Api.Trips;
 
 /**
- * Returns one trip only to its owner. Account standing is checked live first: deactivated and unknown accounts
+ * Returns trips only to their owner. Account standing is checked live first: deactivated and unknown accounts
  * are refused, banned accounts may still read their own trips, and an unconfirmed standing fails closed.
  *
  * @param trips Reads owner-scoped trips.
@@ -23,6 +24,33 @@ public sealed class TripReadService(ITripRepository trips, UsersStandingClient u
      * @return Found with the trip, or the category explaining why it was not returned.
      */
     public async Task<TripReadOutcome> GetOwnedAsync(CallerIdentity caller, Guid tripId, CancellationToken cancellationToken) {
+        if (await CheckStandingAsync(caller, cancellationToken) is { } refusal)
+            return refusal;
+
+        var trip = await trips.GetOwnedByIdAsync(tripId, caller.Issuer, caller.Subject, cancellationToken);
+        if (trip is null) {
+            logger.LogInformation("trip read found no trip owned by this caller.");
+            return new(TripReadStatus.NotFound, null, "no trip is visible to this caller.");
+        }
+        logger.LogInformation("trip read returned one owned trip.");
+        return new(TripReadStatus.Found, trip, "trip is owned by this caller.");
+    }
+
+    /**
+     * Lists the caller's saved trip summaries after the same live check as trip detail.
+     * @param caller The issuer and subject from the caller's validated token.
+     * @param cancellationToken Cancels the lookups.
+     * @return Found with the caller's trips, or the reason the read was refused.
+     */
+    public async Task<(TripReadStatus Status, IReadOnlyList<TripHistoryEntry> Trips)> ListOwnedAsync(
+        CallerIdentity caller, CancellationToken cancellationToken) {
+        if (await CheckStandingAsync(caller, cancellationToken) is { } refusal)
+            return (refusal.Status, []);
+
+        return (TripReadStatus.Found, await trips.ListOwnedAsync(caller.Issuer, caller.Subject, cancellationToken));
+    }
+
+    private async Task<TripReadOutcome?> CheckStandingAsync(CallerIdentity caller, CancellationToken cancellationToken) {
         if (string.IsNullOrWhiteSpace(caller.Issuer) || string.IsNullOrWhiteSpace(caller.Subject)) {
             logger.LogWarning("trip read refused: the caller identity is incomplete.");
             return new(TripReadStatus.Unauthorized, null, "a validated caller identity is required.");
@@ -42,12 +70,6 @@ public sealed class TripReadService(ITripRepository trips, UsersStandingClient u
             return new(TripReadStatus.AccountRejected, null, "deactivated accounts cannot read trips.");
         }
 
-        var trip = await trips.GetOwnedByIdAsync(tripId, caller.Issuer, caller.Subject, cancellationToken);
-        if (trip is null) {
-            logger.LogInformation("trip read found no trip owned by this caller.");
-            return new(TripReadStatus.NotFound, null, "no trip is visible to this caller.");
-        }
-        logger.LogInformation("trip read returned one owned trip.");
-        return new(TripReadStatus.Found, trip, "trip is owned by this caller.");
+        return null;
     }
 }

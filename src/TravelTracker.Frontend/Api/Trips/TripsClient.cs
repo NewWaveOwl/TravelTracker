@@ -9,6 +9,15 @@ public sealed class TripsClient(ProtectedClient client)
     const string Path = "/api/v1/trips";
 
     /**
+     * Lists the trips saved by the current user.
+     * @param token Cancels a request when History closes or the session changes.
+     * @return The user's saved trip summaries.
+     */
+    public async Task<IReadOnlyList<TripSummaryDto>> ListAsync(CancellationToken token) =>
+        await client.GetJsonAsync<TripSummaryDto[]>("Trips", Path, token)
+        ?? throw new ApiError(FailureKind.Unexpected, "The Trips service returned no history.");
+
+    /**
      * Loads an existing trip and its stored snapshots.
      * @param id Public trip identifier.
      * @param token Cancels a closed editor.

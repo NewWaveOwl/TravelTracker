@@ -58,7 +58,7 @@ else
         }
         else if (!HasScope("users.write"))
         {
-            <aside class="profile-notice" role="status"><strong>Read-only profile</strong><p>This session can view your profile but does not have permission to edit it. Sign in again after profile-edit access is granted.</p></aside>
+            <aside class="profile-notice" role="status"><strong>Read-only profile</strong><p>This session can view your profile but does not have permission to edit it. Sign out and back in after <code>users.write</code> is granted.</p></aside>
         }
         else if (writeDenied)
         {

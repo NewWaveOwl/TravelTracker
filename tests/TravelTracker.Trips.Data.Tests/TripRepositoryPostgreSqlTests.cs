@@ -28,7 +28,15 @@ public sealed class TripRepositoryPostgreSqlTests
         }
 
         await using var restarted = CreateContext(database.ConnectionString);
-        var persisted = await new EfTripRepository(restarted).GetOwnedByIdAsync(expected.TripId, OwnerIssuer, "alice");
+        var repository = new EfTripRepository(restarted);
+        var persisted = await repository.GetOwnedByIdAsync(expected.TripId, OwnerIssuer, "alice");
+        var history = Assert.Single(await repository.ListOwnedAsync(OwnerIssuer, "alice"));
+        Assert.Equal(expected.TripId, history.TripId);
+        Assert.Equal(expected.Name, history.Name);
+        Assert.Equal(expected.Start.Offset, history.Start.Offset);
+        Assert.Equal(expected.End.Offset, history.End.Offset);
+        Assert.Empty(await repository.ListOwnedAsync(OwnerIssuer, "bob"));
+        Assert.Empty(await repository.ListOwnedAsync("https://other-issuer.example/", "alice"));
         var migrations = await restarted.Database.GetAppliedMigrationsAsync();
 
         Assert.NotNull(persisted);

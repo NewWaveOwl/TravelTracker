@@ -12,7 +12,7 @@ TravelTracker is a .NET 10 backend for a travel-planning application. The projec
 | Accommodations | Create private or administrator-shared lodging records, search visible records by name and retrieve visible details. |
 | Transport entries | Create, list and retrieve named transport entries using `car`, `bus`, `train`, `pedestrian`, `bike` or `plane`. |
 | Route points | Create, list and retrieve reusable locations of type `accommodation`, `attraction` or `transport_stop`. |
-| Trips | Create, retrieve and replace an owner's complete itinerary with ordered place and transport snapshots. See the [Trips service](docs/trips-service.md). |
+| Trips | Create, list, retrieve and replace your saved trips. Open **History** to recover a saved trip's map link. See the [Trips service](docs/trips-service.md). |
 | Validation | Validate required fields, supported codes and types, coordinate ranges, ratings and visit duration. |
 | API authentication | Validate bearer tokens and require separate catalogue read/write permissions. Health remains anonymous. |
 | API exploration | Use each independent service's Development Swagger page to inspect and execute its endpoints. |
@@ -31,7 +31,6 @@ The following features are not yet available through the running application:
 - Administrator account-status management remains separate from the traveller profile editor. The independent Users service supports first-sign-in provisioning, self-profile reads and updates over HTTP, live standing, verified first-administrator setup and administrator role management. See [Users contracts](docs/api.md#users-contracts).
 - Accommodation management as a separate resource.
 - Accommodation update/archive management and frontend lodging screens.
-- A browsable trip history. Settings preferences are available through the independent Settings service ([docs/settings-service.md](docs/settings-service.md)).
 - Scheduled journeys, departure and arrival times, and stop timing.
 - PATCH and DELETE endpoints for transport entries and route points, and DELETE endpoints for every resource.
 - Complete traveller-facing feature screens (the Blazor navigation and HTTP foundation is in `src/TravelTracker.Frontend`).
@@ -118,7 +117,104 @@ basemap fails to load. Connection lines show the itinerary approximately.
 Sign-in, catalogue search and saving use the services below.
 Press `Ctrl+C` in the terminal to stop the app.
 
-### Run with sign-in and trip saving
+### Run the full app with the shared Azure databases
+
+The frontend and six APIs run locally. The shared Azure PostgreSQL server
+stores app data, so teammates can run the app without installing PostgreSQL.
+Use Windows PowerShell from the repository root for the steps below.
+
+#### Maintainer setup
+
+- Allow each teammate's current public IP in the Azure PostgreSQL firewall.
+  Provision an assigned development database login with runtime access to
+  the six TravelTracker databases. Use a separate migration-capable login
+  for schema changes and keep the server administrator credentials private.
+- Share the assigned database username and password and the Auth0 backend
+  application Client ID and Client Secret through a private channel. The
+  launcher uses one PostgreSQL login across the six databases.
+- In Auth0, configure the frontend callback `http://localhost:5100/signin-oidc`
+  and logout URL `http://localhost:5100/`. Grant the frontend these scopes
+  under **User-Delegated Access**. Grant `users.access` only to the backend
+  machine-to-machine application under **Client Access**.
+  See the [Auth0 setup guide](docs/frontend-auth0.md).
+
+  | Feature | Frontend user-delegated scopes |
+  | --- | --- |
+  | View and edit your profile | `users.read`, `users.write` |
+  | Browse and add catalogue entries | `catalogue.read`, `catalogue.write` |
+  | Save and reopen trips | `catalogue.read`, `trips.write`, `trips.read` |
+  | Load account preferences | `settings.read` |
+
+Each teammate signs in with their own Auth0 account. The backend application's
+credentials let the APIs check account standing.
+
+#### One-time setup on each Windows PC
+
+1. Install the **.NET 10 SDK**, trust the local Users API development
+   certificate, and check that `TcpTestSucceeded` is `True`.
+
+   ```powershell
+   dotnet dev-certs https --trust
+   Test-NetConnection traveltracker-jac-dev-pg.postgres.database.azure.com -Port 5432
+   ```
+
+2. Replace `<frontend-client-id>` with the frontend application ID from the
+   maintainer and run the block below. If the frontend is registered as a
+   confidential application, configure its own `Auth0:ClientSecret` locally
+   using the [Auth0 setup guide](docs/frontend-auth0.md). The backend secret
+   goes into the launcher prompt.
+
+   ```powershell
+   $auth0Domain = 'dev-d523qhusnp72gtz5.us.auth0.com'
+   $auth0Issuer = "https://$auth0Domain/"
+   dotnet user-secrets set 'Auth0:Domain' $auth0Domain --project src/TravelTracker.Frontend
+   dotnet user-secrets set 'Auth0:ClientId' '<frontend-client-id>' --project src/TravelTracker.Frontend
+   dotnet user-secrets set 'Auth0:Audience' 'traveltracker-api' --project src/TravelTracker.Frontend
+   dotnet user-secrets set 'Authentication:Bearer:Authority' $auth0Issuer --project src/TravelTracker.Users.Api
+   dotnet user-secrets set 'Authentication:Bearer:Issuer' $auth0Issuer --project src/TravelTracker.Users.Api
+   dotnet user-secrets set 'Authentication:Bearer:Audience' 'traveltracker-api' --project src/TravelTracker.Users.Api
+   ```
+
+#### Start the app
+
+Run the launcher from the repository root. Enter your database username and
+password, then the Auth0 backend Client ID and Client Secret. Both secret
+prompts are hidden. The launcher requests the backend token and starts the
+frontend and APIs.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Start-AzureTripSmokeTest.ps1 -RunOnly
+```
+
+Wait for **All services are listening**, then open
+[TravelTracker](http://localhost:5100) in your desktop browser and sign in.
+Keep PowerShell open and press Enter there when you want to stop the stack.
+After an Auth0 grant change, sign out and back in to refresh your sign-in token.
+
+The Windows launcher uses the team Auth0 domain and Azure PostgreSQL host by
+default. To point it at another development environment, update the Auth0
+settings in user secrets for that environment and pass both hostnames.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Start-AzureTripSmokeTest.ps1 -RunOnly -Auth0Domain my-dev.us.auth0.com -PostgresHost my-dev.postgres.database.azure.com
+```
+
+The launcher prints the backend token's expiry time and warns when it expires
+in the PowerShell console. It keeps the stack running so you can finish your
+work. Stop and rerun the launcher for a fresh backend token.
+
+For the Azure persistence check, run the same command without `-RunOnly`.
+Save a trip, press Enter to restart Trips, and reopen the saved trip URL.
+The launcher uses the existing database schemas with automatic migrations off.
+If restore fails with `NU1900` because the NuGet audit feed is unreachable,
+rerun with `-SkipNuGetAudit` to skip auditing for that restore.
+
+If the profile fails to load and the Users log shows `28P01`, check the
+database username and password. If trip saving returns `403`, check the
+frontend grants above and sign in again. The launcher prints the log folder
+at startup.
+
+### Start each service manually
 
 1. Configure the frontend and API bearer settings using the [Auth0 setup guide](docs/frontend-auth0.md).
    Grant `users.read` for the account profile, `trips.read` to reopen saved trips,

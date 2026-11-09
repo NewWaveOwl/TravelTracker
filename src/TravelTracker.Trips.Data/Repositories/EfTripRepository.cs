@@ -105,6 +105,19 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
         return row is null ? null : ToDomain(row);
     }
 
+    /** {@inheritDoc} */
+    public async Task<IReadOnlyList<TripHistoryEntry>> ListOwnedAsync(string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default)
+    {
+        var rows = await database.Trips.AsNoTracking()
+            .Where(row => row.OwnerIssuer == ownerIssuer && row.OwnerSubject == ownerSubject)
+            .OrderByDescending(row => row.StartAt)
+            .ThenBy(row => row.TripId)
+            .Select(row => new { row.TripId, row.Name, row.StartAt, row.StartOffset, row.EndAt, row.EndOffset })
+            .ToListAsync(cancellationToken);
+        return rows.Select(row => new TripHistoryEntry(row.TripId, row.Name,
+            row.StartAt.ToOffset(row.StartOffset), row.EndAt.ToOffset(row.EndOffset))).ToArray();
+    }
+
     /**
      * Maps a stored trip and its legs back to the domain, restoring each offset the traveller entered.
      *

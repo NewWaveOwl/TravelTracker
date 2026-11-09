@@ -196,6 +196,9 @@ export function watchViewport(svg, container, map, camera) {
         const canPan = rightMouse || event.pointerType !== "mouse" || !event.target.closest(".location-target");
         pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, dragging: false, marker, canPan,
             transform: marker?.getAttribute("transform") };
+        // Keep receiving movement immediately, even if the pointer leaves a small pin before the drag threshold.
+        // Capture on the pin itself so a normal click still selects that stop.
+        marker?.setPointerCapture(event.pointerId);
     }, options);
 
     svg.addEventListener("contextmenu", event => {
@@ -208,7 +211,7 @@ export function watchViewport(svg, container, map, camera) {
             if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) < 5) return;
             pointer.dragging = true;
             suppressClick = true;
-            svg.setPointerCapture(event.pointerId);
+            if (!pointer.marker) svg.setPointerCapture(event.pointerId);
             if (pointer.canPan || pointer.marker) svg.setAttribute("data-dragging", "");
         }
         if (!pointer.canPan && !pointer.marker) return;
@@ -244,7 +247,7 @@ export function watchViewport(svg, container, map, camera) {
     svg.addEventListener("pointercancel", endDrag, options);
     svg.addEventListener("lostpointercapture", endDrag, options);
     svg.addEventListener("pointerleave", event => {
-        if (!pointer?.dragging) endDrag(event);
+        if (!pointer?.dragging && !pointer?.marker) endDrag(event);
     }, options);
     svg.addEventListener("click", event => {
         if (!suppressClick || event.detail === 0) return;
@@ -262,6 +265,9 @@ export function watchViewport(svg, container, map, camera) {
         if (!marker?.draggable || !event.dataTransfer) return;
         event.dataTransfer.setData(markerType, marker.dataset.mapMarker);
         event.dataTransfer.effectAllowed = "copy";
+    }, options);
+    svg.addEventListener("dragstart", event => {
+        if (event.target.closest(".trip-marker[data-move-index]")) event.preventDefault();
     }, options);
     svg.addEventListener("dragover", event => {
         if (!svg.dataset.markerDrop || !event.dataTransfer?.types.includes(markerType)) return;

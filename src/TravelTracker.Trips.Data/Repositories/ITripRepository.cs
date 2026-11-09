@@ -54,4 +54,13 @@ public interface ITripRepository
      * @return A task containing the trip, or null when it is absent or owned by someone else.
      */
     Task<Trip?> GetOwnedByIdAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default);
+
+    /**
+     * Lists saved trips for one owner in descending trip start order.
+     * @param ownerIssuer The caller's validated issuer.
+     * @param ownerSubject The caller's validated subject.
+     * @param cancellationToken Cancels the read.
+     * @return The caller's saved trip summaries.
+     */
+    Task<IReadOnlyList<TripHistoryEntry>> ListOwnedAsync(string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default);
 }

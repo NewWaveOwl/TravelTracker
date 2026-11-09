@@ -100,6 +100,7 @@
     gap: 8px;
 }
 .map-workspace .trip-chain h1 { font-size: clamp(20px, 1.65vw, 32px); margin: 0; }
+.map-workspace .trip-chain input.map-trip-name { font: inherit; background: #fffdf5; color: #263a2a; }
 .map-workspace .trip-chain h2 { font-size: clamp(16px, 1.4vw, 27px); margin: 0; }
 .trip-eyebrow { text-transform: uppercase; font-size: clamp(11px, .95vw, 18px) !important; }
 .map-workspace .trip-steps { gap: 5px; }

@@ -1,10 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Json.Nodes;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -32,6 +36,98 @@ public sealed class TripPlannerTests : BunitContext
     static readonly DateTimeOffset Start = DateTimeOffset.Parse("2026-11-14T09:00:00-05:00");
     static readonly TripDto Saved = new(TripId, "Weekend", "America/Toronto", Start, Start.AddHours(4),
         false, [new(1, Hotel, Museum, Train, Start.AddHours(1), Start.AddHours(2))]);
+
+    [Theory]
+    [InlineData(false, "sessionStorage", "localStorage")]
+    [InlineData(true, "localStorage", "sessionStorage")]
+    public async Task MapNameAndIncompleteDraftCanBeSavedAndRestoredWithoutTripsApi(
+        bool signedIn, string storage, string unusedStorage)
+    {
+        Configure((_, _) => throw new InvalidOperationException("A browser draft must not call the Trips API."));
+        ConfigureBrowserDraftStorage(signedIn);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
+        var page = Render<NewTrip>();
+        page.Find(".map-trip-name").Change("Unfinished weekend");
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.MarkerDropped.InvokeAsync(("attraction", 45.51m, -73.58m)));
+        await page.InvokeAsync(() => canvas.Instance.MarkerDropped.InvokeAsync(("transport_stop", 45.52m, -73.59m)));
+
+        Click(page, "Save map draft");
+        var saved = Assert.Single(JSInterop.Invocations[$"{storage}.setItem"]);
+        Assert.Empty(JSInterop.Invocations[$"{unusedStorage}.setItem"]);
+        var key = Assert.IsType<string>(saved.Arguments[0]);
+        var value = Assert.IsType<string>(saved.Arguments[1]);
+        Assert.Contains("Map draft saved in this browser.", page.Markup);
+        Assert.True(page.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
+        Assert.False(page.Find("[data-trip-undo]").HasAttribute("disabled"));
+
+        JSInterop.Setup<string>($"{storage}.getItem", call => Equals(call.Arguments[0], key)).SetResult(value);
+        var reopened = Render<NewTrip>();
+        Click(reopened, "Restore map draft");
+        Assert.Empty(JSInterop.Invocations[$"{unusedStorage}.getItem"]);
+        Assert.Equal("Unfinished weekend", reopened.Find(".map-trip-name").GetAttribute("value"));
+        Assert.Equal(new[] { 45.51m, 45.52m }, reopened
+            .FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>().Instance.Stops.Select(stop => stop.Lat));
+        Assert.True(reopened.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MalformedBrowserConnectionsDoNotReplaceTheCurrentMap(bool duplicate)
+    {
+        Configure((_, _) => throw new InvalidOperationException("A browser draft must not call the Trips API."));
+        ConfigureBrowserDraftStorage();
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
+        var page = Render<NewTrip>();
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.MarkerDropped.InvokeAsync(("attraction", 45.51m, -73.58m)));
+        await page.InvokeAsync(() => canvas.Instance.MarkerDropped.InvokeAsync(("transport_stop", 45.52m, -73.59m)));
+        Click(page, "Save map draft");
+        var original = Assert.Single(JSInterop.Invocations["localStorage.setItem"]);
+        var key = Assert.IsType<string>(original.Arguments[0]);
+        var readingOriginal = true;
+        JSInterop.Setup<string>("localStorage.getItem", call => readingOriginal && Equals(call.Arguments[0], key))
+            .SetResult(Assert.IsType<string>(original.Arguments[1]));
+        var storage = Services.GetRequiredService<ProtectedLocalStorage>();
+        var snapshot = (await storage.GetAsync<JsonObject>(key)).Value!;
+        var legs = snapshot["map"]!["legs"]!.AsArray();
+        legs.Clear();
+        legs.Add(new JsonObject { ["from"] = 0, ["to"] = duplicate ? 1 : 99 });
+        if (duplicate)
+            legs.Add(new JsonObject { ["from"] = 0, ["to"] = 1 });
+        await storage.SetAsync(key, snapshot);
+        readingOriginal = false;
+        var malformed = JSInterop.Invocations["localStorage.setItem"].Last();
+        JSInterop.Setup<string>("localStorage.getItem", call => Equals(call.Arguments[0], key))
+            .SetResult(Assert.IsType<string>(malformed.Arguments[1]));
+        JSInterop.Setup<bool>("confirm", _ => true).SetResult(true);
+        page.Find(".map-trip-name").Change("Keep these edits");
+
+        Click(page, "Restore map draft");
+
+        Assert.Contains("The browser draft could not be restored.", page.Markup);
+        Assert.Equal("Keep these edits", page.Find(".map-trip-name").GetAttribute("value"));
+        Assert.True(page.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
+    }
+
+    [Fact]
+    public void BrowserStorageUnavailableDoesNotFaultThePlanner()
+    {
+        Configure((_, _) => throw new InvalidOperationException("A browser draft must not call the Trips API."));
+        ConfigureBrowserDraftStorage();
+        JSInterop.SetupVoid("localStorage.setItem", _ => true)
+            .SetException(new InvalidOperationException("JS interop is unavailable."));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
+        var page = Render<NewTrip>();
+        page.Find(".map-trip-name").Change("Keep working");
+
+        Click(page, "Save map draft");
+
+        Assert.Contains("The browser draft could not be saved.", page.Markup);
+        Assert.True(page.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
+        Assert.False(page.Find("[data-trip-undo]").HasAttribute("disabled"));
+    }
 
     [Fact]
     public void FailedUpdateKeepsDraftForRetryAndFreshTripDoesNotReuseSavedId()
@@ -146,8 +242,10 @@ public sealed class TripPlannerTests : BunitContext
         });
     }
 
-    [Fact]
-    public async Task FailedTripSaveAndRetryDoNotWriteToTheCatalogue()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedTripSaveAndRetryDoNotWriteToTheCatalogue(bool restoreExistingPlace)
     {
         var catalogueWrites = 0;
         var tripWrites = 0;
@@ -158,7 +256,13 @@ public sealed class TripPlannerTests : BunitContext
             if (path == "/api/v1/attractions")
             {
                 if (request.Method == HttpMethod.Get)
-                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) };
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = restoreExistingPlace
+                            ? JsonContent.Create(new[] { new { AttractionId = newPlace.PlaceId, newPlace.Name, newPlace.Address,
+                                newPlace.Lat, newPlace.Lon, EstimatedVisitMinutes = 30 } })
+                            : JsonContent.Create(Array.Empty<AttractionDto>())
+                    };
 
                 Assert.Equal(HttpMethod.Post, request.Method);
                 catalogueWrites++;
@@ -181,25 +285,41 @@ public sealed class TripPlannerTests : BunitContext
             Assert.Equal(newPlace.PlaceId, Assert.Single(body.Legs).To.PlaceId);
             return ++tripWrites == 1 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : Json(Saved);
         });
+        ConfigureBrowserDraftStorage();
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        Click(page, "Review on map");
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
         await page.InvokeAsync(() => canvas.Instance.MoveMarker(1, 15, 10));
+        Assert.Empty(page.FindAll(".trip-review"));
+
+        if (restoreExistingPlace)
+        {
+            var moved = canvas.Instance.Stops[1];
+            newPlace = moved with { PlaceId = newPlace.PlaceId };
+            Click(page, "Save map draft");
+            var snapshot = Assert.Single(JSInterop.Invocations["localStorage.setItem"]);
+            JSInterop.Setup<string>("localStorage.getItem", call => Equals(call.Arguments[0], snapshot.Arguments[0]))
+                .SetResult(Assert.IsType<string>(snapshot.Arguments[1]));
+            JSInterop.Setup<bool>("confirm", _ => true).SetResult(true);
+            Click(page, "Restore map draft");
+            Assert.Contains("Map draft restored from this browser.", page.Markup);
+        }
 
         Click(page, "Review on map");
         Assert.Contains("They stay in the catalogue even if you discard this trip.", page.Find(".trip-review").TextContent);
         Assert.DoesNotContain(page.FindAll(".trip-review button"), button => button.TextContent == "Save trip");
         Assert.Equal(0, catalogueWrites);
         Click(page, "Save catalogue entries");
-        page.WaitForAssertion(() => Assert.Equal(1, catalogueWrites));
+        page.WaitForAssertion(() => Assert.Equal(restoreExistingPlace ? 0 : 1, catalogueWrites));
         Assert.Equal(0, tripWrites);
 
         Click(page, "Save trip");
         page.WaitForAssertion(() => Assert.Contains("entries are retained", page.Find("[role=alert]").TextContent));
         Click(page, "Retry save");
-        page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
+        page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find(".trip-message.success").TextContent));
         Assert.Equal(2, tripWrites);
-        Assert.Equal(1, catalogueWrites);
+        Assert.Equal(restoreExistingPlace ? 0 : 1, catalogueWrites);
     }
 
     [Theory]
@@ -765,6 +885,7 @@ public sealed class TripPlannerTests : BunitContext
                     throw new InvalidOperationException($"Unexpected request path {path}.");
             }
         });
+        ConfigureBrowserDraftStorage();
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/map");
         var page = Render<NewTrip>();
@@ -812,9 +933,13 @@ public sealed class TripPlannerTests : BunitContext
             page.WaitForAssertion(() => Assert.Contains("could not be confirmed", page.Find("[role=alert]").TextContent));
             Click(page, "Save catalogue entries");
         }
+        Click(page, "Save map draft");
         Click(page, "Save trip");
 
-        page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
+        page.WaitForAssertion(() => Assert.Contains(page.FindAll("[role=status]"), item => item.TextContent.Contains("Saved Weekend")));
+        Assert.Collection(JSInterop.Invocations["localStorage.setItem"],
+            item => Assert.EndsWith("-new", Assert.IsType<string>(item.Arguments[0])),
+            item => Assert.EndsWith($"-{TripId:D}", Assert.IsType<string>(item.Arguments[0])));
         Assert.Equal(loseModeResponse ? 1 : 0, modeWrites);
         Assert.NotNull(created);
         Assert.Equal(Start, created.Start);
@@ -1018,6 +1143,22 @@ public sealed class TripPlannerTests : BunitContext
             Assert.Contains("<svg", await response.Content.ReadAsStringAsync());
         }
         Assert.Contains("export function watchUndo", await browser.GetStringAsync("/Components/Pages/NewTrip.razor.js"));
+    }
+
+    void ConfigureBrowserDraftStorage(bool signedIn = true)
+    {
+        var authentication = new SwitchableAuthentication(new SessionRegistry(TimeProvider.System));
+        if (signedIn)
+        {
+            authentication.SignIn("test-token", DateTimeOffset.UtcNow.AddHours(1));
+            var identity = (ClaimsIdentity)authentication.User.Identity!;
+            identity.AddClaim(new Claim("iss", "https://traveltracker.test/"));
+            identity.AddClaim(new Claim("sub", "auth0|test-user"));
+        }
+        Services.AddSingleton<AuthenticationStateProvider>(authentication);
+        Services.AddSingleton<IDataProtectionProvider, EphemeralDataProtectionProvider>();
+        Services.AddScoped<ProtectedLocalStorage>();
+        Services.AddScoped<ProtectedSessionStorage>();
     }
 
     void Configure(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond,

@@ -15,7 +15,7 @@ Dependency direction stays Api to Data to Domain. `TravelTracker.Data` no longer
 
 It does not read the catalogue services' tables. Before saving, it asks the Accommodations, Attractions and Transport services over HTTP, forwarding the caller's token, and asks Users for live account standing with a backend credential.
 
-Trip history listing, deleting, individual leg writes and separate map-point resources remain future work. The complete trip representation includes the ordered place and transport snapshots needed by Map View.
+History lists the caller's saved trips from PostgreSQL, including trips saved before the list endpoint was added. Deleting trips, individual leg writes and separate map-point resources remain future work. The complete trip representation includes the ordered place and transport snapshots needed by Map View.
 
 ## Start independently
 
@@ -47,6 +47,7 @@ Swagger is available at `/swagger` in the Development environment.
 | --- | --- | --- |
 | `GET /health` | Anonymous | `200` with `{"status":"ok","service":"Trips"}`. Liveness only. |
 | `POST /api/v1/trips` | `trips.write` and `catalogue.read` | `201` with the saved trip and `Location: /api/v1/trips/{tripId}`. |
+| `GET /api/v1/trips` | `trips.read` | `200` with an array of the caller's trip summaries (`tripId`, `name`, `start`, `end`), ordered by latest start first. |
 | `GET /api/v1/trips/{tripId}` | `trips.read` | `200` for the caller's own trip. |
 | `PUT /api/v1/trips/{tripId}` | `trips.write` and `catalogue.read` | `200` with the updated trip. The identifier and owner are preserved. |
 
@@ -147,13 +148,21 @@ The Blazor client (`TravelTracker.Frontend`) talks to the Trips, Accommodations,
 | `/new-trip/form` | Form-only trip creation with basics, itinerary cards, and a review before saving. Open it from the standard planner. |
 | `/trips/{tripId}` | Reopens a saved trip from the service. `?saved=true` only adds a "Trip saved." line once the trip itself has loaded. |
 
+In Map View, **Save map draft** stores a browser copy and keeps the undo history
+and unsaved-changes warning. Restoring a browser draft brings its edits back into
+the planner. Signed-out drafts stay in the current tab's session. Signed-in
+drafts stay in this browser under the account that saved them. When a signed-in
+draft receives a saved trip link, its browser copy is also available from that
+link. Dragging a pin in Map View review returns to editing
+and records an unsaved change.
+
 In the form-only planner:
 
 - Places are picked from their owning catalogue and sent by public id: accommodations (`AccommodationsClient`), attractions (`AttractionsClient`) and transport stops (`TransportClient`, route points of type `transport_stop`). The first leg starts at an accommodation; a new leg starts where the previous one ended, and the traveller can change that, which shows the disconnected-leg error instead of repairing it. With the optional `catalogue.write` grant, the accommodation picker also offers "Add a new accommodation": a private place saved through the Accommodations service, then selected by the id the service confirms. Shared places stay on the accommodation workspace (#46).
 - Times are entered as local times in the trip time zone. The client attaches the zone's offset. A time that does not exist (clocks skip forward) or happens twice (clocks go back) is refused with a message; the client never picks an offset. The service stays authoritative and its field errors (`legs[1].arrival`) are shown on the matching field.
 - The draft lives only in memory. A failed save (validation, permission, network or unavailable dependency) keeps every entry and shows what happened. The save button is disabled while a request is in flight and the handler ignores a second click, so one click sequence creates at most one request. The create has no idempotency key, so after a network failure the outcome is unknown; the message says so.
 - Leaving with entries asks first (in-app dialog for links, the browser's own prompt for closing the tab). The draft is dropped when the signed-in identity changes.
-- Stays and visits, scheduled routes, history listing, and deletion remain outside these planner flows. `/history` explains that the service cannot list trips yet.
+- Open **History** to recover a saved trip link. Stays and visits, scheduled routes, and deletion remain outside these planner flows.
 
 Verified by `tests/TravelTracker.Frontend.Tests` (`TripDraftTests`, `NewTripPageTests`, `TripsContractTests`), which drive the real pages through the real protected HTTP stack against in-process services. They are not a run against live hosts or a live Auth0 tenant.
 
