@@ -159,10 +159,10 @@
         <mxCell id="settings-api" value="&lt;b&gt;HTTP API&lt;/b&gt;&lt;br&gt;/settings&lt;br&gt;GET | PUT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=14;fontColor=#1E3A8A;" vertex="1" parent="1">
           <mxGeometry x="1745" y="420" width="260" height="105" as="geometry"/>
         </mxCell>
-        <mxCell id="settings-service" value="&lt;b&gt;Application service&lt;/b&gt;&lt;br&gt;ISettingsService&lt;br&gt;get-or-create + update defaults" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+        <mxCell id="settings-service" value="&lt;b&gt;Application service&lt;/b&gt;&lt;br&gt;ISettingsService&lt;br&gt;defaults on read + If-Match replace" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
           <mxGeometry x="1745" y="565" width="260" height="115" as="geometry"/>
         </mxCell>
-        <mxCell id="settings-repo" value="&lt;b&gt;Data access&lt;/b&gt;&lt;br&gt;ISettingsRepository&lt;br&gt;get by user + upsert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
+        <mxCell id="settings-repo" value="&lt;b&gt;Data access&lt;/b&gt;&lt;br&gt;ISettingsRepository&lt;br&gt;get by owner + revision-checked replace" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;strokeWidth=2;fontSize=14;fontColor=#78350F;" vertex="1" parent="1">
           <mxGeometry x="1745" y="720" width="260" height="115" as="geometry"/>
         </mxCell>
         <mxCell id="settings-db" value="&lt;b&gt;Settings store&lt;/b&gt;&lt;br&gt;UserSettings&lt;br&gt;transport preference + map defaults" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=18;fillColor=#DCFCE7;strokeColor=#16A34A;strokeWidth=2;fontSize=14;fontColor=#14532D;" vertex="1" parent="1">

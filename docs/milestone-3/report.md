@@ -2,15 +2,13 @@
  
 ## 1. Layered backend architecture and frontend integration choices
 
-**Owner:** Jimmy
-
-*Draft written from the repository state; the owner should review it before submission.*
+**Owner:** James
 
 Six backend services run independently, each with its own Domain, Data and Api project: Attractions (port 5104), Transport (5105), Accommodations (5106), Settings (5107), Trips (5108) and Users (5101). Dependencies point one way, Api to Data to Domain. A boundary test fails the build if a Domain project gains a reference or a Data project becomes a web project. Each service owns its PostgreSQL database and never reads another service's tables. Services talk to each other only over versioned HTTP contracts: for example, Trips confirms every place and transport mode with the owning service before it saves, and asks Users for the live account standing. If any of them is unavailable, the save fails closed and stores nothing.
 
 The frontend is a Blazor Web App in interactive Server mode (`src/TravelTracker.Frontend`). It has no project reference to any backend project, so it can only use the public HTTP DTOs. It replaced an earlier same-day React choice by owner decision on 2026-11-03. It calls the services from the server, so the browser needs no CORS configuration or proxy, and the access token stays in a server-owned session. The decision is recorded in `docs/milestone-3-contracts.md`.
 
-Sign-in uses Auth0 through the ASP.NET Core OpenID Connect handler with PKCE. Every API validates the bearer token's signature, issuer, audience and expiry, then enforces a scope policy per operation (`catalogue.read`, `catalogue.write`, `users.read`, `settings.read`, `settings.write`, `trips.read`, `trips.write`). The full endpoint-to-policy table is in `docs/milestone-3-contracts.md` and `docs/authentication.md`. No secret is committed: the validation settings are authority, issuer and audience only.
+Sign-in uses Auth0 through the ASP.NET Core OpenID Connect handler with PKCE. Every API validates the bearer token's signature, issuer, audience and expiry through one shared `TravelTracker.Security` project, so the rules are written once and not per service, then enforces a scope policy per operation (`catalogue.read`, `catalogue.write`, `users.read`, `settings.read`, `settings.write`, `trips.read`, `trips.write`). The full endpoint-to-policy table is in `docs/milestone-3-contracts.md` and `docs/authentication.md`. No secret is committed: the validation settings are authority, issuer and audience only.
 
 Trade-offs: the Trips save has no idempotency key, so a network failure after a send leaves the outcome unknown (the client says so). Trip history, editing and deletion are not implemented. Scheduled routes, stays and visits were left out of the minimum trip slice by an owner decision.
 
