@@ -133,6 +133,26 @@ dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category=
 
 EF InMemory and the in-memory store do not prove migration, constraint, transaction or restart behavior; those are verified only by the PostgreSQL group.
 
+## Frontend (#47)
+
+The Blazor client (`TravelTracker.Frontend`) talks to the Trips, Accommodations, Attractions and Transport services over HTTP only. Configure their addresses under `Services` (Accommodations 5106, Trips 5108 by default).
+
+| Route | What it does |
+| --- | --- |
+| `/new-trip` and `/map` | Share a planner draft, including map markers and connections. Append a trip ID to open a saved itinerary for editing. |
+| `/new-trip/form` | Form-only trip creation with basics, itinerary cards, and a review before saving. Open it from the standard planner. |
+| `/trips/{tripId}` | Reopens a saved trip from the service. `?saved=true` only adds a "Trip saved." line once the trip itself has loaded. |
+
+In the form-only planner:
+
+- Places are picked from their owning catalogue and sent by public id: accommodations (`AccommodationsClient`), attractions (`AttractionsClient`) and transport stops (`TransportClient`, route points of type `transport_stop`). The first leg starts at an accommodation; a new leg starts where the previous one ended, and the traveller can change that, which shows the disconnected-leg error instead of repairing it. With the optional `catalogue.write` grant, the accommodation picker also offers "Add a new accommodation": a private place saved through the Accommodations service, then selected by the id the service confirms. Shared places stay on the accommodation workspace (#46).
+- Times are entered as local times in the trip time zone. The client attaches the zone's offset. A time that does not exist (clocks skip forward) or happens twice (clocks go back) is refused with a message; the client never picks an offset. The service stays authoritative and its field errors (`legs[1].arrival`) are shown on the matching field.
+- The draft lives only in memory. A failed save (validation, permission, network or unavailable dependency) keeps every entry and shows what happened. The save button is disabled while a request is in flight and the handler ignores a second click, so one click sequence creates at most one request. The create has no idempotency key, so after a network failure the outcome is unknown; the message says so.
+- Leaving with entries asks first (in-app dialog for links, the browser's own prompt for closing the tab). The draft is dropped when the signed-in identity changes.
+- Stays and visits, scheduled routes, history listing, and deletion remain outside these planner flows. `/history` explains that the service cannot list trips yet.
+
+Verified by `tests/TravelTracker.Frontend.Tests` (`TripDraftTests`, `NewTripPageTests`, `TripsContractTests`), which drive the real pages through the real protected HTTP stack against in-process services. They are not a run against live hosts or a live Auth0 tenant.
+
 ## Limits
 
 - Concurrent edits to the same trip commit whole itineraries in sequence. The later successful replacement becomes the saved trip.

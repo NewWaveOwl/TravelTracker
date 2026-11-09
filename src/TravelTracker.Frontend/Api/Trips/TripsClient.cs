@@ -29,4 +29,13 @@ public sealed class TripsClient(ProtectedClient client)
         await client.SendJsonAsync<TripDto>("Trips", id is null ? HttpMethod.Post : HttpMethod.Put,
             id is null ? Path : $"{Path}/{id:D}", request, token)
         ?? throw new ApiError(FailureKind.Unexpected, "The trip save could not be confirmed.");
+
+    /**
+     * Creates a trip from the form planner.
+     * @param request Validated trip details and catalogue references.
+     * @param token Cancels a closed editor.
+     * @return The trip confirmed by the service.
+     */
+    public Task<TripDto> CreateAsync(SaveTripRequest request, CancellationToken token) =>
+        SaveAsync(null, request, token);
 }

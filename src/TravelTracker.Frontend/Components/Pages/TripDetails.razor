@@ -1,0 +1,36 @@
+@page "/trips/{TripId:guid}"
+@using TravelTracker.Frontend.Api.Trips
+@implements IDisposable
+
+<PageHeading Title="@(trip?.Name ?? "Trip details")" />
+<div class="trip-page">
+@if (loading)
+{
+    <Feedback Kind="FeedbackKind.Loading">Loading your trip…</Feedback>
+}
+else if (failure is not null)
+{
+    <Feedback Kind="@FailureFeedback" Title="@FailureTitle" Retry="@(CanRetry ? EventCallback.Factory.Create(this, LoadAsync) : default)">@failure.Message</Feedback>
+}
+else if (trip is not null)
+{
+    @if (justSaved) { <p class="trip-status" role="status">Trip saved.</p> }
+    <dl class="trip-summary">
+        <dt>Time zone</dt><dd>@trip.TimeZone</dd>
+        <dt>Starts</dt><dd>@When(trip.Start)</dd>
+        <dt>Ends</dt><dd>@When(trip.End)</dd>
+        <dt>Type</dt><dd>@(trip.IsRoundTrip ? "Round trip" : "One way")</dd>
+    </dl>
+    <h2>Itinerary</h2>
+    <ol class="trip-legs">
+        @foreach (var leg in trip.Legs)
+        {
+            <li>
+                <strong>@leg.From.Name</strong> to <strong>@leg.To.Name</strong> by @leg.Transport.Name (@leg.Transport.Code)
+                <small>Departs @When(leg.Departure), arrives @When(leg.Arrival). From @leg.From.Address to @leg.To.Address.</small>
+            </li>
+        }
+    </ol>
+    <div class="trip-actions"><a class="button secondary" href="@($"new-trip/{trip.TripId:D}")">Edit trip</a><a class="button secondary" href="new-trip">Plan another trip</a></div>
+}
+</div>

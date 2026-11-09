@@ -226,7 +226,14 @@ dotnet build TravelTracker.Tests.slnx --configuration Release
 dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --filter "Category!=PostgreSQL"
 ```
 
-CI runs these commands plus the PostgreSQL group. Warnings fail the build (`Directory.Build.props`), and a boundary test fails if Domain gains references or Data becomes a web project. CI uploads the `.trx` results as a `test-results` artifact even when tests fail.
+Each service host can also be started alone, with every other host stopped, and its `/health` checked (no database or identity provider needed):
+
+```powershell
+dotnet build TravelTracker.slnx --configuration Release
+scripts/smoke-hosts.sh
+```
+
+CI runs these commands plus the PostgreSQL group and the same host smoke test. Warnings fail the build (`Directory.Build.props`), and a boundary test fails if Domain gains references or Data becomes a web project. CI uploads the `.trx` results as a `test-results` artifact even when tests fail.
 
 The suite covers health, accommodation/attraction/transport operations, route points, validation, concurrent identity generation, project dependency boundaries, and real bearer-token validation and scope policies. Catalogue tests cover private/shared visibility and literal name search. Tests configure isolated signing keys and require no external identity provider. Application/domain/HTTP tests use EF InMemory and need no PostgreSQL. Relational tests marked `Category=PostgreSQL` require real PostgreSQL for constraints, migrations, locking, rollback and restart.
 

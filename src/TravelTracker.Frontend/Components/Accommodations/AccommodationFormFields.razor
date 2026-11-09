@@ -1,0 +1,38 @@
+@using TravelTracker.Frontend.Features.Accommodations
+
+<label for="@(Prefix)-name">Name *<input id="@(Prefix)-name" @bind="Draft.Name" @ref="firstControl" required aria-invalid="@(Message("name") is null ? null : "true")" aria-describedby="@(Prefix)-name-error" /></label>
+@if (Message("name") is { } nameError) { <small class="field-error" id="@(Prefix)-name-error">@nameError</small> }
+<label for="@(Prefix)-address">Address<input id="@(Prefix)-address" @bind="Draft.Address" aria-invalid="@(Message("address") is null ? null : "true")" aria-describedby="@(Prefix)-address-error" /></label>
+@if (Message("address") is { } addressError) { <small class="field-error" id="@(Prefix)-address-error">@addressError</small> }
+<div class="accommodation-coordinate-grid">
+    <div><label for="@(Prefix)-lat">Latitude *<input id="@(Prefix)-lat" @bind="Draft.Lat" inputmode="decimal" required aria-invalid="@(Message("lat") is null ? null : "true")" aria-describedby="@(Prefix)-lat-error" /></label>@if (Message("lat") is { } latError) { <small class="field-error" id="@(Prefix)-lat-error">@latError</small> }</div>
+    <div><label for="@(Prefix)-lon">Longitude *<input id="@(Prefix)-lon" @bind="Draft.Lon" inputmode="decimal" required aria-invalid="@(Message("lon") is null ? null : "true")" aria-describedby="@(Prefix)-lon-error" /></label>@if (Message("lon") is { } lonError) { <small class="field-error" id="@(Prefix)-lon-error">@lonError</small> }</div>
+</div>
+@if (CanShare)
+{
+    <label for="@(Prefix)-visibility">Visibility<select id="@(Prefix)-visibility" @bind="Draft.Visibility" aria-invalid="@(Message("visibility") is null ? null : "true")" aria-describedby="@(Prefix)-visibility-error"><option value="private">Private</option><option value="shared">Shared catalogue</option></select></label>
+    @if (Message("visibility") is { } visibilityError) { <small class="field-error" id="@(Prefix)-visibility-error">@visibilityError</small> }
+}
+else { <p class="accommodation-private-note">Private place · visible only to you.</p> }
+<small>Fields marked * are required. Enter coordinates for the place you want to stay.</small>
+
+@code {
+    ElementReference firstControl;
+
+    /** The values being edited. */
+    [Parameter, EditorRequired] public AccommodationDraft Draft { get; set; } = default!;
+
+    /** Field errors keyed by request field name, matched without regard to case. */
+    [Parameter] public IReadOnlyDictionary<string, string[]> Errors { get; set; } = new Dictionary<string, string[]>();
+
+    /** Prefix for the element ids. */
+    [Parameter, EditorRequired] public string Prefix { get; set; } = "";
+
+    /** Whether the shared visibility option is offered. */
+    [Parameter] public bool CanShare { get; set; }
+
+    /** Moves keyboard focus to the first field. */
+    public ValueTask FocusFirstAsync() => firstControl.FocusAsync();
+
+    string? Message(string name) => Errors.FirstOrDefault(entry => string.Equals(entry.Key, name, StringComparison.OrdinalIgnoreCase)).Value is { } messages ? string.Join(" ", messages) : null;
+}

@@ -131,6 +131,10 @@ References: [ASP.NET Core OpenID Connect](https://learn.microsoft.com/aspnet/cor
 
 The account's own preferences use two scopes on the Settings API. `settings.read` is in the default `Auth0:Scope` (the view needs it to load values), so add it to the API's scopes and to the frontend application's user-delegated grant before signing in. `settings.write` is optional. Without it the Settings page is read-only and says so. To allow saving, add `settings.write` to the API, grant it, append it to the existing `Auth0:Scope` value and sign in again. The page reads the grant from the server-owned session metadata, never from a browser-decoded token; the Settings service remains authoritative for every write. See [Settings service](settings-service.md#frontend-48).
 
+## Trips scopes (#47)
+
+Saved-trip views need `trips.read`. Creating or editing a trip needs `trips.write` and `catalogue.read`. New catalogue entries also need `catalogue.write`. Grant the required scopes to the frontend application and include them in `Auth0:Scope` when overriding the defaults. Sign in again after changing grants. The form-only planner uses server-owned session metadata to disable Save if the grant is missing. The Trips API remains authoritative for all reads and writes. See [Trips service](trips-service.md#frontend-47).
+
 ## Attraction write grants (#43)
 
 For users intended to create/edit attractions, authorize `catalogue.write` in the API's user-delegated application access and user role/grant. If you override `Auth0:Scope`, include `catalogue.write` alongside your existing scopes. Restart and sign in again to obtain the new grant. The frontend stores scope returned by the trusted token endpoint as server-owned session metadata (when OAuth omits scope, requested scopes apply). ID-token claims cannot impersonate this metadata. It controls UI availability only; no access token is browser-decoded, and Attractions remains authoritative for scope, ownership and live Users standing. Older sessions without granted-scope metadata remain read-only until a new sign-in.

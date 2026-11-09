@@ -1,0 +1,10 @@
+@if (Messages.Length > 0)
+{
+    <small class="field-error" role="alert">@string.Join(" ", Messages)</small>
+}
+
+@code {
+    /** The messages to show for one field. */
+    [Parameter]
+    public string[] Messages { get; set; } = [];
+}

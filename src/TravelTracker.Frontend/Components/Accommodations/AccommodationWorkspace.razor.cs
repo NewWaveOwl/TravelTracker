@@ -30,7 +30,8 @@ public partial class AccommodationWorkspace : IDisposable
     IReadOnlyDictionary<string, string[]> errors = new Dictionary<string, string[]>();
     bool signedIn, canRead, canWrite, canShare, loaded, searching, loadingDetails, showCreate, saving, busy, disposed, retrySearch;
     bool focusError, focusDetails, focusNameOnRender, focusAddOnRender;
-    ElementReference errorSummary, createErrorSummary, detailsHeading, workspaceHeading, addButton, firstModalControl, lastModalControl;
+    ElementReference errorSummary, createErrorSummary, detailsHeading, workspaceHeading, addButton, lastModalControl;
+    AccommodationFormFields? fields;
     CancellationTokenSource? request;
     int generation;
 
@@ -53,7 +54,7 @@ public partial class AccommodationWorkspace : IDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (focusNameOnRender && showCreate) { focusNameOnRender = false; await firstModalControl.FocusAsync(); }
+        if (focusNameOnRender && showCreate) { focusNameOnRender = false; await fields!.FocusFirstAsync(); }
         else if (focusAddOnRender && !showCreate)
         {
             focusAddOnRender = false;
@@ -179,7 +180,7 @@ public partial class AccommodationWorkspace : IDisposable
     async Task FocusLastModalControl(FocusEventArgs _) { if (!saving) await lastModalControl.FocusAsync(); }
 
     /** Moves keyboard focus to the first form control when tabbing forward past the dialog end. */
-    async Task FocusFirstModalControl(FocusEventArgs _) { if (!saving) await firstModalControl.FocusAsync(); }
+    async Task FocusFirstModalControl(FocusEventArgs _) { if (!saving) await fields!.FocusFirstAsync(); }
 
     /**
      * Validates and creates once; only a confirmed response enters the trip draft.
@@ -245,9 +246,6 @@ public partial class AccommodationWorkspace : IDisposable
         }
         finally { if (Current(version)) saving = busy = false; }
     }
-
-    string? FieldError(string name) => errors.FirstOrDefault(entry => string.Equals(entry.Key, name, StringComparison.OrdinalIgnoreCase)).Value is { } messages
-        ? string.Join(" ", messages) : null;
 
     async Task HandleReadFailure(ApiError failure, bool searchFailure, Guid? detailId = null)
     {

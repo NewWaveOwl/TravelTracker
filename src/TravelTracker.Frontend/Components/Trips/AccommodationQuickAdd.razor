@@ -1,0 +1,12 @@
+@using TravelTracker.Frontend.Components.Accommodations
+@using TravelTracker.Frontend.Features.Accommodations
+
+<div class="place-add" role="group" aria-label="Add an accommodation">
+    <p class="trip-hint">New places are private to you. Shared places are managed on the accommodation workspace.</p>
+    <AccommodationFormFields Draft="draft" Errors="errors" Prefix="@Id" />
+    @if (failure is not null) { <p class="field-error" role="alert">@failure</p> }
+    <div class="trip-actions">
+        <button type="button" id="@(Id)-save" @onclick="SaveAsync" disabled="@saving">@(saving ? "Saving…" : "Save place")</button>
+        <button type="button" class="secondary" @onclick="() => Cancelled.InvokeAsync()" disabled="@saving">Cancel</button>
+    </div>
+</div>

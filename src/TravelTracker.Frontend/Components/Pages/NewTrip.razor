@@ -28,6 +28,10 @@
                 <p>Plan your trip with places, transport and times.</p>
             </div>
             <div class="trip-actions" aria-label="Trip view">
+                @if (draft.Id is null)
+                {
+                    <a class="button secondary" href="new-trip/form">Step-by-step form</a>
+                }
                 <button type="button" class="secondary" disabled="@busy" @onclick="() => SwitchView(true)">Map View</button>
                 <button type="button" class="secondary" disabled="@busy" aria-expanded="@Pressed(browseAccommodations)"
                         @onclick="() => browseAccommodations = !browseAccommodations">

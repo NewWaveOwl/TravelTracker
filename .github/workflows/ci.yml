@@ -39,6 +39,10 @@ jobs:
           cache-dependency-path: "**/*.csproj"
       - name: Build (warnings fail the build)
         run: dotnet build TravelTracker.Tests.slnx --configuration Release
+      - name: Smoke test each service host alone (every other host stopped)
+        env:
+          SMOKE_LOGS: smoke-logs
+        run: scripts/smoke-hosts.sh
       - name: Application and domain tests (EF InMemory, no PostgreSQL connection)
         env:
           TRAVELTRACKER_TEST_POSTGRES: ""
@@ -50,4 +54,6 @@ jobs:
         if: always()
         with:
           name: test-results
-          path: test-results
+          path: |
+            test-results
+            smoke-logs
