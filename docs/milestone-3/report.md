@@ -2,9 +2,7 @@
  
 ## 1. Layered backend architecture and frontend integration choices
 
-**Owner:** Jimmy
-
-*Draft written from the repository state; the owner should review it before submission.*
+**Owner:** James
 
 Six backend services run independently, each with its own Domain, Data and Api project: Attractions (port 5104), Transport (5105), Accommodations (5106), Settings (5107), Trips (5108) and Users (5101). Dependencies point one way, Api to Data to Domain. A boundary test fails the build if a Domain project gains a reference or a Data project becomes a web project. Each service owns its PostgreSQL database and never reads another service's tables. Services talk to each other only over versioned HTTP contracts: for example, Trips confirms every place and transport mode with the owning service before it saves, and asks Users for the live account standing. If any of them is unavailable, the save fails closed and stores nothing.
 
