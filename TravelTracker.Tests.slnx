@@ -38,6 +38,7 @@
     <Project Path="tests/TravelTracker.Settings.Domain.Tests/TravelTracker.Settings.Domain.Tests.csproj" />
     <Project Path="tests/TravelTracker.Settings.Data.Tests/TravelTracker.Settings.Data.Tests.csproj" />
     <Project Path="tests/TravelTracker.Settings.Api.Tests/TravelTracker.Settings.Api.Tests.csproj" />
+    <Project Path="tests/TravelTracker.Journey.Tests/TravelTracker.Journey.Tests.csproj" />
     <Project Path="tests/TravelTracker.Trips.Api.Tests/TravelTracker.Trips.Api.Tests.csproj" />
     <Project Path="tests/TravelTracker.Trips.Data.Tests/TravelTracker.Trips.Data.Tests.csproj" />
     <Project Path="tests/TravelTracker.Trips.Domain.Tests/TravelTracker.Trips.Domain.Tests.csproj" />
