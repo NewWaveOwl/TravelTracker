@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # starts each service host on its own, with every other host stopped, and checks that /health answers.
 # usage: dotnet build TravelTracker.slnx -c Release && scripts/smoke-hosts.sh
-# needs no database, identity provider or other service: the hosts only validate their settings at startup.
+# By default only validates host settings. SMOKE_POSTGRES opts into migrations on six disposable service databases.
 set -u
 cd "$(dirname "$0")/.."
 
@@ -24,9 +24,15 @@ for entry in "${hosts[@]}"; do
     continue
   fi
   echo "INFO starting $name alone on port $port (log: $log)"
-  # placeholder settings only; nothing connects to them while the host starts
+  connection="Host=127.0.0.1;Port=1;Database=unused"
+  migrate=false
+  if [ -n "${SMOKE_POSTGRES:-}" ]; then
+    connection="${SMOKE_POSTGRES};Database=traveltracker_${name,,}"
+    migrate=true
+  fi
   env ASPNETCORE_URLS="http://127.0.0.1:$port" \
-    "ConnectionStrings__$name=Host=127.0.0.1;Port=1;Database=unused" \
+    "ConnectionStrings__$name=$connection" \
+    Database__ApplyMigrations="$migrate" \
     Authentication__Bearer__Authority=https://identity.example.invalid \
     Authentication__Bearer__Issuer=https://identity.example.invalid \
     Authentication__Bearer__Audience=traveltracker-api \
