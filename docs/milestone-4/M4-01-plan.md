@@ -3,7 +3,7 @@
 **Issue:** M4-01 — verify and harden bearer-token validation across the protected API hosts.
 **Branch:** `bearer-token`
 **Research baseline:** committed tree at `15b4a40`.
-**Status:** research and implementation plan only; no production behavior has been changed.
+**Status:** implemented and validated locally; ready for developer review and pull request.
 
 ## Goal and scope
 
@@ -57,15 +57,15 @@ The tests should exercise at least one real protected route per host for authent
 | `src/TravelTracker.Security/Authentication/ScopePolicies.cs` | Confirm exact, case-sensitive scope parsing stays downstream of authenticated principal validation. Do not rename or broaden scopes in this issue. |
 | `src/TravelTracker.Accommodations.Api/Program.cs`, `src/TravelTracker.Attractions.Api/Program.cs`, `src/TravelTracker.Settings.Api/Program.cs`, `src/TravelTracker.Transport.Api/TransportProgram.cs`, `src/TravelTracker.Trips.Api/Program.cs`, `src/TravelTracker.Users.Api/Program.cs` | Verify every host registers the shared handler and runs authentication before authorization. Keep health explicitly anonymous. Edit only a host that fails the audit. |
 | `src/TravelTracker.*.Api/appsettings*.json` and host launch settings | Verify development placeholders are nonfunctional, production settings remain externally configured, and every host uses the intended issuer/audience without secrets. No checked-in token or key material. Edit only if inconsistent. |
-| `tests/TravelTracker.Accommodations.Api.Tests/AuthenticationTests.cs` and `Support/{ApiFactory,DiscoveryBackchannelHandler}.cs` | Complete missing/invalid/valid bearer cases through the Accommodations host and verify no create or ownership side effect occurs for a rejected token. |
-| `tests/TravelTracker.Attractions.Api.Tests/AuthenticationTests.cs` and `Support/{ApiFactory,DiscoveryBackchannelHandler,AuthenticationLogCapture,IdentityProbeController}.cs` | Retain its existing broad real-bearer coverage; close any route/identity/error-leak gap found during cross-host comparison. Keep identity probes test-only. |
-| `tests/TravelTracker.Transport.Api.Tests/AuthenticationTests.cs` and `Support/{ApiFactory,DiscoveryBackchannelHandler,AuthenticationLogCapture,IdentityProbeController}.cs` | Retain existing broad matrix; verify protected collection/detail/create routes and that identity headers/query values cannot replace validated claims. |
-| `tests/TravelTracker.Settings.Api.Tests/AuthenticationTests.cs` and `Support/{ApiFactory,DiscoveryBackchannelHandler,FallbackProbeController}.cs` | Complete the real-bearer matrix for settings routes; prove rejected tokens do not reach Users-standing lookup or read/write behavior. |
-| `tests/TravelTracker.Trips.Api.Tests/AuthenticationTests.cs` and `Support/{TripsApiFactory,DiscoveryBackchannelHandler}.cs` | Complete the matrix for trip detail/create; prove invalid credentials do not trigger place/transport lookups or writes and caller ownership derives from validated claims. |
-| `tests/TravelTracker.Users.Tests/UserProfileScopeMatrixTests.cs`, `UsersStartupTests.cs`, and `Support/{UsersApiFactory,UsersLogCapture}.cs` | Complete the matrix for Users self and internal routes, preserving scope and allowlisted-service-subject checks. Verify no rejected request provisions an account and errors/logs omit token contents. |
+| `tests/TravelTracker.Accommodations.Api.Tests/AuthenticationTests.cs` and `Support/ApiFactory.cs` | Completed the missing/malformed/unsigned/bad-signature/wrong-issuer/wrong-audience/expired/no-expiry/future-`nbf`/bad-subject matrix through the host, and assert failures stop before Users calls and do not echo tokens. |
+| `tests/TravelTracker.Attractions.Api.Tests/AuthenticationTests.cs` and `Support/ApiFactory.cs` | Retained its broad real-bearer coverage and added a sentinel malformed token with response non-disclosure assertions. Existing identity probes remain test-only. |
+| `tests/TravelTracker.Transport.Api.Tests/AuthenticationTests.cs` and `Support/ApiFactory.cs` | Retained its broad real-bearer matrix and added a sentinel malformed token with response non-disclosure assertions. Existing identity probes remain test-only. |
+| `tests/TravelTracker.Settings.Api.Tests/AuthenticationTests.cs` and `Support/ApiFactory.cs` | Completed the invalid-token matrix; assert rejected tokens do not reach Users standing lookups and responses do not echo tokens. Health remains public with malformed bearer input. |
+| `tests/TravelTracker.Trips.Api.Tests/AuthenticationTests.cs` and `Support/TripsApiFactory.cs` | Completed the invalid-token matrix; assert rejected credentials do not trigger place/transport lookups or writes and responses do not echo tokens. Health remains public with malformed bearer input. |
+| `tests/TravelTracker.Users.Tests/UserProfileScopeMatrixTests.cs`, `UsersStartupTests.cs`, and `Support/UsersApiFactory.cs` | Completed the self-profile invalid-token matrix; verify no account provisioning, no token text in responses/logs, and public health with malformed bearer input. |
 | `TravelTracker.Tests.slnx` and `.github/workflows/ci.yml` | Verify all six host test projects already run in CI's non-PostgreSQL group. Add project/workflow wiring only if a required host suite is absent. No PostgreSQL migration or test category is needed for this auth-only scope. |
-| `docs/authentication.md` and `docs/api.md` | Record the six-host bearer/health/permission map, validated `(iss, sub)` identity rules, safe failure behavior, the Users service-token distinction, and exact reproducible test commands/results. Avoid claiming a live Auth0 test when tests use local test signing keys and discovery stubs. |
-| `docs/milestone-4/M4-01-plan.md` | Keep this approved plan, then append implementation files changed, final test/build results, any uncovered host gap, and remaining live-provider limitations after implementation. |
+| `docs/authentication.md` | Updated the six-host bearer/health/permission map, validated `(iss, sub)` identity rules, safe failure behavior, Users service-token distinction, reproducible commands and provider-test limitations. Existing `docs/api.md` already records the Users route-specific access contract. |
+| `docs/milestone-4/M4-01-plan.md` | This file records implementation scope, validation results and remaining live-provider limitations. |
 
 ## Test and validation plan
 
@@ -90,4 +90,28 @@ The PostgreSQL group is not directly implicated, but run the same CI matrix wher
 - Existing source files and documentation vary in completeness; test each host instead of inferring safety from its reference to `TravelTracker.Security`.
 - The Auth0 tenant's exact issuer (including trailing slash), audience, signing algorithm, and scope claim must match deployment configuration. A discovery or tenant grant problem must not be “fixed” by relaxing issuer/audience/signature validation.
 - Tests with a local discovery stub verify JWT handler behavior and the wire contract, not Auth0 uptime, TLS, real tenant key rotation, or deployed secret configuration.
-- The Milestone 4 Security PDF is unavailable in this repository snapshot. Confirm whether it includes other explicit controls before implementation.
+- The Milestone 4 Security PDF is unavailable in this repository snapshot. Compare it before merge if the course provides it elsewhere.
+
+## Implementation and verification record
+
+No production authentication code or API registration required a change: the audit confirmed that all six runnable API hosts use the shared production JWT bearer handler, validate the configured signing key/signature, exact issuer and audience, token lifetime and allowed algorithms, and reject missing/blank/ambiguous subjects after validation. All hosts configure authentication before authorization; health is anonymous. The work therefore closes the cross-host automated coverage and documentation gaps without altering runtime policy.
+
+Files changed:
+
+- `tests/TravelTracker.Accommodations.Api.Tests/AuthenticationTests.cs` and `Support/ApiFactory.cs`
+- `tests/TravelTracker.Attractions.Api.Tests/AuthenticationTests.cs` and `Support/ApiFactory.cs`
+- `tests/TravelTracker.Settings.Api.Tests/AuthenticationTests.cs` and `Support/ApiFactory.cs`
+- `tests/TravelTracker.Transport.Api.Tests/AuthenticationTests.cs` and `Support/ApiFactory.cs`
+- `tests/TravelTracker.Trips.Api.Tests/AuthenticationTests.cs` and `Support/TripsApiFactory.cs`
+- `tests/TravelTracker.Users.Tests/UserProfileScopeMatrixTests.cs`, `UsersStartupTests.cs`, and `Support/UsersApiFactory.cs`
+- `docs/authentication.md`
+
+Validation on branch `bearer-token`:
+
+- `dotnet restore TravelTracker.Tests.slnx --disable-parallel -m:1 -p:NuGetAudit=false` — completed. The environment could not reach NuGet's vulnerability service, so audit checks were disabled for this local restore only; package versions and project files were not changed.
+- `dotnet build TravelTracker.Tests.slnx --configuration Release --no-restore --verbosity minimal -m:1` — passed, 0 warnings and 0 errors.
+- `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL" --verbosity minimal -m:1` — passed: 1,076 tests passed, 0 failed, 0 skipped. Projects without tests matching the non-PostgreSQL filter reported no matches.
+- Baseline before edits: full build passed with 0 warnings/errors; the same non-PostgreSQL command passed 1,057 tests.
+- `git diff --check` — passed.
+
+The PostgreSQL group was not run because this change adds no persistence behavior and relational test infrastructure was not needed. Automated JWT tests use isolated local signing keys and discovery stubs; live Auth0 tenant configuration, deployment TLS, uptime and key rotation remain unverified. Compare the Milestone 4 Security PDF when available, because it is absent from this checkout.

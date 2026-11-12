@@ -4,7 +4,7 @@
 
 Auth0 handles credentials and authentication; the Users service remains responsible for TravelTracker profiles, roles and account standing. Provider selection does not replace those checks. Expiry and permission-failure behavior is covered by automated client and backend tests; see the linked evidence for limits. Any client secret stays on the Blazor server, never in the browser.
 
-The independent `TravelTracker.Transport.Api` is the representative resource server. It validates access tokens with ASP.NET Core's real JWT bearer handler. It does not issue tokens or implement sign-in. Other service issues must adopt this pattern and independently verify their endpoints.
+All six API hosts—Accommodations, Attractions, Settings, Transport, Trips and Users—validate access tokens with the shared ASP.NET Core JWT bearer handler in `TravelTracker.Security`. They do not issue tokens or implement sign-in. Each host retains its own audience, explicit endpoint scopes and any service-specific account/ownership checks.
 
 ## Configuration and startup
 
@@ -37,6 +37,8 @@ Authority and Issuer are intentionally independent: a legitimate discovery base 
 | Operation | Required permission |
 | --- | --- |
 | GET `/health` | None; explicitly anonymous, including with an invalid bearer token |
+| GET `/api/v1/accommodations` and `/api/v1/accommodations/{id}` | `catalogue.read` |
+| POST `/api/v1/accommodations` | `catalogue.write` |
 | GET `/api/v1/attractions` | `catalogue.read` |
 | GET `/api/v1/attractions/{id}` | `catalogue.read` |
 | POST `/api/v1/attractions` | `catalogue.write` |
@@ -45,6 +47,13 @@ Authority and Issuer are intentionally independent: a legitimate discovery base 
 | POST `/api/v1/transport-modes` | `catalogue.write` |
 | GET `/api/v1/route-points` and `/api/v1/route-points/{id}` | `catalogue.read` |
 | POST `/api/v1/route-points` | `catalogue.write` |
+| GET `/api/v1/settings` | `settings.read` |
+| PUT `/api/v1/settings` | `settings.write` |
+| GET `/api/v1/trips/{id}` | `trips.read` |
+| POST `/api/v1/trips` | `trips.write` and `catalogue.read` |
+| GET `/api/v1/users/me` | `users.read` |
+| PATCH `/api/v1/users/me` | `users.write` |
+| Users bootstrap/admin/internal and legacy service-access routes | The route-specific policy and identity rules in [the API contract](api.md#users-contracts); the legacy `/api/v1/users/access` service credential remains separate |
 
 Read and write are independent. A write-only token cannot subsequently GET the created Location without read permission. Missing/invalid tokens yield `401` and a Bearer challenge; valid tokens lacking a required scope yield `403`, before model binding or mutation. Existing validation and not-found semantics apply after permission checks. Both the fallback policy (no attribute) and default policy (bare `[Authorize]`) require `catalogue.read`. Authors must still add explicit write policies to mutations; the read default does not infer permissions from HTTP verbs. Deliberately public endpoints require `[AllowAnonymous]`. Swagger names the read permission for implicit policies and correctly lists both `401` and `403`.
 
@@ -52,9 +61,9 @@ Development Swagger has an **Authorize** control for an access token and documen
 
 ## Identity and boundaries
 
-Inbound claim mapping is disabled and `User.Identity.Name` is the validated `sub`. Missing or blank subjects are rejected. Use the validated `(iss, sub)` pair for future Users mapping: `sub` is not assumed to be a TravelTracker UUID. Request headers, query values and bodies cannot replace this identity. No production identity-debug endpoint is exposed.
+Inbound claim mapping is disabled and `User.Identity.Name` is the validated `sub`. Each accepted user token must contain exactly one nonblank `sub`; the issuer must match both configured Issuer and discovery metadata. Use the validated `(iss, sub)` pair for Users mapping: `sub` is not assumed to be a TravelTracker UUID. Request headers, query values and bodies cannot replace this identity. No production identity-debug endpoint is exposed.
 
-This representative catalogue API enforces token permissions only. Account-standing checks, resource ownership, Users mapping, banned/deactivated rules, sign-in, and independent service adoption remain with their related issues. A token with write permission currently authorizes catalogue writes; the identity provider must grant that permission only to authorized callers. Do not treat scopes as completed ownership or account-status enforcement.
+Bearer validation establishes only the caller identity and token permissions. Each owning service separately enforces account-standing and resource-ownership rules where its contract requires them. A token with write permission authorizes only the operations listed for that host; the identity provider must grant permissions only to authorized callers. Do not treat scopes as a substitute for ownership or account-status enforcement.
 
 ## Adoption recipe
 
@@ -66,9 +75,24 @@ This representative catalogue API enforces token permissions only. Account-stand
 
 ## Verification and security considerations
 
-`AuthenticationTests` uses isolated RSA keys and an HTTP backchannel stub serving public-only discovery/JWKS JSON. The framework's real configuration manager follows Authority to `.well-known/openid-configuration` and then `jwks_uri`; it is not replaced with static configuration. Tests assert both requested addresses, valid discovery, metadata/issuer mismatch rejection and a legitimate differing authority/issuer pair. This exercises discovery parsing and key retrieval, but does not prove a live provider's TLS, availability or key rotation behavior.
+The Attractions and Transport `AuthenticationTests` use isolated RSA keys and an HTTP backchannel stub serving public-only discovery/JWKS JSON. The framework's real configuration manager follows Authority to `.well-known/openid-configuration` and then `jwks_uri`; it is not replaced with static configuration. Tests assert both requested addresses, valid discovery, metadata/issuer mismatch rejection and a legitimate differing authority/issuer pair. This exercises discovery parsing and key retrieval, but does not prove a live provider's TLS, availability or key rotation behavior.
 
-The production JWT handler, validation settings, token-validated event and policy registration stay on. Coverage includes missing/malformed/unsigned tokens, invalid signatures, expired/not-yet-valid/missing-expiry tokens, configured clock tolerance, algorithm allowlisting, wrong issuer/audience, missing/blank subject, absent/wrong/case-varied/prefix scopes, alternate configured claim names, repeated claims, every implemented action's access policy, implicit default/fallback scopes, anonymous health, and rejected writes leaving no created attraction. A test-only controller proves the validated identity resists a separate identity header/query. Separate tests load the shipped Development settings without ApiFactory overrides, and verify missing Production settings still fail startup. Existing resource tests use real signed tokens too. No external provider or credentials are needed for tests.
+The production JWT handler, validation settings, token-validated event and policy registration stay on in every API test host. The six host suites exercise valid signed tokens and missing/malformed/unsigned tokens, invalid signatures, expired/not-yet-valid/missing-expiry tokens, wrong issuer/audience, missing/blank subject, and the host's scope behavior. The Attractions and Transport suites additionally cover configured clock tolerance, algorithm allowlisting, alternate scope claim names, repeated claims, all their route policies, identity header/query spoofing, and discovery metadata behavior. The Accommodations, Settings, Trips and Users suites verify rejected tokens stop before dependency lookups, account provisioning or mutations where applicable. The response contract is checked for a bearer challenge without echoed token material. Anonymous health is exercised with no credential and malformed bearer credentials. All cases use local keys and stubs; they do not require external credentials or a live provider.
+
+### M4-01 reproducible verification
+
+Run from the repository root after restoring the solution packages:
+
+```powershell
+dotnet test tests/TravelTracker.Accommodations.Api.Tests --configuration Release --no-restore
+dotnet test tests/TravelTracker.Attractions.Api.Tests --configuration Release --no-restore
+dotnet test tests/TravelTracker.Settings.Api.Tests --configuration Release --no-restore
+dotnet test tests/TravelTracker.Transport.Api.Tests --configuration Release --no-restore
+dotnet test tests/TravelTracker.Trips.Api.Tests --configuration Release --no-restore
+dotnet test tests/TravelTracker.Users.Tests --configuration Release --no-restore
+```
+
+The CI-wide verification is `dotnet build TravelTracker.Tests.slnx --configuration Release` followed by `dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"`. The implementation record in [M4-01 plan](milestone-4/M4-01-plan.md) lists the exact run results. The tests verify local JWT handler behavior and HTTP contracts, not live Auth0 tenant configuration, deployed TLS, provider uptime, or key rotation.
 
 Assets are catalogue integrity and the trusted caller identity. The trust boundary is the bearer token received over HTTP; trusted discovery configuration and the issuer's signing keys establish identity. Forged or replayed-to-another-audience tokens are rejected by validation; exact scopes prevent accidental privilege inheritance. Residual risks include compromised issuer keys/tokens, overly broad provider grants, token replay before expiry, provider availability during discovery, and the still-unimplemented standing/ownership rules. Keep deployment configuration trusted, keys at the provider, token lifetimes appropriate, and never log bearer values.
 

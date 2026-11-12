@@ -68,28 +68,41 @@ public sealed class AuthenticationTests
     [InlineData("missing-sub")]
     [InlineData("empty-sub")]
     [InlineData("unsigned")]
+    [InlineData("malformed")]
+    [InlineData("no-expiry")]
+    [InlineData("future")]
     public async Task ProtectedRoutes_RejectInvalidBearerTokensBeforeAnyLookup(string failure)
     {
         using var factory = new TripsApiFactory();
         TripTestData.SeedAccounts(factory.Upstream);
         TripTestData.SeedHealthyCatalogue(factory.Upstream);
         using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(failure: failure));
+        var token = factory.CreateToken(failure: failure);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
         using var detail = await client.GetAsync($"/api/v1/trips/{TripTestData.Hotel:D}");
         using var create = await client.PostAsJsonAsync("/api/v1/trips", TripTestData.OneWayBody());
 
         Assert.Equal(HttpStatusCode.Unauthorized, detail.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, create.StatusCode);
+        Assert.Contains(detail.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
+        Assert.Contains(create.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
+        Assert.DoesNotContain(token, await detail.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(token, await create.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(token, string.Join(" ", detail.Headers.WwwAuthenticate));
+        Assert.DoesNotContain(token, string.Join(" ", create.Headers.WwwAuthenticate));
         Assert.Empty(factory.Upstream.Calls);
         Assert.Equal(0, factory.Repository.Count);
     }
 
-    [Fact]
-    public async Task Health_IsAnonymous_AndCallsNoDependency()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Health_IsAnonymous_AndCallsNoDependency(bool invalidBearer)
     {
         using var factory = new TripsApiFactory();
         using var client = factory.CreateClient();
+        if (invalidBearer) client.DefaultRequestHeaders.Authorization = new("Bearer", "M4_TOKEN_SENTINEL_malformed");
 
         using var response = await client.GetAsync("/health");
 

@@ -76,6 +76,7 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractio
     internal string CreateToken(string? scopes = "catalogue.read catalogue.write", string? failure = null,
         string? claimType = null, int? lifetimeOffsetSeconds = null, string subject = "test-traveller")
     {
+        if (failure == "malformed") return "M4_TOKEN_SENTINEL_malformed";
         using var otherKey = RSA.Create(2048);
         var now = DateTime.UtcNow;
         var claims = new List<Claim>();

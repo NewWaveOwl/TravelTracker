@@ -45,6 +45,7 @@ internal sealed class ApiFactory(string? connectionString = null) : WebApplicati
      */
     internal string CreateToken(string? scopes = "settings.read settings.write", string subject = "alice", string? failure = null)
     {
+        if (failure == "malformed") return "M4_TOKEN_SENTINEL_malformed";
         using var otherKey = RSA.Create(2048);
         var claims = new List<Claim>();
         if (failure != "missing-sub") claims.Add(new Claim("sub", failure == "empty-sub" ? " " : subject));
@@ -55,8 +56,8 @@ internal sealed class ApiFactory(string? connectionString = null) : WebApplicati
         SigningCredentials? credentials = failure == "unsigned" ? null : new SigningCredentials(
             new RsaSecurityKey(failure == "signature" ? otherKey : signingKey) { KeyId = "settings-test-key" },
             SecurityAlgorithms.RsaSha256);
-        var expires = failure == "expired" ? now.AddMinutes(-5) : now.AddMinutes(10);
-        var notBefore = failure == "expired" ? now.AddMinutes(-10) : now.AddMinutes(-1);
+        DateTime? expires = failure == "no-expiry" ? null : failure == "expired" ? now.AddMinutes(-5) : now.AddMinutes(10);
+        var notBefore = failure == "expired" ? now.AddMinutes(-10) : failure == "future" ? now.AddMinutes(5) : now.AddMinutes(-1);
         var token = new JwtSecurityToken(issuer, audience, claims, notBefore, expires, credentials);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
