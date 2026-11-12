@@ -151,7 +151,6 @@
     private bool? basemapReady;
     private bool disposed;
     private (decimal Lat, decimal Lon)[] previousStops = [];
-    private int previousSelection = -1;
     private bool hasMeasuredViewport;
     private int zoom = DefaultZoom;
     private (double X, double Y) center = Project(45.5019m, -73.5674m);
@@ -251,25 +250,16 @@
         StateHasChanged();
     }
 
-    /** Refit a changed route only when its stops would otherwise be out of view. */
+    /** Fits the first loaded itinerary; selection and marker edits preserve the camera. */
     protected override void OnParametersSet()
     {
         var positions = Stops.Select(stop => (stop.Lat, stop.Lon)).ToArray();
         if (!positions.SequenceEqual(previousStops))
         {
-            if (previousStops.Length == 0 || positions.Any(position => !IsVisible(ScreenPoint(position.Lat, position.Lon))))
+            if (previousStops.Length == 0)
                 FitStops();
             previousStops = positions;
         }
-
-        if (SelectedIndex != previousSelection && SelectedIndex >= 0 && SelectedIndex < Stops.Count)
-        {
-            var selected = Stops[SelectedIndex];
-            if (!IsVisible(ScreenPoint(selected.Lat, selected.Lon)))
-                SetCenter(Project(selected.Lat, selected.Lon));
-        }
-
-        previousSelection = SelectedIndex;
     }
 
     /**
