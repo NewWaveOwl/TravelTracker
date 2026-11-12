@@ -173,6 +173,15 @@ URL is loading, the previous trip's private fields and editing controls are
 hidden; a failed load restores the previous draft's own URL and displays an
 error. History and pasted saved links use these same loading rules.
 
+History (`/history` and Trip → **Open saved**) reads the owner's existing summary
+list over HTTP. Its responsive cards show names, date ranges, planned status
+and explicit **Open trip** links. Search, inclusive overlapping date ranges,
+status filters, ordering and ten-item pages are applied locally to that list;
+the service contract is unchanged. Default ordering puts completed trips first,
+newest first, followed by current/upcoming trips in start order. Loading, access
+denial, empty history, no filter matches and retryable read failures have
+separate messages. Account changes clear both summaries and filter state.
+
 In the form-only planner:
 
 - Places are picked from their owning catalogue and sent by public id: accommodations (`AccommodationsClient`), attractions (`AttractionsClient`) and transport stops (`TransportClient`, route points of type `transport_stop`). The first leg starts at an accommodation; a new leg starts where the previous one ended, and the traveller can change that, which shows the disconnected-leg error instead of repairing it. With the optional `catalogue.write` grant, the accommodation picker also offers "Add a new accommodation": a private place saved through the Accommodations service, then selected by the id the service confirms. Shared places stay on the accommodation workspace (#46).

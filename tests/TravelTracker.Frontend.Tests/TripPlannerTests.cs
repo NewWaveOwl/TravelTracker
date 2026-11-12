@@ -1336,6 +1336,7 @@ public sealed class TripPlannerTests : BunitContext
         var authentication = new SwitchableAuthentication(sessions);
         authentication.SignIn("test-token", Start.AddHours(1),
             withAccommodationCatalogue ? "catalogue.read" : "users.read users.write");
+        Services.AddSingleton<TimeProvider>(clock);
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         var directory = new ServiceDirectory(new Dictionary<string, string>
         {

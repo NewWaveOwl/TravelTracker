@@ -148,7 +148,7 @@ What each part of the system lets people create, read, update and delete.
 **Other screens**
 
 - **Trip details:** status, dates, legs, stays, visits and notes, with Edit, View on Map and Delete (with confirmation). A current-trip panel highlights the active or next planned event, based on the plan, not location.
-- **History:** past trips first, newest on top, with search, date filter and paging. Later, several trips can be shown together on the map.
+- **History:** readable trip names, date ranges, planned status and an explicit Open trip action. Past trips appear first, newest on top; local search, overlapping date range, status, ordering and paging apply to the owner's saved summaries. The same browser appears under Trip → Open saved. Empty history, no matching filters, loading and failed reads have distinct states. Later, several trips can be shown together on the map.
 - **User and Settings:** profile and password are separate forms; settings cover theme, default map view, preferred transport and time zone.
 - **Admin:** search accounts, change status with a reason, and see audit and cleanup progress. Nothing shows success until it is confirmed.
 - Banned users see a read-only notice and no editing controls.
