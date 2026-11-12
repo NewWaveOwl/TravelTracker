@@ -19,42 +19,59 @@ Open [TravelTracker](http://localhost:5100/) or go straight to [Map View](http:/
 
 ## Run the full app
 
-The C# launcher works on **Linux and Windows**. It builds and starts the frontend and all six APIs. You need:
+The C# launcher builds and starts the frontend and all six APIs. Use the **same command in PowerShell, Bash, or a macOS terminal**; PowerShell 7 is not required:
 
-- The Supabase **Session pooler** host and assigned database username from **Connect**, the database password, and the root certificate from **Database Settings**.
-- The Auth0 tenant domain and **frontend application Client ID**, plus the **machine-to-machine Client ID and secret** for an application granted `users.access` on `traveltracker-api`.
-- Six initialized `traveltracker_*` databases. If your team already shares a Supabase project, ask the maintainer for access to its existing databases.
+```sh
+dotnet run --file scripts/StartSupabaseDev.cs
+```
 
-Configure the frontend client using the [Auth0 setup guide](docs/frontend-auth0.md). This is a one-time step per machine. The guide covers the local callback URL and the grants for profile, catalogue, and trip access.
+On the first run, it asks for missing settings and saves the non-secret values in `.traveltracker-launch.json` in the repository root. This file is Git-ignored and belongs to this machine. On later runs, use the same command and enter the hidden secret prompts. Stop with **Ctrl+C**.
 
-### Linux (Bash)
+### First run on each machine
 
-Replace the example values with your team's settings. Keep the certificate path quoted if it contains spaces.
+Install the **.NET 10 SDK**, clone the repository, and run from its root. Obtain these settings from your team:
+
+| Launcher setting | Where to find it |
+| --- | --- |
+| Pooler host or PostgreSQL URI | Supabase project → Connect → Direct → **Session pooler**. Paste the Host or full URI. Input is hidden; any URI password is discarded and requested again privately. |
+| Database username | Same panel → User. Include the `.project-reference` suffix; use your assigned runtime role. |
+| Root certificate | Supabase Database Settings → SSL configuration. Download it and enter its path **on this computer**. Spaces and surrounding quotes are supported. |
+| Auth0 domain and frontend Client ID | Auth0 → Applications → your **frontend** application → Settings. A domain with `https://` is accepted too. |
+| Backend Client ID | Auth0 → Applications → your **machine-to-machine** application. It must be authorized for `users.access` on the API. |
+| Audience | Your Auth0 API identifier; defaults to `traveltracker-api`. |
+| Frontend type | Defaults to `spa` (Single Page Application with PKCE). Use `--setup` to select `regular` for a Regular Web Application, which also prompts for its frontend secret at launch. |
+
+The launcher asks for the **M2M client secret** and **database password** privately at every launch; neither is stored in the settings file. For the shared project, the six `traveltracker_*` databases must already exist. A new teammate needs access to those databases, not a new Supabase project.
+
+The frontend Auth0 application must allow callback `http://localhost:5100/signin-oidc`, logout `http://localhost:5100/`, and the API scopes in the [Auth0 setup guide](docs/frontend-auth0.md). Those provider settings are shared; local configuration and certificates are per machine. Existing `Auth0__Domain`, `Auth0__ClientId`, and `Authentication__Bearer__Audience` environment values override saved values. The launcher can also derive the domain from `Authentication__Bearer__Authority` when there is no saved domain.
+
+Trust the local Users API's HTTPS development certificate once:
+
+```sh
+dotnet dev-certs https --trust
+```
+
+On Linux, .NET HTTP clients may also need the OpenSSL trust directory set in the terminal that launches the app. For Ubuntu:
 
 ```bash
-export Authentication__Bearer__Authority='https://your-tenant.us.auth0.com/'
-export Authentication__Bearer__Issuer="$Authentication__Bearer__Authority"
-export Authentication__Bearer__Audience='traveltracker-api'
-
-dotnet dev-certs https --trust
 export SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:${SSL_CERT_DIR:-/usr/lib/ssl/certs}"
-
-dotnet run --file scripts/StartSupabaseDev.cs -- 'your-region.pooler.supabase.com' 'your-role.yourprojectref' 'your-m2m-client-id' '/path/to/supabase-ca.crt'
 ```
 
-The `SSL_CERT_DIR` example uses Ubuntu's OpenSSL certificate directory. For another Linux distribution, use the trust path shown by `dotnet dev-certs https --trust --verbose`.
+For other distributions, use the trust path reported by `dotnet dev-certs https --trust --verbose`. Do not disable certificate verification. Windows, Linux, and macOS use the same launcher; OS certificate trust, network access to Supabase/Auth0, and the local certificate path still need setup on each machine. Cross-platform startup must be verified on the target OS.
 
-### Windows (PowerShell)
+### Change or check settings
 
-```powershell
-$env:Authentication__Bearer__Authority = 'https://your-tenant.us.auth0.com/'
-$env:Authentication__Bearer__Issuer = $env:Authentication__Bearer__Authority
-$env:Authentication__Bearer__Audience = 'traveltracker-api'
+```sh
+# Review every setting; Enter keeps the current value. Save without starting services.
+dotnet run --file scripts/StartSupabaseDev.cs -- --setup
 
-dotnet dev-certs https --trust
-
-dotnet run --file scripts/StartSupabaseDev.cs -- 'your-region.pooler.supabase.com' 'your-role.yourprojectref' 'your-m2m-client-id' 'C:\path\to\supabase-ca.crt'
+# Validate saved settings and certificate path without network access or secret prompts.
+dotnet run --file scripts/StartSupabaseDev.cs -- --check-config
 ```
+
+Check mode validates configuration only, not the database password, certificate contents, Auth0 grants, or connectivity. Correct any named setting with `--setup`. For malformed JSON or unsupported fields, correct or rename the local settings file first. Never add passwords, client secrets, or tokens to this file.
+
+The old four-argument command remains supported, with Auth0 values taken from saved settings, environment variables, or prompts. `scripts/Start-SupabaseDev.ps1` remains a legacy launcher; use the C# command above for the guided setup on every OS.
 
 ### Sign in and save a trip
 
@@ -70,9 +87,18 @@ Create the six service databases once with [the bootstrap SQL](src/Database/supa
 psql -X -W "host=your-region.pooler.supabase.com port=5432 user=postgres.yourprojectref dbname=postgres sslmode=verify-full sslrootcert='/path/to/supabase-ca.crt'" -f src/Database/supabase-bootstrap.sql
 ```
 
-Add `--apply-migrations` to the end of the C# launcher command for the first schema setup or when there are new EF migrations. Have one maintainer run this step with a migration-capable login. Teammates use their assigned runtime login for everyday development.
+Run `dotnet run --file scripts/StartSupabaseDev.cs -- --apply-migrations` for the first schema setup or when there are new EF migrations. Have one maintainer run this step with a migration-capable login. Teammates use their assigned runtime login for everyday development.
 
 ## Tests and reference
+
+Offline launcher regression checks (run the help command first to build the launcher):
+
+```sh
+dotnet run --file scripts/StartSupabaseDev.cs -- --help
+dotnet run --file scripts/TestLauncher.cs
+```
+
+Application tests:
 
 ```sh
 dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"

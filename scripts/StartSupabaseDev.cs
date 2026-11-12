@@ -10,7 +10,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-const string usage = "dotnet run --file scripts/StartSupabaseDev.cs -- <pooler-host> <database-user> <auth0-m2m-client-id> <root-certificate> [--apply-migrations]";
+const string usage = "dotnet run --file scripts/StartSupabaseDev.cs [-- --setup | --check-config | --apply-migrations]\nLegacy: dotnet run --file scripts/StartSupabaseDev.cs -- <pooler-host> <database-user> <auth0-m2m-client-id> <root-certificate> [--apply-migrations]";
 const string usersUrl = "https://localhost:5101";
 const string frontendUrl = "http://localhost:5100";
 
@@ -20,9 +20,11 @@ if (args is ["--help"])
     return 0;
 }
 
-if (args.Length is not (4 or 5) || (args.Length == 5 && args[4] != "--apply-migrations") ||
-    !Regex.IsMatch(args[0], @"\A[a-z0-9-]+\.pooler\.supabase\.com\z") ||
-    !Regex.IsMatch(args[1], @"\A[a-z0-9_]+\.[a-z0-9]+\z") || string.IsNullOrWhiteSpace(args[2]))
+var applyMigrations = args.Contains("--apply-migrations");
+var setupOnly = args is ["--setup"];
+var checkOnly = args is ["--check-config"];
+var positional = args.Where(value => value != "--apply-migrations").ToArray();
+if (!setupOnly && !checkOnly && positional.Length is not (0 or 4))
 {
     Console.Error.WriteLine(usage);
     return 2;
@@ -54,17 +56,64 @@ try
     if (!File.Exists(solution))
         throw new InvalidOperationException("Run the launcher from the TravelTracker repository root.");
 
-    var rootCertificate = Path.GetFullPath(args[3]);
+    var configPath = Path.GetFullPath(Environment.GetEnvironmentVariable("TRAVELTRACKER_LAUNCH_CONFIG")
+        ?? Path.Combine(repo, ".traveltracker-launch.json"));
+    var config = LoadConfiguration(configPath);
+    if (positional.Length == 4 && !setupOnly && !checkOnly)
+    {
+        config["PoolerHost"] = positional[0];
+        config["DatabaseUser"] = positional[1];
+        config["BackendClientId"] = positional[2];
+        config["RootCertificate"] = positional[3];
+    }
+    var interactive = !checkOnly && !Console.IsInputRedirected;
+    var (poolerHost, connectionUser) = ParseConnection(Setting(config, "PoolerHost", null,
+        "Supabase > Connect > Direct > Session pooler: paste Host or connection URI (input hidden)",
+        interactive, hidden: true, cancellationToken: shutdown.Token));
+    config["PoolerHost"] = poolerHost;
+    if (connectionUser is not null)
+        config["DatabaseUser"] = connectionUser;
+    var databaseUser = Setting(config, "DatabaseUser", null,
+        "Supabase Session pooler User (include the .project-reference suffix)", interactive);
+    if (!Regex.IsMatch(databaseUser, @"\A[a-z0-9_]+\.[a-z0-9]+\z"))
+        throw new InvalidOperationException("DatabaseUser must be the Session pooler username including its .project-reference suffix.");
+    var backendClientId = Setting(config, "BackendClientId", null,
+        "Auth0 > Applications > machine-to-machine application > Client ID", interactive);
+    var rootCertificate = Path.GetFullPath(Setting(config, "RootCertificate", null,
+        "Supabase root certificate file path on THIS machine (download from Database Settings > SSL)", interactive).Trim('"', '\''));
     if (!File.Exists(rootCertificate))
-        throw new InvalidOperationException("The Supabase root certificate file does not exist.");
-
-    var authorityValue = Environment.GetEnvironmentVariable("Authentication__Bearer__Authority");
-    var issuer = Environment.GetEnvironmentVariable("Authentication__Bearer__Issuer");
-    var audience = Environment.GetEnvironmentVariable("Authentication__Bearer__Audience");
-    if (!Uri.TryCreate(authorityValue, UriKind.Absolute, out var authority) || authority.Scheme != Uri.UriSchemeHttps ||
-        authority.UserInfo.Length != 0 || authority.Query.Length != 0 || authority.Fragment.Length != 0 ||
-        string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience))
-        throw new InvalidOperationException("Set the Auth0 bearer authority (HTTPS), issuer, and audience before starting the stack.");
+        throw new InvalidOperationException("RootCertificate file does not exist on this machine. Run with --setup to correct its path.");
+    config["RootCertificate"] = rootCertificate;
+    var domain = Setting(config, "Auth0Domain", "Auth0__Domain",
+        "Auth0 > frontend application > Settings > Domain (for example dev-example.us.auth0.com)", interactive,
+        fallback: Environment.GetEnvironmentVariable("Authentication__Bearer__Authority"));
+    domain = domain.TrimEnd('/');
+    if (domain.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        domain = domain[8..];
+    if (!Regex.IsMatch(domain, @"\A[a-z0-9]+(?:[a-z0-9.-]*[a-z0-9])?\z", RegexOptions.IgnoreCase) ||
+        !domain.Contains('.') || domain.Contains(".."))
+        throw new InvalidOperationException("Auth0Domain must be your Auth0 tenant hostname, without a path, query, or credentials.");
+    config["Auth0Domain"] = domain;
+    var frontendClientId = Setting(config, "FrontendClientId", "Auth0__ClientId",
+        "Auth0 > frontend application > Settings > Client ID (different from M2M)", interactive);
+    var audience = Setting(config, "Audience", "Authentication__Bearer__Audience",
+        "Auth0 API identifier", interactive, fallback: "traveltracker-api");
+    var frontendType = Setting(config, "FrontendType", null,
+        "Frontend Auth0 application type: spa or regular", interactive, fallback: "spa").ToLowerInvariant();
+    if (frontendType is not ("spa" or "regular"))
+        throw new InvalidOperationException("FrontendType must be spa or regular.");
+    config["FrontendType"] = frontendType;
+    var authority = new Uri($"https://{domain}/");
+    if (!checkOnly)
+    {
+        await SaveConfigurationAsync(configPath, config, shutdown.Token);
+        Console.WriteLine("Saved local launch settings. Passwords, client secrets, and tokens are never saved.");
+    }
+    if (setupOnly || checkOnly)
+    {
+        Console.WriteLine("Launch configuration is valid. Database access and Auth0 credentials have not been tested.");
+        return 0;
+    }
 
     var listeners = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners();
     if (listeners.Any(listener => services.Any(service => service.Port == listener.Port)))
@@ -74,10 +123,12 @@ try
         "Trust the Users development certificate with dotnet dev-certs https --trust.", shutdown.Token);
     await RunDotnetAsync(repo, ["build", solution, "--configuration", "Debug"], "TravelTracker build failed.", shutdown.Token);
 
-    var (token, subject, expiry) = await GetServiceTokenAsync(authority, args[2], audience, shutdown.Token);
+    var frontendSecret = frontendType == "regular"
+        ? ReadSecret("Auth0 FRONTEND client secret (Regular Web Application)", shutdown.Token) : null;
+    var (token, subject, expiry) = await GetServiceTokenAsync(authority, backendClientId, audience, shutdown.Token);
     var connection = new DbConnectionStringBuilder
     {
-        ["Host"] = args[0], ["Port"] = 5432, ["Username"] = args[1],
+        ["Host"] = poolerHost, ["Port"] = 5432, ["Username"] = databaseUser,
         ["SSL Mode"] = "VerifyFull", ["Root Certificate"] = rootCertificate, ["Maximum Pool Size"] = 5,
         ["Password"] = ReadSecret("Supabase database password", shutdown.Token)
     };
@@ -98,11 +149,21 @@ try
         settings["ASPNETCORE_ENVIRONMENT"] = "Development";
         settings["DOTNET_ENVIRONMENT"] = "Development";
         settings["ASPNETCORE_URLS"] = origin;
+        settings["Authentication__Bearer__Authority"] = authority.AbsoluteUri;
+        settings["Authentication__Bearer__Issuer"] = authority.AbsoluteUri;
+        settings["Authentication__Bearer__Audience"] = audience;
+        if (frontend)
+        {
+            settings["Auth0__Domain"] = domain;
+            settings["Auth0__ClientId"] = frontendClientId;
+            settings["Auth0__Audience"] = audience;
+            settings["Auth0__ClientSecret"] = frontendSecret ?? "";
+        }
         if (!frontend)
         {
             connection["Database"] = "traveltracker_" + service.ToLowerInvariant();
             settings[$"ConnectionStrings__{service}"] = connection.ConnectionString;
-            settings["Database__ApplyMigrations"] = (args.Length == 5).ToString();
+            settings["Database__ApplyMigrations"] = applyMigrations.ToString();
             settings["Database__SeedExamples"] = "false";
         }
 
@@ -153,6 +214,111 @@ finally
         StopProcess(process);
         process.Dispose();
     }
+}
+
+/**
+ * Reads only the supported non-secret local settings.
+ * @param path Local JSON configuration file.
+ * @return Settings, or an empty configuration on first run.
+ */
+static Dictionary<string, string> LoadConfiguration(string path)
+{
+    if (!File.Exists(path))
+        return new();
+    try
+    {
+        var config = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(path))
+            ?? throw new InvalidOperationException("Local launch settings must be a JSON object.");
+        string[] allowed = ["PoolerHost", "DatabaseUser", "BackendClientId", "RootCertificate",
+            "Auth0Domain", "FrontendClientId", "Audience", "FrontendType"];
+        if (config.Keys.Any(key => !allowed.Contains(key)))
+            throw new InvalidOperationException("Local launch settings contain unsupported fields. Store only non-secret launcher settings.");
+        return config;
+    }
+    catch (JsonException)
+    {
+        throw new InvalidOperationException("Local launch settings contain invalid JSON. Correct or rename .traveltracker-launch.json, then run --setup.");
+    }
+}
+
+/**
+ * Resolves a setting from the environment, saved values, or an interactive first-run prompt.
+ * @param config Non-secret settings updated with the chosen value.
+ * @param key Setting name.
+ * @param environment Optional environment override.
+ * @param prompt Instructions shown when input is required.
+ * @param interactive Whether prompting is allowed.
+ * @param fallback Default used when no saved value exists.
+ * @param hidden Whether typed input may contain a connection-string password.
+ * @param cancellationToken Cancels secret-style input.
+ * @return The chosen nonempty setting.
+ */
+string Setting(Dictionary<string, string> config, string key, string? environment, string prompt,
+    bool interactive, string? fallback = null, bool hidden = false, CancellationToken cancellationToken = default)
+{
+    var value = (environment is null ? null : Environment.GetEnvironmentVariable(environment))
+        ?? config.GetValueOrDefault(key) ?? fallback;
+    if (interactive && (setupOnly || string.IsNullOrWhiteSpace(value)))
+    {
+        // Never echo a saved URI: old or hand-edited input may contain a password.
+        var defaultHint = string.IsNullOrWhiteSpace(value) ? "" : hidden ? " [Enter keeps saved value]" : $" [{value}]";
+        var label = prompt + defaultHint;
+        if (hidden)
+            value = ReadSecret(label, cancellationToken, value);
+        else
+        {
+            Console.Write(label + ": ");
+            var input = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(input))
+                value = input.Trim();
+        }
+    }
+    if (string.IsNullOrWhiteSpace(value) || (key != "PoolerHost" && value.Contains("YOUR-", StringComparison.OrdinalIgnoreCase)) ||
+        value.Contains("your-tenant", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException($"{key} is missing or contains an example placeholder. {prompt}. Run --setup in an interactive terminal.");
+    config[key] = value;
+    return value;
+}
+
+/**
+ * Extracts session-pooler host and username while discarding any URI password.
+ * @param input A hostname or PostgreSQL URI.
+ * @return The validated pooler host and optional URI username.
+ */
+static (string Host, string? User) ParseConnection(string input)
+{
+    var host = input.Trim();
+    string? user = null;
+    if (host.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase) || host.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase))
+    {
+        // Supabase's [YOUR-PASSWORD] placeholder is not URI syntax; discard the password before parsing.
+        var schemeEnd = host.IndexOf("://", StringComparison.Ordinal) + 3;
+        var at = host.LastIndexOf('@');
+        if (at <= schemeEnd)
+            throw new InvalidOperationException("The PostgreSQL URI must contain a username and host. Copy the Session pooler URI from Supabase.");
+        var credentials = host[schemeEnd..at];
+        user = Uri.UnescapeDataString(credentials.Split(':', 2)[0]);
+        if (!Uri.TryCreate("postgresql://" + host[(at + 1)..], UriKind.Absolute, out var uri) || uri.Port is not (-1 or 5432))
+            throw new InvalidOperationException("Use the Supabase Session pooler on port 5432, rather than the transaction pooler.");
+        host = uri.Host;
+    }
+    if (!Regex.IsMatch(host, @"\A[a-z0-9-]+\.pooler\.supabase\.com\z"))
+        throw new InvalidOperationException("PoolerHost must end in .pooler.supabase.com. In Supabase choose Connect > Direct > Session pooler; the db.* direct host will not work here.");
+    return (host, user);
+}
+
+/**
+ * Atomically saves the normalized non-secret settings after validation.
+ * @param path Local configuration destination.
+ * @param config Validated configuration containing no credentials.
+ * @param cancellationToken Cancels the write.
+ * @return A task completing after replacement succeeds.
+ */
+static async Task SaveConfigurationAsync(string path, Dictionary<string, string> config, CancellationToken cancellationToken)
+{
+    var temporary = path + ".tmp";
+    await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
+    File.Move(temporary, path, overwrite: true);
 }
 
 static ProcessStartInfo Dotnet(string folder, params string[] arguments)
@@ -261,7 +427,14 @@ static async Task<(string Token, string Subject, DateTimeOffset Expiry)> GetServ
     return (token, subject, expiry);
 }
 
-static string ReadSecret(string prompt, CancellationToken cancellationToken)
+/**
+ * Reads terminal input without echoing credentials or connection-string passwords.
+ * @param prompt Instructions containing no secret values.
+ * @param cancellationToken Cancels input on shutdown.
+ * @param fallback Optional saved value retained on Enter during setup.
+ * @return The entered value or the saved fallback.
+ */
+static string ReadSecret(string prompt, CancellationToken cancellationToken, string? fallback = null)
 {
     if (Console.IsInputRedirected)
         throw new InvalidOperationException("Run the launcher in an interactive terminal so it can prompt for secrets.");
@@ -280,5 +453,5 @@ static string ReadSecret(string prompt, CancellationToken cancellationToken)
             value.Append(key.KeyChar);
     }
     Console.WriteLine();
-    return value.Length > 0 ? value.ToString() : throw new InvalidOperationException($"{prompt} is required.");
+    return value.Length > 0 ? value.ToString() : fallback ?? throw new InvalidOperationException($"{prompt} is required.");
 }
