@@ -52,6 +52,7 @@ public partial class NewTrip : IAsyncDisposable
     bool showMap;
     bool browseAccommodations;
     bool stopsStep;
+    bool toolsOpen = true;
     bool savedReview;
     MapTool? mapTool;
     (string Code, string Label)? pendingMode;
@@ -128,8 +129,10 @@ public partial class NewTrip : IAsyncDisposable
 
     ElementReference durationHoursInput;
     ElementReference stopNameInput;
+    ElementReference toolsToggle;
     bool focusDuration;
     bool focusStopDetails;
+    bool focusToolsToggle;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -144,6 +147,11 @@ public partial class NewTrip : IAsyncDisposable
         {
             focusStopDetails = false;
             await stopNameInput.FocusAsync();
+        }
+        if (focusToolsToggle)
+        {
+            focusToolsToggle = false;
+            await toolsToggle.FocusAsync();
         }
         if (firstRender)
             await undoShortcut!;
@@ -487,6 +495,7 @@ public partial class NewTrip : IAsyncDisposable
 
     void ShowStops()
     {
+        toolsOpen = true;
         stopsStep = true;
         review = false;
         savedReview = false;
@@ -504,6 +513,7 @@ public partial class NewTrip : IAsyncDisposable
 
     void OpenMarkers()
     {
+        toolsOpen = true;
         stopsStep = true;
         mapTool = MapTool.Markers;
         markerType = null;
@@ -516,6 +526,13 @@ public partial class NewTrip : IAsyncDisposable
     }
 
     void OpenTransport() => ShowStops();
+
+    /** Slides the editing panel without resetting its selection, buffers or connections. */
+    void ToggleTools()
+    {
+        toolsOpen = !toolsOpen;
+        focusToolsToggle = !toolsOpen;
+    }
 
     void CancelConnection()
     {
@@ -783,6 +800,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Opens an isolated edit buffer for the selected stop without moving the map. */
     void EditSelectedStop()
     {
+        toolsOpen = true;
         var marker = draft.Stops[selected];
         editingMarker = marker;
         editingStopDetails = true;

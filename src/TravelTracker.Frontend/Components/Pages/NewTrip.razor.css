@@ -102,6 +102,12 @@
 .map-workspace .trip-chain h1 { font-size: clamp(20px, 1.65vw, 32px); margin: 0; }
 .map-workspace .trip-chain input.map-trip-name { font: inherit; background: #fffdf5; color: #263a2a; }
 .map-workspace .trip-chain h2 { font-size: clamp(16px, 1.4vw, 27px); margin: 0; }
+.map-workspace .trip-chain .trip-basics, .map-workspace .trip-chain .trip-open { color: var(--forest); }
+.map-workspace .trip-work { transition: transform .22s ease, opacity .22s ease, visibility .22s; }
+.map-workspace .trip-work.tools-collapsed { transform: translateX(24px); opacity: 0; visibility: hidden; pointer-events: none; max-height: 0; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+    .map-workspace .trip-work { transition: none; }
+}
 .trip-eyebrow { text-transform: uppercase; font-size: clamp(11px, .95vw, 18px) !important; }
 .map-workspace .trip-steps { gap: 5px; }
 .map-workspace .trip-steps button { flex: 1; white-space: nowrap; }

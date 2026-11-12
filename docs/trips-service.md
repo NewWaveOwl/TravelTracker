@@ -156,6 +156,17 @@ draft receives a saved trip link, its browser copy is also available from that
 link. Dragging a pin in Map View review returns to editing
 and records an unsaved change.
 
+Map View keeps essential trip settings beside the itinerary. **Map tools**
+opens or closes the stop/connection editor without dropping the current edit
+buffer or selection. Marker and transport controls reopen this panel, and its
+slide transition respects reduced-motion preferences. Select a marker to edit
+its name, address and coordinates; confirm applies the draft and Cancel leaves
+the original place intact. Changed saved places are resolved through **Save
+catalogue entries** before saving the trip, so reopening uses the confirmed
+location snapshot. Selecting or editing a marker preserves the map camera;
+**Fit stops** remains an explicit navigation action. Time inputs show minutes,
+and only changed times are normalized to minute precision.
+
 In the form-only planner:
 
 - Places are picked from their owning catalogue and sent by public id: accommodations (`AccommodationsClient`), attractions (`AttractionsClient`) and transport stops (`TransportClient`, route points of type `transport_stop`). The first leg starts at an accommodation; a new leg starts where the previous one ended, and the traveller can change that, which shows the disconnected-leg error instead of repairing it. With the optional `catalogue.write` grant, the accommodation picker also offers "Add a new accommodation": a private place saved through the Accommodations service, then selected by the id the service confirms. Shared places stay on the accommodation workspace (#46).
