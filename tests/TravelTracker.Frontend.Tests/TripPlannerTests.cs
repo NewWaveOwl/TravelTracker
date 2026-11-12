@@ -37,6 +37,27 @@ public sealed class TripPlannerTests : BunitContext
     static readonly TripDto Saved = new(TripId, "Weekend", "America/Toronto", Start, Start.AddHours(4),
         false, [new(1, Hotel, Museum, Train, Start.AddHours(1), Start.AddHours(2))]);
 
+    [Fact]
+    public async Task SameTypePaletteStartsANewMarkerInsteadOfEditingTheSelectedSavedStop()
+    {
+        Configure((_, _) => Task.FromResult(Json(Saved)));
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
+        Assert.False(canvas.Instance.CanPick);
+
+        Click(page, "Attraction");
+
+        Assert.True(canvas.Instance.CanPick);
+        Assert.Equal("", page.Find(".trip-place input[type=text]").GetAttribute("value"));
+        Assert.Equal(Museum, canvas.Instance.Stops[1]);
+        page.Find("button[aria-label='Pick map center']").Click();
+        Assert.Equal(3, canvas.Instance.Stops.Count);
+        Assert.Equal(Museum, canvas.Instance.Stops[1]);
+        Assert.Equal(Guid.Empty, canvas.Instance.Stops[2].PlaceId);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

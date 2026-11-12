@@ -772,7 +772,7 @@ public partial class NewTrip : IAsyncDisposable
 
     void SelectMarker(string type)
     {
-        if (showMap && (!placing || type != markerType))
+        if (showMap && (editingStopDetails || !placing || type != markerType))
             BeginPlacement();
         if (type == markerType)
             return;
