@@ -37,6 +37,49 @@ public sealed class TripPlannerTests : BunitContext
     static readonly TripDto Saved = new(TripId, "Weekend", "America/Toronto", Start, Start.AddHours(4),
         false, [new(1, Hotel, Museum, Train, Start.AddHours(1), Start.AddHours(2))]);
 
+    [Fact]
+    public void MinuteInputsPreserveUntouchedSavedSecondsAndNormalizeEditedTimes()
+    {
+        var instant = Start.AddSeconds(37).AddTicks(1234);
+        var trip = Saved with
+        {
+            Start = instant, End = instant.AddHours(4),
+            Legs = [new(1, Hotel, Museum, Train, instant.AddHours(1), instant.AddHours(2))]
+        };
+        var writes = new List<SaveTripRequest>();
+        Configure(async (request, token) =>
+        {
+            if (request.Method == HttpMethod.Get) return Json(trip);
+            var body = (await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token))!;
+            writes.Add(body);
+            trip = trip with { Name = body.Name, Start = body.Start, End = body.End,
+                Legs = [trip.Legs[0] with { Departure = body.Legs[0].Departure, Arrival = body.Legs[0].Arrival }] };
+            return Json(trip);
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var inputs = page.FindAll(".trip-basics input[type=datetime-local]");
+        Assert.All(inputs, input => Assert.Equal("60", input.GetAttribute("step")));
+        Assert.Equal("2026-11-14T09:00", inputs[0].GetAttribute("value"));
+        page.Find(".trip-basics input").Change("Renamed trip");
+        Click(page, "Review on map");
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.Single(writes));
+        Assert.Equal(instant, writes[0].Start);
+        Assert.Equal(instant.AddHours(1), writes[0].Legs[0].Departure);
+
+        Click(page, "Back to editor");
+        page.Find("button[aria-label^='Edit connection 1:']").Click();
+        var times = page.FindAll(".leg-panel input[type=datetime-local]");
+        Assert.All(times, input => Assert.Equal("60", input.GetAttribute("step")));
+        times[0].Change("2026-11-14T10:05:59.123");
+        Click(page, "Review on map");
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.Equal(2, writes.Count));
+        Assert.Equal(Start.AddHours(1).AddMinutes(5), writes[1].Legs[0].Departure);
+        Assert.Equal(instant.AddHours(2), writes[1].Legs[0].Arrival);
+    }
+
     [Theory]
     [InlineData(false, "sessionStorage", "localStorage")]
     [InlineData(true, "localStorage", "sessionStorage")]

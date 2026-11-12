@@ -68,12 +68,12 @@ else
             </div>
             <div class="trip-field">
                 <label for="trip-start">Trip starts *</label>
-                <input id="trip-start" type="datetime-local" aria-invalid="@Invalid("start")" value="@draft.Start" @onchange="change => draft.Start = change.Value?.ToString() ?? string.Empty" />
+                <input id="trip-start" type="datetime-local" step="60" aria-invalid="@Invalid("start")" value="@draft.Start" @onchange="change => draft.Start = change.Value?.ToString() ?? string.Empty" />
                 <FieldError Messages="@Messages("start")" />
             </div>
             <div class="trip-field">
                 <label for="trip-end">Trip ends *</label>
-                <input id="trip-end" type="datetime-local" aria-invalid="@Invalid("end")" value="@draft.End" @onchange="change => draft.End = change.Value?.ToString() ?? string.Empty" />
+                <input id="trip-end" type="datetime-local" step="60" aria-invalid="@Invalid("end")" value="@draft.End" @onchange="change => draft.End = change.Value?.ToString() ?? string.Empty" />
                 <FieldError Messages="@Messages("end")" />
             </div>
             <fieldset class="trip-kind">
@@ -111,12 +111,12 @@ else
                     </div>
                     <div class="trip-field">
                         <label for="@($"leg-{position}-departure")">Departure *</label>
-                        <input id="@($"leg-{position}-departure")" type="datetime-local" aria-invalid="@Invalid($"legs[{position}].departure")" value="@leg.Departure" @onchange="change => leg.Departure = change.Value?.ToString() ?? string.Empty" />
+                        <input id="@($"leg-{position}-departure")" type="datetime-local" step="60" aria-invalid="@Invalid($"legs[{position}].departure")" value="@leg.Departure" @onchange="change => leg.Departure = change.Value?.ToString() ?? string.Empty" />
                         <FieldError Messages="@Messages($"legs[{position}].departure")" />
                     </div>
                     <div class="trip-field">
                         <label for="@($"leg-{position}-arrival")">Arrival *</label>
-                        <input id="@($"leg-{position}-arrival")" type="datetime-local" aria-invalid="@Invalid($"legs[{position}].arrival")" value="@leg.Arrival" @onchange="change => leg.Arrival = change.Value?.ToString() ?? string.Empty" />
+                        <input id="@($"leg-{position}-arrival")" type="datetime-local" step="60" aria-invalid="@Invalid($"legs[{position}].arrival")" value="@leg.Arrival" @onchange="change => leg.Arrival = change.Value?.ToString() ?? string.Empty" />
                         <FieldError Messages="@Messages($"legs[{position}].arrival")" />
                     </div>
                     <button type="button" class="secondary" @onclick="() => RemoveLeg(position)">Remove leg @(position + 1)</button>

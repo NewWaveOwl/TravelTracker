@@ -156,7 +156,7 @@ public partial class NewTrip : IAsyncDisposable
     static readonly string[] LocalDateTimeFormats = ["yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.FFFFFFF"];
 
     static string DateTimeValue(DateTime? value) =>
-        value?.ToString("yyyy-MM-ddTHH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture) ?? "";
+        value?.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture) ?? "";
 
     static string OffsetValue(TimeSpan offset) => offset.ToString("c", CultureInfo.InvariantCulture);
 
@@ -185,7 +185,7 @@ public partial class NewTrip : IAsyncDisposable
         if (string.IsNullOrEmpty(input))
             EditTripValue(previous, null, apply);
         else if (DateTime.TryParseExact(input, LocalDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-            EditTripValue(previous, date, apply);
+            EditTripValue(previous, new DateTime(date.Ticks - date.Ticks % TimeSpan.TicksPerMinute, date.Kind), apply);
         else
         {
             errors = ["Enter a valid date and time."];
