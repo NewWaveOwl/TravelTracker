@@ -38,6 +38,59 @@ public sealed class TripPlannerTests : BunitContext
         false, [new(1, Hotel, Museum, Train, Start.AddHours(1), Start.AddHours(2))]);
 
     [Fact]
+    public async Task MarkerEditingKeepsCancelAndInvalidBuffersAndSavesTheConfirmedNewPlace()
+    {
+        var renamedId = Guid.NewGuid();
+        var name = "Museum <script>alert(1)</script>";
+        SaveTripRequest? savedRequest = null;
+        var failSave = true;
+        Configure(async (request, token) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/v1/attractions")
+            {
+                object result = request.Method == HttpMethod.Get ? Array.Empty<AttractionDto>()
+                    : new AttractionDto(renamedId, name, null, null, "New address", Museum.Lat, Museum.Lon, 0);
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(result) };
+            }
+            if (request.Method == HttpMethod.Get) return Json(Saved);
+            savedRequest = (await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token))!;
+            return failSave ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                : Json(Saved with { Legs = [Saved.Legs[0] with { To = Museum with { PlaceId = renamedId, Name = name, Address = "New address" } }] });
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
+        Assert.Contains("Edit stop details", page.Markup);
+        Assert.False(canvas.Instance.CanPick);
+        page.Find(".trip-place input[type=text]").Change("Discard me");
+        Click(page, "Cancel");
+        Assert.Equal(Museum, canvas.Instance.Stops[1]);
+        await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
+        page.Find(".trip-place input[type=text]").Change("");
+        page.Find(".trip-place").Submit();
+        Assert.Contains("Enter a place name", page.Find("[role=alert]").TextContent);
+        Assert.Equal(Museum, canvas.Instance.Stops[1]);
+        page.Find(".trip-place input[type=text]").Change(name);
+        page.FindAll(".trip-place input[type=text]")[1].Change("New address");
+        page.Find(".trip-place").Submit();
+        Assert.Equal(Guid.Empty, canvas.Instance.Stops[1].PlaceId);
+        Assert.Equal(name, page.FindAll(".trip-stop strong")[1].TextContent);
+        Assert.Empty(page.FindAll("script"));
+        Click(page, "Review on map");
+        Click(page, "Save catalogue entries");
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.NotNull(savedRequest));
+        Assert.Equal(renamedId, savedRequest!.Legs[0].To.PlaceId);
+        Assert.Contains(name, page.FindAll(".trip-stop strong")[1].TextContent);
+        failSave = false;
+        Click(page, "Retry save");
+        page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Markup));
+        Assert.Equal(renamedId, canvas.Instance.Stops[1].PlaceId);
+        Assert.Equal(name, canvas.Instance.Stops[1].Name);
+    }
+
+    [Fact]
     public void MinuteInputsPreserveUntouchedSavedSecondsAndNormalizeEditedTimes()
     {
         var instant = Start.AddSeconds(37).AddTicks(1234);

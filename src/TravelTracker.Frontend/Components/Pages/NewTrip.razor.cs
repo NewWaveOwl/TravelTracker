@@ -64,6 +64,7 @@ public partial class NewTrip : IAsyncDisposable
     bool searched;
     bool placing;
     TripPlannerDraft.Stop? editingMarker;
+    bool editingStopDetails;
     int markerNumber;
     bool saveFailed;
     string? observedPath;
@@ -126,7 +127,9 @@ public partial class NewTrip : IAsyncDisposable
     }
 
     ElementReference durationHoursInput;
+    ElementReference stopNameInput;
     bool focusDuration;
+    bool focusStopDetails;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -136,6 +139,11 @@ public partial class NewTrip : IAsyncDisposable
         {
             focusDuration = false;
             await durationHoursInput.FocusAsync();
+        }
+        if (focusStopDetails)
+        {
+            focusStopDetails = false;
+            await stopNameInput.FocusAsync();
         }
         if (firstRender)
             await undoShortcut!;
@@ -605,7 +613,11 @@ public partial class NewTrip : IAsyncDisposable
 
         selected = index;
         if (pendingMode is not { } mode)
+        {
+            if (showMap && !review)
+                EditSelectedStop();
             return;
+        }
 
         if (connectionFrom is not { } from)
         {
@@ -761,10 +773,33 @@ public partial class NewTrip : IAsyncDisposable
     void ClearMarkerDetails()
     {
         editingMarker = null;
+        editingStopDetails = false;
         placeName = "";
         placeAddress = "";
         latitude = null;
         longitude = null;
+    }
+
+    /** Opens an isolated edit buffer for the selected stop without moving the map. */
+    void EditSelectedStop()
+    {
+        var marker = draft.Stops[selected];
+        editingMarker = marker;
+        editingStopDetails = true;
+        focusStopDetails = true;
+        placing = true;
+        stopsStep = true;
+        mapTool = MapTool.Markers;
+        markerType = marker.Place.Type;
+        (placeName, placeAddress, latitude, longitude) =
+            (marker.Place.Name, marker.Place.Address, marker.Place.Lat, marker.Place.Lon);
+    }
+
+    /** Discards unconfirmed marker fields while preserving the itinerary's original place. */
+    void CancelMarkerDetails()
+    {
+        placing = false;
+        ClearMarkerDetails();
     }
 
     /** Starts placement for a palette marker dropped on the map. */
@@ -809,6 +844,8 @@ public partial class NewTrip : IAsyncDisposable
         if (showMap && editingMarker is { } marker)
         {
             var place = marker.Place with { Name = placeName.Trim(), Address = placeAddress.Trim(), Lat = position.Lat, Lon = position.Lon };
+            if (place != marker.Place)
+                place = place with { PlaceId = Guid.Empty };
             EditTripValue(marker.Place, place, value => draft.UpdatePlace(marker, value));
             return;
         }

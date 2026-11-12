@@ -15,7 +15,7 @@
         <div class="map-surface">
             <TripMapCanvas Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())" SelectedIndex="selected"
                            Legs="MapLegs" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<(int, bool)>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
-                           CanPick="@(!review && !busy && mapTool == MapTool.Markers && placing)"
+                           CanPick="@(!review && !busy && mapTool == MapTool.Markers && placing && !editingStopDetails)"
                            StopMoved="@(!busy && (showMap || !review) ? EventCallback.Factory.Create<(int, decimal, decimal)>(this, MoveMarker) : default)"
                            StopRemoved="@(!review && !busy ? EventCallback.Factory.Create<int>(this, RemoveStop) : default)" AllowMarkerDrop="@(showMap && !review && !busy)" MarkerDropped="PlaceDroppedMarker" FullScreen="true" />
         </div>
@@ -437,19 +437,19 @@
 
     RenderFragment MarkerEditor => @<div>
                 <section class="trip-panel marker-panel" aria-labelledby="marker-panel-title">
-                    <h2 id="marker-panel-title">@(showMap ? "Add a marker" : "Markers")</h2>
+                    <h2 id="marker-panel-title">@(editingStopDetails ? "Edit stop details" : showMap ? "Add a marker" : "Markers")</h2>
                     <fieldset class="marker-fields" disabled="@busy">
                     @if (!showMap)
                     {
                         @MarkerPalette
                     }
-                    else
+                    else if (!editingStopDetails)
                     {
                         <p>Choose a marker, then click the map or drag it onto the map. While placing a marker, right-drag to pan.</p>
                     }
                     @if (markerType is { } activeMarker)
                     {
-                        @if (showMap && draft.Stops.Count > 0)
+                        @if (showMap && !editingStopDetails && draft.Stops.Count > 0)
                         {
                             <label>Insert after
                                 <select @bind="insertAfter">
@@ -460,6 +460,8 @@
                                 </select>
                             </label>
                         }
+                        @if (!editingStopDetails)
+                        {
                         <form class="trip-search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
                             <label>Search saved @MarkerLabel(activeMarker).ToLowerInvariant() locations <input type="search" @bind="searchValue" placeholder="Enter a place name" /></label>
                             <button type="submit">Search</button>
@@ -480,6 +482,7 @@
                                 </ul>
                             }
                         }
+                        }
                         @if (!placing)
                         {
                             <button type="button" class="secondary" @onclick="BeginPlacement">@(showMap ? "Pick a location on the map" : "Enter a location")</button>
@@ -487,20 +490,20 @@
                         else
                         {
                             <form class="trip-place" @onsubmit="AddPickedStop" @onsubmit:preventDefault>
-                                <p>@(showMap ? "Select a point on the map or enter its coordinates." : "Enter the coordinates for this place.")</p>
+                                <p>@(editingStopDetails ? "Confirm your changes to update this stop. Changed locations must be saved to the catalogue before saving the trip." : showMap ? "Select a point on the map or enter its coordinates." : "Enter the coordinates for this place.")</p>
                                 @if (activeMarker == "transport_stop")
                                 {
                                     <p>Saving this trip adds new stops to the shared location catalogue.</p>
                                 }
                                 <div class="trip-fields">
-                                    <label>Place name <input type="text" required @bind="placeName" /></label>
+                                    <label>Place name <input @ref="stopNameInput" type="text" required @bind="placeName" /></label>
                                     <label>Address (optional) <input type="text" @bind="placeAddress" /></label>
                                     <label>Latitude <input type="number" min="-90" max="90" step="any" required @bind="latitude" /></label>
                                     <label>Longitude <input type="number" min="-180" max="180" step="any" required @bind="longitude" /></label>
                                 </div>
                                 <div class="trip-actions">
                                     <button type="submit">@(editingMarker is null ? $"Add {MarkerLabel(activeMarker).ToLowerInvariant()}" : "Apply marker details")</button>
-                                    <button type="button" class="secondary" @onclick="() => placing = false">Cancel</button>
+                                    <button type="button" class="secondary" @onclick="CancelMarkerDetails">Cancel</button>
                                 </div>
                             </form>
                         }
