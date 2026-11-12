@@ -2,14 +2,34 @@
 @page "/new-trip/{TripId:guid}"
 @page "/map"
 @page "/map/{TripId:guid}"
+@page "/trip"
+@page "/trip/{TripId:guid}"
 @using TravelTracker.Frontend.Components.Accommodations
 @using TravelTracker.Frontend.Components.Trips
 @using TravelTracker.Frontend.Features.Trips
 
-<PageTitle>@(showMap ? TripTitle : "Trip Editor") | TravelTracker</PageTitle>
-<NavigationLock ConfirmExternalNavigation="dirty" OnBeforeInternalNavigation="ConfirmDraftNavigationAsync" />
+<PageTitle>@(openingRoute ? "Opening trip" : showMap ? TripTitle : "Trip Editor") | TravelTracker</PageTitle>
+<NavigationLock ConfirmExternalNavigation="HasUnsavedWork" OnBeforeInternalNavigation="ConfirmDraftNavigationAsync" />
 
 <div @ref="plannerElement" class="trip-planner @(MapVisible ? "map-workspace" : null)">
+@if (openingRoute)
+{
+    <h1>Trip</h1>
+    <p role="status" aria-live="polite">Opening saved trip…</p>
+}
+else
+{
+    <div class="trip-workspace-actions" aria-label="Trip workspace">
+        <button type="button" disabled="@busy" @onclick="CreateNewAsync">Create new</button>
+        <button type="button" class="secondary" disabled="@busy" aria-expanded="@Pressed(browseSaved)"
+                aria-controls="saved-trip-browser" @onclick="() => browseSaved = !browseSaved">Open saved</button>
+    </div>
+    @if (browseSaved)
+    {
+        <section id="saved-trip-browser" class="trip-saved-browser" aria-label="Open saved trip">
+            <History Embedded="true" />
+        </section>
+    }
     @if (MapVisible)
     {
         <div class="map-surface">
@@ -327,6 +347,7 @@
             }
         </div>
     </div>
+}
 </div>
 
 @code {
@@ -363,6 +384,7 @@
     RenderFragment OpenSavedTrip => @<div>
         <details class="trip-open">
             <summary>Open a saved trip</summary>
+            <a href="history">Browse saved trips</a>
             <form @onsubmit="RequestOpenAsync" @onsubmit:preventDefault>
                 <label>Trip link or ID <input type="text" @bind="openValue" placeholder="Paste a saved trip link or ID" disabled="@busy" /></label>
                 <button type="submit" disabled="@busy">Open trip</button>

@@ -9,6 +9,7 @@ namespace TravelTracker.Frontend.Components.Pages;
 /** Lists saved trips for the authenticated traveller. */
 public partial class History : IDisposable
 {
+    [Parameter] public bool Embedded { get; set; }
     [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
     [Inject] TripsClient Trips { get; set; } = default!;
 

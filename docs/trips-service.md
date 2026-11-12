@@ -144,7 +144,7 @@ The Blazor client (`TravelTracker.Frontend`) talks to the Trips, Accommodations,
 
 | Route | What it does |
 | --- | --- |
-| `/new-trip` and `/map` | Share a planner draft, including map markers and connections. Append a trip ID to open a saved itinerary for editing. |
+| `/trip`, `/new-trip` and `/map` | Share a planner draft, including map markers and connections. Trip offers Create new and Open saved; append a trip ID to open a saved itinerary for editing. Existing links remain valid. |
 | `/new-trip/form` | Form-only trip creation with basics, itinerary cards, and a review before saving. Open it from the standard planner. |
 | `/trips/{tripId}` | Reopens a saved trip from the service. `?saved=true` only adds a "Trip saved." line once the trip itself has loaded. |
 
@@ -166,6 +166,12 @@ catalogue entries** before saving the trip, so reopening uses the confirmed
 location snapshot. Selecting or editing a marker preserves the map camera;
 **Fit stops** remains an explicit navigation action. Time inputs show minutes,
 and only changed times are normalized to minute precision.
+
+Creating a new trip confirms before discarding unsaved work. Opening another
+saved trip replaces the draft only after its read succeeds. While a saved-trip
+URL is loading, the previous trip's private fields and editing controls are
+hidden; a failed load restores the previous draft's own URL and displays an
+error. History and pasted saved links use these same loading rules.
 
 In the form-only planner:
 

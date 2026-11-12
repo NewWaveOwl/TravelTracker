@@ -37,7 +37,7 @@ public sealed class LayoutTests : BunitContext
 
         layout.WaitForAssertion(() => Assert.Equal("Service unavailable", layout.Find("h2").TextContent));
         var links = layout.FindAll("nav[aria-label='Main navigation'] a");
-        Assert.Equal(new[] { "map", "new-trip", "history" }, links.Select(link => link.GetAttribute("href")));
+        Assert.Equal(new[] { "map", "trip", "history" }, links.Select(link => link.GetAttribute("href")));
         Assert.Equal("Map", links[0].TextContent);
     }
 
@@ -60,6 +60,21 @@ public sealed class LayoutTests : BunitContext
         var header = Render<SiteHeader>();
 
         Assert.Equal("page", header.Find("a[href='history']").GetAttribute("aria-current"));
-        Assert.Null(header.Find("a[href='new-trip']").GetAttribute("aria-current"));
+        Assert.Null(header.Find("a[href='trip']").GetAttribute("aria-current"));
+    }
+
+    [Theory]
+    [InlineData("trip")]
+    [InlineData("new-trip")]
+    [InlineData("new-trip/form")]
+    [InlineData("trips/90dccf9b-ac00-4daf-8ca4-097fb263cc3d")]
+    public void TripNavigationRemainsActiveForCurrentAndLegacyRoutes(string path)
+    {
+        Services.GetRequiredService<NavigationManager>().NavigateTo(path);
+        var header = Render<SiteHeader>();
+        Assert.Equal("page", header.Find("a[href='trip']").GetAttribute("aria-current"));
+        Assert.Equal("Trip", header.Find("a[href='trip']").TextContent);
+        header.Find("button[aria-label=Menu]").Click();
+        Assert.Equal("Trip", header.Find("#menu a[href='trip']").TextContent);
     }
 }

@@ -51,6 +51,7 @@ public partial class NewTrip : IAsyncDisposable
 
     bool showMap;
     bool browseAccommodations;
+    bool browseSaved;
     bool stopsStep;
     bool toolsOpen = true;
     bool savedReview;
@@ -60,6 +61,8 @@ public partial class NewTrip : IAsyncDisposable
     int insertAfter;
     bool review;
     bool busy;
+    bool openingRoute;
+    string editorPath = "new-trip";
     bool savingCatalogue;
     bool dirty;
     bool searched;
@@ -94,6 +97,8 @@ public partial class NewTrip : IAsyncDisposable
     bool MapVisible => showMap || review;
     string TripTitle => string.IsNullOrWhiteSpace(draft.Name) ? "Untitled trip" : draft.Name;
     bool CanUndo => !busy && undoHistory.Count > 0;
+    bool HasUnsavedWork => dirty || editingMarker is { } marker &&
+        (placeName != marker.Place.Name || placeAddress != marker.Place.Address || latitude != marker.Place.Lat || longitude != marker.Place.Lon);
     bool HasPendingCatalogueEntries => draft.Stops.Any(stop => stop.Place.PlaceId == Guid.Empty) ||
         Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(draft.LegTo)
             .Any(leg => leg.Mode?.TransportModeId == Guid.Empty);
@@ -268,7 +273,10 @@ public partial class NewTrip : IAsyncDisposable
         routeVersion++;
         browserDraftNotice = null;
         busy = false;
+        openingRoute = false;
         showMap = path.Split('/')[0].Equals("map", StringComparison.OrdinalIgnoreCase);
+        if (path.Split('/')[0] is "trip" or "new-trip")
+            editorPath = path.Split('/')[0];
         ShowBasics();
 
         // Map and New Trip share this component, even when the router reuses the same parameters.
@@ -280,18 +288,43 @@ public partial class NewTrip : IAsyncDisposable
         }
         else if (previousPath is not null && draft.Id is not null)
         {
-            draft = new();
-            ResetBrowserDraftTracking();
-            undoHistory.Clear();
-            routeId = null;
-            selected = -1;
-            pendingOpen = null;
-            placing = false;
-            dirty = false;
-            notice = null;
-            errors = [];
-            saveFailed = false;
+            ResetPlannerDraft();
         }
+    }
+
+    /** Creates an empty trip only after the traveller chooses to discard unsaved changes. */
+    async Task CreateNewAsync()
+    {
+        if (busy) return;
+        var version = routeVersion;
+        if (HasUnsavedWork && !await JavaScript.InvokeAsync<bool>("confirm", closed.Token,
+                "Discard your unsaved trip changes and create a new trip?"))
+            return;
+        if (version != routeVersion || closed.IsCancellationRequested) return;
+        routeVersion++;
+        ResetPlannerDraft();
+        NavigateToPlanner(showMap, null);
+    }
+
+    /** Replaces all trip-specific buffers after an approved new-trip action or navigation. */
+    void ResetPlannerDraft()
+    {
+        browseSaved = false;
+        draft = new();
+        ResetBrowserDraftTracking();
+        undoHistory.Clear();
+        pendingPlaceCreates.Clear();
+        pendingModeCreates.Clear();
+        routeId = null;
+        selected = -1;
+        pendingOpen = null;
+        markerNumber = 0;
+        openValue = "";
+        dirty = false;
+        notice = null;
+        errors = [];
+        saveFailed = false;
+        ShowBasics();
     }
 
     /**
@@ -437,13 +470,14 @@ public partial class NewTrip : IAsyncDisposable
      */
     async Task ConfirmDraftNavigationAsync(LocationChangingContext context)
     {
-        if (!dirty)
+        if (!HasUnsavedWork)
             return;
 
         var path = PlannerPath(context.TargetLocation);
         var segments = path.Split('/');
         var planner = segments[0].Equals("map", StringComparison.OrdinalIgnoreCase) ||
-            segments[0].Equals("new-trip", StringComparison.OrdinalIgnoreCase);
+            segments[0].Equals("new-trip", StringComparison.OrdinalIgnoreCase) ||
+            segments[0].Equals("trip", StringComparison.OrdinalIgnoreCase);
         var sameDraft = planner && (segments.Length == 1 && draft.Id is null ||
             segments.Length == 2 && Guid.TryParse(segments[1], out var id) && id == draft.Id);
         if (sameDraft)
@@ -880,7 +914,7 @@ public partial class NewTrip : IAsyncDisposable
 
     async Task RequestOpenAsync()
     {
-        var input = openValue.Trim().TrimEnd('/');
+        var input = openValue.Trim().Split('?', '#')[0].TrimEnd('/');
         var lastSegment = input[(input.LastIndexOf('/') + 1)..];
         if (!Guid.TryParse(lastSegment, out var id) || id == Guid.Empty)
         {
@@ -888,7 +922,7 @@ public partial class NewTrip : IAsyncDisposable
             saveFailed = false;
             return;
         }
-        if (dirty)
+        if (HasUnsavedWork)
             pendingOpen = id;
         else
             await OpenTripAsync(id);
@@ -903,6 +937,7 @@ public partial class NewTrip : IAsyncDisposable
     {
         var version = routeVersion;
         busy = true;
+        openingRoute = restoreRouteOnFailure && id != draft.Id;
         pendingOpen = null;
         errors = [];
         saveFailed = false;
@@ -914,6 +949,7 @@ public partial class NewTrip : IAsyncDisposable
                 return;
             var saved = revision.Trip;
             draft = TripPlannerDraft.FromSaved(revision);
+            browseSaved = false;
             ResetBrowserDraftTracking();
             undoHistory.Clear();
             selected = draft.Stops.Count > 0 ? 0 : -1;
@@ -938,7 +974,10 @@ public partial class NewTrip : IAsyncDisposable
         finally
         {
             if (version == routeVersion)
+            {
                 busy = false;
+                openingRoute = false;
+            }
         }
     }
 
@@ -1221,7 +1260,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Keeps the URL and navigation links aligned with the displayed editor. */
     void NavigateToPlanner(bool map, Guid? id, bool replace = false)
     {
-        var path = map ? "map" : "new-trip";
+        var path = map ? "map" : editorPath;
         if (id is { } tripId)
             path += $"/{tripId:D}";
 

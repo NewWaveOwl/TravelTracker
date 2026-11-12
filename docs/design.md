@@ -132,7 +132,7 @@ What each part of the system lets people create, read, update and delete.
 
 ## 7. User interface
 
-**Navigation.** Map, New Trip, History and User. Settings sits under User, and Admin appears only for administrators. Direct links obey the same permissions as menus.
+**Navigation.** Map, Trip, History and User. Trip offers Create new and Open saved in the same workspace; creating a replacement handles unsaved work first. Existing `/new-trip`, `/map/{id}` and `/trips/{id}` links remain valid. Settings sits under User, and Admin appears only for administrators. Direct links obey the same permissions as menus.
 
 **Map screen.** A large map with the itinerary list beside it. Events are grouped by day with times, place, type and transport. Choosing a list item highlights its marker and vice versa. Markers are numbered with a legend, and each segment shows the transport icon, mode and duration. Straight lines are labelled approximate and never suggest a real road or flight path. There are zoom, fit-trip and legend controls plus a text version of the itinerary. On phones, Map and Itinerary become tabs sharing one selection. If the map cannot load, the list and details keep working.
 

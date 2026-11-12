@@ -1,7 +1,14 @@
 @page "/history"
 
-<PageTitle>Trip history | TravelTracker</PageTitle>
-<PageHeading Title="History" />
+@if (!Embedded)
+{
+    <PageTitle>Trip history | TravelTracker</PageTitle>
+    <PageHeading Title="History" />
+}
+else
+{
+    <h2>Open saved trip</h2>
+}
 
 @if (loading)
 {
