@@ -116,6 +116,7 @@
 </section>
 
 @code {
+    [Parameter] public Guid? TripId { get; set; }
     [Parameter] public IReadOnlyList<TripPlaceDto> Stops { get; set; } = [];
     [Parameter] public int SelectedIndex { get; set; } = -1;
     [Parameter] public EventCallback<int> StopSelected { get; set; }
@@ -151,7 +152,7 @@
     private bool? basemapReady;
     private bool disposed;
     private (decimal Lat, decimal Lon)[] previousStops = [];
-    private int previousSelection = -1;
+    private Guid? previousTripId;
     private bool hasMeasuredViewport;
     private int zoom = DefaultZoom;
     private (double X, double Y) center = Project(45.5019m, -73.5674m);
@@ -251,25 +252,18 @@
         StateHasChanged();
     }
 
-    /** Refit a changed route only when its stops would otherwise be out of view. */
+    /** Fits newly opened itineraries; selection and marker edits within a trip preserve the camera. */
     protected override void OnParametersSet()
     {
         var positions = Stops.Select(stop => (stop.Lat, stop.Lon)).ToArray();
-        if (!positions.SequenceEqual(previousStops))
+        var tripChanged = TripId != previousTripId;
+        if (tripChanged || !positions.SequenceEqual(previousStops))
         {
-            if (previousStops.Length == 0 || positions.Any(position => !IsVisible(ScreenPoint(position.Lat, position.Lon))))
+            if (tripChanged || previousStops.Length == 0)
                 FitStops();
             previousStops = positions;
+            previousTripId = TripId;
         }
-
-        if (SelectedIndex != previousSelection && SelectedIndex >= 0 && SelectedIndex < Stops.Count)
-        {
-            var selected = Stops[SelectedIndex];
-            if (!IsVisible(ScreenPoint(selected.Lat, selected.Lon)))
-                SetCenter(Project(selected.Lat, selected.Lon));
-        }
-
-        previousSelection = SelectedIndex;
     }
 
     /**

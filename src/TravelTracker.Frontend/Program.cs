@@ -25,14 +25,23 @@ builder.Services.AddScoped<TravelTracker.Frontend.Services.AdminAccessState>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Settings.SettingsClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Services.UserPreferences>();
 
-var auth0 = Auth0Settings.TryRead(builder.Configuration);
-builder.Services.AddSingleton(new AuthSetup(auth0));
+var provider = builder.Configuration["Authentication:Provider"];
+var supabase = string.IsNullOrWhiteSpace(provider) || string.Equals(provider, "Supabase", StringComparison.OrdinalIgnoreCase)
+    ? SupabaseSettings.TryRead(builder.Configuration) : null;
+var auth0 = string.Equals(provider, "Auth0", StringComparison.OrdinalIgnoreCase)
+    ? Auth0Settings.TryRead(builder.Configuration) : null;
+builder.Services.AddSingleton(new AuthSetup(auth0, supabase));
 var startupLogger = LoggerFactory.Create(logging => logging.AddConfiguration(builder.Configuration.GetSection("Logging")).AddConsole()).CreateLogger("TravelTracker.Frontend.Auth");
-if (auth0 is null)
+if (supabase is not null)
+{
+    builder.Services.AddSupabaseAuth(supabase);
+    startupLogger.LogInformation("Supabase sign-in configured for {Issuer}", supabase.Issuer);
+}
+else if (auth0 is null)
 {
     // no schemes registered: every request stays anonymous and navigation keeps working
     builder.Services.AddAuthentication();
-    startupLogger.LogWarning("Auth0 is not configured; sign-in is disabled until Auth0:Domain, ClientId and Audience are set");
+    startupLogger.LogWarning("Sign-in is not configured. Set Supabase:Url and Supabase:PublishableKey for Supabase Auth.");
 }
 else
 {
@@ -54,11 +63,23 @@ if (!app.Environment.IsDevelopment())
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path == "/sign-in" || context.Request.Path.StartsWithSegments("/auth"))
+    {
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    }
+    await next(context);
+});
 app.UseAuthentication();
 app.UseAuthorization();
+if (supabase is not null) app.UseRateLimiter();
 app.UseAntiforgery();
 app.MapStaticAssets();
-if (auth0 is not null)
+if (supabase is not null)
+    app.MapSupabaseAuthEndpoints();
+else if (auth0 is not null)
     app.MapAuthEndpoints();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();

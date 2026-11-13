@@ -48,7 +48,7 @@ The planned backend has six logical services. Each is intended to own its data a
 
 ## 3. Accounts and access
 
-TravelTracker uses **Auth0** for hosted authentication (owner decision, 2026-11-03). The Blazor application signs users in through Auth0 with authorization-code flow and PKCE, and sends access tokens to the service APIs. Auth0 handles login credentials; TravelTracker's Users service owns application profiles, roles and account standing. This introduces an external dependency for interactive sign-in; the earlier no-outside-service roadmap goal does not describe the selected authentication setup. See [setup and current verification status](frontend-auth0.md).
+TravelTracker uses **Supabase Auth** for email/password authentication (owner decision, 2026-11-12, replacing Auth0). The Blazor server sends sign-in requests to Supabase and forwards validated access tokens to the APIs. Supabase manages login credentials and identities; TravelTracker's Users service retains profiles, roles, account standing and audit history. Interactive sign-in depends on Supabase connectivity. Existing accounts and private ownership require the explicit [identity cutover](supabase-auth.md); matching email addresses never silently merge accounts. Auth0 remains an explicit compatibility path during migration.
 
 Every account is a traveller or an administrator, and is active, banned or deactivated.
 
@@ -132,7 +132,7 @@ What each part of the system lets people create, read, update and delete.
 
 ## 7. User interface
 
-**Navigation.** Map, New Trip, History and User. Settings sits under User, and Admin appears only for administrators. Direct links obey the same permissions as menus.
+**Navigation.** Map, Trip, History and User. Trip offers Create new and Open saved in the same workspace; creating a replacement handles unsaved work first. Existing `/new-trip`, `/map/{id}` and `/trips/{id}` links remain valid. Settings sits under User, and Admin appears only for administrators. Direct links obey the same permissions as menus.
 
 **Map screen.** A large map with the itinerary list beside it. Events are grouped by day with times, place, type and transport. Choosing a list item highlights its marker and vice versa. Markers are numbered with a legend, and each segment shows the transport icon, mode and duration. Straight lines are labelled approximate and never suggest a real road or flight path. There are zoom, fit-trip and legend controls plus a text version of the itinerary. On phones, Map and Itinerary become tabs sharing one selection. If the map cannot load, the list and details keep working.
 
@@ -148,7 +148,7 @@ What each part of the system lets people create, read, update and delete.
 **Other screens**
 
 - **Trip details:** status, dates, legs, stays, visits and notes, with Edit, View on Map and Delete (with confirmation). A current-trip panel highlights the active or next planned event, based on the plan, not location.
-- **History:** past trips first, newest on top, with search, date filter and paging. Later, several trips can be shown together on the map.
+- **History:** readable trip names, date ranges, planned status and an explicit Open trip action. Past trips appear first, newest on top; local search, overlapping date range, status, ordering and paging apply to the owner's saved summaries. The same browser appears under Trip → Open saved. Empty history, no matching filters, loading and failed reads have distinct states. Later, several trips can be shown together on the map.
 - **User and Settings:** profile and password are separate forms; settings cover theme, default map view, preferred transport and time zone.
 - **Admin:** search accounts, change status with a reason, and see audit and cleanup progress. Nothing shows success until it is confirmed.
 - Banned users see a read-only notice and no editing controls.

@@ -1,0 +1,29 @@
+@page "/auth/confirm"
+@using TravelTracker.Frontend.Auth
+@inject AuthSetup Setup
+
+<PageTitle>Confirm email | TravelTracker</PageTitle>
+<PageHeading Title="Confirm your email" />
+
+@if (Setup.Supabase is not null && Type == "email" && !string.IsNullOrWhiteSpace(TokenHash))
+{
+    <section class="profile-panel">
+        <p>Confirm your email address to finish creating your TravelTracker account.</p>
+        <form method="post" action="/auth/confirm-email">
+            <AntiforgeryToken />
+            <input type="hidden" name="token_hash" value="@TokenHash" />
+            <input type="hidden" name="type" value="email" />
+            <button type="submit">Confirm email</button>
+        </form>
+    </section>
+}
+else
+{
+    <p role="alert">This confirmation link is incomplete or unavailable.</p>
+}
+<p><a href="/sign-in">Return to sign in</a></p>
+
+@code {
+    [SupplyParameterFromQuery(Name = "token_hash")] public string? TokenHash { get; set; }
+    [SupplyParameterFromQuery(Name = "type")] public string? Type { get; set; }
+}

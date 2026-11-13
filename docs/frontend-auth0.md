@@ -1,5 +1,9 @@
 # Frontend Auth0 sign-in (#33)
 
+**Historical/compatibility guide.** The owner selected Supabase Auth on 2026-11-12.
+Use [Supabase Auth](supabase-auth.md) for current setup and existing-account migration.
+Auth0 configuration is retained only for an explicit compatibility deployment.
+
 TravelTracker uses **Auth0** as its identity provider (owner decision, 2026-11-03). The Blazor Web App in `src/TravelTracker.Frontend` signs users in with the ASP.NET Core OpenID Connect handler: authorization-code flow with PKCE, callback state and nonce handling, access-token acquisition and hosted logout. TravelTracker never collects provider passwords.
 
 Status of the evidence: hosted login, a protected Transport read and hosted logout were verified against a live Auth0 tenant in the Blazor client on 2026-11-04, including logout updating a second open tab without reloading it. The session invalidation follow-up below addresses the two original review findings; the remaining live failure checklist still applies before treating #33 as fully verified.
