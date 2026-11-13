@@ -11,6 +11,29 @@ public sealed class TripMapCanvasTests : BunitContext
     public TripMapCanvasTests() => JSInterop.Mode = JSRuntimeMode.Loose;
 
     [Fact]
+    public async Task OpeningAnotherTripFitsItsStopsAfterPanningThePreviousTrip()
+    {
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+        var montreal = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Montreal", "", 45.5m, -73.57m);
+        var paris = montreal with { PlaceId = Guid.NewGuid(), Name = "Paris", Lat = 48.86m, Lon = 2.35m };
+        var map = Render<TripMapCanvas>(parameters => parameters
+            .Add(component => component.TripId, firstId)
+            .Add(component => component.Stops, [montreal]));
+        await map.InvokeAsync(() => map.Instance.PanByDrag(4000, 0));
+        Assert.Empty(map.FindAll(".trip-marker"));
+
+        map.Render(parameters => parameters
+            .Add(component => component.TripId, secondId)
+            .Add(component => component.Stops, [paris]));
+
+        Assert.Single(map.FindAll(".trip-marker[aria-label='Stop 1: Paris']"));
+        await map.InvokeAsync(() => map.Instance.PanByDrag(4000, 0));
+        map.Render(parameters => parameters.Add(component => component.Stops, [paris with { Name = "Edited Paris" }]));
+        Assert.Empty(map.FindAll(".trip-marker"));
+    }
+
+    [Fact]
     public async Task SelectingAndEditingOffscreenMarkersPreservesTheCameraUntilFitStops()
     {
         var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);

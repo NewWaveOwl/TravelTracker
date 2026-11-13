@@ -37,6 +37,65 @@ public sealed class TripPlannerTests : BunitContext
     static readonly TripDto Saved = new(TripId, "Weekend", "America/Toronto", Start, Start.AddHours(4),
         false, [new(1, Hotel, Museum, Train, Start.AddHours(1), Start.AddHours(2))]);
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task SwitchingEditorViewsConfirmsBeforeDiscardingUnconfirmedMarkerDetails(bool viaLink, bool discard)
+    {
+        Configure((_, _) => Task.FromResult(Json(Saved)));
+        JSInterop.Setup<bool>("confirm", _ => true).SetResult(discard);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo($"/map/{TripId:D}");
+        var routes = Render<Routes>();
+        var page = routes.FindComponent<NewTrip>();
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
+        page.Find(".trip-place input[type=text]").Change("Unconfirmed museum");
+
+        if (viaLink)
+            await routes.InvokeAsync(() => navigation.NavigateTo($"/trip/{TripId:D}"));
+        else
+            Click(page, "Standard editor");
+
+        routes.WaitForAssertion(() =>
+        {
+            Assert.Single(JSInterop.Invocations["confirm"]);
+            Assert.EndsWith($"/{(discard ? viaLink ? "trip" : "new-trip" : "map")}/{TripId:D}", navigation.Uri);
+            if (!discard)
+                Assert.Equal("Unconfirmed museum", page.Find(".trip-place input[type=text]").GetAttribute("value"));
+            else
+                Assert.Empty(page.FindAll(".trip-map-canvas"));
+        });
+        Assert.Equal(Museum.Name, page.FindAll(".trip-stop strong")[1].TextContent);
+    }
+
+    [Fact]
+    public async Task PastedSavedTripLinkFitsTheNewTripInsteadOfKeepingThePreviousCamera()
+    {
+        var otherId = Guid.NewGuid();
+        var parisHotel = Hotel with { PlaceId = Guid.NewGuid(), Name = "Paris hotel", Lat = 48.86m, Lon = 2.35m };
+        var parisMuseum = Museum with { PlaceId = Guid.NewGuid(), Name = "Paris museum", Lat = 48.87m, Lon = 2.36m };
+        var other = Saved with { TripId = otherId, Legs = [Saved.Legs[0] with { From = parisHotel, To = parisMuseum }] };
+        Configure((request, _) => Task.FromResult(Json(request.RequestUri!.AbsolutePath.EndsWith(otherId.ToString()) ? other : Saved)));
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.PanByDrag(4000, 0));
+        Assert.Empty(page.FindAll(".trip-marker"));
+
+        page.Find(".trip-open input").Change($"https://localhost/map/{otherId:D}");
+        page.Find(".trip-open form").Submit();
+
+        page.WaitForAssertion(() =>
+        {
+            Assert.Equal(otherId, canvas.Instance.TripId);
+            Assert.Equal(2, page.FindAll(".trip-marker").Count);
+            Assert.Equal(parisHotel, canvas.Instance.Stops[0]);
+        });
+    }
+
     [Fact]
     public async Task SameTypePaletteStartsANewMarkerInsteadOfEditingTheSelectedSavedStop()
     {
