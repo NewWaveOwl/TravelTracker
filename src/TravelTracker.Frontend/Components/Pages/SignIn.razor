@@ -1,0 +1,66 @@
+@page "/sign-in"
+@using TravelTracker.Frontend.Auth
+@inject AuthSetup Setup
+
+<PageTitle>@(Register ? "Create account" : "Sign in") | TravelTracker</PageTitle>
+<PageHeading Title="@(Register ? "Create your account" : "Sign in")" />
+
+@if (Setup.Supabase is null)
+{
+    <Feedback Kind="FeedbackKind.Unavailable">Supabase sign-in is not configured.</Feedback>
+}
+else
+{
+    <section class="profile-panel" aria-labelledby="sign-in-heading">
+        <h2 id="sign-in-heading">@(Register ? "Join TravelTracker" : "Welcome back")</h2>
+        @if (Error == "unavailable")
+        {
+            <p role="alert">Sign-in is temporarily unavailable. Please try again later.</p>
+        }
+        else if (Error == "confirmation")
+        {
+            <p role="alert">The confirmation link is invalid or expired. Request a new confirmation email or contact the project administrator.</p>
+        }
+        else if (Error is not null)
+        {
+            <p role="alert">@(Register ? "Registration could not be completed. Check your email and matching passwords (at least 8 characters), or try signing in." : "Sign-in failed. Check your email and password, and confirm your email before signing in.")</p>
+        }
+        @if (Message == "confirmation")
+        {
+            <p role="status">If registration is available for this address, check your email and confirm your account before signing in.</p>
+        }
+        else if (Message == "confirmed")
+        {
+            <p role="status">Your email is confirmed. Sign in to continue.</p>
+        }
+        <form method="post" action="@(Register ? "/auth/register" : "/auth/login")">
+            <AntiforgeryToken />
+            <div class="profile-field">
+                <label for="sign-in-email">Email</label>
+                <input id="sign-in-email" name="email" type="email" autocomplete="email" maxlength="254" required />
+            </div>
+            <div class="profile-field">
+                <label for="sign-in-password">Password</label>
+                <input id="sign-in-password" name="password" type="password" autocomplete="@(Register ? "new-password" : "current-password")" minlength="@(Register ? "8" : null)" maxlength="128" required />
+            </div>
+            @if (Register)
+            {
+                <div class="profile-field">
+                    <label for="sign-in-confirmation">Confirm password</label>
+                    <input id="sign-in-confirmation" name="passwordConfirmation" type="password" autocomplete="new-password" minlength="8" maxlength="128" required />
+                </div>
+            }
+            <button type="submit">@(Register ? "Create account" : "Sign in")</button>
+        </form>
+        <p><a href="@(Register ? "/sign-in" : "/sign-in?mode=register")">@(Register ? "Already have an account? Sign in" : "Create an account")</a></p>
+        <p>Need to reset your password? Contact the project administrator for account recovery.</p>
+        <p><a href="/">Back to TravelTracker</a></p>
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "mode")] public string? Mode { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+    [SupplyParameterFromQuery(Name = "message")] public string? Message { get; set; }
+    bool Register => Mode == "register";
+}
