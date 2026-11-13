@@ -70,13 +70,29 @@ public sealed class UserProfileScopeMatrixTests
     [InlineData("issuer")]
     [InlineData("audience")]
     [InlineData("expired")]
+    [InlineData("malformed")]
+    [InlineData("unsigned")]
+    [InlineData("missing-sub")]
+    [InlineData("empty-sub")]
+    [InlineData("no-expiry")]
+    [InlineData("future")]
     public async Task ProfileRejectsInvalidBearerBeforeProvisioningAnAccount(string failure)
     {
         using var app = new UsersApiFactory();
-        using var client = app.Browser(app.Token(subject: "stranger", scope: "users.read users.write", failure: failure));
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(Me)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PatchAsJsonAsync(Me, new { address = "1 Main St" })).StatusCode);
+        var token = app.Token(subject: "stranger", scope: "users.read users.write", failure: failure);
+        using var client = app.Browser(token);
+        using var read = await client.GetAsync(Me);
+        using var patch = await client.PatchAsJsonAsync(Me, new { address = "1 Main St" });
+        Assert.Equal(HttpStatusCode.Unauthorized, read.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, patch.StatusCode);
+        Assert.Contains(read.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
+        Assert.Contains(patch.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
+        Assert.DoesNotContain(token, await read.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(token, await patch.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(token, string.Join(" ", read.Headers.WwwAuthenticate));
+        Assert.DoesNotContain(token, string.Join(" ", patch.Headers.WwwAuthenticate));
         Assert.Null(app.Repository.Account);
+        Assert.DoesNotContain(app.Logs.Entries, entry => entry.Contains(token, StringComparison.Ordinal));
     }
 
     [Fact]

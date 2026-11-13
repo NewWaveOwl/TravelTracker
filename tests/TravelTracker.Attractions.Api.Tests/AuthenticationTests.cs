@@ -243,11 +243,16 @@ public sealed class AuthenticationTests
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = failure == "missing" ? null :
-            new AuthenticationHeaderValue("Bearer", failure == "malformed" ? "not-a-jwt" : factory.CreateToken(failure: failure));
+        var token = failure == "missing" ? null : factory.CreateToken(failure: failure);
+        client.DefaultRequestHeaders.Authorization = token is null ? null : new AuthenticationHeaderValue("Bearer", token);
         using var response = await client.GetAsync("/api/v1/attractions");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Contains(response.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
+        if (token is not null)
+        {
+            Assert.DoesNotContain(token, await response.Content.ReadAsStringAsync());
+            Assert.DoesNotContain(token, string.Join(" ", response.Headers.WwwAuthenticate));
+        }
     }
 
     [Theory]

@@ -53,25 +53,38 @@ public sealed class AuthenticationTests
     [InlineData("missing-sub")]
     [InlineData("empty-sub")]
     [InlineData("unsigned")]
+    [InlineData("malformed")]
+    [InlineData("no-expiry")]
+    [InlineData("future")]
     public async Task ProtectedRoutes_RejectInvalidBearerTokensBeforeStandingLookup(string failure)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", factory.CreateToken(failure: failure));
+        var token = factory.CreateToken(failure: failure);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var read = await client.GetAsync("/api/v1/settings");
         using var write = await client.PutAsJsonAsync("/api/v1/settings", ValidPreferences());
 
         Assert.Equal(HttpStatusCode.Unauthorized, read.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, write.StatusCode);
+        Assert.Contains(read.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
+        Assert.Contains(write.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
+        Assert.DoesNotContain(token, await read.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(token, await write.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(token, string.Join(" ", read.Headers.WwwAuthenticate));
+        Assert.DoesNotContain(token, string.Join(" ", write.Headers.WwwAuthenticate));
         Assert.Equal(0, factory.Users!.Calls);
     }
 
-    [Fact]
-    public async Task Health_IsAnonymousAndDoesNotCallUsers()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Health_IsAnonymousAndDoesNotCallUsers(bool invalidBearer)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
+        if (invalidBearer) client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "M4_TOKEN_SENTINEL_malformed");
 
         using var response = await client.GetAsync("/health");
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
