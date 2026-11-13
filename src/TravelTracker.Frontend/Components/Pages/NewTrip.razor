@@ -33,7 +33,7 @@ else
     @if (MapVisible)
     {
         <div class="map-surface">
-            <TripMapCanvas Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())" SelectedIndex="selected"
+            <TripMapCanvas TripId="draft.Id" Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())" SelectedIndex="selected"
                            Legs="MapLegs" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<(int, bool)>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
                            CanPick="@(!review && !busy && mapTool == MapTool.Markers && placing && !editingStopDetails)"
                            StopMoved="@(!busy && (showMap || !review) ? EventCallback.Factory.Create<(int, decimal, decimal)>(this, MoveMarker) : default)"

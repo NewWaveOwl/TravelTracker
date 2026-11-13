@@ -97,7 +97,8 @@ public partial class NewTrip : IAsyncDisposable
     bool MapVisible => showMap || review;
     string TripTitle => string.IsNullOrWhiteSpace(draft.Name) ? "Untitled trip" : draft.Name;
     bool CanUndo => !busy && undoHistory.Count > 0;
-    bool HasUnsavedWork => dirty || editingMarker is { } marker &&
+    bool HasUnsavedWork => dirty || HasUnconfirmedMarkerChanges;
+    bool HasUnconfirmedMarkerChanges => editingMarker is { } marker &&
         (placeName != marker.Place.Name || placeAddress != marker.Place.Address || latitude != marker.Place.Lat || longitude != marker.Place.Lon);
     bool HasPendingCatalogueEntries => draft.Stops.Any(stop => stop.Place.PlaceId == Guid.Empty) ||
         Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(draft.LegTo)
@@ -480,7 +481,7 @@ public partial class NewTrip : IAsyncDisposable
             segments[0].Equals("trip", StringComparison.OrdinalIgnoreCase);
         var sameDraft = planner && (segments.Length == 1 && draft.Id is null ||
             segments.Length == 2 && Guid.TryParse(segments[1], out var id) && id == draft.Id);
-        if (sameDraft)
+        if (sameDraft && !HasUnconfirmedMarkerChanges)
             return;
 
         try
@@ -509,8 +510,18 @@ public partial class NewTrip : IAsyncDisposable
         catch (JSDisconnectedException) { }
     }
 
-    void SwitchView(bool map)
+    /**
+     * Changes editor views after confirming any marker fields that the view change would discard.
+     * @param map Whether to show the map editor.
+     * @return A task completing after navigation or a declined confirmation.
+     */
+    async Task SwitchView(bool map)
     {
+        var version = routeVersion;
+        if (HasUnconfirmedMarkerChanges && !await JavaScript.InvokeAsync<bool>("confirm", closed.Token,
+                "Discard your unconfirmed marker details and switch editor views?"))
+            return;
+        if (version != routeVersion || closed.IsCancellationRequested) return;
         showMap = map;
         ShowBasics();
         NavigateToPlanner(map, draft.Id);
@@ -539,10 +550,10 @@ public partial class NewTrip : IAsyncDisposable
         CancelConnection();
     }
 
-    void BackFromReview()
+    async Task BackFromReview()
     {
         if (showMap) ShowStops();
-        else SwitchView(false);
+        else await SwitchView(false);
     }
 
     void OpenMarkers()
