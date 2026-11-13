@@ -6,6 +6,7 @@ namespace TravelTracker.Api.Authentication;
 public sealed class BearerSettings
 {
     public const string SectionName = "Authentication:Bearer";
+    public string Provider { get; set; } = "Oidc";
     public string Authority { get; set; } = "";
     public string Issuer { get; set; } = "";
     public string Audience { get; set; } = "";

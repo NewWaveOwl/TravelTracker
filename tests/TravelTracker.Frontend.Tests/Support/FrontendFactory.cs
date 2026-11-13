@@ -45,6 +45,7 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+        builder.UseSetting("Authentication:Provider", "Auth0");
         if (signInConfigured)
         {
             builder.UseSetting("Auth0:Domain", "tenant.example.test");

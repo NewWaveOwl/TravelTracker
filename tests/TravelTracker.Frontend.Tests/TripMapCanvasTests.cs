@@ -11,6 +11,52 @@ public sealed class TripMapCanvasTests : BunitContext
     public TripMapCanvasTests() => JSInterop.Mode = JSRuntimeMode.Loose;
 
     [Fact]
+    public async Task OpeningAnotherTripFitsItsStopsAfterPanningThePreviousTrip()
+    {
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+        var montreal = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Montreal", "", 45.5m, -73.57m);
+        var paris = montreal with { PlaceId = Guid.NewGuid(), Name = "Paris", Lat = 48.86m, Lon = 2.35m };
+        var map = Render<TripMapCanvas>(parameters => parameters
+            .Add(component => component.TripId, firstId)
+            .Add(component => component.Stops, [montreal]));
+        await map.InvokeAsync(() => map.Instance.PanByDrag(4000, 0));
+        Assert.Empty(map.FindAll(".trip-marker"));
+
+        map.Render(parameters => parameters
+            .Add(component => component.TripId, secondId)
+            .Add(component => component.Stops, [paris]));
+
+        Assert.Single(map.FindAll(".trip-marker[aria-label='Stop 1: Paris']"));
+        await map.InvokeAsync(() => map.Instance.PanByDrag(4000, 0));
+        map.Render(parameters => parameters.Add(component => component.Stops, [paris with { Name = "Edited Paris" }]));
+        Assert.Empty(map.FindAll(".trip-marker"));
+    }
+
+    [Fact]
+    public async Task SelectingAndEditingOffscreenMarkersPreservesTheCameraUntilFitStops()
+    {
+        var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
+        var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
+        var viewport = module.SetupModule("watchViewport", _ => true);
+        viewport.SetupVoid("setCamera", _ => true).SetVoidResult();
+        var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, [hotel]));
+        await map.InvokeAsync(() => map.Instance.PanByDrag(4000, 0));
+        Assert.Empty(map.FindAll(".trip-marker"));
+        var changes = viewport.Invocations["setCamera"].Count;
+
+        map.Render(parameters => parameters.Add(component => component.SelectedIndex, 0));
+        Assert.Equal(changes, viewport.Invocations["setCamera"].Count);
+        map.Render(parameters => parameters.Add(component => component.Stops, [hotel with { Name = "Edited hotel", Lon = -74m }]));
+        Assert.Equal(changes, viewport.Invocations["setCamera"].Count);
+        Assert.Empty(map.FindAll(".trip-marker"));
+
+        map.Find("button[aria-label='Fit stops']").Click();
+        Assert.Single(map.FindAll(".trip-marker[aria-label='Stop 1: Edited hotel']"));
+        Assert.Equal(changes + 1, viewport.Invocations["setCamera"].Count);
+    }
+
+    [Fact]
     public void SharedPinCyclesBetweenReturnVisits()
     {
         var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);

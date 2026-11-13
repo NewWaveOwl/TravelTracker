@@ -144,7 +144,7 @@ The Blazor client (`TravelTracker.Frontend`) talks to the Trips, Accommodations,
 
 | Route | What it does |
 | --- | --- |
-| `/new-trip` and `/map` | Share a planner draft, including map markers and connections. Append a trip ID to open a saved itinerary for editing. |
+| `/trip`, `/new-trip` and `/map` | Share a planner draft, including map markers and connections. Trip offers Create new and Open saved; append a trip ID to open a saved itinerary for editing. Existing links remain valid. |
 | `/new-trip/form` | Form-only trip creation with basics, itinerary cards, and a review before saving. Open it from the standard planner. |
 | `/trips/{tripId}` | Reopens a saved trip from the service. `?saved=true` only adds a "Trip saved." line once the trip itself has loaded. |
 
@@ -155,6 +155,34 @@ drafts stay in this browser under the account that saved them. When a signed-in
 draft receives a saved trip link, its browser copy is also available from that
 link. Dragging a pin in Map View review returns to editing
 and records an unsaved change.
+
+Map View keeps essential trip settings beside the itinerary. **Map tools**
+opens or closes the stop/connection editor without dropping the current edit
+buffer or selection. Marker and transport controls reopen this panel, and its
+slide transition respects reduced-motion preferences. Select a marker to edit
+its name, address and coordinates; confirm applies the draft and Cancel leaves
+the original place intact. Changed saved places are resolved through **Save
+catalogue entries** before saving the trip, so reopening uses the confirmed
+location snapshot. Switching editor views asks before discarding unconfirmed
+marker fields. Selecting or editing a marker preserves the map camera; opening
+a different saved trip fits its stops. **Fit stops** remains an explicit
+navigation action within a trip. Time inputs show minutes,
+and only changed times are normalized to minute precision.
+
+Creating a new trip confirms before discarding unsaved work. Opening another
+saved trip replaces the draft only after its read succeeds. While a saved-trip
+URL is loading, the previous trip's private fields and editing controls are
+hidden; a failed load restores the previous draft's own URL and displays an
+error. History and pasted saved links use these same loading rules.
+
+History (`/history` and Trip → **Open saved**) reads the owner's existing summary
+list over HTTP. Its responsive cards show names, date ranges, planned status
+and explicit **Open trip** links. Search, inclusive overlapping date ranges,
+status filters, ordering and ten-item pages are applied locally to that list;
+the service contract is unchanged. Default ordering puts completed trips first,
+newest first, followed by current/upcoming trips in start order. Loading, access
+denial, empty history, no filter matches and retryable read failures have
+separate messages. Account changes clear both summaries and filter state.
 
 In the form-only planner:
 
