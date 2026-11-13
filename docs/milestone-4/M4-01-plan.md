@@ -3,7 +3,7 @@
 **Issue:** M4-01 — verify and harden bearer-token validation across the protected API hosts.
 **Branch:** `bearer-token`
 **Research baseline:** committed tree at `15b4a40`.
-**Status:** implemented and validated locally; ready for developer review and pull request.
+**Status:** implementation and local validation are recorded below. The selected-provider documentation has been aligned with the Supabase Auth decision; the Supabase-specific handler/tests are present in the current branch, but the current tree's full validation results still need to be recorded before delivery.
 
 ## Goal and scope
 
@@ -15,7 +15,7 @@ Out of scope: changing the approved provider, issuing tokens, frontend sign-in i
 
 ## Ground truth
 
-Sources: the issue supplied in chat; [API authentication contract](../authentication.md); [API contracts](../api.md); [design account/access rules](../design.md#3-accounts-and-access); [domain identity boundary](../domain.md); and [data boundaries](../data.md). The owner updated the provider decision to Supabase Auth on 2026-11-13, superseding the Auth0 assumption in the original issue. Supabase also remains the PostgreSQL host; its schema and connection configuration are not part of this change.
+Sources: the issue supplied in chat; [API authentication contract](../authentication.md); [API contracts](../api.md); [design account/access rules](../design.md#3-accounts-and-access); [domain identity boundary](../domain.md); and [data boundaries](../data.md). The owner selected Supabase Auth on 2026-11-12, replacing the original Auth0 assumption. Supabase also remains the PostgreSQL host; its schema and connection configuration are not part of this change.
 
 The Milestone 4 Security PDF named by the issue was not found in the repository checkout. This plan follows the issue text, the owner's updated Supabase Auth provider decision, and current repository contracts; if the PDF contains additional requirements, compare them before merge.
 
@@ -28,7 +28,7 @@ The Milestone 4 Security PDF named by the issue was not found in the repository 
 
 ## Identity and HTTP contract to preserve
 
-- A protected user request is authenticated only by a JWT accepted by the production bearer handler using the selected Supabase Auth project's trusted OIDC discovery/JWKS configuration. The issuer is the exact project issuer (`https://<project-ref>.supabase.co/auth/v1`), the audience is `authenticated`, and signature, `exp`, `nbf`, and the configured asymmetric signing algorithm are validated.
+- A protected user request is authenticated only by a JWT accepted by the production bearer handler using the selected Supabase Auth project's direct trusted JWKS endpoint (`{Issuer}/.well-known/jwks.json`). Supabase mode does not use OIDC discovery. The issuer is the exact project issuer (`https://<project-ref>.supabase.co/auth/v1`), the audience is `authenticated`, and signature, `exp`, `nbf`, asymmetric algorithm, authenticated role, and non-anonymous user identity are validated. The separate `Provider=Oidc` compatibility path retains discovery validation for legacy Auth0 configuration and generic resource-server tests.
 - Supabase Auth's Custom Access Token Hook must add the top-level space-separated `scope` claim used by the API policies, sourced from trusted server-controlled authorization data. Default Supabase roles or client-editable metadata do not grant TravelTracker API permissions.
 - Application identity is the validated `(iss, sub)` pair. `sub` is not a TravelTracker public UUID. A missing, blank, or ambiguous subject fails authentication. Headers, query parameters, and request DTO fields do not replace it; owner/account identifiers are derived from validated claims or rejected as unknown input.
 - A missing, malformed, unsigned, expired, not-yet-valid, wrong-issuer, wrong-audience, or wrong-signature token receives `401` and a Bearer challenge. A valid token without the route's explicit scope receives `403`. Authentication failure responses and logs do not reveal the token, signing key, or validation exception details.
@@ -53,8 +53,9 @@ The tests should exercise at least one real protected route per host for authent
 
 | File or area | Planned work |
 | --- | --- |
-| `src/TravelTracker.Security/Authentication/BearerAuthenticationExtensions.cs` | Audit the production handler options, metadata/issuer check, validated subject check, failure response and safe logging against the contract. Change only a demonstrated validation gap; do not weaken validation to accommodate a test or provider misconfiguration. |
-| `src/TravelTracker.Security/Authentication/BearerSettings.cs` | Confirm configuration defaults and bounds can match the Supabase Auth project's issuer, `authenticated` audience, scope claim and asymmetric signing algorithm. Change only if the matrix identifies a real gap. |
+| `src/TravelTracker.Security/Authentication/BearerAuthenticationExtensions.cs` | Implements Supabase direct-JWKS validation and preserves OIDC discovery compatibility; validates issuer, signature, audience, expiry, subject, Supabase role and anonymous-user status; emits safe failures. |
+| `src/TravelTracker.Security/Authentication/SupabaseSigningConfigurationRetriever.cs` | Retrieves only the configured Supabase issuer's HTTPS JWKS and binds the key set to that issuer. |
+| `src/TravelTracker.Security/Authentication/BearerSettings.cs` | Configures provider selection plus issuer, audience, scope claim and asymmetric signing algorithm settings. |
 | `src/TravelTracker.Security/Authentication/ScopePolicies.cs` | Confirm exact, case-sensitive scope parsing stays downstream of authenticated principal validation. Do not rename or broaden scopes in this issue. |
 | `src/TravelTracker.Accommodations.Api/Program.cs`, `src/TravelTracker.Attractions.Api/Program.cs`, `src/TravelTracker.Settings.Api/Program.cs`, `src/TravelTracker.Transport.Api/TransportProgram.cs`, `src/TravelTracker.Trips.Api/Program.cs`, `src/TravelTracker.Users.Api/Program.cs` | Verify every host registers the shared handler and runs authentication before authorization. Keep health explicitly anonymous. Edit only a host that fails the audit. |
 | `src/TravelTracker.*.Api/appsettings*.json` and host launch settings | Verify development placeholders are nonfunctional, production settings remain externally configured, and every host uses the intended Supabase issuer and `authenticated` audience without secrets. No checked-in token or key material. Edit only if inconsistent. |
@@ -65,12 +66,13 @@ The tests should exercise at least one real protected route per host for authent
 | `tests/TravelTracker.Trips.Api.Tests/AuthenticationTests.cs` and `Support/TripsApiFactory.cs` | Completed the invalid-token matrix; assert rejected credentials do not trigger place/transport lookups or writes and responses do not echo tokens. Health remains public with malformed bearer input. |
 | `tests/TravelTracker.Users.Tests/UserProfileScopeMatrixTests.cs`, `UsersStartupTests.cs`, and `Support/UsersApiFactory.cs` | Completed the self-profile invalid-token matrix; verify no account provisioning, no token text in responses/logs, and public health with malformed bearer input. |
 | `TravelTracker.Tests.slnx` and `.github/workflows/ci.yml` | Verify all six host test projects already run in CI's non-PostgreSQL group. Add project/workflow wiring only if a required host suite is absent. No PostgreSQL migration or test category is needed for this auth-only scope. |
-| `docs/authentication.md` | Updated the six-host bearer/health/permission map, validated `(iss, sub)` identity rules, safe failure behavior, Users service-token distinction, reproducible commands and provider-test limitations. Existing `docs/api.md` already records the Users route-specific access contract. |
+| `tests/TravelTracker.Transport.Api.Tests/SupabaseAuthenticationTests.cs` and `Support/SupabaseBearerHost.cs` | Exercise Supabase direct JWKS validation, user identity constraints, scope behavior and configuration rejection through the real bearer handler. |
+| `docs/authentication.md` | Aligns the selected-provider setup with Supabase, labels generic OIDC/Auth0 compatibility explicitly, and retains the six-host bearer/health/permission map, validated `(iss, sub)` identity rules, safe failure behavior, Users service-token distinction, reproducible commands and provider-test limitations. Existing `docs/api.md` records the Users route-specific access contract. |
 | `docs/milestone-4/M4-01-plan.md` | This file records implementation scope, validation results and remaining live-provider limitations. |
 
 ## Test and validation plan
 
-Use each host's actual `JwtBearer` handler and isolated RSA test key plus a local discovery/JWKS backchannel stub. Do not replace authentication with a fake principal in tests that claim to prove cryptographic validation.
+Use each host's actual `JwtBearer` handler and isolated signing keys plus local provider backchannel stubs. OIDC compatibility tests use discovery/JWKS; the Supabase-specific Transport tests use the issuer's direct JWKS endpoint. Do not replace authentication with a fake principal in tests that claim to prove cryptographic validation.
 
 For every host, test a valid correctly signed token with the right issuer, audience, lifetime, and required scope reaches the expected protected operation. Test missing credentials; malformed bearer text; unsigned token; invalid signature; wrong issuer; wrong audience; expiration beyond the configured clock-skew allowance; missing expiration; and `nbf` beyond the allowed skew all return `401`. Preserve explicit tests for the configured clock-skew boundary. Include an invalid-token request to anonymous health and confirm health remains public. Separately prove a valid token without the operation's scope receives `403`.
 
@@ -95,7 +97,7 @@ The PostgreSQL group is not directly implicated, but run the same CI matrix wher
 
 ## Implementation and verification record
 
-No production authentication code or API registration required a change: the audit confirmed that all six runnable API hosts use the shared production JWT bearer handler, validate the configured signing key/signature, exact issuer and audience, token lifetime and allowed algorithms, and reject missing/blank/ambiguous subjects after validation. All hosts configure authentication before authorization; health is anonymous. The work therefore closes the cross-host automated coverage and documentation gaps without altering runtime policy.
+The current branch includes Supabase provider support in `TravelTracker.Security` alongside the legacy OIDC compatibility path. The shared handler validates signature, issuer, audience, lifetime and allowed algorithms, and rejects missing/blank/ambiguous subjects; Supabase mode additionally enforces its project issuer, authenticated audience/role and non-anonymous subject. All six hosts configure authentication before authorization; health is anonymous. The previously recorded build and non-PostgreSQL suite results below predate the current Supabase-specific handler/test additions and must not be treated as validation of the current tree.
 
 Files changed:
 
@@ -106,6 +108,8 @@ Files changed:
 - `tests/TravelTracker.Trips.Api.Tests/AuthenticationTests.cs` and `Support/TripsApiFactory.cs`
 - `tests/TravelTracker.Users.Tests/UserProfileScopeMatrixTests.cs`, `UsersStartupTests.cs`, and `Support/UsersApiFactory.cs`
 - `docs/authentication.md`
+- `src/TravelTracker.Security/Authentication/BearerAuthenticationExtensions.cs`, `BearerSettings.cs`, and `SupabaseSigningConfigurationRetriever.cs`
+- `tests/TravelTracker.Transport.Api.Tests/SupabaseAuthenticationTests.cs` and `Support/SupabaseBearerHost.cs`
 
 Validation on branch `bearer-token`:
 
@@ -115,4 +119,4 @@ Validation on branch `bearer-token`:
 - Baseline before edits: full build passed with 0 warnings/errors; the same non-PostgreSQL command passed 1,057 tests.
 - `git diff --check` — passed.
 
-The PostgreSQL group was not run because this change adds no persistence behavior and relational test infrastructure was not needed. Automated JWT tests use isolated local signing keys and discovery stubs; live Supabase project configuration, deployment TLS, uptime, key rotation and Custom Access Token Hook behavior remain unverified. Compare the Milestone 4 Security PDF when available, because it is absent from this checkout.
+The PostgreSQL group was not run because this change adds no persistence behavior and relational test infrastructure was not needed. The recorded automated JWT run used local signing keys and discovery stubs. Current Supabase-specific tests use local direct-JWKS fixtures, but the full current tree has not been revalidated in this record. Live Supabase project configuration, deployment TLS, uptime, key rotation and Custom Access Token Hook behavior remain unverified. Compare the Milestone 4 Security PDF when available, because it is absent from this checkout.
