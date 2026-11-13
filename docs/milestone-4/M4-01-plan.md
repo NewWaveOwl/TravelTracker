@@ -43,7 +43,7 @@ The Milestone 4 Security PDF named by the issue was not found in the repository 
 | Attractions | `GET /api/v1/attractions` and `/{id}`; `POST` and `PATCH` | `catalogue.read`; `catalogue.write` |
 | Transport | transport-mode and route-point collection/detail `GET`; their `POST` routes | `catalogue.read`; `catalogue.write` |
 | Settings | own-settings `GET` and `PUT` | `settings.read`; `settings.write` |
-| Trips | own-trip detail `GET`; trip `POST` | `trips.read`; `trips.write` plus the existing `catalogue.read` dependency permission |
+| Trips | own-trip collection/detail `GET`; trip `POST` and replacement `PUT` | `trips.read`; `trips.write` plus the existing `catalogue.read` dependency permission |
 | Users | self-profile `GET`/`PATCH`, bootstrap/admin routes, and internal identity/access routes | Each existing policy and allowlisted service-subject rule documented in `docs/api.md`; preserve the separate legacy service-token endpoint |
 
 The tests should exercise at least one real protected route per host for authentication, then cover every protected operation's existing authorization policy with the relevant host's scope matrix. Do not treat a valid token that lacks permission as an authentication failure.

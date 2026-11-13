@@ -49,8 +49,9 @@ Authority and Issuer are intentionally independent: a legitimate discovery base 
 | POST `/api/v1/route-points` | `catalogue.write` |
 | GET `/api/v1/settings` | `settings.read` |
 | PUT `/api/v1/settings` | `settings.write` |
-| GET `/api/v1/trips/{id}` | `trips.read` |
+| GET `/api/v1/trips` and `/api/v1/trips/{id}` | `trips.read` |
 | POST `/api/v1/trips` | `trips.write` and `catalogue.read` |
+| PUT `/api/v1/trips/{id}` | `trips.write` and `catalogue.read` |
 | GET `/api/v1/users/me` | `users.read` |
 | PATCH `/api/v1/users/me` | `users.write` |
 | Users bootstrap/admin/internal and legacy service-access routes | The route-specific policy and identity rules in [the API contract](api.md#users-contracts); the legacy `/api/v1/users/access` service credential remains separate |
@@ -84,12 +85,12 @@ The production JWT handler, validation settings, token-validated event and polic
 Run from the repository root after restoring the solution packages:
 
 ```powershell
-dotnet test tests/TravelTracker.Accommodations.Api.Tests --configuration Release --no-restore
-dotnet test tests/TravelTracker.Attractions.Api.Tests --configuration Release --no-restore
-dotnet test tests/TravelTracker.Settings.Api.Tests --configuration Release --no-restore
-dotnet test tests/TravelTracker.Transport.Api.Tests --configuration Release --no-restore
-dotnet test tests/TravelTracker.Trips.Api.Tests --configuration Release --no-restore
-dotnet test tests/TravelTracker.Users.Tests --configuration Release --no-restore
+dotnet test tests/TravelTracker.Accommodations.Api.Tests --configuration Release --no-restore --filter "Category!=PostgreSQL"
+dotnet test tests/TravelTracker.Attractions.Api.Tests --configuration Release --no-restore --filter "Category!=PostgreSQL"
+dotnet test tests/TravelTracker.Settings.Api.Tests --configuration Release --no-restore --filter "Category!=PostgreSQL"
+dotnet test tests/TravelTracker.Transport.Api.Tests --configuration Release --no-restore --filter "Category!=PostgreSQL"
+dotnet test tests/TravelTracker.Trips.Api.Tests --configuration Release --no-restore --filter "Category!=PostgreSQL"
+dotnet test tests/TravelTracker.Users.Tests --configuration Release --no-restore --filter "Category!=PostgreSQL"
 ```
 
 The CI-wide verification is `dotnet build TravelTracker.Tests.slnx --configuration Release` followed by `dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"`. The implementation record in [M4-01 plan](milestone-4/M4-01-plan.md) lists the exact run results. The tests verify local JWT handler behavior and HTTP contracts, not live Auth0 tenant configuration, deployed TLS, provider uptime, or key rotation.
