@@ -16,6 +16,12 @@ API bearer authentication adds no token storage or signing keys to Data. The ind
 
 ## Users persistence
 
+The selected identity provider is now [Supabase Auth](supabase-auth.md). Existing
+account identity pairs and owner identity pairs in the other service databases
+require an explicit coordinated cutover. Changing only the login provider does
+not transfer private data, roles or standing. The operator mapping script retains
+public account IDs and never merges accounts based on matching email addresses.
+
 `TravelTracker.Users.Data` references its own Domain and EF Core/Npgsql only. Its committed migrations create account, permanent bootstrap-consumption and administrator-audit records. Public IDs are application-issued UUIDv7 values. Role changes and bootstrap share a transaction advisory lock, recheck live actor/target standing and roles, protect the last active administrator, and save the role plus actor/target/before/after/reason audit atomically. Listing also checks live administrator authority within the database transaction. First-use provisioning creates an active traveller and preserves existing standing and roles. The account row stores editable profile fields separately from verified provider email. A filtered unique index enforces case-insensitive username uniqueness. Profile writes check active standing and use an optimistic concurrency token.
 
 Use a separate `ConnectionStrings:Users`; the Attractions service consumes the authenticated HTTPS access contract and never reads Users tables. Production uses PostgreSQL. Users HTTP tests use an isolated test repository; Marked PostgreSQL tests exercise migrations, profile persistence, concurrency, permanent bootstrap consumption and audit rollback against disposable databases.
