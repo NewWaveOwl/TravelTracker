@@ -1,6 +1,7 @@
 #:property PublishAot=false
 
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 
 // Offline process tests: no database, token requests, certificate trust changes, or service startup.
@@ -14,12 +15,10 @@ var baseline = new Dictionary<string, string>
 {
     ["PoolerHost"] = "aws-0-us-east-1.pooler.supabase.com",
     ["DatabaseUser"] = "runtime.exampleproject",
-    ["BackendClientId"] = "test-backend-client",
     ["RootCertificate"] = certificate,
-    ["Auth0Domain"] = "dev-example.us.auth0.com",
-    ["FrontendClientId"] = "test-frontend-client",
-    ["Audience"] = "traveltracker-api",
-    ["FrontendType"] = "spa"
+    ["SupabaseUrl"] = "https://exampleproject.supabase.co",
+    ["PublishableKey"] = "sb_publishable_offline_fixture",
+    ["ServiceEmail"] = "service@example.test"
 };
 var passed = 0;
 try
@@ -29,12 +28,19 @@ try
     await Check("direct host explains session pooler requirement", Changed("PoolerHost", "db.example.supabase.co"), "--check-config", 1, "Session pooler");
     await Check("pooler username requires project suffix", Changed("DatabaseUser", "postgres"), "--check-config", 1, "project-reference suffix");
     await Check("missing certificate explains local path", Changed("RootCertificate", Path.Combine(temporary, "missing.crt")), "--check-config", 1, "does not exist on this machine");
-    await Check("placeholder client rejected", Changed("FrontendClientId", "YOUR-FRONTEND-CLIENT-ID"), "--check-config", 1, "example placeholder");
-    await Check("domain URL normalized", Changed("Auth0Domain", "https://dev-example.us.auth0.com/"), "--setup", 0, "configuration is valid");
-    Require(JsonDocument.Parse(File.ReadAllText(configPath)).RootElement.GetProperty("Auth0Domain").GetString() == "dev-example.us.auth0.com", "Domain normalization failed");
-    await Check("domain with path rejected", Changed("Auth0Domain", "dev-example.us.auth0.com/path"), "--check-config", 1, "without a path");
-    await Check("regular frontend type accepted", Changed("FrontendType", "regular"), "--check-config", 0, "configuration is valid");
-    await Check("invalid frontend type rejected", Changed("FrontendType", "native"), "--check-config", 1, "spa or regular");
+    await Check("placeholder public key rejected", Changed("PublishableKey", "YOUR-PUBLISHABLE-KEY"), "--check-config", 1, "example placeholder");
+    await Check("project URL normalized", Changed("SupabaseUrl", "https://exampleproject.supabase.co/"), "--setup", 0, "configuration is valid");
+    Require(JsonDocument.Parse(File.ReadAllText(configPath)).RootElement.GetProperty("SupabaseUrl").GetString() == "https://exampleproject.supabase.co", "Project URL normalization failed");
+    await Check("project URL with path rejected", Changed("SupabaseUrl", "https://exampleproject.supabase.co/auth/v1"), "--check-config", 1, "without a path");
+    await Check("non-Supabase project URL rejected", Changed("SupabaseUrl", "https://attacker.example.test"), "--check-config", 1, "HTTPS Project URL");
+    await Check("insecure project URL rejected", Changed("SupabaseUrl", "http://exampleproject.supabase.co"), "--check-config", 1, "HTTPS Project URL");
+    await Check("project URL credentials rejected", Changed("SupabaseUrl", "https://do-not-print-this@exampleproject.supabase.co"), "--check-config", 1, "HTTPS Project URL");
+    await Check("secret API key rejected", Changed("PublishableKey", "sb_secret_do-not-print-this"), "--check-config", 1, "never accepted");
+    await Check("legacy anon key accepted", Changed("PublishableKey", JwtKey("anon")), "--check-config", 0, "configuration is valid");
+    await Check("legacy service_role key rejected", Changed("PublishableKey", JwtKey("service_role")), "--check-config", 1, "never accepted");
+    await Check("invalid service email rejected", Changed("ServiceEmail", "not-an-email"), "--check-config", 1, "valid email address");
+    var legacy = new Dictionary<string, string>(baseline) { ["Auth0Domain"] = "old.example.auth0.com" };
+    await Check("legacy Auth0 settings explain migration", legacy, "--setup", 1, "use Auth0");
     var secretField = new Dictionary<string, string>(baseline) { ["Password"] = "do-not-print-this" };
     await Check("secret fields rejected without disclosure", secretField, "--setup", 1, "unsupported fields");
     await Check("URI password discarded on save", Changed("PoolerHost", "postgresql://runtime.exampleproject:do-not-print-this@aws-0-us-east-1.pooler.supabase.com:5432/postgres"), "--setup", 0, "configuration is valid");
@@ -90,7 +96,7 @@ async Task Check(string name, Dictionary<string, string> config, string option, 
 }
 
 /**
- * Executes the prebuilt launcher with isolated settings and closed standard input.
+ * Executes the launcher with isolated settings and closed standard input.
  * @param option Configuration-only operation to execute.
  * @return Exit status and captured output.
  */
@@ -101,9 +107,10 @@ async Task<(int Code, string Output)> Run(string option)
         WorkingDirectory = repo, UseShellExecute = false,
         RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true
     };
-    foreach (var argument in new[] { "run", "--file", "scripts/StartSupabaseDev.cs", "--no-build", "--", option })
+    foreach (var argument in new[] { "run", "--file", "scripts/StartSupabaseDev.cs", "--", option })
         start.ArgumentList.Add(argument);
-    foreach (var key in start.Environment.Keys.Where(key => key.StartsWith("Auth0__") || key.StartsWith("Authentication__Bearer__")).ToArray())
+    foreach (var key in start.Environment.Keys.Where(key => key.StartsWith("Auth0__") || key.StartsWith("Supabase__") ||
+        key.StartsWith("Authentication__Bearer__") || key == "TRAVELTRACKER_SERVICE_EMAIL").ToArray())
         start.Environment.Remove(key);
     start.Environment["TRAVELTRACKER_LAUNCH_CONFIG"] = configPath;
     using var process = Process.Start(start)!;
@@ -125,4 +132,16 @@ static void Require(bool condition, string message)
 {
     if (!condition)
         throw new InvalidOperationException(message);
+}
+
+/**
+ * Creates an offline API-key-shaped fixture; no signature or live project is implied.
+ * @param role The API-key role under validation.
+ * @return A syntactically valid JWT-shaped fixture.
+ */
+static string JwtKey(string role)
+{
+    var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { role })))
+        .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    return "eyJhbGciOiJIUzI1NiJ9." + payload + ".offline";
 }
