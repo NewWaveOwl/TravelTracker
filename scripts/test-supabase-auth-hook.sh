@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Keep this script LF-terminated for Linux runners (see .gitattributes).
 # Uses standard PGHOST/PGPORT/PGUSER/PGPASSWORD settings on an isolated test server.
 # Never run against the shared Supabase project. CI supplies its disposable PostgreSQL.
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
