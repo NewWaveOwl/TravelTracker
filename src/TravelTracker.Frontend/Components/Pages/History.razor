@@ -1,8 +1,16 @@
 @page "/history"
 
-<PageTitle>Trip history | TravelTracker</PageTitle>
-<PageHeading Title="History" />
+@if (!Embedded)
+{
+    <PageTitle>Trip history | TravelTracker</PageTitle>
+    <PageHeading Title="History" />
+}
+else
+{
+    <h2>Open saved trip</h2>
+}
 
+<div class="history-workspace">
 @if (loading)
 {
     <Feedback Kind="FeedbackKind.Loading">Loading your saved trips…</Feedback>
@@ -26,20 +34,67 @@ else if (failure is not null)
 else if (trips.Count == 0)
 {
     <Feedback Kind="FeedbackKind.Empty" Title="No saved trips yet">
-        <a href="new-trip">Plan a trip</a> and save it to see it here.
+        <a href="trip">Create a trip</a> and save it to see it here.
     </Feedback>
 }
 else
 {
-    <p>Open a saved trip to view its map and copy its address from your browser.</p>
-    <ul aria-label="Saved trips">
-        @foreach (var trip in trips)
+    var matches = FilteredTrips();
+    <div class="history-filters" aria-label="Filter saved trips">
+        <label>Search trips <input type="search" @bind="search" @bind:event="oninput" @bind:after="ResetPage" placeholder="Trip name" /></label>
+        <label>From date <input type="date" @bind="fromDate" @bind:after="ResetPage" /></label>
+        <label>Through date <input type="date" @bind="throughDate" @bind:after="ResetPage" /></label>
+        <label>Status
+            <select @bind="status" @bind:after="ResetPage">
+                <option value="all">All trips</option>
+                <option value="completed">Completed</option>
+                <option value="current">In progress</option>
+                <option value="upcoming">Upcoming</option>
+            </select>
+        </label>
+        <label>Order
+            <select @bind="order" @bind:after="ResetPage">
+                <option value="past">Past trips first</option>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="name">Name A–Z</option>
+            </select>
+        </label>
+        <button type="button" class="secondary" @onclick="ClearFilters">Clear filters</button>
+    </div>
+    @if (InvalidDates)
+    {
+        <p role="alert">From date must be on or before through date.</p>
+    }
+    else if (matches.Count == 0)
+    {
+        <Feedback Kind="FeedbackKind.Empty" Title="No trips match your filters">Change the search, dates or status, or clear the filters to see all your saved trips.</Feedback>
+    }
+    else
+    {
+    <p role="status">@matches.Count of @trips.Count saved trips</p>
+    <ul class="history-list" aria-label="Saved trips">
+        @foreach (var trip in matches.Skip(pageIndex * PageSize).Take(PageSize))
         {
-            <li @key="trip.TripId">
-                <a href="@($"map/{trip.TripId:D}")">@trip.Name</a>
-                <p><time datetime="@trip.Start.ToString("O")">@trip.Start.ToString("d")</time>
-                    to <time datetime="@trip.End.ToString("O")">@trip.End.ToString("d")</time></p>
+            <li @key="trip.TripId" class="history-card">
+                <div>
+                    <h3>@TripName(trip)</h3>
+                    <p><time datetime="@trip.Start.ToString("O")">@trip.Start.ToString("MMM d, yyyy")</time>
+                        – <time datetime="@trip.End.ToString("O")">@trip.End.ToString("MMM d, yyyy")</time></p>
+                    <span class="history-status" data-status="@Status(trip)">@StatusLabel(trip)</span>
+                </div>
+                <a class="button" href="@($"map/{trip.TripId:D}")" aria-label="@($"Open {TripName(trip)}")">Open trip</a>
             </li>
         }
     </ul>
+    @if (matches.Count > PageSize)
+    {
+        <nav class="history-pages" aria-label="Saved trip pages">
+            <button type="button" class="secondary" disabled="@(pageIndex == 0)" @onclick="() => pageIndex--">Previous</button>
+            <span>Page @(pageIndex + 1) of @((matches.Count + PageSize - 1) / PageSize)</span>
+            <button type="button" class="secondary" disabled="@((pageIndex + 1) * PageSize >= matches.Count)" @onclick="() => pageIndex++">Next</button>
+        </nav>
+    }
+    }
 }
+</div>

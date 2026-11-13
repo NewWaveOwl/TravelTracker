@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Protocols;
 
 namespace TravelTracker.Api.Authentication;
 
@@ -24,8 +25,11 @@ public static class BearerAuthenticationExtensions
     public static IServiceCollection AddApiBearerAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<BearerSettings>().Bind(configuration.GetSection(BearerSettings.SectionName))
+            .Validate(settings => settings.Provider is "Oidc" or "Supabase", "Bearer Provider must be Oidc or Supabase.")
             .Validate(settings => IsHttps(settings.Authority), "Bearer Authority must be an absolute HTTPS URL.")
             .Validate(settings => IsHttps(settings.Issuer), "Bearer Issuer must be an absolute HTTPS URL.")
+            .Validate(settings => settings.Provider != "Supabase" || IsSupabaseIssuer(settings),
+                "Supabase Authority and Issuer must identify the same HTTPS /auth/v1 issuer, without a trailing slash on Issuer.")
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Audience), "Bearer Audience is required.")
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.ScopeClaimType), "Bearer ScopeClaimType is required.")
             .Validate(settings => settings.ClockSkewSeconds is >= 0 and <= 120,
@@ -45,6 +49,17 @@ public static class BearerAuthenticationExtensions
                 options.RequireHttpsMetadata = true;
                 options.MapInboundClaims = false;
                 options.IncludeErrorDetails = false;
+                if (bearer.Provider == "Supabase")
+                {
+                    // Supabase publishes JWKS directly; it is not an OIDC discovery document.
+                    options.MetadataAddress = bearer.Issuer + "/.well-known/jwks.json";
+                    options.Backchannel ??= new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+                    {
+                        Timeout = TimeSpan.FromSeconds(10)
+                    };
+                    options.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(options.MetadataAddress,
+                        new SupabaseSigningConfigurationRetriever(bearer.Issuer), new HttpDocumentRetriever(options.Backchannel) { RequireHttps = true });
+                }
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
@@ -92,7 +107,16 @@ public static class BearerAuthenticationExtensions
                         // Never substitute a request header or body value for the validated subject.
                         var subjects = context.Principal?.FindAll("sub").ToArray();
                         if (subjects is not { Length: 1 } || string.IsNullOrWhiteSpace(subjects[0].Value))
+                        {
                             context.Fail("A single subject is required.");
+                            return;
+                        }
+                        if (bearer.Provider == "Supabase" &&
+                            (!Guid.TryParse(subjects[0].Value, out var subject) || subject == Guid.Empty ||
+                             context.Principal!.FindAll("role").Select(claim => claim.Value).ToArray() is not ["authenticated"] ||
+                             context.Principal.FindAll("is_anonymous").Any(claim =>
+                                 string.Equals(claim.Value, "true", StringComparison.OrdinalIgnoreCase))))
+                            context.Fail("A non-anonymous authenticated Supabase user is required.");
                     },
                     OnAuthenticationFailed = context =>
                     {
@@ -130,4 +154,14 @@ public static class BearerAuthenticationExtensions
      */
     private static bool IsHttps(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
+
+    /**
+     * Pins the Supabase key endpoint to a credential-free HTTPS Auth issuer.
+     * @param settings Resource-server provider configuration.
+     * @return Whether the authority and exact issuer describe the same Auth service.
+     */
+    private static bool IsSupabaseIssuer(BearerSettings settings) =>
+        Uri.TryCreate(settings.Issuer, UriKind.Absolute, out var issuer) && issuer.Scheme == Uri.UriSchemeHttps &&
+        issuer.UserInfo.Length == 0 && issuer.Query.Length == 0 && issuer.Fragment.Length == 0 &&
+        issuer.AbsolutePath == "/auth/v1" && settings.Authority.TrimEnd('/') == settings.Issuer;
 }

@@ -1,12 +1,23 @@
 # API bearer authentication (#34)
 
-**Selected identity provider: Auth0** (owner decision, 2026-11-03). The Blazor frontend uses the ASP.NET Core OpenID Connect handler for hosted sign-in, authorization-code flow with PKCE, access-token acquisition and logout. Each API remains a resource server: it validates Auth0-issued access tokens against its configured issuer, audience and scopes. See [Auth0 application/API registration, local configuration and live verification](frontend-auth0.md).
+**Selected identity provider: Supabase Auth** (owner decision, 2026-11-12), replacing Auth0. See [Supabase configuration and account cutover](supabase-auth.md). The guided launcher configures Supabase email/password login and the APIs' trusted project JWKS, exact issuer, `authenticated` audience and signed scopes. The explicit Auth0 compatibility path and its historical verification remain in [the earlier guide](frontend-auth0.md).
 
-Auth0 handles credentials and authentication; the Users service remains responsible for TravelTracker profiles, roles and account standing. Provider selection does not replace those checks. Expiry and permission-failure behavior is covered by automated client and backend tests; see the linked evidence for limits. Any client secret stays on the Blazor server, never in the browser.
+Supabase Auth handles credentials and authentication; the Users service remains responsible for TravelTracker profiles, roles and account standing. Provider selection does not replace those checks. Expiry and permission-failure behavior is covered by automated client and backend tests; see the linked evidence for limits. Public API keys do not grant administrator authority, and Supabase secret/service-role keys must never be used as traveller tokens.
 
 The independent `TravelTracker.Transport.Api` is the representative resource server. It validates access tokens with ASP.NET Core's real JWT bearer handler. It does not issue tokens or implement sign-in. Other service issues must adopt this pattern and independently verify their endpoints.
 
 ## Configuration and startup
+
+For the selected provider use `Authentication:Bearer:Provider=Supabase`, Authority
+and Issuer `https://PROJECT.supabase.co/auth/v1`, Audience `authenticated`, and
+allowed asymmetric algorithms matching the project (ES256 or RS256). Supabase
+signing keys come directly from the issuer's `/.well-known/jwks.json`; the OIDC
+discovery issuer check described below applies to the legacy OIDC configuration.
+The signed `scope` claim is produced by the access-token hook in the Supabase guide.
+Without the hook, tokens do not gain TravelTracker feature permissions.
+
+The following generic OIDC examples are retained for explicit Auth0 compatibility
+and existing resource-server tests; they are not the Supabase launcher setup.
 
 After configuring `ConnectionStrings__Transport` and migrations ([Transport startup](transport-service.md)), `dotnet run --project src/TravelTracker.Transport.Api --launch-profile http` starts in Development using the placeholder identity settings in `appsettings.Development.json`. Health and Swagger work immediately and anonymous catalogue requests return `401`. These placeholders do not provide a running identity provider or valid access tokens. There are no signing keys or authentication bypasses in Development defaults.
 
