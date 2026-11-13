@@ -65,7 +65,10 @@ jobs:
           PGHOST: 127.0.0.1
           PGPORT: 5432
           PGUSER: postgres
-        run: bash scripts/test-supabase-auth-hook.sh
+        run: |
+          # GitHub's editor can retain CRLF in an existing script despite eol=lf.
+          sed -i 's/\r$//' scripts/test-supabase-auth-hook.sh
+          bash scripts/test-supabase-auth-hook.sh
       # publish results even when tests fail so reviewers can inspect them
       - uses: actions/upload-artifact@v4
         if: always()
