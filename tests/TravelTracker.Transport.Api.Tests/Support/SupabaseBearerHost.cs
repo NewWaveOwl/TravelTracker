@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 
 namespace TravelTracker.Transport.Api.Tests;
 

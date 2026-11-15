@@ -8,13 +8,8 @@ namespace TravelTracker.Api.Tests.Trips;
 /**
  * Proves the reference checks over stubbed HTTP: live standing, visibility, dependency failures, credentials and snapshot values.
  */
-public sealed class TripReferenceValidatorTests {
-    private static readonly string HotelPath = $"/api/v1/accommodations/{TripFixture.Hotel:D}";
-    private static readonly string MuseumPath = $"/api/v1/attractions/{TripFixture.Museum:D}";
-    private static readonly string StopPath = $"/api/v1/route-points/{TripFixture.Stop:D}";
-    private static readonly string TrainPath = $"/api/v1/transport-modes/{TripFixture.Train:D}";
-    private static readonly string IdentityPath = "/internal/users/identity";
-    private static readonly string AccessPath = $"/internal/users/{TripFixture.UserId:D}/access";
+public sealed class TripReferenceValidatorTests
+{
 
     /**
      * Runs the validator for the standard one-way draft and caller.
@@ -38,7 +33,8 @@ public sealed class TripReferenceValidatorTests {
      * Valid references produce the snapshot values the owning services returned.
      */
     [Fact]
-    public async Task Validate_ValidReferences_ProducesSnapshotValues() {
+    public async Task Validate_ValidReferences_ProducesSnapshotValues()
+    {
         var outcome = await ValidateAsync(TripFixture.HealthyUpstream());
 
         Assert.Equal(TripReferenceStatus.Ready, outcome.Status);
@@ -53,7 +49,8 @@ public sealed class TripReferenceValidatorTests {
      * The caller's token reaches the catalogue hosts only, and the backend credential reaches Users only.
      */
     [Fact]
-    public async Task Validate_SendsCallerTokenToCatalogueAndServiceTokenToUsers() {
+    public async Task Validate_SendsCallerTokenToCatalogueAndServiceTokenToUsers()
+    {
         var upstream = TripFixture.HealthyUpstream();
         await ValidateAsync(upstream);
 
@@ -71,9 +68,10 @@ public sealed class TripReferenceValidatorTests {
     [Theory]
     [InlineData(HttpStatusCode.NotFound)]
     [InlineData(HttpStatusCode.Forbidden)]
-    public async Task Validate_MissingOrInaccessiblePlace_RejectsWithFieldAndNoTrip(HttpStatusCode status) {
+    public async Task Validate_MissingOrInaccessiblePlace_RejectsWithFieldAndNoTrip(HttpStatusCode status)
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Respond("GET", MuseumPath, status);
+        upstream.Respond("GET", TripFixture.MuseumPath, status);
 
         var outcome = await ValidateAsync(upstream);
 
@@ -87,9 +85,10 @@ public sealed class TripReferenceValidatorTests {
      * A transport mode that is absent blocks the save and names the transport field.
      */
     [Fact]
-    public async Task Validate_MissingTransportMode_RejectsWithTransportField() {
+    public async Task Validate_MissingTransportMode_RejectsWithTransportField()
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Respond("GET", TrainPath, HttpStatusCode.NotFound);
+        upstream.Respond("GET", TripFixture.TrainPath, HttpStatusCode.NotFound);
 
         var outcome = await ValidateAsync(upstream);
 
@@ -101,9 +100,10 @@ public sealed class TripReferenceValidatorTests {
      * A transport stop reference must name a record that Transport reports as a transport stop.
      */
     [Fact]
-    public async Task Validate_TransportStopThatIsNotAStop_RejectsWithFromField() {
+    public async Task Validate_TransportStopThatIsNotAStop_RejectsWithFromField()
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Respond("GET", StopPath, HttpStatusCode.OK, new { routePointId = TripFixture.Stop, type = "attraction", name = "x", address = "y", lat = 1m, lon = 2m });
+        upstream.Respond("GET", TripFixture.StopPath, HttpStatusCode.OK, new { routePointId = TripFixture.Stop, type = "attraction", name = "x", address = "y", lat = 1m, lon = 2m });
         var draft = new TripDraft("stop", TimeZoneInfo.FindSystemTimeZoneById("Europe/Paris"), TripFixture.Start, TripFixture.Start.AddHours(4), false,
             [new(1, new(TripFixture.Stop, "transport_stop"), new(TripFixture.Museum, "attraction"), TripFixture.Train, TripFixture.Start.AddHours(1), TripFixture.Start.AddHours(2))]);
 
@@ -121,9 +121,10 @@ public sealed class TripReferenceValidatorTests {
     [Theory]
     [InlineData("banned")]
     [InlineData("deactivated")]
-    public async Task Validate_BannedOrDeactivatedAccount_RejectsBeforeAnyCatalogueCall(string status) {
+    public async Task Validate_BannedOrDeactivatedAccount_RejectsBeforeAnyCatalogueCall(string status)
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Respond("GET", AccessPath, HttpStatusCode.OK, new { userId = TripFixture.UserId, status, role = "traveller" });
+        upstream.Respond("GET", TripFixture.AccessPath, HttpStatusCode.OK, new { userId = TripFixture.UserId, status, role = "traveller" });
 
         var outcome = await ValidateAsync(upstream);
 
@@ -135,9 +136,10 @@ public sealed class TripReferenceValidatorTests {
      * A sign-in with no matching account cannot save, and no catalogue is read for it.
      */
     [Fact]
-    public async Task Validate_UnknownAccount_RejectsBeforeAnyCatalogueCall() {
+    public async Task Validate_UnknownAccount_RejectsBeforeAnyCatalogueCall()
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Respond("POST", IdentityPath, HttpStatusCode.NotFound);
+        upstream.Respond("POST", TripFixture.IdentityPath, HttpStatusCode.NotFound);
 
         var outcome = await ValidateAsync(upstream);
 
@@ -153,9 +155,10 @@ public sealed class TripReferenceValidatorTests {
     [Theory]
     [InlineData(HttpStatusCode.ServiceUnavailable)]
     [InlineData(HttpStatusCode.Unauthorized)]
-    public async Task Validate_UsersAnswersWithFailure_FailsClosedWithoutCatalogueCall(HttpStatusCode status) {
+    public async Task Validate_UsersAnswersWithFailure_FailsClosedWithoutCatalogueCall(HttpStatusCode status)
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Respond("POST", IdentityPath, status);
+        upstream.Respond("POST", TripFixture.IdentityPath, status);
 
         var outcome = await ValidateAsync(upstream);
 
@@ -168,9 +171,10 @@ public sealed class TripReferenceValidatorTests {
      * A Users timeout fails closed without reading the catalogue.
      */
     [Fact]
-    public async Task Validate_UsersTimesOut_FailsClosedWithoutCatalogueCall() {
+    public async Task Validate_UsersTimesOut_FailsClosedWithoutCatalogueCall()
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Fail("POST", IdentityPath, new TaskCanceledException("timed out"));
+        upstream.Fail("POST", TripFixture.IdentityPath, new TaskCanceledException("timed out"));
 
         var outcome = await ValidateAsync(upstream);
 
@@ -182,9 +186,10 @@ public sealed class TripReferenceValidatorTests {
      * An identity answer that disagrees with the access answer is not trusted.
      */
     [Fact]
-    public async Task Validate_AccessAnswersForAnotherAccount_FailsClosed() {
+    public async Task Validate_AccessAnswersForAnotherAccount_FailsClosed()
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Respond("GET", AccessPath, HttpStatusCode.OK, new { userId = Guid.NewGuid(), status = "active", role = "traveller" });
+        upstream.Respond("GET", TripFixture.AccessPath, HttpStatusCode.OK, new { userId = Guid.Parse("0196a1b2-0000-7000-8000-0000000000ff"), status = "active", role = "traveller" });
 
         var outcome = await ValidateAsync(upstream);
 
@@ -195,9 +200,10 @@ public sealed class TripReferenceValidatorTests {
      * A catalogue outage blocks the save with no trip, so nothing partial can be stored.
      */
     [Fact]
-    public async Task Validate_CatalogueUnavailable_BlocksWithoutTrip() {
+    public async Task Validate_CatalogueUnavailable_BlocksWithoutTrip()
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Respond("GET", MuseumPath, HttpStatusCode.ServiceUnavailable);
+        upstream.Respond("GET", TripFixture.MuseumPath, HttpStatusCode.ServiceUnavailable);
 
         var outcome = await ValidateAsync(upstream);
 
@@ -209,9 +215,10 @@ public sealed class TripReferenceValidatorTests {
      * A catalogue timeout blocks the save as an unavailable dependency.
      */
     [Fact]
-    public async Task Validate_CatalogueTimesOut_BlocksAsDependencyUnavailable() {
+    public async Task Validate_CatalogueTimesOut_BlocksAsDependencyUnavailable()
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Fail("GET", HotelPath, new TaskCanceledException("timed out"));
+        upstream.Fail("GET", TripFixture.HotelPath, new TaskCanceledException("timed out"));
 
         var outcome = await ValidateAsync(upstream);
 
@@ -222,9 +229,10 @@ public sealed class TripReferenceValidatorTests {
      * A catalogue that rejects the caller's token reports an unauthorized outcome.
      */
     [Fact]
-    public async Task Validate_CatalogueRejectsCallerToken_ReportsUnauthorized() {
+    public async Task Validate_CatalogueRejectsCallerToken_ReportsUnauthorized()
+    {
         var upstream = TripFixture.HealthyUpstream();
-        upstream.Respond("GET", HotelPath, HttpStatusCode.Unauthorized);
+        upstream.Respond("GET", TripFixture.HotelPath, HttpStatusCode.Unauthorized);
 
         var outcome = await ValidateAsync(upstream);
 
@@ -232,22 +240,46 @@ public sealed class TripReferenceValidatorTests {
     }
 
     /**
-     * Cancelling the caller's request stops the check instead of being reported as an outage.
+     * Once the first lookup is refused for the caller's credential, the remaining lookups of the same leg are never sent.
      */
     [Fact]
-    public async Task Validate_CallerCancels_PropagatesCancellation() {
+    public async Task Validate_CatalogueRejectsCallerToken_SkipsLaterLookups()
+    {
+        var upstream = TripFixture.HealthyUpstream();
+        upstream.Respond("GET", TripFixture.HotelPath, HttpStatusCode.Unauthorized);
+
+        var outcome = await ValidateAsync(upstream);
+
+        Assert.Equal(TripReferenceStatus.Unauthorized, outcome.Status);
+        Assert.DoesNotContain(upstream.Calls, call => call.Contains(TripFixture.MuseumPath) || call.Contains(TripFixture.TrainPath));
+    }
+
+    /**
+     * Cancelling the caller's request while a catalogue lookup is in flight stops the check instead of being reported as an outage,
+     * and no further upstream call follows the cancellation.
+     */
+    [Fact]
+    public async Task Validate_CallerCancelsDuringLookup_PropagatesCancellation()
+    {
+        var upstream = TripFixture.HealthyUpstream();
+        upstream.Stall("GET", TripFixture.HotelPath);
         using var cancellation = new CancellationTokenSource();
+        var validation = TripFixture.CreateValidator(upstream).ValidateAsync(TripFixture.Caller, TripFixture.CallerToken, TripFixture.OneWayDraft(), cancellation.Token);
+
+        await upstream.WaitForStallAsync("GET", TripFixture.HotelPath);
+        var callsAtCancellation = upstream.Calls.Count;
         await cancellation.CancelAsync();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            TripFixture.CreateValidator(TripFixture.HealthyUpstream()).ValidateAsync(TripFixture.Caller, TripFixture.CallerToken, TripFixture.OneWayDraft(), cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => validation);
+        Assert.Equal(callsAtCancellation, upstream.Calls.Count);
     }
 
     /**
      * A missing caller identity or token is rejected before any outbound call.
      */
     [Fact]
-    public async Task Validate_IncompleteCaller_RejectsBeforeAnyOutboundCall() {
+    public async Task Validate_IncompleteCaller_RejectsBeforeAnyOutboundCall()
+    {
         var upstream = TripFixture.HealthyUpstream();
 
         var outcome = await TripFixture.CreateValidator(upstream).ValidateAsync(new("", "sub"), TripFixture.CallerToken, TripFixture.OneWayDraft(), CancellationToken.None);
@@ -257,10 +289,11 @@ public sealed class TripReferenceValidatorTests {
     }
 
     /**
-     * An unsupported place type is an invalid trip and is reported before any outbound call.
+     * An unsupported place type is an invalid trip and is reported before any catalogue lookup.
      */
     [Fact]
-    public async Task Validate_UnsupportedPlaceType_IsInvalidWithoutOutboundCall() {
+    public async Task Validate_UnsupportedPlaceType_IsInvalidWithoutCatalogueLookup()
+    {
         var upstream = TripFixture.HealthyUpstream();
         var draft = new TripDraft("bad", TimeZoneInfo.FindSystemTimeZoneById("Europe/Paris"), TripFixture.Start, TripFixture.Start.AddHours(4), false,
             [new(1, new(TripFixture.Hotel, "hostel"), new(TripFixture.Museum, "attraction"), TripFixture.Train, TripFixture.Start.AddHours(1), TripFixture.Start.AddHours(2))]);
@@ -269,14 +302,15 @@ public sealed class TripReferenceValidatorTests {
 
         Assert.Equal(TripReferenceStatus.InvalidTrip, outcome.Status);
         Assert.Equal("legs[0].from", Assert.Single(outcome.Errors).Field);
-        Assert.Empty(upstream.Calls);
+        Assert.DoesNotContain(upstream.Calls, call => call.Contains("/api/v1/"));
     }
 
     /**
      * Every reference can be real and the itinerary can still break a trip rule, which is reported against its field.
      */
     [Fact]
-    public async Task Validate_ValidReferencesButBrokenItinerary_ReportsTripRuleWithoutTrip() {
+    public async Task Validate_ValidReferencesButBrokenItinerary_ReportsTripRuleWithoutTrip()
+    {
         var draft = new TripDraft("loop", TimeZoneInfo.FindSystemTimeZoneById("Europe/Paris"), TripFixture.Start, TripFixture.Start.AddHours(4), false,
             [new(1, new(TripFixture.Hotel, "accommodation"), new(TripFixture.Hotel, "accommodation"), TripFixture.Train, TripFixture.Start.AddHours(1), TripFixture.Start.AddHours(2))]);
 
@@ -285,5 +319,57 @@ public sealed class TripReferenceValidatorTests {
         Assert.Equal(TripReferenceStatus.InvalidTrip, outcome.Status);
         Assert.Null(outcome.Trip);
         Assert.Contains(outcome.Errors, error => error.Field == "legs[0].to");
+    }
+
+    /**
+     * A connection that breaks while the answer is read fails closed as unavailable instead of escaping as an exception.
+     */
+    [Fact]
+    public async Task Validate_ConnectionResetWhileReading_IsDependencyUnavailable()
+    {
+        var upstream = TripFixture.HealthyUpstream();
+        upstream.Fail("GET", TripFixture.MuseumPath, new IOException("connection reset"));
+
+        var outcome = await ValidateAsync(upstream);
+
+        Assert.Equal(TripReferenceStatus.DependencyUnavailable, outcome.Status);
+        Assert.Null(outcome.Trip);
+    }
+
+    /**
+     * A place answer with a blank address or coordinates outside the globe is never snapshotted.
+     *
+     * @param address The address the catalogue returns.
+     * @param lat The latitude the catalogue returns.
+     */
+    [Theory]
+    [InlineData("", 48.86)]
+    [InlineData("   ", 48.86)]
+    [InlineData("Rue de Rivoli", 91.0)]
+    [InlineData("Rue de Rivoli", -91.0)]
+    public async Task Validate_UnusablePlaceAnswer_FailsClosed(string address, double lat)
+    {
+        var upstream = TripFixture.HealthyUpstream();
+        upstream.Respond("GET", TripFixture.MuseumPath, HttpStatusCode.OK, new { name = "Louvre", address, lat = (decimal)lat, lon = 2.34m });
+
+        var outcome = await ValidateAsync(upstream);
+
+        Assert.Equal(TripReferenceStatus.DependencyUnavailable, outcome.Status);
+        Assert.Null(outcome.Trip);
+    }
+
+    /**
+     * An access token with interior whitespace is refused before any outbound call.
+     */
+    [Fact]
+    public async Task Validate_TokenWithWhitespace_IsUnauthorizedWithoutOutboundCall()
+    {
+        var upstream = TripFixture.HealthyUpstream();
+
+        var outcome = await TripFixture.CreateValidator(upstream)
+            .ValidateAsync(TripFixture.Caller, "two words", TripFixture.OneWayDraft(), CancellationToken.None);
+
+        Assert.Equal(TripReferenceStatus.Unauthorized, outcome.Status);
+        Assert.Empty(upstream.Calls);
     }
 }

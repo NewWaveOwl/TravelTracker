@@ -10,7 +10,9 @@ public sealed class AccommodationDraft
     public string Address { get; set; } = "";
     public string Lat { get; set; } = "";
     public string Lon { get; set; } = "";
-    public string Visibility { get; set; } = "private";
+    public const string PrivateVisibility = "private";
+    public const string SharedVisibility = "shared";
+    public string Visibility { get; set; } = PrivateVisibility;
 
     /**
      * Checks required name, coordinate ranges and supported visibility before a request is sent.
@@ -20,9 +22,9 @@ public sealed class AccommodationDraft
     {
         var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(Name)) errors["name"] = ["Enter an accommodation name."];
-        if (!Coordinate(Lat, -90, 90)) errors["lat"] = ["Enter a latitude from −90 to 90."];
-        if (!Coordinate(Lon, -180, 180)) errors["lon"] = ["Enter a longitude from −180 to 180."];
-        if (Visibility is not ("private" or "shared")) errors["visibility"] = ["Choose private or shared visibility."];
+        if (!RangeRules.IsDecimalInRange(Lat, -90, 90)) errors["lat"] = ["Enter a latitude from -90 to 90."];
+        if (!RangeRules.IsDecimalInRange(Lon, -180, 180)) errors["lon"] = ["Enter a longitude from -180 to 180."];
+        if (Visibility is not (PrivateVisibility or SharedVisibility)) errors["visibility"] = ["Choose private or shared visibility."];
         return errors;
     }
 
@@ -31,9 +33,6 @@ public sealed class AccommodationDraft
      * @return Writable values with trimmed name and non-null address.
      */
     public CreateAccommodationRequest ToRequest() => new(Name.Trim(), Address, ParseCoordinate(Lat), ParseCoordinate(Lon), Visibility);
-
-    static bool Coordinate(string text, decimal minimum, decimal maximum) =>
-        decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value >= minimum && value <= maximum;
 
     static decimal ParseCoordinate(string text) => decimal.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
 }

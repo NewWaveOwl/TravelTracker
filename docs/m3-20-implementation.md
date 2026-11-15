@@ -12,13 +12,13 @@ Design references: [search/results](https://www.figma.com/design/7eOFtBm64Ep9fQX
 
 ## Validation
 
-- `dotnet restore TravelTracker.slnx --disable-parallel -m:1 -p:NuGetAudit=false` — succeeded using cached packages. A normal restore first failed with `NU1900` because `api.nuget.org` vulnerability data was unreachable. NuGet audit was disabled only for local restore; package versions were not changed.
-- `dotnet restore TravelTracker.Tests.slnx --disable-parallel -m:1 -p:NuGetAudit=false` — succeeded.
-- `dotnet build TravelTracker.slnx --configuration Release --no-restore -m:1` — succeeded, 0 warnings and 0 errors.
-- `dotnet build TravelTracker.Tests.slnx --configuration Release --no-restore -m:1` — succeeded, 0 warnings and 0 errors.
-- `dotnet test tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~Accommodation" -m:1` — 26 passed, 0 failed, 0 skipped.
-- `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL" -m:1` — 947 passed, 0 failed, 0 skipped. Data-test assemblies contain only PostgreSQL-category cases and therefore had no tests under this filter.
-- `git diff --check` — passed.
+- `dotnet restore TravelTracker.slnx --disable-parallel -m:1 -p:NuGetAudit=false`: succeeded using cached packages. A normal restore first failed with `NU1900` because `api.nuget.org` vulnerability data was unreachable. NuGet audit was disabled only for local restore; package versions were not changed.
+- `dotnet restore TravelTracker.Tests.slnx --disable-parallel -m:1 -p:NuGetAudit=false`: succeeded.
+- `dotnet build TravelTracker.slnx --configuration Release --no-restore -m:1`: succeeded, 0 warnings and 0 errors.
+- `dotnet build TravelTracker.Tests.slnx --configuration Release --no-restore -m:1`: succeeded, 0 warnings and 0 errors.
+- `dotnet test tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~Accommodation" -m:1`: 26 passed, 0 failed, 0 skipped.
+- `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL" -m:1`: 947 passed, 0 failed, 0 skipped. Data-test assemblies contain only PostgreSQL-category cases and therefore had no tests under this filter.
+- `git diff --check`: passed.
 
 The VSTest host needed loopback permission in this environment; the first restricted run could not start it. The successful test results above are from the subsequent loopback-enabled runs. No PostgreSQL test group was run because this change adds no persistence behavior. A live Auth0 tenant plus running Accommodations and Users services was not used, so the authenticated cloud end-to-end journey remains unverified.
 
@@ -28,11 +28,11 @@ PR #87 review at `a66598a` identified two medium findings. A successful create n
 
 Follow-up validation:
 
-- `dotnet build TravelTracker.slnx --configuration Release --no-restore --verbosity minimal -m:1` — succeeded, 0 warnings and 0 errors.
-- `dotnet test tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~Accommodation" --verbosity minimal -m:1` — 27 passed, 0 failed, 0 skipped.
-- `dotnet test tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj --configuration Release --no-build --no-restore --verbosity minimal -m:1` — 265 passed, 0 failed, 0 skipped.
-- `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL" --verbosity minimal -m:1` — 948 passed, 0 failed, 0 skipped. Data-test assemblies contain only PostgreSQL-category cases and therefore had no tests under this filter.
-- `git diff --check` — passed.
+- `dotnet build TravelTracker.slnx --configuration Release --no-restore --verbosity minimal -m:1`: succeeded, 0 warnings and 0 errors.
+- `dotnet test tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~Accommodation" --verbosity minimal -m:1`: 27 passed, 0 failed, 0 skipped.
+- `dotnet test tests/TravelTracker.Frontend.Tests/TravelTracker.Frontend.Tests.csproj --configuration Release --no-build --no-restore --verbosity minimal -m:1`: 265 passed, 0 failed, 0 skipped.
+- `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL" --verbosity minimal -m:1`: 948 passed, 0 failed, 0 skipped. Data-test assemblies contain only PostgreSQL-category cases and therefore had no tests under this filter.
+- `git diff --check`: passed.
 
 The PostgreSQL group and live Auth0/service journey remain unverified. The follow-up findings are addressed in this branch; the reviewer has not yet re-reviewed these fixes.
 

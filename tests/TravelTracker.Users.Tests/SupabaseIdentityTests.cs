@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Tests.Support;
 
@@ -26,7 +27,7 @@ public sealed class SupabaseIdentityTests
         if (scenario == "metadata-only") handler.User.Remove("email");
         if (scenario == "anonymous") handler.User["is_anonymous"] = true;
         using var http = new HttpClient(handler);
-        var client = new VerifiedIdentityClient(http, Settings());
+        var client = new VerifiedIdentityClient(http, Settings(), NullLogger<VerifiedIdentityClient>.Instance);
 
         var email = await client.EmailAsync(Issuer, Subject, "test-user-token", default);
 
@@ -43,7 +44,7 @@ public sealed class SupabaseIdentityTests
     {
         using var handler = new SupabaseIdentityHandler();
         using var http = new HttpClient(handler);
-        var client = new VerifiedIdentityClient(http, Settings(key));
+        var client = new VerifiedIdentityClient(http, Settings(key), NullLogger<VerifiedIdentityClient>.Instance);
 
         Assert.Null(await client.EmailAsync(issuer, Subject, "test-user-token", default));
         Assert.Equal(0, handler.Calls);

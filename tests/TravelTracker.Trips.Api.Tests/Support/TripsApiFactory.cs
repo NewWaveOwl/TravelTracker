@@ -12,7 +12,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
-using TravelTracker.Data.Repositories;
 using TravelTracker.Trips.Api;
 
 namespace TravelTracker.Trips.Api.Tests.Support;

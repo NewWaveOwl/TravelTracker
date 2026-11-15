@@ -32,7 +32,7 @@ public sealed class UsersStartupTests
     [Fact]
     public async Task Health_ReturnsOkWithNoDatabaseConfiguration()
     {
-        // Bearer settings are still required at startup (ValidateOnStart); ConnectionStrings:Users is deliberately absent.
+        // bearer settings are still required at startup (ValidateOnStart); ConnectionStrings:Users is deliberately absent.
         using var factory = DevelopmentHost(new Dictionary<string, string?>
         {
             ["Authentication:Bearer:Authority"] = Authority,

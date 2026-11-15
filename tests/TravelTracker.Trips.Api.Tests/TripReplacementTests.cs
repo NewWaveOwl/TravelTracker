@@ -56,6 +56,7 @@ public sealed class TripReplacementTests
 
         Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
         Assert.Equal(denied.StatusCode, missing.StatusCode);
+        Assert.Equal(await ProblemBodies.WithoutTraceIdAsync(missing), await ProblemBodies.WithoutTraceIdAsync(denied));
         var unchanged = await factory.Repository.GetOwnedByIdAsync(trip.TripId, TripsApiFactory.Issuer, "alice");
         Assert.Same(trip, unchanged);
     }

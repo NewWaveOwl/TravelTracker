@@ -21,7 +21,7 @@ public sealed class EfSettingsRepository(SettingsDbContext database) : ISettings
     public async Task<UserSettings?> GetByOwnerAsync(string issuer, string subject, CancellationToken cancellationToken = default)
     {
         var row = await database.UserSettings.AsNoTracking()
-            .SingleOrDefaultAsync(row => row.OwnerIssuer == issuer && row.OwnerSubject == subject, cancellationToken);
+            .SingleOrDefaultAsync(candidate => candidate.OwnerIssuer == issuer && candidate.OwnerSubject == subject, cancellationToken);
         return row is null ? null : ToDomain(row);
     }
 
@@ -39,7 +39,7 @@ public sealed class EfSettingsRepository(SettingsDbContext database) : ISettings
         CancellationToken cancellationToken = default)
     {
         var row = await database.UserSettings
-            .SingleOrDefaultAsync(row => row.OwnerIssuer == issuer && row.OwnerSubject == subject, cancellationToken);
+            .SingleOrDefaultAsync(candidate => candidate.OwnerIssuer == issuer && candidate.OwnerSubject == subject, cancellationToken);
         if (row is null)
         {
             if (expectedRevision != 0) return null;

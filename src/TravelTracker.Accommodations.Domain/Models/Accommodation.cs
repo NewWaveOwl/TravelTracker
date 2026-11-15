@@ -5,6 +5,12 @@ namespace TravelTracker.Accommodations.Domain.Models;
  */
 public sealed class Accommodation
 {
+    /** The longest accepted display name. */
+    public const int MaxNameLength = 200;
+
+    /** The longest accepted address. */
+    public const int MaxAddressLength = 500;
+
     /**
      * Gets or sets the public identifier assigned by the service.
      */
@@ -46,7 +52,7 @@ public sealed class Accommodation
     public decimal Longitude { get; set; }
 
     /**
-     * Validates the intrinsic location and identity values.
+     * Validates the intrinsic identity, name, address and location values.
      * @return Field errors; empty when all invariants hold.
      */
     public Dictionary<string, string[]> Validate()
@@ -56,7 +62,9 @@ public sealed class Accommodation
         if (string.IsNullOrWhiteSpace(OwnerIssuer) || string.IsNullOrWhiteSpace(OwnerSubject))
             errors["owner"] = ["A validated owner identity is required."];
         if (string.IsNullOrWhiteSpace(Name)) errors["name"] = ["Name must not be empty."];
+        if (Name.Length > MaxNameLength) errors["name"] = [$"Name must be at most {MaxNameLength} characters."];
         if (Address is null) errors["address"] = ["Address cannot be null."];
+        else if (Address.Length > MaxAddressLength) errors["address"] = [$"Address must be at most {MaxAddressLength} characters."];
         if (Latitude is < -90m or > 90m) errors["lat"] = ["Latitude must be between -90 and 90."];
         if (Longitude is < -180m or > 180m) errors["lon"] = ["Longitude must be between -180 and 180."];
         return errors;

@@ -52,12 +52,34 @@ public sealed class AttractionTests
     }
 
     [Fact]
+    public async Task Create_AddressIsTrimmed()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/attractions",
+            new { name = "Address Museum", address = "  1 Main Street  ", lat = 45m, lon = -73m, estimatedVisitMinutes = 30 });
+        var saved = await HttpTestSupport.AssertCreatedAsync(client, response);
+        Assert.Equal("1 Main Street", saved.GetProperty("address").GetString());
+    }
+
+    [Fact]
+    public async Task Patch_AddressIsTrimmed()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var patchResponse = await client.PatchAsync("/api/v1/attractions/11111111-1111-1111-1111-111111111111", JsonContent.Create(new { address = "  2 Side Road  " }));
+        Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
+        var updated = await patchResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("2 Side Road", updated.GetProperty("address").GetString());
+    }
+
+    [Fact]
     public async Task Create_UnknownPropertyReturns400()
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         using var response = await client.PostAsync("/api/v1/attractions", JsonContent.Create(new { name = "Museum", lat = 45m, lon = -73m, estimatedVisitMinutes = 60, unknown = "x" }));
-        await HttpTestSupport.AssertValidationAsync(response);
+        await HttpTestSupport.AssertValidationAsync(response, "$.unknown");
     }
 
     [Fact]
@@ -134,6 +156,42 @@ public sealed class AttractionTests
     }
 
     /**
+     * Accepts the inclusive rating boundaries.
+     * @param rating Lowest or highest valid score.
+     * @return Completion after checking creation.
+     */
+    [Theory]
+    [InlineData(0)]
+    [InlineData(5)]
+    public async Task Create_BoundaryRatingIsAccepted(double rating)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/attractions",
+            new { name = "Museum", rating, lat = 45m, lon = -73m, estimatedVisitMinutes = 60 });
+        await HttpTestSupport.AssertCreatedAsync(client, response);
+    }
+
+    /**
+     * Rejects values longer than the documented limits, naming the failing field.
+     * @param field The oversized field.
+     * @return Completion after checking validation.
+     */
+    [Theory]
+    [InlineData("name")]
+    [InlineData("description")]
+    [InlineData("address")]
+    public async Task Create_OversizedTextReturns400(string field)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var body = new Dictionary<string, object> { ["name"] = "Museum", ["lat"] = 45m, ["lon"] = -73m, ["estimatedVisitMinutes"] = 60 };
+        body[field] = new string('x', 5000);
+        using var response = await client.PostAsJsonAsync("/api/v1/attractions", body);
+        await HttpTestSupport.AssertValidationAsync(response, field);
+    }
+
+    /**
      * Lists all attractions deterministically ordered by name (OrdinalIgnoreCase).
      */
     [Fact]
@@ -143,7 +201,7 @@ public sealed class AttractionTests
         using var client = factory.CreateClient();
         var list = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions");
         Assert.NotNull(list);
-        var names = list.Select(e => e.GetProperty("name").GetString()).ToArray();
+        var names = list.Select(entry => entry.GetProperty("name").GetString()).ToArray();
         Assert.Equal(new[] { "Montreal Museum", "Old Port", "Science Centre" }, names);
     }
 
@@ -215,21 +273,15 @@ public sealed class AttractionTests
 
     /**
      * Keeps single filters trimmed, case-insensitive and decoded exactly once.
-     * @param query Encoded single-value filter or unrelated query parameter.
-     * @param expectedName Expected match, or null when the literal filter matches nothing.
+     * @param query Encoded single-value filter that matches exactly one attraction.
+     * @param expectedName Name of the single expected match.
      * @return Completion after checking successful search results.
      */
     [Theory]
     [InlineData("name=%20mUsEuM%20", "Montreal Museum")]
     [InlineData("%6Eame=port", "Old Port")]
     [InlineData("name=port&other=one&other=two", "Old Port")]
-    [InlineData("name=%2520museum%2520", null)]
-    [InlineData("name=museum%26name%3Dport", null)]
-    [InlineData("name=%25", null)]
-    [InlineData("name=_", null)]
-    [InlineData("name=*", null)]
-    [InlineData("name=.*", null)]
-    public async Task GetAll_SingleName_PreservesLiteralSearch(string query, string? expectedName)
+    public async Task GetAll_SingleName_PreservesLiteralSearch(string query, string expectedName)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
@@ -239,59 +291,58 @@ public sealed class AttractionTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var results = await response.Content.ReadFromJsonAsync<JsonElement[]>();
         Assert.NotNull(results);
-        if (expectedName is null) Assert.Empty(results);
-        else Assert.Equal(expectedName, Assert.Single(results).GetProperty("name").GetString());
+        Assert.Equal(expectedName, Assert.Single(results).GetProperty("name").GetString());
     }
 
-    [Fact]
-    public async Task GetAll_DuplicateNames_DoesNotThrow_And_SortedByPublicId()
+    /**
+     * Treats encoded wildcards and separators in a single name filter as literal text.
+     * @param query Encoded single-value filter that matches no attraction.
+     * @return Completion after checking the empty search result.
+     */
+    [Theory]
+    [InlineData("name=%2520museum%2520")]
+    [InlineData("name=museum%26name%3Dport")]
+    [InlineData("name=%25")]
+    [InlineData("name=_")]
+    [InlineData("name=*")]
+    [InlineData("name=.*")]
+    public async Task GetAll_SingleNameWithoutMatch_ReturnsEmptyLiteralSearch(string query)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        using var r1 = await client.PostAsJsonAsync("/api/v1/attractions",
+
+        using var response = await client.GetAsync($"/api/v1/attractions?{query}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var results = await response.Content.ReadFromJsonAsync<JsonElement[]>();
+        Assert.NotNull(results);
+        Assert.Empty(results);
+    }
+
+    /**
+     * Breaks name ties by public identifier instead of failing.
+     * @return Completion after checking the tie order.
+     */
+    [Fact]
+    public async Task GetAll_DuplicateNames_AreSortedByPublicId()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var firstResponse = await client.PostAsJsonAsync("/api/v1/attractions",
             new { name = "Montreal Museum", lat = 45m, lon = -73m, estimatedVisitMinutes = 30 });
-        var s1 = await HttpTestSupport.AssertCreatedAsync(client, r1);
-        using var r2 = await client.PostAsJsonAsync("/api/v1/attractions",
+        await HttpTestSupport.AssertCreatedAsync(client, firstResponse);
+        using var secondResponse = await client.PostAsJsonAsync("/api/v1/attractions",
             new { name = "montreal museum", lat = 45m, lon = -73m, estimatedVisitMinutes = 30 });
-        var s2 = await HttpTestSupport.AssertCreatedAsync(client, r2);
+        await HttpTestSupport.AssertCreatedAsync(client, secondResponse);
 
         var list = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions");
         Assert.NotNull(list);
-        var matches = list.Where(e => string.Equals(e.GetProperty("name").GetString(), "montreal museum", StringComparison.OrdinalIgnoreCase))
-                          .Select(e => e.GetProperty("attractionId").GetGuid())
+        var matches = list.Where(entry => string.Equals(entry.GetProperty("name").GetString(), "montreal museum", StringComparison.OrdinalIgnoreCase))
+                          .Select(entry => entry.GetProperty("attractionId").GetGuid())
                           .ToArray();
-        Assert.True(matches.Length >= 2);
-        var sorted = matches.OrderBy(g => g).ToArray();
-        Assert.Equal(sorted, matches);
-    }
-
-    [Fact]
-    public async Task Update_FullReplace_PersistsValuesAndKeepsIdentity()
-    {
-        using var factory = new ApiFactory();
-        using var scope = factory.Services.CreateScope();
-        factory.PrepareScope(scope.ServiceProvider);
-        var svc = scope.ServiceProvider.GetRequiredService<IAttractionService>();
-        var existing = await svc.GetByIdAsync(Guid.Parse("11111111-1111-1111-1111-111111111111"));
-        Assert.NotNull(existing);
-        var updated = new Attraction
-        {
-            Name = existing.Name + " Updated",
-            Description = (existing.Description ?? string.Empty) + " Changed",
-            Rating = existing.Rating ?? 3m,
-            Address = existing.Address,
-            Latitude = existing.Latitude,
-            Longitude = existing.Longitude,
-            EstimatedVisitMinutes = existing.EstimatedVisitMinutes
-        };
-        var returned = await svc.UpdateAsync(existing.AttractionId.PublicId, updated);
-        Assert.NotNull(returned);
-        Assert.Equal(existing.AttractionId.PublicId, returned.AttractionId.PublicId);
-        var fetched = await svc.GetByIdAsync(existing.AttractionId.PublicId);
-        Assert.NotNull(fetched);
-        Assert.Equal(updated.Name, fetched.Name);
-        Assert.Equal(updated.Description, fetched.Description);
-        Assert.Equal(existing.AttractionId.PublicId, updated.AttractionId.PublicId);
+        // the seeded catalogue already holds one Montreal Museum
+        Assert.Equal(3, matches.Length);
+        Assert.Equal(matches.Order().ToArray(), matches);
     }
 
     [Fact]
@@ -300,17 +351,25 @@ public sealed class AttractionTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         var before = await client.GetFromJsonAsync<JsonElement>("/api/v1/attractions/11111111-1111-1111-1111-111111111111");
-        var beforeDescription = before.GetProperty("description").ValueKind == JsonValueKind.Null ? null : before.GetProperty("description").GetString();
-        var beforeRating = before.GetProperty("rating").ValueKind == JsonValueKind.Null ? (decimal?)null : before.GetProperty("rating").GetDecimal();
+        var beforeDescription = OptionalString(before, "description");
+        var beforeRating = OptionalDecimal(before, "rating");
 
         using var patchResponse = await client.PatchAsync("/api/v1/attractions/11111111-1111-1111-1111-111111111111", JsonContent.Create(new { name = "Montreal Museum Renamed" }));
         Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
         var updated = await patchResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Montreal Museum Renamed", updated.GetProperty("name").GetString());
         // omitted fields preserved
-        Assert.Equal(beforeDescription, updated.GetProperty("description").ValueKind == JsonValueKind.Null ? null : updated.GetProperty("description").GetString());
-        Assert.Equal(beforeRating, updated.GetProperty("rating").ValueKind == JsonValueKind.Null ? (decimal?)null : updated.GetProperty("rating").GetDecimal());
+        Assert.Equal(beforeDescription, OptionalString(updated, "description"));
+        Assert.Equal(beforeRating, OptionalDecimal(updated, "rating"));
     }
+
+    /** Reads a nullable string property, so a JSON null comes back as a C# null. */
+    static string? OptionalString(JsonElement element, string name) =>
+        element.GetProperty(name).ValueKind == JsonValueKind.Null ? null : element.GetProperty(name).GetString();
+
+    /** Reads a nullable decimal property, so a JSON null comes back as a C# null. */
+    static decimal? OptionalDecimal(JsonElement element, string name) =>
+        element.GetProperty(name).ValueKind == JsonValueKind.Null ? null : element.GetProperty(name).GetDecimal();
 
     [Fact]
     public async Task Patch_ExplicitNull_ClearsDescriptionAndRating()
@@ -334,17 +393,9 @@ public sealed class AttractionTests
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        object body = field switch
-        {
-            "name" => new { name = (object?)null },
-            "address" => new { address = (object?)null },
-            "lat" => new { lat = (object?)null },
-            "lon" => new { lon = (object?)null },
-            "estimatedVisitMinutes" => new { estimatedVisitMinutes = (object?)null },
-            _ => new { }
-        };
+        var body = new Dictionary<string, object?> { [field] = null };
         using var response = await client.PatchAsync("/api/v1/attractions/11111111-1111-1111-1111-111111111111", JsonContent.Create(body));
-        await HttpTestSupport.AssertValidationAsync(response);
+        await HttpTestSupport.AssertValidationAsync(response, field);
     }
 
     [Fact]
@@ -353,7 +404,7 @@ public sealed class AttractionTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         using var response = await client.PatchAsync("/api/v1/attractions/11111111-1111-1111-1111-111111111111", JsonContent.Create(new { unknown = "x" }));
-        await HttpTestSupport.AssertValidationAsync(response);
+        await HttpTestSupport.AssertValidationAsync(response, "unknown");
     }
 
     [Fact]
@@ -378,9 +429,6 @@ public sealed class AttractionTests
     [Trait("Category", "PostgreSQL")]
     public async Task Patch_ConcurrentUpdates_AllChangesApplied()
     {
-        using var factory = new ApiFactory(usePostgres: true);
-        using var client = factory.CreateClient();
-        var id = "11111111-1111-1111-1111-111111111111";
         var patches = new object[]
         {
             new { name = "Concurrent Name" },
@@ -391,10 +439,20 @@ public sealed class AttractionTests
             new { lon = -74m },
             new { estimatedVisitMinutes = 42 }
         };
+        // every PATCH is held at its row lock until all seven have reached it, so the writers really overlap.
+        var rendezvous = new WriteRendezvous(patches.Length);
+        using var factory = new ApiFactory(usePostgres: true) { WriteInterceptor = new RendezvousCommandInterceptor(rendezvous, "FOR UPDATE") };
+        using var client = factory.CreateClient();
+        var id = "11111111-1111-1111-1111-111111111111";
 
-        var tasks = patches.Select(p => client.PatchAsync($"/api/v1/attractions/{id}", JsonContent.Create(p))).ToArray();
+        var tasks = patches.Select(patch => client.PatchAsync($"/api/v1/attractions/{id}", JsonContent.Create(patch))).ToArray();
         var responses = await Task.WhenAll(tasks);
-        foreach (var r in responses) Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.True(rendezvous.Completed, "all seven writers must reach the row lock together.");
+        foreach (var response in responses)
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            response.Dispose();
+        }
 
         var updated = await client.GetFromJsonAsync<JsonElement>($"/api/v1/attractions/{id}");
         Assert.Equal("Concurrent Name", updated.GetProperty("name").GetString());
@@ -406,7 +464,6 @@ public sealed class AttractionTests
         Assert.Equal(42, updated.GetProperty("estimatedVisitMinutes").GetInt32());
     }
 
-    // Service tests moved from ServiceTests.cs
     [Fact]
     public async Task Service_GetAll_SearchTrimCaseInsensitive()
     {
@@ -415,18 +472,21 @@ public sealed class AttractionTests
         factory.PrepareScope(scope.ServiceProvider);
         var service = scope.ServiceProvider.GetRequiredService<IAttractionService>();
         var results = await service.GetAllAsync(" museum ");
-        Assert.All(results, r => Assert.Contains("museum", r.Name, StringComparison.OrdinalIgnoreCase));
+        Assert.NotEmpty(results);
+        Assert.All(results, attraction => Assert.Contains("museum", attraction.Name, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
     [Trait("Category", "PostgreSQL")]
     public async Task Service_UpdatePartialAsync_Concurrent_AllChangesApplied()
     {
-        using var factory = new ApiFactory(usePostgres: true);
+        // every service call is held at its row lock until all seven have reached it, so the writers really overlap.
+        var rendezvous = new WriteRendezvous(7);
+        using var factory = new ApiFactory(usePostgres: true) { WriteInterceptor = new RendezvousCommandInterceptor(rendezvous, "FOR UPDATE") };
         using var scope = factory.Services.CreateScope();
         factory.PrepareScope(scope.ServiceProvider);
         var service = scope.ServiceProvider.GetRequiredService<IAttractionService>();
-        var repo = scope.ServiceProvider.GetRequiredService<TravelTracker.Attractions.Data.Repositories.IAttractionRepository>();
+        var repository = scope.ServiceProvider.GetRequiredService<TravelTracker.Attractions.Data.Repositories.IAttractionRepository>();
         var seeded = await service.CreateAsync(new TravelTracker.Attractions.Domain.Models.Attraction
         {
             Name = "Seed",
@@ -439,16 +499,12 @@ public sealed class AttractionTests
         });
         var id = seeded.AttractionId.PublicId;
 
-        var patches = new[]
+        var documents = new[]
         {
-            JsonDocument.Parse("{ \"name\": \"N1\" }").RootElement,
-            JsonDocument.Parse("{ \"description\": \"D1\" }").RootElement,
-            JsonDocument.Parse("{ \"rating\": 4 }").RootElement,
-            JsonDocument.Parse("{ \"address\": \"Addr\" }").RootElement,
-            JsonDocument.Parse("{ \"lat\": 12.34 }").RootElement,
-            JsonDocument.Parse("{ \"lon\": -56.78 }").RootElement,
-            JsonDocument.Parse("{ \"estimatedVisitMinutes\": 99 }").RootElement
-        };
+            "{ \"name\": \"N1\" }", "{ \"description\": \"D1\" }", "{ \"rating\": 4 }", "{ \"address\": \"Addr\" }",
+            "{ \"lat\": 12.34 }", "{ \"lon\": -56.78 }", "{ \"estimatedVisitMinutes\": 99 }"
+        }.Select(text => JsonDocument.Parse(text)).ToArray();
+        var patches = documents.Select(document => document.RootElement).ToArray();
 
         var tasks = patches.Select(async patch =>
         {
@@ -457,10 +513,11 @@ public sealed class AttractionTests
             return await patchScope.ServiceProvider.GetRequiredService<IAttractionService>().UpdatePartialAsync(id, patch);
         }).ToArray();
         var results = await Task.WhenAll(tasks);
-        Assert.All(results, r => Assert.False(r.NotFound));
-        Assert.All(results, r => Assert.Null(r.Errors));
+        Assert.True(rendezvous.Completed, "all seven writers must reach the row lock together.");
+        Assert.All(results, result => Assert.False(result.NotFound));
+        Assert.All(results, result => Assert.Null(result.Errors));
 
-        var final = await repo.GetByIdAsync(id);
+        var final = await repository.GetByIdAsync(id);
         Assert.NotNull(final);
         Assert.Equal("N1", final!.Name);
         Assert.Equal("D1", final.Description);
@@ -469,5 +526,6 @@ public sealed class AttractionTests
         Assert.Equal(12.34m, final.Latitude);
         Assert.Equal(-56.78m, final.Longitude);
         Assert.Equal(99, final.EstimatedVisitMinutes);
+        foreach (var document in documents) document.Dispose();
     }
 }

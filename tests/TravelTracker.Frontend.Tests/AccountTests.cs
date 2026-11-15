@@ -1,5 +1,4 @@
 using System.Net;
-using System.Security.Claims;
 using System.Text.Json;
 using Bunit;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -23,11 +22,11 @@ public sealed class AccountTests : BunitContext
 
     void Configure(bool configured = true, StubHandler? handler = null)
     {
-        Services.AddSingleton(new AuthSetup(configured ? new Auth0Settings("tenant.auth0.com", "client", null, "traveltracker-api", Auth0Settings.DefaultScope) : null));
+        Services.AddSingleton(new AuthSetup(configured));
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         Services.AddSingleton<TimeProvider>(clock);
         Services.AddSingleton(authentication.Sessions);
-        Services.AddSingleton(new ServiceDirectory(new Dictionary<string, string> { ["Users"] = "http://localhost:5105" }));
+        Services.AddSingleton(new ServiceDirectory(new Dictionary<string, string> { ["Users"] = "https://localhost:5101" }));
         Services.AddSingleton(new ServiceClient(new HttpClient(handler ?? StubHandler.Status(200, Profile)), NullLogger<ServiceClient>.Instance));
         Services.AddScoped<ProtectedClient>();
         Services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
@@ -92,12 +91,9 @@ public sealed class AccountTests : BunitContext
     {
         Configure();
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
-        var provider = new MutableAuthentication(authentication.User);
-        Services.AddSingleton<AuthenticationStateProvider>(provider);
         var page = Render<Account>();
         page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
-        authentication.Sessions.Revoke(SessionRegistry.IdFor(authentication.User));
-        provider.Notify(authentication.User);
+        authentication.SignOut();
         page.WaitForAssertion(() => Assert.Contains("Sign in to view your profile", page.Markup));
         Assert.DoesNotContain("traveller_1", page.Markup);
     }
@@ -158,6 +154,19 @@ public sealed class AccountTests : BunitContext
         Assert.Contains("does not have access to a profile", page.Markup);
         Assert.DoesNotContain("traveller_1", page.Markup);
         Assert.DoesNotContain("Profile details", page.Markup);
+    }
+
+    [Fact]
+    public void FirstSignInWithoutUsersAccountShowsNoAccountStateWithoutRetry()
+    {
+        Configure(handler: StubHandler.Status(404));
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+
+        page.WaitForAssertion(() => Assert.Contains("No TravelTracker profile yet", page.Markup));
+        Assert.DoesNotContain("could not be loaded", page.Markup);
+        Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Contains("Retry", StringComparison.Ordinal));
+        Assert.Contains("Sign out", page.Markup);
     }
 
     [Fact]
@@ -261,14 +270,15 @@ public sealed class AccountTests : BunitContext
         Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Contains("Edit profile", StringComparison.Ordinal));
     }
 
-    sealed class MutableAuthentication(ClaimsPrincipal user) : AuthenticationStateProvider
+    [Fact]
+    public void DeactivatedProfileExplainsTheAccountStatusInsteadOfPermission()
     {
-        ClaimsPrincipal user = user;
-        public void Notify(ClaimsPrincipal next)
-        {
-            user = next;
-            NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
-        }
-        public override Task<AuthenticationState> GetAuthenticationStateAsync() => Task.FromResult(new AuthenticationState(user));
+        Configure(handler: StubHandler.Status(200, Profile.Replace("active", "deactivated")));
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        Assert.Contains("Account deactivated", page.Markup);
+        Assert.Contains("Deactivated", page.Markup);
+        Assert.DoesNotContain("does not have permission to edit", page.Markup);
+        Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Contains("Edit profile", StringComparison.Ordinal));
     }
 }

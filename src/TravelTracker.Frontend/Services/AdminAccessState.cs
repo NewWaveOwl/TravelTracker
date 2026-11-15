@@ -14,6 +14,12 @@ namespace TravelTracker.Frontend.Services;
  */
 public sealed class AdminAccessState(UsersClient users, AuthenticationStateProvider authentication, SessionRegistry sessions, TimeProvider clock) : IDisposable
 {
+    /** the Users role value that grants the administrator panel. */
+    public const string AdministratorRole = "administrator";
+
+    /** the Users status value of an account in good standing. */
+    public const string ActiveStatus = "active";
+
     int version;
     int refreshVersion;
     bool subscribed;
@@ -28,12 +34,16 @@ public sealed class AdminAccessState(UsersClient users, AuthenticationStateProvi
      */
     public async Task<SelfUserProfile?> RefreshAsync(CancellationToken cancellationToken = default)
     {
-        if (!subscribed) { authentication.AuthenticationStateChanged += AuthenticationChanged; subscribed = true; }
+        if (!subscribed)
+        {
+            authentication.AuthenticationStateChanged += AuthenticationChanged;
+            subscribed = true;
+        }
         var currentVersion = version;
         var currentRefresh = ++refreshVersion;
         var user = (await authentication.GetAuthenticationStateAsync()).User;
         if (disposed || currentVersion != version) return null;
-        if (user.Identity?.IsAuthenticated != true || !sessions.IsActive(user) || AccessTokenClaims.ActiveToken(user, clock.GetUtcNow()) is null)
+        if (!AccessTokenClaims.IsSignedIn(user, sessions, clock.GetUtcNow()))
         {
             Clear();
             return null;
@@ -44,19 +54,39 @@ public sealed class AdminAccessState(UsersClient users, AuthenticationStateProvi
             if (disposed || currentVersion != version) return null;
             if (currentRefresh == refreshVersion)
             {
-                IsAdministrator = profile is { Role: "administrator", Status: "active" };
+                IsAdministrator = profile is { Role: AdministratorRole, Status: ActiveStatus };
                 Changed?.Invoke();
             }
             return profile;
         }
-        catch (ApiError) { if (!disposed && currentVersion == version && currentRefresh == refreshVersion) Clear(); throw; }
+        catch (ApiError)
+        {
+            if (!disposed && currentVersion == version && currentRefresh == refreshVersion)
+                Clear();
+            throw;
+        }
     }
 
     /** Clears the display hint immediately; the next navigation or panel refresh asks the service again. */
-    public void Clear() { refreshVersion++; IsAdministrator = false; Changed?.Invoke(); }
+    public void Clear()
+    {
+        refreshVersion++;
+        IsAdministrator = false;
+        Changed?.Invoke();
+    }
 
-    void AuthenticationChanged(Task<AuthenticationState> _) { version++; Clear(); }
+    void AuthenticationChanged(Task<AuthenticationState> _)
+    {
+        version++;
+        Clear();
+    }
 
     /** Removes the session notification subscription when the circuit closes. */
-    public void Dispose() { disposed = true; version++; if (subscribed) authentication.AuthenticationStateChanged -= AuthenticationChanged; }
+    public void Dispose()
+    {
+        disposed = true;
+        version++;
+        if (subscribed)
+            authentication.AuthenticationStateChanged -= AuthenticationChanged;
+    }
 }

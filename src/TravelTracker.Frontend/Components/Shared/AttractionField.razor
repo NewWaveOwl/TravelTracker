@@ -17,8 +17,8 @@
 
     /**
      * Keeps raw values in the draft, including invalid input until the user corrects it.
-     * @param args The latest input value.
+     * @param eventArgs The latest input value.
      * @return Completion of the parent draft update.
      */
-    Task Changed(ChangeEventArgs args) => ValueChanged.InvokeAsync(args.Value?.ToString() ?? "");
+    Task Changed(ChangeEventArgs eventArgs) => ValueChanged.InvokeAsync(eventArgs.Value?.ToString() ?? "");
 }

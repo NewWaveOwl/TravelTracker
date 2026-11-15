@@ -16,9 +16,9 @@ public interface ISettingsService
      * validates the candidate, then replaces the caller's preferences only if the stored revision still matches.
      * nothing is saved when validation fails or the revision is stale.
      * @param candidate the complete submitted values.
-     * @param expectedRevision the revision the caller read, taken from If-Match.
+     * @param expectedRevision the revision the caller read, taken from If-Match; null when the header is malformed.
      * @param cancellationToken cancels database I/O.
      * @return the saved values, field errors, or a stale marker.
      */
-    Task<SettingsReplaceResult> ReplaceAsync(UserSettings candidate, long expectedRevision, CancellationToken cancellationToken = default);
+    Task<SettingsReplaceResult> ReplaceAsync(UserSettings candidate, long? expectedRevision, CancellationToken cancellationToken = default);
 }

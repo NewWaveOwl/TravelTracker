@@ -3,9 +3,9 @@ using TravelTracker.Transport.Domain.Types;
 namespace TravelTracker.Transport.Domain.Models;
 
 /**
- * Represents one transportation method that can be assigned to a trip leg.
+ * Represents one reusable transportation method, such as car or train.
  */
-public sealed class TransportMode
+public sealed record TransportMode
 {
     /**
      * Gets or sets the unique identifier of the transportation method.

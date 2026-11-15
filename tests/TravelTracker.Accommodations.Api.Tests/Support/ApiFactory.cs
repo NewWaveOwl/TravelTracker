@@ -30,7 +30,6 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Accommoda
     private HttpClient? discoveryClient;
 
     internal UsersBackchannelHandler? Users { get; private set; }
-    internal DiscoveryBackchannelHandler? Discovery { get; private set; }
 
     /**
      * Creates a JWT signed by the isolated test key; production still uses real issuer discovery.
@@ -102,8 +101,7 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Accommoda
             services.AddHttpClient<UsersAccessClient>().ConfigurePrimaryHttpMessageHandler(() => Users);
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
-                Discovery = new DiscoveryBackchannelHandler(signingKey.ExportParameters(false), Issuer);
-                discoveryClient = new HttpClient(Discovery);
+                discoveryClient = new HttpClient(new DiscoveryBackchannelHandler(signingKey.ExportParameters(false), Issuer));
                 options.Backchannel = discoveryClient;
             });
         });

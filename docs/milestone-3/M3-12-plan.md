@@ -13,15 +13,15 @@ This plan is for the separate `accomodation-services` branch based on `milestone
 ## Ground truth reviewed
 
 - [Design](../design.md): section 3 defines active, banned, deactivated, and administrator behavior; section 4 says places are private to their creator unless an administrator adds them to the shared catalogue; section 6 assigns Accommodations to Christel and lists add/search/view/edit/archive; section 7 describes place search and field-level validation.
-- [Domain](../domain.md): the legacy shared `Accomodation` has only `Id`, `Name`, and `Address`; it is explicitly retained unchanged. RoutePoint has coordinates but is a distinct snapshot/location record.
-- [Data](../data.md): the old `IAccomadationRepository` and `Accomodation` names/contracts are preserved as scaffold. They do not establish an independent service implementation.
+- [Domain](../domain.md): the legacy shared `Accomodation` model (only `Id`, `Name`, and `Address`) has been removed and is not retained. RoutePoint has coordinates but is a distinct snapshot/location record.
+- [Data](../data.md): the old `IAccomadationRepository` and `Accomodation` names/contracts have been removed; they are not kept as scaffold and establish no service implementation.
 - [API](../api.md): no accommodation service/API exists. Attractions is the closest implemented independent catalogue pattern, with separate projects, PostgreSQL, validated public DTOs, owner mapping, scope policies, and private/shared checks.
 - [Milestone 3 contracts](../milestone-3-contracts.md): Accommodations use `catalogue.read` and `catalogue.write`; private places belong to their creator. The explicit 2026-10-28 admin-shared decision is written for Attractions and says Accommodations remain their owner's work, so this plan proposes applying the same semantics to Accommodations rather than claiming that decision already covered them.
 - Current checkout: separate Attractions, Transport, and Users project families exist. Existing tests are grouped by service, including PostgreSQL-backed persistence and API/auth/privacy suites. No Accommodations projects or tests exist.
 
 ## Proposed behavior and boundaries
 
-- Use canonical new names under `TravelTracker.Accommodations.*`, with `Accommodation` as the new service Domain model. Leave the existing shared `TravelTracker.Domain.Models.Accomodation` and `TravelTracker.Data.Repositories.IAccomadationRepository` unchanged for compatibility; document that they are historical scaffold and do not cross the new service boundary. No broad rename or migration of existing consumers is included.
+- Use canonical new names under `TravelTracker.Accommodations.*`, with `Accommodation` as the new service Domain model. The legacy shared `TravelTracker.Domain.Models.Accomodation` and `TravelTracker.Data.Repositories.IAccomadationRepository` were removed before M3-12, so no compatibility surface remains and the new service does not cross any shared boundary. No broad rename or migration of existing consumers is included.
 - A record has a server-generated public GUID, validated owner `(issuer, subject)`, name, address, latitude, longitude, and visibility. Keep owner identity out of public request/response DTOs.
 - Trim and require a nonblank name; require latitude in `[-90, 90]` and longitude in `[-180, 180]`. Address defaults to an empty string when omitted and rejects explicit null, following the current location DTO convention. Invalid values produce field-keyed validation errors and are never persisted.
 - Omitted visibility defaults to private. The creator can find their own private records. Other users cannot find a private record in collection search or detail (return 404). Shared records are discoverable to authorized active catalogue readers. Only an administrator may create or change a record to shared; a traveller may create private records. Owners may edit their own private records. For shared-record edits, follow the Attractions implementation's explicit administrator/owner rule after confirming its current code during implementation.
@@ -79,12 +79,12 @@ Proposed public response: `accommodationId`, `name`, `address`, `lat`, `lon`, `v
 - `docs/api.md` — publish routes, DTO fields, query behavior, policies, validation, status/visibility results, and public health.
 - `docs/milestone-3-contracts.md` — record the Accommodation visibility rule as implemented and close/update any scope ambiguity without changing the prior Attractions decision.
 - `README.md` and/or a new `docs/accommodations-service.md` — independent startup, configuration, migration/database setup, port, health endpoint, and manual request examples.
-- `src/TravelTracker.Api/Program.cs` / existing shared host — do not wire the new service into the combined host; independent startup is part of acceptance.
+- `src/TravelTracker.Api`: a library with no entry point; do not wire the new service into it. Independent startup is part of acceptance.
 
 ### Files deliberately left unchanged
 
-- `src/TravelTracker.Domain/Models/Accomodation.cs`
-- `src/TravelTracker.Data/Repositories/IAccomadationRepository.cs`
+- `src/TravelTracker.Domain/Models/Accomodation.cs` (removed; not present in the current tree)
+- `src/TravelTracker.Data/Repositories/IAccomadationRepository.cs` (removed; not present in the current tree)
 - Existing Attractions, Transport, Users production contracts and data models, except for any small shared integration change shown necessary by repository research and separately reviewed before implementation.
 
 ## Acceptance and validation evidence

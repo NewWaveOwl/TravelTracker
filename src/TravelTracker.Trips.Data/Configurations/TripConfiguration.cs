@@ -4,13 +4,13 @@ using TravelTracker.Trips.Data.Entities;
 
 namespace TravelTracker.Trips.Data.Configurations;
 
-/** Defines PostgreSQL mapping and database-enforced invariants for the trip row. */
+/** defines PostgreSQL mapping and database-enforced invariants for the trip row. */
 internal sealed class TripConfiguration : IEntityTypeConfiguration<TripRow>
 {
     /**
-     * Configures public identity, owner scoping and the trip's own values.
+     * configures public identity, owner scoping and the trip's own values.
      *
-     * @param builder Trip row mapping.
+     * @param builder trip row mapping.
      */
     public void Configure(EntityTypeBuilder<TripRow> builder)
     {
@@ -18,6 +18,7 @@ internal sealed class TripConfiguration : IEntityTypeConfiguration<TripRow>
         {
             table.HasCheckConstraint("CK_Trips_Name", "length(btrim(\"Name\")) > 0");
             table.HasCheckConstraint("CK_Trips_Owner", "length(btrim(\"OwnerIssuer\")) > 0 AND length(btrim(\"OwnerSubject\")) > 0");
+            table.HasCheckConstraint("CK_Trips_Revision", "\"Revision\" >= 1");
             table.HasCheckConstraint("CK_Trips_End", "\"EndAt\" >= \"StartAt\"");
         });
         builder.HasKey(row => row.TripId);

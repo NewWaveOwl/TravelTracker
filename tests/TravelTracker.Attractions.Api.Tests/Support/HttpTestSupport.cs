@@ -29,13 +29,16 @@ internal static class HttpTestSupport
     /**
      * Checks the standard ASP.NET Core validation response.
      * @param response The rejected request's response.
+     * @param expectedField The field expected to fail, compared case-insensitively; null accepts any field.
      * @return Completion after checking status and field errors.
      */
-    public static async Task AssertValidationAsync(HttpResponseMessage response)
+    public static async Task AssertValidationAsync(HttpResponseMessage response, string? expectedField = null)
     {
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(problem.GetProperty("errors").EnumerateObject().Any());
+        var errors = problem.GetProperty("errors").EnumerateObject().ToArray();
+        Assert.NotEmpty(errors);
+        if (expectedField is not null) Assert.Contains(errors, error => string.Equals(error.Name, expectedField, StringComparison.OrdinalIgnoreCase));
     }
 }

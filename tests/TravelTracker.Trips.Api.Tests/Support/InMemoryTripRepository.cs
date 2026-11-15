@@ -42,8 +42,10 @@ internal sealed class InMemoryTripRepository : ITripRepository
                 NextWriteFailure = null;
                 return Task.FromException(failure);
             }
-            trips[trip.TripId] = (trip, ownerIssuer, ownerSubject);
-            return Task.CompletedTask;
+            // the real store rejects a duplicate primary key, so the fake does too.
+            return trips.TryAdd(trip.TripId, (trip, ownerIssuer, ownerSubject))
+                ? Task.CompletedTask
+                : Task.FromException(new InvalidOperationException("a trip with this id is already stored."));
         }
     }
 

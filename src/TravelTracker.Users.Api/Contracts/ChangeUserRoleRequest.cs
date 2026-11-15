@@ -7,10 +7,10 @@ namespace TravelTracker.Users.Api.Contracts;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class ChangeUserRoleRequest
 {
-    [Required, RegularExpression("^(traveller|administrator)$")]
+    [Required, RegularExpression(@"\A(traveller|administrator)\z")]
     public string Role { get; init; } = "";
 
-    [Required, RegularExpression("^(traveller|administrator)$")]
+    [Required, RegularExpression(@"\A(traveller|administrator)\z")]
     public string ExpectedRole { get; init; } = "";
 
     [Required, MaxLength(500)]

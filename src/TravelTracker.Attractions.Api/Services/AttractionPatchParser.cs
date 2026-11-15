@@ -5,9 +5,13 @@ namespace TravelTracker.Attractions.Api.Services;
 
 /**
  * Applies presence-aware PATCH fields to a detached candidate without reading or writing storage.
+ * Value rules (ranges, lengths) live in Attraction.Validate; this only checks shape and types.
  */
 internal static class AttractionPatchParser
 {
+    private static readonly HashSet<string> AllowedFields = new(
+        ["name", "description", "rating", "address", "lat", "lon", "estimatedVisitMinutes"], StringComparer.OrdinalIgnoreCase);
+
     /**
      * Rejects unknown or repeated fields and preserves omission versus explicit null.
      * @param existing The visible record to copy.
@@ -16,32 +20,26 @@ internal static class AttractionPatchParser
      */
     internal static UpdateResult Apply(Attraction existing, JsonElement patch)
     {
-        // Patch must be an object
+        // patch must be an object
         if (patch.ValueKind != JsonValueKind.Object)
-        {
-            return new UpdateResult(null, new Dictionary<string, string[]> { ["patch"] = new[] { "Request body must be a JSON object." } });
-        }
+            return Failure("patch", "Request body must be a JSON object.");
 
-        // Collect provided properties and detect unknowns
-        var allowed = new HashSet<string>(new[] { "name", "description", "rating", "address", "lat", "lon", "estimatedVisitMinutes" }, StringComparer.OrdinalIgnoreCase);
+        // collect provided properties and detect unknowns
         var provided = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
-        foreach (var prop in patch.EnumerateObject())
+        foreach (var property in patch.EnumerateObject())
         {
-            if (!allowed.Contains(prop.Name))
-            {
-                return new UpdateResult(null, new Dictionary<string, string[]> { [prop.Name] = new[] { "Unknown field." } });
-            }
-            if (!provided.TryAdd(prop.Name, prop.Value))
-                return new UpdateResult(null, new Dictionary<string, string[]> { [prop.Name] = ["Duplicate field (case-insensitive)."] });
+            if (!AllowedFields.Contains(property.Name)) return Failure(property.Name, "Unknown field.");
+            if (!provided.TryAdd(property.Name, property.Value)) return Failure(property.Name, "Duplicate field (case-insensitive).");
         }
 
-        if (provided.Count == 0)
-            return new UpdateResult(null, new Dictionary<string, string[]> { ["patch"] = new[] { "Empty update object is not allowed." } });
+        if (provided.Count == 0) return Failure("patch", "Empty update object is not allowed.");
 
-        // Start from a copy
+        // start from a copy
         var candidate = new Attraction
         {
-            OwnerIssuer = existing.OwnerIssuer, OwnerSubject = existing.OwnerSubject, IsShared = existing.IsShared,
+            OwnerIssuer = existing.OwnerIssuer,
+            OwnerSubject = existing.OwnerSubject,
+            IsShared = existing.IsShared,
             AttractionId = existing.AttractionId,
             Name = existing.Name,
             Description = existing.Description,
@@ -52,75 +50,46 @@ internal static class AttractionPatchParser
             EstimatedVisitMinutes = existing.EstimatedVisitMinutes
         };
 
-        var errors = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
 
-        void AddError(string field, string message)
-        {
-            if (!errors.TryGetValue(field, out var list)) { list = new List<string>(); errors[field] = list; }
-            list.Add(message);
-        }
+        void AddError(string field, string message) => errors[field] = [.. errors.GetValueOrDefault(field) ?? [], message];
 
-        // Apply provided fields with validation rules per specification
-        foreach (var kv in provided)
+        // apply provided fields; range and length rules are checked afterwards by Attraction.Validate
+        foreach (var (name, value) in provided)
         {
-            var name = kv.Key;
-            var value = kv.Value;
             try
             {
                 switch (name.ToLowerInvariant())
                 {
                     case "name":
-                        if (value.ValueKind == JsonValueKind.Null) { AddError("name", "Name cannot be null."); break; }
-                        var nm = value.GetString() ?? string.Empty;
-                        nm = nm.Trim();
-                        if (string.IsNullOrEmpty(nm)) AddError("name", "Name must not be empty.");
-                        else candidate.Name = nm;
+                        if (value.ValueKind == JsonValueKind.Null) AddError("name", "Name cannot be null.");
+                        else candidate.Name = (value.GetString() ?? string.Empty).Trim();
                         break;
                     case "description":
-                        if (value.ValueKind == JsonValueKind.Null) candidate.Description = null;
-                        else candidate.Description = value.GetString();
+                        candidate.Description = value.ValueKind == JsonValueKind.Null ? null : value.GetString();
                         break;
                     case "rating":
-                        if (value.ValueKind == JsonValueKind.Null) { candidate.Rating = null; }
-                        else
-                        {
-                            if (value.TryGetDecimal(out var dec))
-                            {
-                                if (dec < 0m || dec > 5m) AddError("rating", "Rating must be between 0 and 5.");
-                                else candidate.Rating = dec;
-                            }
-                            else AddError("rating", "Rating must be a number.");
-                        }
+                        if (value.ValueKind == JsonValueKind.Null) candidate.Rating = null;
+                        else if (value.TryGetDecimal(out var rating)) candidate.Rating = rating;
+                        else AddError("rating", "Rating must be a number.");
                         break;
                     case "address":
-                        if (value.ValueKind == JsonValueKind.Null) { AddError("address", "Address cannot be null."); break; }
-                        candidate.Address = value.GetString() ?? string.Empty;
+                        if (value.ValueKind == JsonValueKind.Null) AddError("address", "Address cannot be null.");
+                        else candidate.Address = (value.GetString() ?? string.Empty).Trim();
                         break;
                     case "lat":
-                        if (value.ValueKind == JsonValueKind.Null) { AddError("lat", "Latitude cannot be null."); break; }
-                        if (value.TryGetDecimal(out var lat))
-                        {
-                            if (lat < -90m || lat > 90m) AddError("lat", "Latitude must be between -90 and 90.");
-                            else candidate.Latitude = lat;
-                        }
+                        if (value.ValueKind == JsonValueKind.Null) AddError("lat", "Latitude cannot be null.");
+                        else if (value.TryGetDecimal(out var latitude)) candidate.Latitude = latitude;
                         else AddError("lat", "Latitude must be a number.");
                         break;
                     case "lon":
-                        if (value.ValueKind == JsonValueKind.Null) { AddError("lon", "Longitude cannot be null."); break; }
-                        if (value.TryGetDecimal(out var lon))
-                        {
-                            if (lon < -180m || lon > 180m) AddError("lon", "Longitude must be between -180 and 180.");
-                            else candidate.Longitude = lon;
-                        }
+                        if (value.ValueKind == JsonValueKind.Null) AddError("lon", "Longitude cannot be null.");
+                        else if (value.TryGetDecimal(out var longitude)) candidate.Longitude = longitude;
                         else AddError("lon", "Longitude must be a number.");
                         break;
                     case "estimatedvisitminutes":
-                        if (value.ValueKind == JsonValueKind.Null) { AddError("estimatedVisitMinutes", "EstimatedVisitMinutes cannot be null."); break; }
-                        if (value.TryGetInt32(out var mins))
-                        {
-                            if (mins < 0) AddError("estimatedVisitMinutes", "EstimatedVisitMinutes must be non-negative.");
-                            else candidate.EstimatedVisitMinutes = mins;
-                        }
+                        if (value.ValueKind == JsonValueKind.Null) AddError("estimatedVisitMinutes", "EstimatedVisitMinutes cannot be null.");
+                        else if (value.TryGetInt32(out var minutes)) candidate.EstimatedVisitMinutes = minutes;
                         else AddError("estimatedVisitMinutes", "EstimatedVisitMinutes must be an integer.");
                         break;
                 }
@@ -131,12 +100,14 @@ internal static class AttractionPatchParser
             }
         }
 
-        if (errors.Count > 0)
-        {
-            var dict = errors.ToDictionary(k => k.Key, k => k.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
-            return new UpdateResult(null, new Dictionary<string, string[]>(dict, StringComparer.OrdinalIgnoreCase));
-        }
-
-        return new UpdateResult(candidate, null);
+        return errors.Count > 0 ? new UpdateResult(null, errors) : new UpdateResult(candidate, null);
     }
+
+    /**
+     * Builds a single-error result.
+     * @param field The offending field.
+     * @param message The error message.
+     * @return A result carrying only that error.
+     */
+    private static UpdateResult Failure(string field, string message) => new(null, new Dictionary<string, string[]> { [field] = [message] });
 }

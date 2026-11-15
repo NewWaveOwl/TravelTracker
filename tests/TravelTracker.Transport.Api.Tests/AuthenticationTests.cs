@@ -5,7 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 using Swashbuckle.AspNetCore.Swagger;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -82,7 +82,7 @@ public sealed class AuthenticationTests
     [Fact]
     public async Task Development_ShippedConfigurationStartsWithPublicHealthAndProtectedCatalogue()
     {
-        // No ApiFactory configuration overrides: load the repository's actual Development settings.
+        // no ApiFactory configuration overrides: load the repository's actual Development settings.
         using var factory = new WebApplicationFactory<TravelTracker.Transport.Api.TransportProgram>().WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
         using var client = factory.CreateClient();
         using var health = await client.GetAsync("/health");
@@ -210,7 +210,9 @@ public sealed class AuthenticationTests
         var document = factory.Services.GetRequiredService<ISwaggerProvider>().GetSwagger("v1");
         Assert.NotNull(document.Components?.SecuritySchemes);
         Assert.True(document.Components.SecuritySchemes.ContainsKey("Bearer"));
-        foreach (var (path, item) in document.Paths.Where(entry => entry.Key.StartsWith("/api/v1/", StringComparison.Ordinal)))
+        var protectedPaths = document.Paths.Where(entry => entry.Key.StartsWith("/api/v1/", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(protectedPaths);
+        foreach (var (path, item) in protectedPaths)
         {
             Assert.NotNull(item.Operations);
             foreach (var (method, operation) in item.Operations)

@@ -11,9 +11,8 @@ namespace TravelTracker.Attractions.Api.Tests;
 internal sealed class InMemoryEfAttractionRepository(AttractionsDbContext database) : IAttractionRepository
 {
     private readonly EfAttractionRepository repository = new(database);
-    public Task<List<Attraction>> GetVisibleAsync(string issuer, string subject, bool includeShared, CancellationToken cancellationToken = default) =>
-        repository.GetVisibleAsync(issuer, subject, includeShared, cancellationToken);
-    public Task<List<Attraction>> GetAllAsync(CancellationToken cancellationToken = default) => repository.GetAllAsync(cancellationToken);
+    public Task<List<Attraction>> GetVisibleAsync(string issuer, string subject, bool includeShared, string? nameFilter = null, CancellationToken cancellationToken = default) =>
+        repository.GetVisibleAsync(issuer, subject, includeShared, nameFilter, cancellationToken);
     public Task<Attraction?> GetByIdAsync(Guid attractionId, CancellationToken cancellationToken = default) => repository.GetByIdAsync(attractionId, cancellationToken);
     public Task AddAsync(Attraction attraction, CancellationToken cancellationToken = default) => repository.AddAsync(attraction, cancellationToken);
     public Task UpdateAsync(Attraction attraction, CancellationToken cancellationToken = default) => repository.UpdateAsync(attraction, cancellationToken);
@@ -29,13 +28,4 @@ internal sealed class InMemoryEfAttractionRepository(AttractionsDbContext databa
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult<IAttractionWriteSession>(new NonRelationalWriteSession());
     }
-
-    /**
-     * Prevents accidentally citing the relational-only deletion path as in-memory evidence.
-     * @param attractionId The requested identifier.
-     * @param cancellationToken Cancels the operation.
-     * @return No result; DELETE is not an exposed HTTP operation and requires relational tests.
-     */
-    public Task<bool> DeleteAsync(Guid attractionId, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("Use PostgreSQL for relational delete behavior.");
 }

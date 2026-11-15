@@ -152,11 +152,16 @@ internal sealed class TripPlannerDraft
             }
             legs.Clear();
             foreach (var (key, leg) in connections)
-                legs.Add(key, leg);
+                legs.Add(key, leg.Copy());
         };
     }
 
-    /** Inserts a place after the selected stop, or appends it when no insertion point is supplied. */
+    /**
+     * Inserts a place after the selected stop, or appends it when no insertion point is supplied.
+     * @param place The place to add as a new visit.
+     * @param after Index of the stop to insert after, or null to append.
+     * @return The index the new visit now has.
+     */
     internal int Add(TripPlaceDto place, int? after = null)
     {
         var index = after is { } previous ? Math.Clamp(previous + 1, 0, stops.Count) : stops.Count;
@@ -165,7 +170,7 @@ internal sealed class TripPlannerDraft
     }
 
     /**
-     * Appends another visit to the starting accommodation with the same editable location.
+     * Appends another visit to the starting accommodation with the same place; UpdatePlace keeps the endpoints in step.
      * @return The index of the return visit.
      */
     internal int AddReturnToStart()
@@ -201,8 +206,12 @@ internal sealed class TripPlannerDraft
         stops.RemoveAt(index);
     }
 
-    /** Moves the stop and retains the details for any leg whose endpoints remain adjacent. */
-    internal void Move(int index, int destination) =>
+    /**
+     * Trades the stops at two indexes; connection details follow the stop pair, not the position.
+     * @param index Index of the first stop.
+     * @param destination Index of the stop it trades places with; must be inside the itinerary.
+     */
+    internal void Swap(int index, int destination) =>
         (stops[index], stops[destination]) = (stops[destination], stops[index]);
 
     /**
@@ -276,7 +285,11 @@ internal sealed class TripPlannerDraft
     static bool SamePlace(TripPlaceDto first, TripPlaceDto second) => first == second ||
         (first.PlaceId != Guid.Empty && first.PlaceId == second.PlaceId && first.Type == second.Type);
 
-    /** Retrieves the editable leg ending at the given stop. */
+    /**
+     * Retrieves the editable leg ending at the given stop; the first read of a pair creates an empty leg and remembers it.
+     * @param destination Index of the stop the leg arrives at; at least 1.
+     * @return The leg between the previous stop and this one.
+     */
     internal Leg LegTo(int destination)
     {
         var key = (stops[destination - 1], stops[destination]);
@@ -288,7 +301,11 @@ internal sealed class TripPlannerDraft
         return leg;
     }
 
-    /** Restores the shared draft from the stored trip and its ordered snapshots. */
+    /**
+     * Restores the shared draft from the stored trip and its ordered snapshots.
+     * @param revision The saved trip and its entity tag.
+     * @return A draft that matches the saved itinerary.
+     */
     internal static TripPlannerDraft FromSaved(TripRevision revision)
     {
         var trip = revision.Trip;
@@ -329,7 +346,11 @@ internal sealed class TripPlannerDraft
         return draft;
     }
 
-    /** Gets the displayed arrival, calculated from elapsed duration in the trip's time zone. */
+    /**
+     * Gets the displayed arrival, calculated from elapsed duration in the trip's time zone.
+     * @param leg The leg being shown.
+     * @return The local arrival time, or null when it cannot be resolved.
+     */
     internal DateTime? ArrivalFor(Leg leg)
     {
         if (leg.DurationMinutes is null)
@@ -339,7 +360,11 @@ internal sealed class TripPlannerDraft
             : null;
     }
 
-    /** Gets the elapsed duration using the same local time resolution as saving. */
+    /**
+     * Gets the elapsed duration using the same local time resolution as saving.
+     * @param leg The leg being shown.
+     * @return The positive elapsed time, or null when it cannot be resolved.
+     */
     internal TimeSpan? DurationFor(Leg leg)
     {
         if (leg.DurationMinutes is { } minutes)
@@ -354,7 +379,7 @@ internal sealed class TripPlannerDraft
 
     /**
      * Calculates the time at an intermediate stop between its inbound and outbound connections.
-     * @param index The visit's index in the ordered itinerary.
+     * @param index The visit's index in the ordered itinerary; note this creates empty legs for pairs not yet read.
      * @return Elapsed time when both boundaries are known and in order.
      */
     internal TimeSpan? DurationAtStop(int index)

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
@@ -34,7 +36,7 @@ internal sealed class UsersBackchannelHandler : HttpMessageHandler
             var subject = payload.GetProperty("subject").GetString();
             if (issuer != ApiFactory.Issuer || string.IsNullOrWhiteSpace(subject))
                 return new HttpResponseMessage(HttpStatusCode.BadRequest);
-            var id = idsBySubject.GetOrAdd(subject, _ => Guid.CreateVersion7());
+            var id = idsBySubject.GetOrAdd(subject, key => new Guid(MD5.HashData(Encoding.UTF8.GetBytes(key))));
             subjectsById.TryAdd(id, subject);
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { userId = id }) };
         }

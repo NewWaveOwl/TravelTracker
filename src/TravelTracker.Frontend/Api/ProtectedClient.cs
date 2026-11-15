@@ -27,7 +27,7 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
     /**
      * Sends a protected public contract while preserving session revocation across awaits.
      * @param service Configured service name.
-     * @param method GET, POST or PATCH.
+     * @param method GET, POST, PUT or PATCH.
      * @param path Versioned relative API path.
      * @param body Public request fields.
      * @param cancellationToken View cancellation.
@@ -66,7 +66,10 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
         var token = sessions.IsActive(user) ? AccessTokenClaims.ActiveToken(user, timeProvider.GetUtcNow()) : null;
         if (token is null) throw SignedOut();
         ServiceResponse<T> result;
-        try { result = await client.SendAsync<T>(method, url, body, cancellationToken, token, bootstrapSecret, ifMatch); }
+        try
+        {
+            result = await client.SendAsync<T>(method, url, body, cancellationToken, token, bootstrapSecret, ifMatch);
+        }
         catch (ApiError error) when (error.Status == 401)
         {
             sessions.Revoke(sessionId);
@@ -80,7 +83,7 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
         cancellationToken.ThrowIfCancellationRequested();
         var current = (await authentication.GetAuthenticationStateAsync()).User;
         if (!sessions.IsActive(user) || !sessions.IsActive(current) || SessionRegistry.IdFor(current) != sessionId)
-            throw SignedOut();
+            throw method == HttpMethod.Get ? SignedOut() : new ApiError(FailureKind.Permission, "You were signed out while saving. The save may have been applied; check before retrying.", 401);
         return result;
     }
 

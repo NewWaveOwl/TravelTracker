@@ -10,16 +10,17 @@ internal static class AccommodationTestData
     /**
      * Adds a record for an isolated account without making a protected create request.
      * @param factory Isolated HTTP host and service container.
+     * @param accommodationId Fixed public identifier for the record.
      * @param name Accommodation name.
      * @param ownerSubject Validated owner subject.
      * @param shared Whether the item belongs to the shared catalogue.
      * @return The public identifier assigned to the fixture.
      */
-    internal static async Task<Guid> SeedAsync(ApiFactory factory, string name, string ownerSubject, bool shared)
+    internal static async Task<Guid> SeedAsync(ApiFactory factory, Guid accommodationId, string name, string ownerSubject, bool shared)
     {
         var record = new Accommodation
         {
-            AccommodationId = Guid.CreateVersion7(),
+            AccommodationId = accommodationId,
             Name = name,
             Address = "Test address",
             Latitude = 45.5m,

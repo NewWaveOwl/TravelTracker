@@ -1,7 +1,7 @@
 namespace TravelTracker.Frontend.Tests.Support;
 
 /**
- * Answers every request from a delegate so tests never touch the network.
+ * answers every request from a delegate so tests never touch the network.
  *
  * @param respond Produces the response, or throws to simulate a transport failure.
  */
@@ -10,13 +10,13 @@ public sealed class StubHandler(Func<HttpRequestMessage, CancellationToken, Task
     Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond = respond;
 
     public HttpRequestMessage? LastRequest { get; private set; }
-    /** Captures the body before the HTTP client disposes the recorded request. */
+    /** captures the body before the HTTP client disposes the recorded request. */
     public string? LastRequestBody { get; private set; }
 
-    /** Changes every later answer to this status, for tests that flip a service from healthy to rejecting. */
+    /** changes every later answer to this status, for tests that flip a service from healthy to rejecting. */
     public void RespondWith(int status, string body = "") => respond = (_, _) => Task.FromResult(new HttpResponseMessage((System.Net.HttpStatusCode)status) { Content = new StringContent(body) });
 
-    /** Clears the recorded request so a test can assert that nothing new was sent. */
+    /** clears the recorded request so a test can assert that nothing new was sent. */
     public void Forget()
     {
         LastRequest = null;

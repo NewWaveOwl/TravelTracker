@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using TravelTracker.Api.Trips;
 using TravelTracker.Trips.Domain.Models;
 
 namespace TravelTracker.Api.References;
@@ -11,7 +12,8 @@ namespace TravelTracker.Api.References;
  * @param sender Sends the request and logs failures.
  * @param logger Records a route point whose type is not a transport stop.
  */
-public sealed class RoutePointReferenceClient(HttpClient http, ReferenceSender sender, ILogger<RoutePointReferenceClient> logger) {
+public sealed class RoutePointReferenceClient(HttpClient http, ReferenceSender sender, ILogger<RoutePointReferenceClient> logger)
+{
     /**
      * Reads one transport stop route point and copies it into a place snapshot.
      *
@@ -20,17 +22,18 @@ public sealed class RoutePointReferenceClient(HttpClient http, ReferenceSender s
      * @param cancellationToken Cancels the lookup.
      * @return A place snapshot when the record is a transport stop, otherwise the non-found outcome.
      */
-    public async Task<ReferenceResult<TripPlace>> GetTransportStopAsync(Guid routePointId, string bearerToken, CancellationToken cancellationToken) {
-        var operation = $"route point {routePointId:D} lookup";
+    public async Task<ReferenceResult<TripPlace>> GetTransportStopAsync(Guid routePointId, string bearerToken, CancellationToken cancellationToken)
+    {
+        var operation = "route point lookup";
         var result = await sender.SendAsync<RoutePointResponse>(http,
             ReferenceRequest.Get($"api/v1/route-points/{routePointId:D}", bearerToken), operation, cancellationToken);
         if (result.Status != ReferenceStatus.Found) return result.Forward<TripPlace>();
         var point = result.Value!;
-        if (point.Type == "transport_stop")
-            return string.IsNullOrWhiteSpace(point.Name) || point.Address is null || point.Lat is null || point.Lon is null
+        if (point.Type == TripPlaceTypes.TransportStop)
+            return !ReferenceSender.IsUsablePlace(point.Name, point.Address, point.Lat, point.Lon)
                 ? sender.Incomplete<TripPlace>(operation)
                 : ReferenceResult<TripPlace>.Found(new(routePointId, point.Type, point.Name, point.Address, point.Lat.Value, point.Lon.Value));
-        logger.LogWarning("route point {RoutePointId} is a {Type}, not a transport stop; treated as absent.", routePointId, point.Type);
+        logger.LogWarning("route point is not a transport stop; treated as absent.");
         return ReferenceResult<TripPlace>.Failed(ReferenceStatus.NotFound, "upstream record is not a transport stop.");
     }
 

@@ -5,9 +5,7 @@ using TravelTracker.Attractions.Data.Entities;
 namespace TravelTracker.Attractions.Data.Configurations;
 
 /**
-
  * Defines PostgreSQL mappings without leaking persistence keys to the API.
-
  */
 internal sealed class AttractionConfiguration : IEntityTypeConfiguration<AttractionRow>
 {

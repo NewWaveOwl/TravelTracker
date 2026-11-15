@@ -12,6 +12,7 @@ namespace TravelTracker.Users.Data.Repositories.Profile;
  */
 public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : IUserRepository
 {
+    /** Allocates internal keys for new account rows while the caller holds the provisioning lock. */
     private static readonly EntityIdGenerator IdGenerator = new();
 
     /**
@@ -22,8 +23,8 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
      */
     public async Task<UserAccount?> FindByProviderIdentityAsync(ProviderIdentity identity, CancellationToken cancellationToken)
     {
-        await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        var record = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        var record = await database.Accounts.AsNoTracking().SingleOrDefaultAsync(
             item => item.Issuer == identity.Issuer && item.Subject == identity.Subject,
             cancellationToken);
         return record is null ? null : ToAccount(record);
@@ -37,8 +38,8 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
      */
     public async Task<UserAccount?> FindByPublicIdAsync(Guid publicId, CancellationToken cancellationToken)
     {
-        await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        var record = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(item => item.PublicId == publicId, cancellationToken);
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        var record = await database.Accounts.AsNoTracking().SingleOrDefaultAsync(item => item.PublicId == publicId, cancellationToken);
         return record is null ? null : ToAccount(record);
     }
 
@@ -51,24 +52,24 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
      */
     public async Task<UserAccount> GetOrCreateAsync(ProviderIdentity identity, DateTimeOffset createdAt, CancellationToken cancellationToken)
     {
-        await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        var existing = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        var existing = await database.Accounts.AsNoTracking().SingleOrDefaultAsync(
             item => item.Issuer == identity.Issuer && item.Subject == identity.Subject,
             cancellationToken);
         if (existing is not null) return ToAccount(existing);
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        await db.Database.ExecuteSqlInterpolatedAsync(
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await database.Database.ExecuteSqlInterpolatedAsync(
             $"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
-        existing = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(
+        existing = await database.Accounts.AsNoTracking().SingleOrDefaultAsync(
             item => item.Issuer == identity.Issuer && item.Subject == identity.Subject,
             cancellationToken);
         if (existing is not null) return ToAccount(existing);
 
-        var account = UserAccount.CreateTraveller(identity, Utc(createdAt));
+        var account = UserAccount.CreateTraveller(identity, ToPersistedUtc(createdAt));
         var record = new UserRecord
         {
-            Id = await IdGenerator.NextAsync(db, cancellationToken),
+            Id = await IdGenerator.NextAsync(database, cancellationToken),
             PublicId = account.PublicId,
             Issuer = identity.Issuer,
             Subject = identity.Subject,
@@ -77,8 +78,8 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
             CreatedAt = account.CreatedAt,
             ConcurrencyToken = Guid.NewGuid(),
         };
-        db.Accounts.Add(record);
-        await db.SaveChangesAsync(cancellationToken);
+        database.Accounts.Add(record);
+        await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return ToAccount(record);
     }
@@ -94,6 +95,7 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
      * @param cancellationToken Cancels the read or save.
      * @return Saved profile, unchanged inactive account, or null when absent.
      * @throws DbUpdateConcurrencyException when another writer changed the record after it was loaded.
+     * @throws UserProfileUsernameConflictException when the normalized username belongs to another account.
      */
     public async Task<UserAccount?> UpdateProfileAsync(
         ProviderIdentity identity,
@@ -104,8 +106,8 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
         DateTimeOffset updatedAt,
         CancellationToken cancellationToken)
     {
-        await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        var record = await db.Accounts.SingleOrDefaultAsync(
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        var record = await database.Accounts.SingleOrDefaultAsync(
             item => item.Issuer == identity.Issuer && item.Subject == identity.Subject, cancellationToken);
         if (record is null) return null;
         if (record.Status != "active") return ToAccount(record);
@@ -117,16 +119,16 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
         }
         if (email is not null) record.Email = email;
         if (addressSpecified) record.Address = address;
-        record.UpdatedAt = Utc(updatedAt);
+        record.UpdatedAt = ToPersistedUtc(updatedAt);
         record.ConcurrencyToken = Guid.NewGuid();
         try
         {
-            await db.SaveChangesAsync(cancellationToken);
+            await database.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException
             { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_UserAccounts_NormalizedUsername" })
         {
-            throw new UserProfileUsernameConflictException();
+            throw new UserProfileUsernameConflictException(exception);
         }
         return ToAccount(record);
     }
@@ -203,9 +205,9 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
      * @param value The timestamp supplied by the owning application.
      * @return A UTC timestamp rounded down to microsecond precision.
      */
-    static DateTimeOffset Utc(DateTimeOffset value)
+    static DateTimeOffset ToPersistedUtc(DateTimeOffset value)
     {
-        var utc = value.ToUniversalTime();
-        return new DateTimeOffset(utc.Ticks - utc.Ticks % 10, TimeSpan.Zero);
+        var universalTime = value.ToUniversalTime();
+        return new DateTimeOffset(universalTime.Ticks - universalTime.Ticks % 10, TimeSpan.Zero);
     }
 }

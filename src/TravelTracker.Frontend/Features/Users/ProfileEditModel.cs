@@ -1,17 +1,17 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
 using TravelTracker.Frontend.Api.Users;
 
 namespace TravelTracker.Frontend.Features.Users;
 
 /** Editable values initialized from the server profile; role and status are intentionally absent. */
-public sealed class ProfileEditModel
+public sealed partial class ProfileEditModel
 {
     readonly SelfUserProfile original;
 
     /**
      * Creates an editable form model from the confirmed caller profile.
      * @param profile The server-confirmed profile used as the unchanged-field baseline.
-     * @return A form model containing only the editable public fields.
      */
     public ProfileEditModel(SelfUserProfile profile)
     {
@@ -30,9 +30,8 @@ public sealed class ProfileEditModel
     [StringLength(500, ErrorMessage = "Address must be 500 characters or fewer.")]
     public string Address { get; set; }
 
-    public bool HasChanges => !string.Equals(Normalize(Username), Normalize(original.Username), StringComparison.Ordinal)
-        || !string.Equals(Normalize(Email), Normalize(original.Email), StringComparison.Ordinal)
-        || !string.Equals(string.IsNullOrWhiteSpace(Address) ? null : Address.Trim(), original.Address, StringComparison.Ordinal);
+    /** true when any editable field differs from the confirmed profile, using the same rules as the PATCH body. */
+    public bool HasChanges => new UpdateSelfProfileRequest(Username, Email, Address).ChangedFields(original).Count > 0;
 
     /**
      * Validates a changed username as a field so the form can show its error beside the input.
@@ -48,8 +47,8 @@ public sealed class ProfileEditModel
         if (!string.Equals(username, oldUsername, StringComparison.Ordinal))
         {
             if (username is null) return new ValidationResult("Username is required.", [nameof(Username)]);
-            if (username.Length is < 3 or > 32) return new ValidationResult("Username must be 3–32 characters.", [nameof(Username)]);
-            if (!System.Text.RegularExpressions.Regex.IsMatch(username, "^[A-Za-z0-9._-]+$"))
+            if (username.Length is < 3 or > 32) return new ValidationResult("Username must be 3 to 32 characters.", [nameof(Username)]);
+            if (!UsernameCharacters().IsMatch(username))
                 return new ValidationResult("Use only letters, numbers, periods, underscores or hyphens.", [nameof(Username)]);
         }
         return ValidationResult.Success;
@@ -76,5 +75,8 @@ public sealed class ProfileEditModel
         return ValidationResult.Success;
     }
 
-    static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    static string? Normalize(string? value) => UpdateSelfProfileRequest.Normalize(value);
+
+    [GeneratedRegex("^[A-Za-z0-9._-]+$")]
+    private static partial Regex UsernameCharacters();
 }

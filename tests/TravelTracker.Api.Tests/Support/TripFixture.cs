@@ -1,10 +1,9 @@
-using TravelTracker.Trips.Data.Repositories;
 using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TravelTracker.Api.Trips;
-using TravelTracker.Data.Repositories;
+using TravelTracker.Trips.Data.Repositories;
 
 namespace TravelTracker.Api.Tests.Support;
 
@@ -12,14 +11,15 @@ namespace TravelTracker.Api.Tests.Support;
  * Shared ids, credentials and a healthy upstream script for the trip reference tests. The services are
  * built through the same AddTripReferences registration the host will use, with only the HTTP handler replaced.
  */
-public static class TripFixture {
+public static class TripFixture
+{
     /** Public accommodation the draft starts from. */
     public static readonly Guid Hotel = Guid.Parse("0196a1b2-0000-7000-8000-000000000001");
 
     /** Public attraction the draft ends at. */
     public static readonly Guid Museum = Guid.Parse("0196a1b2-0000-7000-8000-000000000002");
 
-    /** Public transport stop used by optional legs. */
+    /** Public transport stop kept for transport stop lookups; the standard draft does not use it. */
     public static readonly Guid Stop = Guid.Parse("0196a1b2-0000-7000-8000-000000000003");
 
     /** Public transport mode used by the draft legs. */
@@ -27,6 +27,24 @@ public static class TripFixture {
 
     /** Public account identifier that the sign-in resolves to. */
     public static readonly Guid UserId = Guid.Parse("0196a1b2-0000-7000-8000-0000000000aa");
+
+    /** Catalogue path of the hotel. */
+    public static readonly string HotelPath = $"/api/v1/accommodations/{Hotel:D}";
+
+    /** Catalogue path of the museum. */
+    public static readonly string MuseumPath = $"/api/v1/attractions/{Museum:D}";
+
+    /** Catalogue path of the transport stop. */
+    public static readonly string StopPath = $"/api/v1/route-points/{Stop:D}";
+
+    /** Catalogue path of the train mode. */
+    public static readonly string TrainPath = $"/api/v1/transport-modes/{Train:D}";
+
+    /** Users path that resolves a sign-in to an account. */
+    public const string IdentityPath = "/internal/users/identity";
+
+    /** Users path that reads the account's standing. */
+    public static readonly string AccessPath = $"/internal/users/{UserId:D}/access";
 
     /** Caller's access token; forwarded to catalogue services only. */
     public const string CallerToken = "caller-token";
@@ -51,7 +69,8 @@ public static class TripFixture {
      * @return A provider that validates its registrations on build.
      */
     public static ServiceProvider CreateProvider(StubUpstream upstream, LogSink logs, FakeTripRepository? repository = null,
-        IDictionary<string, string?>? overrides = null) {
+        IDictionary<string, string?>? overrides = null)
+        {
         var values = new Dictionary<string, string?> {
             ["TripReferences:AccommodationsBaseUrl"] = "https://upstream.test/",
             ["TripReferences:AttractionsBaseUrl"] = "https://upstream.test/",
@@ -64,9 +83,10 @@ public static class TripFixture {
 
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(new CapturingLoggerProvider(logs)));
-        services.ConfigureHttpClientDefaults(builder => builder.ConfigurePrimaryHttpMessageHandler(() => upstream));
         services.AddSingleton<ITripRepository>(repository ?? new FakeTripRepository());
         services.AddTripReferences(configuration);
+        // registered after the production handler defaults so the stub is the last primary handler configured.
+        services.ConfigureHttpClientDefaults(builder => builder.ConfigurePrimaryHttpMessageHandler(() => upstream));
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 
@@ -97,17 +117,18 @@ public static class TripFixture {
      *
      * @return The scripted upstream.
      */
-    public static StubUpstream HealthyUpstream() {
+    public static StubUpstream HealthyUpstream()
+    {
         var upstream = new StubUpstream();
-        upstream.Respond("POST", "/internal/users/identity", HttpStatusCode.OK, new { userId = UserId });
-        upstream.Respond("GET", $"/internal/users/{UserId:D}/access", HttpStatusCode.OK, new { userId = UserId, status = "active", role = "traveller" });
-        upstream.Respond("GET", $"/api/v1/accommodations/{Hotel:D}", HttpStatusCode.OK,
+        upstream.Respond("POST", IdentityPath, HttpStatusCode.OK, new { userId = UserId });
+        upstream.Respond("GET", AccessPath, HttpStatusCode.OK, new { userId = UserId, status = "active", role = "traveller" });
+        upstream.Respond("GET", HotelPath, HttpStatusCode.OK,
             new { accommodationId = Hotel, name = "Hotel Lumiere", address = "1 rue de Rivoli", lat = 48.85m, lon = 2.35m, visibility = "shared" });
-        upstream.Respond("GET", $"/api/v1/attractions/{Museum:D}", HttpStatusCode.OK,
+        upstream.Respond("GET", MuseumPath, HttpStatusCode.OK,
             new { attractionId = Museum, name = "Louvre", address = "Rue de Rivoli", lat = 48.86m, lon = 2.34m, estimatedVisitMinutes = 120 });
-        upstream.Respond("GET", $"/api/v1/route-points/{Stop:D}", HttpStatusCode.OK,
+        upstream.Respond("GET", StopPath, HttpStatusCode.OK,
             new { routePointId = Stop, type = "transport_stop", name = "Gare du Nord", address = "18 rue de Dunkerque", lat = 48.88m, lon = 2.35m });
-        upstream.Respond("GET", $"/api/v1/transport-modes/{Train:D}", HttpStatusCode.OK,
+        upstream.Respond("GET", TrainPath, HttpStatusCode.OK,
             new { transportModeId = Train, code = "train", name = "Train" });
         return upstream;
     }

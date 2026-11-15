@@ -2,19 +2,15 @@ using TravelTracker.Security.Hosting;
 using Microsoft.EntityFrameworkCore;
 using TravelTracker.Transport.Api.Errors;
 using Microsoft.OpenApi;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 using TravelTracker.Transport.Api.Services;
 using TravelTracker.Transport.Data;
 using TravelTracker.Transport.Data.Repositories;
 
 namespace TravelTracker.Transport.Api;
 
-/**
-
- * Independently composes Transport, its PostgreSQL store and its HTTP access boundaries.
-
- */
-public partial class TransportProgram
+/** Independently composes Transport, its PostgreSQL store and its HTTP access boundaries. */
+public class TransportProgram
 {
     /**
      * Starts the independent host without starting other TravelTracker hosts.
@@ -43,13 +39,22 @@ public partial class TransportProgram
         builder.Services.AddScoped<IRoutePointService, RoutePointService>();
         var app = builder.Build();
         app.UseTransportExceptionHandling();
-        if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<TransportProgram>();
+        var applyMigrations = app.Configuration.GetValue<bool>("Database:ApplyMigrations");
+        var seedExamples = app.Configuration.GetValue<bool>("Database:SeedExamples");
+        logger.LogInformation("Transport starting in {Environment} (apply migrations: {ApplyMigrations}, seed examples: {SeedExamples}).", app.Environment.EnvironmentName, applyMigrations, seedExamples);
+        if (applyMigrations)
         {
             await using var scope = app.Services.CreateAsyncScope();
-            await TransportDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<TransportDbContext>(),
-                app.Configuration.GetValue<bool>("Database:SeedExamples"));
+            var seededCount = await TransportDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<TransportDbContext>(), seedExamples);
+            var seedState = !seedExamples ? "disabled" : seededCount > 0 ? $"inserted {seededCount} record(s)" : "skipped, the tables already have rows";
+            logger.LogInformation("Transport migrations applied (seeding {SeedState}).", seedState);
         }
-        if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI();
+        }
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();

@@ -1,8 +1,9 @@
 @implements IDisposable
 @using TravelTracker.Frontend.Services
 @inject AdminAccessState Access
+@inject ILogger<AdminNavigation> Logger
 
-@if (checkedAccess && Access.IsAdministrator)
+@if (Access.IsAdministrator)
 {
     <a class="@Class" href="administrator">Administrator Panel</a>
 }
@@ -11,19 +12,60 @@
     [Parameter] public string? Class { get; set; }
     readonly CancellationTokenSource closed = new();
     bool disposed;
-    bool checkedAccess;
 
-    protected override async Task OnInitializedAsync()
+    /** renders from the last known administrator hint at once, then rechecks in the background so the link never flickers. */
+    protected override void OnInitialized()
     {
         Access.Changed += RefreshDisplay;
-        try { await Access.RefreshAsync(closed.Token); }
-        catch (ApiError) { /* An unavailable or forbidden authority never exposes an administrator link. */ }
-        catch (OperationCanceledException) when (closed.IsCancellationRequested) { }
-        finally { checkedAccess = true; }
+        _ = RefreshAccessAsync();
     }
 
-    void RefreshDisplay() { if (!disposed) _ = InvokeAsync(StateHasChanged); }
+    /**
+     * Asks the Users service for the current role; an unavailable or forbidden answer hides the link.
+     * @return Completion of the background check.
+     */
+    async Task RefreshAccessAsync()
+    {
+        try
+        {
+            await Access.RefreshAsync(closed.Token);
+        }
+        catch (ApiError failure)
+        {
+            // an unavailable or forbidden authority never exposes an administrator link
+            Logger.LogWarning("Administrator link check failed as {Kind} (status {Status})", failure.Kind, failure.Status);
+        }
+        catch (OperationCanceledException) when (closed.IsCancellationRequested)
+        {
+            // the menu closed while the check was running
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Administrator link check failed unexpectedly");
+        }
+    }
 
-    /** Cancels a closed menu and removes its navigation-state subscription. */
-    public void Dispose() { disposed = true; Access.Changed -= RefreshDisplay; closed.Cancel(); closed.Dispose(); }
+    void RefreshDisplay() => _ = RenderDisplayAsync();
+
+    async Task RenderDisplayAsync()
+    {
+        if (disposed) return;
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.LogError(exception, "Administrator link could not refresh");
+        }
+    }
+
+    /** Cancels a closed menu and removes its administrator-state subscription. */
+    public void Dispose()
+    {
+        disposed = true;
+        Access.Changed -= RefreshDisplay;
+        closed.Cancel();
+        closed.Dispose();
+    }
 }

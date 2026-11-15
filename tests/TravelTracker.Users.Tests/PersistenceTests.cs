@@ -38,9 +38,12 @@ public sealed class PersistenceTests
     public async Task ConcurrentHostsPermitOnlyOneBootstrapIdentity()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
+        // both bootstraps reach the provisioning lock before either takes it, so the race is real.
+        var barrier = new AdvisoryLockBarrier(2);
         var attempts = await Task.WhenAll(
-            database.Repository().BootstrapAsync(Issuer, "account-one", Email, default),
-            database.Repository().BootstrapAsync(Issuer, "account-two", Email, default));
+            database.Repository(interceptor: barrier).BootstrapAsync(Issuer, "account-one", Email, default),
+            database.Repository(interceptor: barrier).BootstrapAsync(Issuer, "account-two", Email, default));
+        Assert.True(barrier.Completed, "both bootstraps must reach the provisioning lock together.");
         Assert.Single(attempts, account => account is not null);
         await using var context = database.Context();
         Assert.Equal(1, await Count(context, "UserAccounts"));

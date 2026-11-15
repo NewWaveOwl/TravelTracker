@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 
 namespace TravelTracker.Attractions.Api.Tests;
 

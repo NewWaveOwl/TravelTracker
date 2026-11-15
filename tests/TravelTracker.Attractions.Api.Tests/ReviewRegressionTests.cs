@@ -20,14 +20,14 @@ public sealed class ReviewRegressionTests
     [InlineData("", "alice")]
     [InlineData("https://issuer.example.test", "")]
     [InlineData("https://issuer.example.test", " ")]
-    public async Task ListWithIncompleteIdentity_ReturnsNoRecords(string issuer, string subject)
+    public async Task ListWithIncompleteIdentity_IsRefusedNotSilentlyEmpty(string issuer, string subject)
     {
         using var factory = new ApiFactory();
         using var scope = factory.Services.CreateScope();
         var caller = scope.ServiceProvider.GetRequiredService<CallerContext>();
         caller.Issuer = issuer;
         caller.Subject = subject;
-        Assert.Empty(await scope.ServiceProvider.GetRequiredService<IAttractionService>().GetAllAsync());
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => scope.ServiceProvider.GetRequiredService<IAttractionService>().GetAllAsync());
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class ReviewRegressionTests
     }
 
     [Fact]
-    public async Task BothUpdatePaths_DenyVisibleUnwritableSharedRecords()
+    public async Task PatchPath_DeniesVisibleUnwritableSharedRecords()
     {
         using var factory = new ApiFactory();
         using var scope = factory.Services.CreateScope();
@@ -72,22 +72,20 @@ public sealed class ReviewRegressionTests
         var service = scope.ServiceProvider.GetRequiredService<IAttractionService>();
         var before = await service.GetByIdAsync(SharedId);
         Assert.NotNull(before);
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.UpdateAsync(SharedId, Values()));
         using var patch = JsonDocument.Parse("{\"name\":\"Denied\"}");
         Assert.True((await service.UpdatePartialAsync(SharedId, patch.RootElement)).Forbidden);
         Assert.Equal(before.Name, (await service.GetByIdAsync(SharedId))!.Name);
     }
 
     [Fact]
-    public async Task BothUpdatePaths_HideOtherUsersPrivateRecords()
+    public async Task PatchPath_HidesOtherUsersPrivateRecords()
     {
         using var factory = new ApiFactory();
         using var scope = factory.Services.CreateScope();
         factory.PrepareScope(scope.ServiceProvider);
         var service = scope.ServiceProvider.GetRequiredService<IAttractionService>();
-        var saved = await service.CreateAsync(Values());
+        var saved = await service.CreateAsync(NewAttraction());
         scope.ServiceProvider.GetRequiredService<CallerContext>().Subject = "bob";
-        Assert.Null(await service.UpdateAsync(saved.AttractionId.PublicId, Values()));
         using var patch = JsonDocument.Parse("{\"name\":\"Denied\"}");
         Assert.True((await service.UpdatePartialAsync(saved.AttractionId.PublicId, patch.RootElement)).NotFound);
     }
@@ -96,5 +94,5 @@ public sealed class ReviewRegressionTests
      * Provides valid independent writable values for authorization scenarios.
      * @return An attraction without server-issued identity.
      */
-    private static Attraction Values() => new() { Name = "Denied", Address = "A", Latitude = 0, Longitude = 0, EstimatedVisitMinutes = 1 };
+    private static Attraction NewAttraction() => new() { Name = "Denied", Address = "A", Latitude = 0, Longitude = 0, EstimatedVisitMinutes = 1 };
 }

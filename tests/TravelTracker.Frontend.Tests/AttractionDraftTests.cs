@@ -21,7 +21,7 @@ public sealed class AttractionDraftTests
         Assert.Null(patch["description"]);
         Assert.Null(patch["rating"]);
         Assert.DoesNotContain("approximationMinutes", patch.Keys);
-        Assert.Equal("90–150 minutes", draft.RangePreview());
+        Assert.Equal("90 to 150 minutes", draft.RangePreview());
     }
 
     [Theory]
@@ -45,7 +45,7 @@ public sealed class AttractionDraftTests
         var draft = AttractionDraft.From(Example);
         draft.EstimatedVisitMinutes = "2147483647";
         draft.ApproximationMinutes = "2147483647";
-        Assert.Equal("0–4294967294 minutes", draft.RangePreview());
+        Assert.Equal("0 to 4294967294 minutes", draft.RangePreview());
     }
 
     [Theory]
@@ -62,7 +62,6 @@ public sealed class AttractionDraftTests
         Assert.Single(patch);
         Assert.Null(patch["description"]);
         Assert.DoesNotContain("attractionId", patch.Keys);
-        Assert.Equal(original.AttractionId, Example.AttractionId);
     }
 
     [Fact]
@@ -87,7 +86,9 @@ public sealed class AttractionDraftTests
     public void RejectsOutOfContractCoordinatesAndRating(string lat, string lon, string rating)
     {
         var draft = AttractionDraft.From(Example);
-        draft.Lat = lat; draft.Lon = lon; draft.Rating = rating;
+        draft.Lat = lat;
+        draft.Lon = lon;
+        draft.Rating = rating;
         Assert.NotEmpty(draft.Validate());
     }
 }

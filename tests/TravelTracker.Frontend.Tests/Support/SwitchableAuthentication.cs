@@ -4,7 +4,7 @@ using TravelTracker.Frontend.Auth;
 
 namespace TravelTracker.Frontend.Tests.Support;
 
-/** A test authentication state whose user can be signed in with a token and signed out again. */
+/** a test authentication state whose user can be signed in with a token and signed out again. */
 public sealed class SwitchableAuthentication(SessionRegistry sessions) : AuthenticationStateProvider
 {
     public SessionRegistry Sessions { get; } = sessions;
@@ -17,6 +17,13 @@ public sealed class SwitchableAuthentication(SessionRegistry sessions) : Authent
         new Claim(AccessTokenClaims.GrantedScope, scopes),
         new Claim(SessionRegistry.SessionIdClaim, Sessions.Create(expiresAt)),
     ], "test"));
+
+    /** Signs in and notifies subscribers, the way a refreshed session reaches components that listen for account changes. */
+    public void SignInAndNotify(string token, DateTimeOffset expiresAt, string scopes = "users.read users.write")
+    {
+        SignIn(token, expiresAt, scopes);
+        NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+    }
 
     public void SignOut()
     {

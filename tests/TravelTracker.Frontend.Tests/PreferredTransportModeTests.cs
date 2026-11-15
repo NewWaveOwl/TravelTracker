@@ -28,8 +28,7 @@ public sealed class PreferredTransportModeTests : BunitContext
     {
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
-        authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10));
-        ((ClaimsIdentity)authentication.User.Identity!).AddClaim(new Claim(AccessTokenClaims.GrantedScope, "catalogue.read catalogue.write settings.read"));
+        authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10), "catalogue.read catalogue.write settings.read");
         var handler = new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath == "/api/v1/settings"
             ? settingsReply(request)
             : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json") }));
@@ -91,6 +90,35 @@ public sealed class PreferredTransportModeTests : BunitContext
         Assert.Equal("bike", (await preferences.LoadAsync())?.PreferredTransportMode);
         Assert.Equal(1, reads);
         authentication.SignOut();
+        Assert.Null(preferences.Current);
+    }
+
+    [Fact]
+    public void RememberedPreferencesAreClearedOnAuthenticationChangeWithoutALoad()
+    {
+        var (authentication, _) = Configure(_ => SavedSettingsWithTag("bike"));
+        using var preferences = new UserPreferences(Services.GetRequiredService<SettingsClient>(), authentication, NullLogger<UserPreferences>.Instance);
+        preferences.Remember(new SettingsDto("system", 0, 0, 2, "train", "UTC"));
+        Assert.Equal("train", preferences.Current?.PreferredTransportMode);
+        authentication.SignOut();
+        Assert.Null(preferences.Current);
+    }
+
+    [Theory]
+    [InlineData("forget")]
+    [InlineData("dispose")]
+    public async Task ALoadThatFinishesAfterAnAccountChangeOrDisposalReturnsNothing(string change)
+    {
+        Configure(_ =>
+        {
+            var overlapping = Services.GetRequiredService<UserPreferences>();
+            if (change == "forget") overlapping.Forget();
+            else overlapping.Dispose();
+            return SavedSettingsWithTag("bike");
+        });
+        var preferences = Services.GetRequiredService<UserPreferences>();
+
+        Assert.Null(await preferences.LoadAsync());
         Assert.Null(preferences.Current);
     }
 }

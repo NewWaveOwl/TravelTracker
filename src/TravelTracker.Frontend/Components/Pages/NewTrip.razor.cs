@@ -13,6 +13,7 @@ using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Accommodations;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
+using TravelTracker.Frontend.Components.Shared;
 using TravelTracker.Frontend.Features.Trips;
 
 namespace TravelTracker.Frontend.Components.Pages;
@@ -20,6 +21,12 @@ namespace TravelTracker.Frontend.Components.Pages;
 /** Coordinates the two editing views, review and the authenticated Trips contract. */
 public partial class NewTrip : IAsyncDisposable
 {
+    enum MapTool
+    {
+        Markers,
+        Transport,
+    }
+
     const int UndoLimit = 10;
     static readonly (string Code, string Label)[] Markers =
         [("transport_stop", "Stop"), ("attraction", "Attraction"), ("accommodation", "Accommodation")];
@@ -33,11 +40,13 @@ public partial class NewTrip : IAsyncDisposable
     [Inject] TransportClient Transport { get; set; } = default!;
     [Inject] IJSRuntime JavaScript { get; set; } = default!;
     [Inject] IServiceProvider Services { get; set; } = default!;
+    [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
     [Inject] ILogger<NewTrip> Logger { get; set; } = default!;
     [Parameter] public Guid? TripId { get; set; }
     [CascadingParameter] Microsoft.AspNetCore.Components.RouteData? ActiveRoute { get; set; }
 
     readonly CancellationTokenSource closed = new();
+    bool disposed;
     readonly List<Action> undoHistory = [];
     readonly Dictionary<TripPlaceDto, HashSet<Guid>> pendingPlaceCreates = [];
     readonly HashSet<string> pendingModeCreates = new(StringComparer.OrdinalIgnoreCase);
@@ -47,7 +56,6 @@ public partial class NewTrip : IAsyncDisposable
     IReadOnlyList<TripPlaceDto> places = [];
     IReadOnlyList<string> errors = [];
     int selected = -1;
-    enum MapTool { Markers, Transport }
 
     bool showMap;
     bool browseAccommodations;
@@ -70,7 +78,7 @@ public partial class NewTrip : IAsyncDisposable
     TripPlannerDraft.Stop? editingMarker;
     bool editingStopDetails;
     int markerNumber;
-    bool saveFailed;
+    bool actionFailed;
     string? observedPath;
     Guid? routeId;
     int routeVersion;
@@ -171,8 +179,16 @@ public partial class NewTrip : IAsyncDisposable
             await using var module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/NewTrip.razor.js");
             return module is null ? null : await module.InvokeAsync<IJSObjectReference>("watchUndo", plannerElement);
         }
-        catch (JSDisconnectedException) { return null; }
-        catch (JSException) { return null; }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogInformation("Undo shortcut not registered because the browser connection closed");
+            return null;
+        }
+        catch (JSException exception)
+        {
+            Logger.LogWarning(exception, "Undo shortcut could not be registered");
+            return null;
+        }
     }
 
     static readonly string[] LocalDateTimeFormats = ["yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.FFFFFFF"];
@@ -189,7 +205,7 @@ public partial class NewTrip : IAsyncDisposable
      * Records which occurrence of a repeated time the traveller chose.
      * @param change Selected option value from the offset picker.
      * @param time Local time associated with this picker.
-     * @param options Valid offsets for this local time.
+     * @param options valid offsets for this local time.
      * @param previous Existing choice for undo and change detection.
      * @param apply Updates the associated draft field.
      */
@@ -211,7 +227,7 @@ public partial class NewTrip : IAsyncDisposable
         else
         {
             errors = ["Enter a valid date and time."];
-            saveFailed = false;
+            actionFailed = false;
             return;
         }
     }
@@ -228,7 +244,7 @@ public partial class NewTrip : IAsyncDisposable
             (!int.TryParse(input, NumberStyles.None, CultureInfo.InvariantCulture, out part) || (!hours && part >= 60)))
         {
             errors = [hours ? "Enter whole hours, zero or greater." : "Enter whole minutes from 0 to 59."];
-            saveFailed = false;
+            actionFailed = false;
             return;
         }
 
@@ -237,7 +253,7 @@ public partial class NewTrip : IAsyncDisposable
         if (minutes > int.MaxValue)
         {
             errors = ["Enter a shorter duration for this connection."];
-            saveFailed = false;
+            actionFailed = false;
             return;
         }
 
@@ -252,10 +268,9 @@ public partial class NewTrip : IAsyncDisposable
             draft.DurationFor(connection) is null)
         {
             errors = ["Enter a departure and a later arrival or a duration for this connection."];
-            saveFailed = false;
-            return;
+            actionFailed = false;
         }
-        MarkEdited();
+        // every connection value already marks the draft as edited when it changes, so confirming alone leaves it clean
     }
 
     static string DurationLabel(long minutes) => minutes < 60
@@ -263,6 +278,52 @@ public partial class NewTrip : IAsyncDisposable
         : $"{minutes / 60} h {minutes % 60} min";
 
     /** Initializes the entry view and loads a trip when a saved-trip link is opened. */
+    protected override void OnInitialized() => Authentication.AuthenticationStateChanged += AuthenticationChanged;
+
+    /**
+     * Drops the catalogue results, draft and retry state when the signed-in account changes, so one account never inherits another's entries.
+     * @param _state The latest validated authentication state, unused because the editor reads its access on demand.
+     */
+    void AuthenticationChanged(Task<AuthenticationState> _state) => _ = ResetForAccountAsync();
+
+    async Task ResetForAccountAsync()
+    {
+        if (disposed) return;
+        try
+        {
+            await InvokeAsync(() =>
+            {
+                // in-flight trip and catalogue calls from the previous account see a new route version and drop their results
+                routeVersion++;
+                busy = false;
+                savingCatalogue = false;
+                markerType = null;
+                places = [];
+                searched = false;
+                review = false;
+                savedReview = false;
+                CancelConnection();
+                ClearMarkerDetails();
+                var hadTrip = draft.Id is not null;
+                ResetDraftState();
+                if (hadTrip) NavigateToPlanner(showMap, null, replace: true);
+                StateHasChanged();
+            });
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.LogError(exception, "Resetting the trip editor after an account change failed");
+        }
+    }
+
+    /** Clears the draft, its undo history and the pending catalogue retry state so no earlier entry can be saved again. */
+    void ResetDraftState()
+    {
+        ResetPlannerDraft();
+        placing = false;
+        actionFailed = false;
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         var path = PlannerPath(Navigation.Uri);
@@ -288,9 +349,7 @@ public partial class NewTrip : IAsyncDisposable
                 await OpenTripAsync(id, restoreRouteOnFailure: true);
         }
         else if (previousPath is not null && draft.Id is not null)
-        {
             ResetPlannerDraft();
-        }
     }
 
     /** Creates an empty trip only after the traveller chooses to discard unsaved changes. */
@@ -324,7 +383,7 @@ public partial class NewTrip : IAsyncDisposable
         dirty = false;
         notice = null;
         errors = [];
-        saveFailed = false;
+        actionFailed = false;
         ShowBasics();
     }
 
@@ -491,13 +550,27 @@ public partial class NewTrip : IAsyncDisposable
             if (!discard)
                 context.PreventNavigation();
         }
-        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested) { }
-        catch (JSDisconnectedException) { context.PreventNavigation(); }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        {
+            // the navigation was superseded while the prompt was open
+        }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogWarning("Leave confirmation unavailable because the browser connection closed; navigation was prevented");
+            context.PreventNavigation();
+        }
+        catch (JSException exception)
+        {
+            Logger.LogWarning(exception, "Leave confirmation failed in the browser; navigation was prevented");
+            context.PreventNavigation();
+        }
     }
 
     /** Cancels outstanding calls and unregisters the shortcut when the editor closes. */
     public async ValueTask DisposeAsync()
     {
+        disposed = true;
+        Authentication.AuthenticationStateChanged -= AuthenticationChanged;
         closed.Cancel();
         closed.Dispose();
         if (undoShortcut is null) return;
@@ -507,7 +580,14 @@ public partial class NewTrip : IAsyncDisposable
             if (registration is not null)
                 await registration.InvokeVoidAsync("disconnect");
         }
-        catch (JSDisconnectedException) { }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogInformation("Undo shortcut not released because the browser connection closed");
+        }
+        catch (JSException exception)
+        {
+            Logger.LogWarning(exception, "Undo shortcut could not be released");
+        }
     }
 
     /**
@@ -603,7 +683,7 @@ public partial class NewTrip : IAsyncDisposable
         notice = null;
         browserDraftNotice = null;
         errors = [];
-        saveFailed = false;
+        actionFailed = false;
     }
 
     /** Records the draft and its selection before a single user edit. */
@@ -642,7 +722,7 @@ public partial class NewTrip : IAsyncDisposable
 
         notice = "Last change undone.";
         errors = review ? draft.Build().Errors : [];
-        saveFailed = false;
+        actionFailed = false;
     }
 
     /**
@@ -665,7 +745,7 @@ public partial class NewTrip : IAsyncDisposable
         savedReview = false;
         CancelConnection();
         errors = draft.Build().Errors;
-        saveFailed = false;
+        actionFailed = false;
     }
 
     void SelectStop(int index)
@@ -701,9 +781,12 @@ public partial class NewTrip : IAsyncDisposable
 
     void MoveStop(int index, int offset)
     {
+        if (review || busy || index < 0 || index >= draft.Stops.Count || index + offset < 0 || index + offset >= draft.Stops.Count)
+            return;
+
         RememberEdit();
         CancelConnection();
-        draft.Move(index, index + offset);
+        draft.Swap(index, index + offset);
         selected = index + offset;
         MarkEdited();
     }
@@ -759,11 +842,12 @@ public partial class NewTrip : IAsyncDisposable
     /**
      * Adds a confirmed catalogue accommodation to the shared itinerary, or selects its existing stop.
      * @param accommodation The selected public record, or null when catalogue selection is cleared.
+     * @return True when the itinerary took the place; false when the draft is busy or open on the map, or a clear had nothing to do.
      */
-    void SelectAccommodation(AccommodationDto? accommodation)
+    bool SelectAccommodation(AccommodationDto? accommodation)
     {
         if (accommodation is null || busy || MapVisible)
-            return;
+            return false;
 
         for (var index = 0; index < draft.Stops.Count; index++)
         {
@@ -771,12 +855,16 @@ public partial class NewTrip : IAsyncDisposable
             if (place.Type == "accommodation" && place.PlaceId == accommodation.AccommodationId)
             {
                 SelectStop(index);
-                return;
+                StateHasChanged();
+                return true;
             }
         }
 
         AddStop(new(accommodation.AccommodationId, "accommodation", accommodation.Name,
             accommodation.Address, accommodation.Lat, accommodation.Lon));
+        // a plain delegate does not re-render this page the way an EventCallback did, so ask for it
+        StateHasChanged();
+        return true;
     }
 
     void AddReturnStop() => AddStop(draft.Stops[0].Place, returnToStart: true);
@@ -799,7 +887,7 @@ public partial class NewTrip : IAsyncDisposable
         busy = true;
         searched = false;
         errors = [];
-        saveFailed = false;
+        actionFailed = false;
         var token = closed.Token;
         var version = routeVersion;
         try
@@ -813,11 +901,18 @@ public partial class NewTrip : IAsyncDisposable
         }
         catch (ApiError error) when (version == routeVersion)
         {
+            Logger.LogWarning("Trip request failed as {Kind} (status {Status})", error.Kind, error.Status);
             errors = [error.Message];
-            saveFailed = true;
+            actionFailed = true;
         }
-        catch (ApiError) when (version != routeVersion) { }
-        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (ApiError error) when (version != routeVersion)
+        {
+            Logger.LogInformation("Ignored a superseded trip request that failed as {Kind} (status {Status})", error.Kind, error.Status);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // the editor closed while the request was running
+        }
         finally
         {
             if (version == routeVersion)
@@ -901,7 +996,7 @@ public partial class NewTrip : IAsyncDisposable
             position.Lat is < -90 or > 90 || position.Lon is < -180 or > 180)
         {
             errors = ["Enter a place name and valid map coordinates."];
-            saveFailed = false;
+            actionFailed = false;
             return;
         }
         if (showMap && editingMarker is { } marker)
@@ -930,7 +1025,7 @@ public partial class NewTrip : IAsyncDisposable
         if (!Guid.TryParse(lastSegment, out var id) || id == Guid.Empty)
         {
             errors = ["Enter a saved trip link or its trip ID."];
-            saveFailed = false;
+            actionFailed = false;
             return;
         }
         if (HasUnsavedWork)
@@ -941,21 +1036,21 @@ public partial class NewTrip : IAsyncDisposable
 
     /**
      * Loads a saved trip and restores the current draft's link if opening a planner route fails.
-     * @param id The saved trip to load.
+     * @param tripId The saved trip to load.
      * @param restoreRouteOnFailure Whether the URL already points at the requested trip.
      */
-    async Task OpenTripAsync(Guid id, bool restoreRouteOnFailure = false)
+    async Task OpenTripAsync(Guid tripId, bool restoreRouteOnFailure = false)
     {
         var version = routeVersion;
         busy = true;
-        openingRoute = restoreRouteOnFailure && id != draft.Id;
+        openingRoute = restoreRouteOnFailure && tripId != draft.Id;
         pendingOpen = null;
         errors = [];
-        saveFailed = false;
+        actionFailed = false;
         var token = closed.Token;
         try
         {
-            var revision = await Trips.GetRevisionAsync(id, token);
+            var revision = await Trips.GetRevisionAsync(tripId, token);
             if (version != routeVersion)
                 return;
             var saved = revision.Trip;
@@ -968,20 +1063,27 @@ public partial class NewTrip : IAsyncDisposable
             review = false;
             dirty = false;
             notice = $"Opened {saved.Name}.";
-            UpdateLink(id);
+            UpdateLink(tripId);
         }
         catch (ApiError error) when (version == routeVersion)
         {
+            Logger.LogWarning("Trip request failed as {Kind} (status {Status})", error.Kind, error.Status);
             errors = [error.Status == 404 ? "That saved trip is unavailable." : error.Message];
-            saveFailed = true;
+            actionFailed = true;
             if (restoreRouteOnFailure)
             {
                 routeId = draft.Id;
                 NavigateToPlanner(showMap, draft.Id, replace: true);
             }
         }
-        catch (ApiError) when (version != routeVersion) { }
-        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (ApiError error) when (version != routeVersion)
+        {
+            Logger.LogInformation("Ignored a superseded trip request that failed as {Kind} (status {Status})", error.Kind, error.Status);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // the editor closed while the request was running
+        }
         finally
         {
             if (version == routeVersion)
@@ -1000,7 +1102,7 @@ public partial class NewTrip : IAsyncDisposable
 
         var (request, problems) = draft.Build();
         errors = problems;
-        saveFailed = false;
+        actionFailed = false;
         if (request is null)
             return;
 
@@ -1011,7 +1113,10 @@ public partial class NewTrip : IAsyncDisposable
         {
             var revision = await Trips.SaveAsync(draft.Id, request, draft.ETag, token);
             if (version != routeVersion)
+            {
+                Logger.LogWarning("Trip save completed after the editor moved to another route, so the saved result was not shown");
                 return;
+            }
             var saved = revision.Trip;
             var checkpoint = draft.Id is null ? newBrowserDraft : null;
             draft = TripPlannerDraft.FromSaved(revision);
@@ -1026,10 +1131,11 @@ public partial class NewTrip : IAsyncDisposable
         }
         catch (ApiError error) when (version == routeVersion)
         {
+            Logger.LogWarning("Trip request failed as {Kind} (status {Status})", error.Kind, error.Status);
             if (error.Status is 412 or 428)
             {
                 errors = ["The saved trip version changed. Your edits are still here. Reopen the trip before saving again."];
-                saveFailed = false;
+                actionFailed = false;
                 return;
             }
 
@@ -1038,12 +1144,19 @@ public partial class NewTrip : IAsyncDisposable
                 : error.Errors.Count == 0
                 ? [error.Message]
                 : error.Errors.Values.SelectMany(messages => messages).Where(message => message.Length > 0).DefaultIfEmpty(error.Message)
-                    .Select(message => Regex.Replace(message, @"\blegs?\b", match => match.Value.ToLowerInvariant() == "legs"
-                        ? "connections" : "connection", RegexOptions.IgnoreCase)).ToArray();
-            saveFailed = error.Kind != FailureKind.Validation;
+                    .Select(message => Regex.Replace(message, @"\blegs?\b", match => ConnectionWord(match.Value), RegexOptions.IgnoreCase)).ToArray();
+            actionFailed = error.Kind != FailureKind.Validation;
+            if (draft.Id is null && CreateRetryWarning.Applies(error))
+                errors = [.. errors, CreateRetryWarning.Message];
         }
-        catch (ApiError) when (version != routeVersion) { }
-        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (ApiError error) when (version != routeVersion)
+        {
+            Logger.LogInformation("Ignored a superseded trip request that failed as {Kind} (status {Status})", error.Kind, error.Status);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            Logger.LogWarning("Trip save was canceled while the editor closed, so its outcome is unknown");
+        }
         finally
         {
             if (version == routeVersion)
@@ -1080,7 +1193,7 @@ public partial class NewTrip : IAsyncDisposable
 
         var (request, problems) = draft.Build();
         errors = problems;
-        saveFailed = false;
+        actionFailed = false;
         if (request is null)
             return;
 
@@ -1094,11 +1207,18 @@ public partial class NewTrip : IAsyncDisposable
         }
         catch (ApiError error) when (version == routeVersion)
         {
+            Logger.LogWarning("Trip request failed as {Kind} (status {Status})", error.Kind, error.Status);
             errors = [error.Message];
-            saveFailed = true;
+            actionFailed = true;
         }
-        catch (ApiError) when (version != routeVersion) { }
-        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (ApiError error) when (version != routeVersion)
+        {
+            Logger.LogInformation("Ignored a superseded trip request that failed as {Kind} (status {Status})", error.Kind, error.Status);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // the editor closed while the request was running
+        }
         finally
         {
             savingCatalogue = false;
@@ -1125,7 +1245,7 @@ public partial class NewTrip : IAsyncDisposable
             foreach (var stop in group)
                 stop.Place = place;
 
-            // Older snapshots contain temporary IDs for the now-persisted locations.
+            // older snapshots contain temporary IDs for the now-persisted locations.
             if (ReferenceEquals(draft, savingDraft))
                 undoHistory.Clear();
             if (version != routeVersion)
@@ -1157,7 +1277,7 @@ public partial class NewTrip : IAsyncDisposable
      */
     async Task<TripPlaceDto?> ResolvePlaceAsync(TripPlaceDto place, int version, CancellationToken token)
     {
-        // Search by a single token so normalizing whitespace between words doesn't hide the saved record.
+        // search by a single token so normalizing whitespace between words doesn't hide the saved record.
         var searchName = place.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
         var entries = await PlaceCatalogue.SearchAsync(place.Type, searchName, token);
         var normalizedName = searchName.Normalize();
@@ -1170,7 +1290,12 @@ public partial class NewTrip : IAsyncDisposable
         {
             var recovered = entries.Where(entry => entry.PlaceId != Guid.Empty && !existingIds.Contains(entry.PlaceId) &&
                 MatchesCreatedPlace(place, entry)).DistinctBy(entry => entry.PlaceId).Take(2).ToArray();
-            if (recovered.Length != 1)
+            if (recovered.Length == 0)
+            {
+                pendingPlaceCreates.Remove(place);
+                throw new ApiError(FailureKind.Unexpected, $"No saved record matches {place.Name}. The earlier save may not have applied, so save catalogue entries again to retry.");
+            }
+            if (recovered.Length > 1)
                 throw UnconfirmedCatalogueEntry(place.Name);
             pendingPlaceCreates.Remove(place);
             return recovered[0];
@@ -1187,7 +1312,7 @@ public partial class NewTrip : IAsyncDisposable
                 return matches[0];
         }
 
-        // An existing identical record cannot confirm the outcome of this POST.
+        // an existing identical record cannot confirm the outcome of this POST.
         pendingPlaceCreates.Add(place, entries.Select(entry => entry.PlaceId).ToHashSet());
         try
         {
@@ -1225,9 +1350,11 @@ public partial class NewTrip : IAsyncDisposable
             return new(saved.TransportModeId, saved.Code, saved.Name);
         }
 
-        if (!pendingModeCreates.Add(mode.Code))
-            throw UnconfirmedCatalogueEntry(mode.Name);
+        // nothing matched after an unconfirmed create, so clear the marker and let the next save retry.
+        if (pendingModeCreates.Remove(mode.Code))
+            throw new ApiError(FailureKind.Unexpected, $"No saved {mode.Name} mode matches the earlier save. The earlier save may not have applied, so save catalogue entries again to retry.");
 
+        pendingModeCreates.Add(mode.Code);
         try
         {
             var created = await Transport.CreateTransportAsync(
@@ -1262,18 +1389,18 @@ public partial class NewTrip : IAsyncDisposable
     static ApiError UnconfirmedCatalogueEntry(string name) =>
         new(FailureKind.Unexpected, $"The catalogue save for {name} could not be confirmed. Check the catalogue before retrying.");
 
-    void UpdateLink(Guid id)
+    void UpdateLink(Guid tripId)
     {
-        routeId = id;
-        NavigateToPlanner(showMap, id, replace: true);
+        routeId = tripId;
+        NavigateToPlanner(showMap, tripId, replace: true);
     }
 
     /** Keeps the URL and navigation links aligned with the displayed editor. */
-    void NavigateToPlanner(bool map, Guid? id, bool replace = false)
+    void NavigateToPlanner(bool map, Guid? tripId, bool replace = false)
     {
         var path = map ? "map" : editorPath;
-        if (id is { } tripId)
-            path += $"/{tripId:D}";
+        if (tripId is { } id)
+            path += $"/{id:D}";
 
         if (Navigation.ToBaseRelativePath(Navigation.Uri) == path)
             return;
@@ -1282,7 +1409,15 @@ public partial class NewTrip : IAsyncDisposable
         Navigation.NavigateTo(path, replace: replace);
     }
 
-    static string MarkerLabel(string type) => Markers.First(option => option.Code == type).Label;
+    /** Rewrites the server's leg wording to the editor's connection wording, keeping the original capitalization. */
+    static string ConnectionWord(string leg)
+    {
+        var word = leg.Equals("legs", StringComparison.OrdinalIgnoreCase) ? "connections" : "connection";
+        return char.IsUpper(leg[0]) ? char.ToUpperInvariant(word[0]) + word[1..] : word;
+    }
+
+    static string MarkerLabel(string type) => Markers.FirstOrDefault(option => option.Code == type).Label ?? type;
+
     /** Groups adjacent itinerary entries at identical coordinates into a single display row. */
     IEnumerable<(int First, int End)> ItineraryRows()
     {
@@ -1302,5 +1437,5 @@ public partial class NewTrip : IAsyncDisposable
         (index > 0 ? draft.ArrivalFor(draft.LegTo(index)) : null)
         ?? (index + 1 < draft.Stops.Count ? draft.LegTo(index + 1).Departure : null);
 
-    static string TimeLabel(DateTime? value) => value?.ToString("MMM d, HH:mm") ?? "Time unset";
+    static string TimeLabel(DateTime? value) => value?.ToString("MMM d, HH:mm", CultureInfo.InvariantCulture) ?? "Time unset";
 }

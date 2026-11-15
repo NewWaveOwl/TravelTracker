@@ -22,7 +22,7 @@ This plan follows [design.md](../design.md), [domain.md](../domain.md), [api.md]
 
 The independent Users Domain/Data/Api projects, PostgreSQL persistence, profile endpoints, internal access endpoints, and associated tests now exist. The six-service architecture uses API-to-Data-to-Domain dependency direction, and each service owns its database.
 
-The existing shared `TravelTracker.Domain.Models.User` and internal `TravelTracker.Data.Repositories.IUserRepository` stay unchanged for the current scaffold. M3-11 does not reuse, move, or delete them. The Users service owns new `UserAccount` and `IUserRepository` types in its own projects. Retiring the shared model or repository requires a separate cleanup after confirming that no remaining consumers depend on them.
+The legacy shared `TravelTracker.Domain.Models.User` and `TravelTracker.Data.Repositories.IUserRepository` were removed before M3-11, so M3-11 does not reuse them. The Users service owns new `UserAccount` and `IUserRepository` types in its own projects.
 
 Baseline build verification on 2026-11-04: `dotnet build TravelTracker.slnx --configuration Release` succeeded with 0 warnings and 0 errors on the current checkout.
 

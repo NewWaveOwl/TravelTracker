@@ -22,7 +22,7 @@ using TravelTracker.Frontend.Tests.Support;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** The new-trip journey and the saved-trip view against in-process services, through the real protected HTTP stack; authorization here is fake-identity only. */
+/** the new-trip journey and the saved-trip view against in-process services, through the real protected HTTP stack; authorization here is fake-identity only. */
 public sealed class NewTripPageTests : BunitContext
 {
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-06T10:00:00Z"));
@@ -38,8 +38,7 @@ public sealed class NewTripPageTests : BunitContext
     {
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
-        if (signedIn) authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10));
-        if (signedIn) ((ClaimsIdentity)authentication.User.Identity!).AddClaim(new Claim(AccessTokenClaims.GrantedScope, scope));
+        if (signedIn) authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10), scope);
         var directory = new ServiceDirectory(new Dictionary<string, string>
         {
             ["Attractions"] = "http://localhost:5104", ["Transport"] = "http://localhost:5105", ["Accommodations"] = "http://localhost:5106",
@@ -51,10 +50,11 @@ public sealed class NewTripPageTests : BunitContext
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         var attractions = new AttractionsClient(client);
         var transport = new TransportClient(client);
-        Services.AddSingleton(new AccommodationsClient(client));
+        var accommodations = new AccommodationsClient(client);
+        Services.AddSingleton(accommodations);
         Services.AddSingleton(attractions);
         Services.AddSingleton(transport);
-        Services.AddSingleton(new TripPlacesClient(attractions, transport, client));
+        Services.AddSingleton(new TripPlacesClient(attractions, transport, accommodations));
         Services.AddSingleton(new TripsClient(client));
         Services.AddSingleton(new SettingsClient(client));
         Services.AddScoped<UserPreferences>();
@@ -146,7 +146,7 @@ public sealed class NewTripPageTests : BunitContext
 
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo($"/trips/{saved.TripId:D}?saved=true");
-        var reopened = Render<TripDetails>(parameters => parameters.Add(p => p.TripId, saved.TripId));
+        var reopened = Render<TripDetails>(parameters => parameters.Add(details => details.TripId, saved.TripId));
         reopened.WaitForAssertion(() => Assert.Contains("Trip saved.", reopened.Markup));
         Assert.Contains("Paris weekend", reopened.Markup);
         Assert.Contains("Hotel Lumiere", reopened.Markup);
@@ -221,6 +221,22 @@ public sealed class NewTripPageTests : BunitContext
     }
 
     [Fact]
+    public void ServiceErrorsOnBasicsOpenTheBasicsStepWithoutDeadLinks()
+    {
+        Configure();
+        backend.Override = request => request.Method == HttpMethod.Post && request.RequestUri!.Port == 5108
+            ? new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = JsonContent.Create(new { errors = new Dictionary<string, string[]> { ["name"] = ["name is already used."], ["legs[0].arrival"] = ["arrival is after the trip end."] } }) }
+            : null;
+        var page = FillBasics();
+        FillLeg(page);
+        GoToReview(page);
+        SaveButton(page).Click();
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#trip-name")));
+        Assert.NotEmpty(page.FindAll("a[href='#trip-name']"));
+        Assert.Empty(page.FindAll("a[href='#leg-0-arrival']"));
+    }
+
+    [Fact]
     public void ServiceFieldErrorsReturnToTheLegAndKeepEntries()
     {
         Configure();
@@ -256,34 +272,51 @@ public sealed class NewTripPageTests : BunitContext
     }
 
     [Fact]
-    public void LeavingWithUnsavedEntriesAsksFirstAndKeepEditingStays()
+    public async Task LeavingWithUnsavedEntriesAsksFirstAndKeepEditingStays()
     {
         Configure();
         var page = FillBasics();
         var navigation = Services.GetRequiredService<NavigationManager>();
         var start = navigation.Uri;
-        page.InvokeAsync(() => navigation.NavigateTo("/history"));
+        await page.InvokeAsync(() => navigation.NavigateTo("/history"));
         page.WaitForAssertion(() => Assert.Contains("Leave without saving?", page.Markup));
         Assert.Equal(start, navigation.Uri);
         page.FindAll("button").Single(button => button.TextContent == "Keep editing").Click();
         Assert.DoesNotContain("Leave without saving?", page.Markup);
-        Assert.Contains("form", page.Markup);
-        page.InvokeAsync(() => navigation.NavigateTo("/history"));
+        page.FindAll("button").Single(button => button.TextContent == "Back").Click();
+        Assert.Equal("Paris weekend", page.Find("#trip-name").GetAttribute("value"));
+        await page.InvokeAsync(() => navigation.NavigateTo("/history"));
         page.WaitForAssertion(() => Assert.Contains("Leave without saving?", page.Markup));
         page.FindAll("button").Single(button => button.TextContent == "Leave without saving").Click();
         Assert.EndsWith("/history", navigation.Uri);
     }
 
     [Fact]
-    public void LeavingAnEmptyTripNeverAsks()
+    public async Task LeavingAnEmptyTripNeverAsks()
     {
         Configure();
         var page = Render<TripFormPlanner>();
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#trip-name")));
         var navigation = Services.GetRequiredService<NavigationManager>();
-        page.InvokeAsync(() => navigation.NavigateTo("/history"));
+        await page.InvokeAsync(() => navigation.NavigateTo("/history"));
         Assert.EndsWith("/history", navigation.Uri);
+        Assert.Empty(JSInterop.Invocations["confirm"]);
     }
+
+    [Fact]
+    public void ReturningAccountReloadsTransportModesInsteadOfReusingThePreviousList()
+    {
+        var authentication = Configure();
+        var page = FillBasics();
+        Assert.Equal(1, TransportModeLoads());
+        authentication.SignOut();
+        page.WaitForAssertion(() => Assert.Contains("Sign in to plan a trip", page.Markup));
+        authentication.SignInAndNotify("test-token", clock.GetUtcNow().AddMinutes(10), "catalogue.read trips.read trips.write settings.read");
+        FillBasics(page);
+        Assert.Equal(2, TransportModeLoads());
+    }
+
+    int TransportModeLoads() => backend.Requests.Count(request => request.Path.StartsWith("/api/v1/transport-modes", StringComparison.Ordinal));
 
     [Fact]
     public void SignedOutVisitorIsAskedToSignInAndNothingIsRequested()
@@ -312,7 +345,22 @@ public sealed class NewTripPageTests : BunitContext
     }
 
     [Fact]
-    public void AddingAnAccommodationWithBadCoordinatesSendsNothing()
+    public void UnavailableAccommodationCreateWarnsBeforeAnyRetry()
+    {
+        Configure("catalogue.read catalogue.write trips.read trips.write settings.read");
+        backend.Override = request => request.Method == HttpMethod.Post && request.RequestUri!.Port == 5106 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : null;
+        var page = FillBasics();
+        page.Find("#leg-0-from-add").Click();
+        page.Find("#leg-0-from-new-name").Change("Pension Nord");
+        page.Find("#leg-0-from-new-address").Change("2 Rue Nord");
+        page.Find("#leg-0-from-new-lat").Change("48.88");
+        page.Find("#leg-0-from-new-lon").Change("2.35");
+        page.Find("#leg-0-from-new-save").Click();
+        page.WaitForAssertion(() => Assert.Contains("may have saved this", page.Find("[role=alert]").TextContent));
+    }
+
+    [Fact]
+    public async Task AddingAnAccommodationWithBadCoordinatesSendsNothing()
     {
         Configure("catalogue.read catalogue.write trips.read trips.write settings.read");
         var page = FillBasics();
@@ -320,7 +368,7 @@ public sealed class NewTripPageTests : BunitContext
         page.Find("#leg-0-from-new-name").Change("Pension Nord");
         page.Find("#leg-0-from-new-lat").Change("999");
         page.Find("#leg-0-from-new-lon").Change("2.35");
-        page.Find("#leg-0-from-new-save").Click();
+        await page.Find("#leg-0-from-new-save").ClickAsync();
         Assert.Contains("latitude", page.Markup);
         Assert.Empty(backend.AccommodationBodies);
     }
@@ -359,10 +407,10 @@ public sealed class NewTripPageTests : BunitContext
     }
 
     [Fact]
-    public void AnotherAccountsTripIsReportedAsNotFound()
+    public void UnknownTripIsReportedAsNotFound()
     {
         Configure();
-        var page = Render<TripDetails>(parameters => parameters.Add(p => p.TripId, Guid.NewGuid()));
+        var page = Render<TripDetails>(parameters => parameters.Add(details => details.TripId, Guid.Parse("00000000-0000-0000-0000-000000000502")));
         page.WaitForAssertion(() => Assert.Contains("Trip not found", page.Markup));
         Assert.Empty(page.FindAll("button"));
     }
@@ -372,8 +420,8 @@ public sealed class NewTripPageTests : BunitContext
     {
         Configure();
         backend.Override = request => request.RequestUri!.Port == 5108 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : null;
-        var page = Render<TripDetails>(parameters => parameters.Add(p => p.TripId, Guid.NewGuid()));
+        var page = Render<TripDetails>(parameters => parameters.Add(details => details.TripId, Guid.Parse("00000000-0000-0000-0000-000000000501")));
         page.WaitForAssertion(() => Assert.Contains("Service unavailable", page.Markup));
-        Assert.NotEmpty(page.FindAll("button"));
+        Assert.Single(page.FindAll("button"), button => button.TextContent == "Retry");
     }
 }

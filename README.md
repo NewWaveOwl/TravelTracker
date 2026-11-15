@@ -88,7 +88,7 @@ dotnet run --file scripts/StartSupabaseDev.cs -- --check-config
 
 Check mode validates configuration shape only. It does not test database access, certificate contents, Auth credentials, signing-key availability or hook configuration. `Supabase__Url`, `Supabase__PublishableKey`, and `TRAVELTRACKER_SERVICE_EMAIL` environment values override saved values. `TRAVELTRACKER_LAUNCH_CONFIG` selects an alternate local configuration file.
 
-If upgrading an older Auth0 launcher setup, **rename** `.traveltracker-launch.json` to keep a backup, then run `--setup`. Re-enter the same database host, role and local certificate path, followed by the new Supabase Auth values. Old Auth0 launch fields are rejected with migration instructions; the obsolete four-argument command and `Start-SupabaseDev.ps1` are not the Supabase Auth startup path. Never add passwords, privileged API keys, or tokens to the JSON file or commit them to Git.
+If upgrading an older Auth0 launcher setup, **rename** `.traveltracker-launch.json` to keep a backup, then run `--setup`. Re-enter the same database host, role and local certificate path, followed by the new Supabase Auth values. Old Auth0 launch fields are rejected with migration instructions; the obsolete four-argument command is not the Supabase Auth startup path. Never add passwords, privileged API keys, or tokens to the JSON file or commit them to Git.
 
 ### Sign in and save a trip
 

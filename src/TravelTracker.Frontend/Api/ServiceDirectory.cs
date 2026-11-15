@@ -9,6 +9,7 @@ namespace TravelTracker.Frontend.Api;
  */
 public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string> urls)
 {
+    /** @return The configured service names. */
     public IEnumerable<string> Names => urls.Keys;
 
     /**
@@ -49,8 +50,8 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
     private static partial Regex NameQuery();
 
     static bool AllowedQuery(string service, string path, string query) =>
-        (service == "Attractions" && path == "/api/v1/attractions" || service == "Accommodations" && path == "/api/v1/accommodations") && NameQuery().IsMatch(query) ||
-        service == "Transport" && (path == "/api/v1/transport-modes" && TransportQuery().IsMatch(query) || path == "/api/v1/route-points" && PointQuery().IsMatch(query));
+        (((service == "Attractions" && path == "/api/v1/attractions") || (service == "Accommodations" && path == "/api/v1/accommodations")) && NameQuery().IsMatch(query)) ||
+        (service == "Transport" && ((path == "/api/v1/transport-modes" && TransportQuery().IsMatch(query)) || (path == "/api/v1/route-points" && PointQuery().IsMatch(query))));
 
     [GeneratedRegex("^name=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})*&code=(?:car|bus|train|pedestrian|bike|plane)?$")]
     private static partial Regex TransportQuery();

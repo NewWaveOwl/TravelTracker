@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using TravelTracker.Trips.Domain.Models;
 using TravelTracker.Trips.Data;
 using TravelTracker.Trips.Data.Repositories;
+using TravelTracker.Trips.Data.Tests.Support;
 
 namespace TravelTracker.Trips.Data.Tests;
 
@@ -59,7 +61,7 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Equal(expected.Legs[0].Departure, first.Departure);
         Assert.Equal("Louvre", persisted.Legs[1].From.Name);
         Assert.Equal("Hotel Lumiere", persisted.Legs[1].To.Name);
-        Assert.Contains("20261106194443_InitialTrips", migrations);
+        Assert.Contains(migrations, migration => migration.EndsWith("_InitialTrips", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -144,11 +146,14 @@ public sealed class TripRepositoryPostgreSqlTests
         var roundTrip = Trip.Create("Round trip", original.TimeZone, original.Start, original.End, true,
             original.Legs, original.TripId);
 
-        await using var first = CreateContext(database.ConnectionString);
-        await using var second = CreateContext(database.ConnectionString);
+        // each writer pauses at its first UPDATE until the other one arrives, so both really overlap in the database.
+        var rendezvous = new WriteRendezvous(2);
+        await using var first = CreateContext(database.ConnectionString, new RendezvousCommandInterceptor(rendezvous));
+        await using var second = CreateContext(database.ConnectionString, new RendezvousCommandInterceptor(rendezvous));
         var writes = await Task.WhenAll(
-            new EfTripRepository(first).ReplaceOwnedAsync(oneWay, OwnerIssuer, "alice", original.Revision),
-            new EfTripRepository(second).ReplaceOwnedAsync(roundTrip, OwnerIssuer, "alice", original.Revision));
+            Task.Run(() => new EfTripRepository(first).ReplaceOwnedAsync(oneWay, OwnerIssuer, "alice", original.Revision)),
+            Task.Run(() => new EfTripRepository(second).ReplaceOwnedAsync(roundTrip, OwnerIssuer, "alice", original.Revision)));
+        Assert.True(rendezvous.Completed, "both writers must have reached the UPDATE together.");
 
         Assert.Single(writes, status => status == TripReplacementStatus.Replaced);
         Assert.Single(writes, status => status == TripReplacementStatus.Stale);
@@ -233,43 +238,9 @@ public sealed class TripRepositoryPostgreSqlTests
      * Creates a PostgreSQL context isolated to the disposable test database.
      *
      * @param connectionString Connection string for this test's database.
+     * @param interceptors Optional EF interceptors for the context.
      * @return A new context that can be disposed independently.
      */
-    private static TripsDbContext CreateContext(string connectionString) =>
-        new(new DbContextOptionsBuilder<TripsDbContext>().UseNpgsql(connectionString).Options);
-
-    /**
-     * Creates and later drops one random PostgreSQL database for a relational test.
-     */
-    private sealed class PostgresTestDatabase : IAsyncDisposable
-    {
-        private readonly string adminConnectionString;
-        private readonly string databaseName = "traveltracker_trips_test_" + Guid.NewGuid().ToString("N");
-
-        public string ConnectionString { get; }
-
-        public PostgresTestDatabase()
-        {
-            adminConnectionString = Environment.GetEnvironmentVariable("TRAVELTRACKER_TEST_POSTGRES") ??
-                throw new InvalidOperationException("PostgreSQL data tests require TRAVELTRACKER_TEST_POSTGRES with CREATEDB permission.");
-            using var admin = new NpgsqlConnection(adminConnectionString);
-            admin.Open();
-            using var create = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", admin);
-            create.ExecuteNonQuery();
-            ConnectionString = new NpgsqlConnectionStringBuilder(adminConnectionString)
-            {
-                Database = databaseName,
-                Pooling = false
-            }.ConnectionString;
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            using var admin = new NpgsqlConnection(adminConnectionString);
-            admin.Open();
-            using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)", admin);
-            drop.ExecuteNonQuery();
-            return ValueTask.CompletedTask;
-        }
-    }
+    private static TripsDbContext CreateContext(string connectionString, params IInterceptor[] interceptors) =>
+        new(new DbContextOptionsBuilder<TripsDbContext>().UseNpgsql(connectionString).AddInterceptors(interceptors).Options);
 }

@@ -11,7 +11,7 @@ using TravelTracker.Frontend.Tests.Support;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** Contract tests exercise the frontend HTTP boundary without calling the service or database. */
+/** contract tests exercise the frontend HTTP boundary without calling the service or database. */
 public sealed class AccommodationsClientTests
 {
     static readonly Guid Id = Guid.Parse("00000000-0000-0000-0000-000000000321");
@@ -21,8 +21,7 @@ public sealed class AccommodationsClientTests
     public AccommodationsClientTests()
     {
         auth = new(new SessionRegistry(clock));
-        auth.SignIn("test-token", clock.GetUtcNow().AddMinutes(10));
-        ((ClaimsIdentity)auth.User.Identity!).AddClaim(new Claim(AccessTokenClaims.GrantedScope, "catalogue.read catalogue.write"));
+        auth.SignIn("test-token", clock.GetUtcNow().AddMinutes(10), "catalogue.read catalogue.write");
     }
 
     AccommodationsClient Client(StubHandler handler) => new(new ProtectedClient(auth,

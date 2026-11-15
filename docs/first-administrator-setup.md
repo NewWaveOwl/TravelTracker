@@ -33,7 +33,7 @@ Independent read-only review found no Critical/High issues. Its one Medium findi
 
 ### Completed local verification
 
-Final build: **0 warnings, 0 errors**. Full solution tests with an isolated PostgreSQL instance: **459 passed, 0 failed, 0 skipped** (API89, Attractions184, frontend146, Users40). Users includes22 bearer/bootstrap HTTP tests,13 domain cases and5 PostgreSQL cases. The initial PostgreSQL timestamp precision issue was fixed by normalizing to database microseconds before persistence.
+Final build: **0 warnings, 0 errors**. Full solution tests with an isolated PostgreSQL instance: **459 passed, 0 failed, 0 skipped** (API89, Attractions184, frontend146, Users40). Users includes 22 bearer/bootstrap HTTP tests, 13 domain cases and 5 PostgreSQL cases. The initial PostgreSQL timestamp precision issue was fixed by normalizing to database microseconds before persistence.
 
 The live target account completed sign-in and the explicit setup action. The website confirmed **Administrator access confirmed** with the configured account. Bootstrap credentials were then disabled in local user-secrets; the permanent database marker and audit retain the operation. Auth0 catalogue write grants are independent and were not changed by this role assignment.
 
@@ -45,7 +45,7 @@ The owner approved listing TravelTracker accounts and promoting/demoting adminis
 
 `/administrator` lists application accounts only for an active persisted administrator. Auth0 tenant identities are not fetched through a Management API; a user becomes a TravelTracker account after a validated sign-in profile read verifies its provider identity and email. First-use provisioning always creates a traveller and never overwrites an existing role/status.
 
-GET `/api/v1/users` returns public userId/email/role/status only. PATCH `/api/v1/users/{id}/role` accepts exactly role, expectedRole and a trimmed1–500 character reason. Authentication uses the existing valid audience and catalogue.read session grant; the additional authority for account administration is the live Users administrator role, not catalogue.write or token role claims. This does not change catalogue API permission checks.
+GET `/api/v1/users` returns public userId/email/role/status only. PATCH `/api/v1/users/{id}/role` accepts exactly role, expectedRole and a trimmed 1 to 500 character reason. Authentication uses the existing valid audience and the `users.admin` session grant; the additional authority for account administration is the live Users administrator role, not catalogue.write or token role claims. This does not change catalogue API permission checks.
 
 Every list and mutation checks live standing. Role changes share the PostgreSQL transaction advisory lock with bootstrap, recheck the actor, verify the last-observed target role, protect the last active administrator, and write actor/target/old/new/reason audit evidence atomically. Same-role or stale requests return conflict without a new audit. Nonactive accounts cannot be promoted. Self-demotion is allowed only when another active administrator remains; subsequent panel reads are forbidden.
 
@@ -53,7 +53,7 @@ The UI requires a confirmation and reason, disables duplicate submissions, prese
 
 ### Administrator Panel validation
 
-Final solution build: **0 warnings, 0 errors**. Full suite with isolated PostgreSQL: **503 passed, 0 failed, 0 skipped** (API89, Attractions184, frontend159, Users71). No baseline tests were removed. The sign-out regression now captures the account-page antiforgery token before resetting its recorded request, because the account page legitimately checks the live administrator role; it still proves logout and subsequent protected reads send no new backend requests.
+Historical, superseded by the test duplication cleanup below: final solution build **0 warnings, 0 errors**. Full suite with isolated PostgreSQL: **503 passed, 0 failed, 0 skipped** (API89, Attractions184, frontend159, Users71). No baseline tests were removed. The sign-out regression now captures the account-page antiforgery token before resetting its recorded request, because the account page legitimately checks the live administrator role; it still proves logout and subsequent protected reads send no new backend requests.
 
 New coverage includes real-JWT administrator/nonadministrator/standing rules, verified ordinary-user provisioning with spoofed roles ignored, atomic audited promotion/demotion, last-active-admin concurrent demotions, stale/no-op refusal, reason/unknown-field validation, audit rollback, role persistence, self-demotion authority loss, UI confirmation and duplicate suppression, error input retention, and immediate removal of rendered personal data on account changes. Independent read-only review has **0 remaining actionable findings** after correcting service outage wording.
 

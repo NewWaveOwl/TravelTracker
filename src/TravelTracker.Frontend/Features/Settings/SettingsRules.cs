@@ -7,10 +7,7 @@ namespace TravelTracker.Frontend.Features.Settings;
 public static class SettingsRules
 {
     /** theme values the service accepts, in display order. */
-    public static readonly string[] Themes = ["system", "light", "dark"];
-
-    /** Transport codes the service accepts, in display order. */
-    public static readonly string[] TransportModes = ["car", "bus", "train", "pedestrian", "bike", "plane"];
+    public static readonly IReadOnlyList<string> Themes = ["system", "light", "dark"];
 
     /**
      * checks that the host knows an IANA time zone identifier.

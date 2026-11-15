@@ -41,8 +41,17 @@ public sealed class UserProfilePostgreSqlTests
 
             saved = (await updated.Content.ReadFromJsonAsync<SelfProfileResponse>())!;
             Assert.Equal(provisioned?.PublicId, saved.PublicId);
-            Assert.Equal(emailResponse.IsSuccessStatusCode ? "edited@example.test" : null, saved.Email);
-            Assert.Equal(addressResponse.IsSuccessStatusCode ? "1 Test Avenue" : null, saved.Address);
+            if (emailResponse.StatusCode == HttpStatusCode.OK)
+            {
+                Assert.Equal("edited@example.test", saved.Email);
+                Assert.Null(saved.Address);
+            }
+            else
+            {
+                Assert.Null(saved.Email);
+                Assert.Equal("1 Test Avenue", saved.Address);
+            }
+
             Assert.NotNull(saved.UpdatedAt);
         }
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using TravelTracker.Attractions.Domain.Models;
 
 namespace TravelTracker.Attractions.Api.Services;
@@ -7,11 +8,6 @@ namespace TravelTracker.Attractions.Api.Services;
  */
 public interface IAttractionService
 {
-    /**
-     * Retrieves every available attraction.
-     *
-     * @return A task containing all attractions.
-     */
     /**
      * Retrieves every available attraction, optionally filtered by name.
      *
@@ -25,31 +21,20 @@ public interface IAttractionService
      * Retrieves an attraction by its unique identifier.
      *
      * @param attractionId The unique identifier to search for.
-     * @return A task containing the matching attraction, or null when it does not exist.
      * @param cancellationToken Cancels database work for the request.
+     * @return A task containing the matching attraction, or null when it does not exist or is private to someone else.
      */
     Task<Attraction?> GetByIdAsync(Guid attractionId, CancellationToken cancellationToken = default);
 
     /**
-     * Validates and creates an attraction.
+     * Creates an attraction from values the HTTP layer has already validated, trimming name and address.
      *
      * @param attraction The attraction values to create.
-     * @return A task containing the created attraction.
      * @param cancellationToken Cancels database work for the request.
+     * @return A task containing the created attraction.
+     * @throws UnauthorizedAccessException When the caller may not create this attraction.
      */
     Task<Attraction> CreateAsync(Attraction attraction, CancellationToken cancellationToken = default);
-
-    /**
-     * Validates and updates an attraction.
-     *
-     * @param attractionId The unique identifier of the attraction to update.
-     * @param attraction The new attraction values.
-     * @return A task containing the updated attraction, or null when absent/private; visible but unwritable records throw UnauthorizedAccessException.
-     * @param cancellationToken Cancels database work for the request.
-     */
-    Task<Attraction?> UpdateAsync(
-        Guid attractionId,
-        Attraction attraction, CancellationToken cancellationToken = default);
 
     /**
      * Applies a partial JSON patch represented as a JsonElement to an existing attraction.
@@ -58,17 +43,8 @@ public interface IAttractionService
      *
      * @param attractionId The identifier of the attraction to update.
      * @param patch JsonElement containing the partial update object.
+     * @param cancellationToken Cancels database work for the request.
      * @return A task containing an UpdateResult describing the outcome and any validation errors.
-     * @param cancellationToken Cancels database work for the request.
      */
-    Task<UpdateResult> UpdatePartialAsync(Guid attractionId, System.Text.Json.JsonElement patch, CancellationToken cancellationToken = default);
-
-    /**
-     * Deletes an attraction.
-     *
-     * @param attractionId The unique identifier of the attraction to delete.
-     * @return A task containing true when the attraction was deleted; otherwise, false.
-     * @param cancellationToken Cancels database work for the request.
-     */
-    Task<bool> DeleteAsync(Guid attractionId, CancellationToken cancellationToken = default);
+    Task<UpdateResult> UpdatePartialAsync(Guid attractionId, JsonElement patch, CancellationToken cancellationToken = default);
 }

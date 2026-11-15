@@ -35,6 +35,20 @@ public sealed class RoutePointTests
     }
 
     /**
+     * Rejects a create body that carries a field the contract does not define, before anything is stored.
+     * @return Completion after checking the rejection.
+     */
+    [Fact]
+    public async Task CreatePoint_UnknownFieldReturns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/route-points",
+            new { type = "attraction", name = "Example Point", lat = 1m, lon = 1m, status = "active" });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /**
      * Reads a seeded route point.
      * @return Completion after checking the seed.
      */
@@ -73,7 +87,7 @@ public sealed class RoutePointTests
         using var client = factory.CreateClient();
         using var response = await client.PostAsJsonAsync("/api/v1/route-points",
             new { type = "restaurant", name = "Example", lat = 45m, lon = -73m });
-        await HttpTestSupport.AssertValidationAsync(response);
+        await HttpTestSupport.AssertValidationAsync(response, "type");
     }
 
     /**
@@ -87,6 +101,34 @@ public sealed class RoutePointTests
         using var client = factory.CreateClient();
         using var response = await client.PostAsJsonAsync("/api/v1/route-points",
             new { type = "transport_stop", name = "Example", lat = 90.1m, lon = -73m });
-        await HttpTestSupport.AssertValidationAsync(response);
+        await HttpTestSupport.AssertValidationAsync(response, "lat");
+    }
+
+    /**
+     * Rejects longitude outside the permitted coordinate range.
+     * @return Completion after checking validation.
+     */
+    [Fact]
+    public async Task CreatePoint_InvalidLongitudeReturns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/route-points",
+            new { type = "transport_stop", name = "Example", lat = 45m, lon = 180.1m });
+        await HttpTestSupport.AssertValidationAsync(response, "lon");
+    }
+
+    /**
+     * Rejects a whitespace-only point name.
+     * @return Completion after checking validation.
+     */
+    [Fact]
+    public async Task CreatePoint_BlankNameReturns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/route-points",
+            new { type = "transport_stop", name = "   ", lat = 45m, lon = -73m });
+        await HttpTestSupport.AssertValidationAsync(response, "name");
     }
 }

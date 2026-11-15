@@ -74,6 +74,7 @@ public sealed class TripDetailTests
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(absent.StatusCode, response.StatusCode);
+        Assert.Equal(await ProblemBodies.WithoutTraceIdAsync(absent), await ProblemBodies.WithoutTraceIdAsync(response));
     }
 
     [Fact]
