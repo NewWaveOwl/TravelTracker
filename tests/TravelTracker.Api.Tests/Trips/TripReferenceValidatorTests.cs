@@ -337,14 +337,12 @@ public sealed class TripReferenceValidatorTests
     }
 
     /**
-     * A place answer with a blank address or coordinates outside the globe is never snapshotted.
+     * A place answer with coordinates outside the globe is never snapshotted.
      *
      * @param address The address the catalogue returns.
      * @param lat The latitude the catalogue returns.
      */
     [Theory]
-    [InlineData("", 48.86)]
-    [InlineData("   ", 48.86)]
     [InlineData("Rue de Rivoli", 91.0)]
     [InlineData("Rue de Rivoli", -91.0)]
     public async Task Validate_UnusablePlaceAnswer_FailsClosed(string address, double lat)
@@ -356,6 +354,20 @@ public sealed class TripReferenceValidatorTests
 
         Assert.Equal(TripReferenceStatus.DependencyUnavailable, outcome.Status);
         Assert.Null(outcome.Trip);
+    }
+
+    /**
+     * A place whose address is empty is still valid, so the trip is ready to save.
+     */
+    [Fact]
+    public async Task Validate_PlaceWithEmptyAddress_IsReady()
+    {
+        var upstream = TripFixture.HealthyUpstream();
+        upstream.Respond("GET", TripFixture.MuseumPath, HttpStatusCode.OK, new { name = "Louvre", address = "", lat = 48.86m, lon = 2.34m });
+
+        var outcome = await ValidateAsync(upstream);
+
+        Assert.Equal(TripReferenceStatus.Ready, outcome.Status);
     }
 
     /**

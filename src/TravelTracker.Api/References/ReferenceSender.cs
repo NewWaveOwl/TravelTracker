@@ -110,11 +110,11 @@ public sealed class ReferenceSender(IOptions<TripReferenceOptions> options, ILog
      * @param address The place address.
      * @param latitude The latitude in degrees.
      * @param longitude The longitude in degrees.
-     * @return True when name and address are not blank and the coordinates are inside -90..90 and -180..180.
+     * @return True when the name is not blank, the address is present (empty is allowed) and the coordinates are inside -90..90 and -180..180.
      */
     internal static bool IsUsablePlace([NotNullWhen(true)] string? name, [NotNullWhen(true)] string? address,
         [NotNullWhen(true)] decimal? latitude, [NotNullWhen(true)] decimal? longitude) =>
-        !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(address)
+        !string.IsNullOrWhiteSpace(name) && address is not null
         && latitude is >= -90m and <= 90m && longitude is >= -180m and <= 180m;
 
     /**
