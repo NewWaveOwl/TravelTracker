@@ -3,7 +3,7 @@
 **Issue:** audit and enforce role, scope, standing and owner checks at protected API boundaries.
 **Branch:** `privileged-API-access-policies`
 **Dependency:** blocked by #97 (validated identity contract), as recorded in the issue.
-**Status:** matrix approved by the developer on 2026-11-16. Stage 1 (Users administrator scope) is ready for review/commit; stage 2 (Transport live standing and role checks) has not started.
+**Status:** matrix approved by the developer on 2026-11-16. Stage 1 (Users administrator scope) is committed. Stage 2 (Transport live standing and role checks) is implemented and ready for review/commit before the remaining APIs are audited. Validation is currently blocked: the targeted Transport build exits with code 1 before reporting compiler diagnostics, and no tests ran.
 
 ## Goal and scope
 
@@ -45,7 +45,7 @@ Scope is necessary but never sufficient by itself. “Active” and “banned”
 ### Approved policy decisions
 
 1. **Dedicated Users administrator scope:** use `users.admin` for account listing and role changes, replacing the current `catalogue.read` requirement. This prevents catalogue readers from inheriting account-administration permission. Trusted Supabase hook grants are supported for administrators; ordinary traveller defaults exclude this scope. There are no UI changes.
-2. **Transport role and standing policy:** add live Users checks on Transport/Route Points reads and writes, with active-only reads and active-administrator-only writes as the shared-catalogue interpretation of `docs/design.md`. Current controllers enforce scopes but do not resolve live standing or role.
+2. **Transport role and standing policy:** add live Users checks on Transport/Route Points reads and writes, with active-only reads and active-administrator-only writes as the shared-catalogue interpretation of `docs/design.md`. Approved and implemented in stage 2.
 
 If either policy is not approved, keep the existing behavior for that decision and document the exception explicitly; do not infer the missing rule during implementation.
 
@@ -55,7 +55,7 @@ If either policy is not approved, keep the existing behavior for that decision a
 - Accommodations, Attractions, Settings and Trips already resolve Users standing on protected operations; their service-specific docs describe the current fail-closed response. Verify each route and status path against tests before changing behavior.
 - Accommodations and Attractions derive owner identity from validated claims, hide another owner's private records, and give administrators no private-record bypass. Attractions has active-admin checks for shared writes; Accommodations has corresponding checks.
 - Settings and Trips derive ownership from validated identity. Trips also checks references through their owning services using the caller token and hides absent/private references as `404`.
-- Transport currently applies `catalogue.read`/`catalogue.write` but has no live Users lookup, role check or resource owner field. Its catalogue write routes are therefore scope-only today.
+- Transport originally applied `catalogue.read`/`catalogue.write` only. Stage 2 now adds live Users checks to protected controller endpoints: active accounts may read, active administrators may write, and unavailable/malformed Users responses fail closed. Transport and Route Point rows remain shared and have no individual owner.
 - Users `/me` uses dedicated `users.read`/`users.write`; internal routes require `users.access` and an allowlisted service subject. Account listing, role changes and bootstrap currently use `catalogue.read`; list/role persistence performs live administrator checks, while bootstrap additionally requires a one-time operator secret and configured identity.
 - The current shared fallback policy requires `catalogue.read` for otherwise unannotated endpoints. The implementation must inventory every mapped route and either give it an explicit policy or deliberately mark it anonymous; an implicit fallback must not stand in for a route-specific access decision.
 - The named PDF is unavailable locally. No claims about its additional requirements are made here.
@@ -68,8 +68,8 @@ If either policy is not approved, keep the existing behavior for that decision a
 | `src/TravelTracker.Users.Api/Program.cs` | Register the admin policy using the configured exact scope; keep `users.access` constrained to `UsersAccess:AllowedServiceSubjects`. |
 | `src/TravelTracker.Users.Api/Controllers/UsersController.cs` | Apply the approved administrative policy to list/role routes; preserve transactional live-admin, audit and bootstrap safeguards; review every internal and legacy access route. |
 | `src/TravelTracker.Users.Data/Repositories/EfUserRepository.cs` and tests | Preserve in-transaction actor/target/last-admin checks; only change if threat review identifies a demonstrated gap. |
-| `src/TravelTracker.Transport.Api/Controllers/TransportModesController.cs`, `RoutePointsController.cs`, `TransportProgram.cs` | If approved, add live Users standing/role resolution at protected boundaries; require active accounts for reads and active administrator for writes; fail closed on Users failure. Keep health public. |
-| `src/TravelTracker.Transport.Api/Access/**` (new only if approved) | Add a narrow caller context/client/middleware for validated `(iss, sub)` and live Users result. Avoid duplicate policy logic or trusting token role/status claims. |
+| `src/TravelTracker.Transport.Api/Controllers/TransportModesController.cs`, `RoutePointsController.cs`, `TransportProgram.cs`, and `Access/**` | Add live Users standing/role resolution at protected boundaries; require active accounts for reads and active administrators for writes; fail closed on Users failure. Keep health public and avoid trusting token role/status claims. |
+| `scripts/StartSupabaseDev.cs` | Start Transport with the same HTTPS Users internal URL and `users.access` service credential as the other Users-dependent hosts. |
 | `src/TravelTracker.Accommodations.Api/**` and `src/TravelTracker.Attractions.Api/**` | Audit all route/action and service authorization paths; retain validated owner assignment, creator-only private visibility, live standing and no admin private-data bypass. Fix only gaps found. |
 | `src/TravelTracker.Settings.Api/**` | Audit scope, live standing, validated identity ownership, rejected owner fields and outage behavior across read/write routes. |
 | `src/TravelTracker.Trips.Api/**`, `src/TravelTracker.Api/Trips/**` | Audit scope combination, live standing, owner filters, revision checks, upstream caller-token use, hidden private references and fail-closed dependency behavior. |

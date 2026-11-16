@@ -21,5 +21,20 @@ public sealed class HealthTests
         var value = await client.GetFromJsonAsync<JsonElement>("/health");
         Assert.Equal("ok", value.GetProperty("status").GetString());
         Assert.Equal("TravelTracker.Transport", value.GetProperty("service").GetString());
+        Assert.Equal(0, factory.Users.Calls);
+    }
+
+    [Fact]
+    public async Task Health_RemainsPublicWithMalformedBearerAndSkipsUsersLookup()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", factory.CreateToken(failure: "malformed"));
+
+        using var response = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(0, factory.Users.Calls);
     }
 }

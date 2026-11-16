@@ -15,6 +15,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using TravelTracker.Transport.Api.Access;
+using TravelTracker.Transport.Api.Tests.Support;
 
 namespace TravelTracker.Transport.Api.Tests;
 
@@ -35,6 +37,8 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Transport
     internal string MetadataIssuer { get; init; } = Issuer;
     internal string ExpectedIssuer { get; init; } = Issuer;
     internal DiscoveryBackchannelHandler? Discovery { get; private set; }
+    internal UsersAccessBackchannelHandler Users { get; } = new();
+    internal const string UsersServiceToken = "test-transport-users-access-service-token";
     private HttpClient? backchannel;
 
     /**
@@ -43,16 +47,18 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Transport
      * @param failure An optional invalid-token scenario.
      * @param claimType An optional scope claim name override.
      * @param lifetimeOffsetSeconds An optional expiration offset to exercise clock tolerance.
+     * @param role An optional untrusted provider role claim for spoofing tests.
      * @return A serialized bearer token for the real validation handler.
      */
     internal string CreateToken(string? scopes = "catalogue.read catalogue.write", string? failure = null,
-        string? claimType = null, int? lifetimeOffsetSeconds = null)
+        string? claimType = null, int? lifetimeOffsetSeconds = null, string? role = null)
     {
         if (failure == "malformed") return "M4_TOKEN_SENTINEL_malformed";
         using var otherKey = RSA.Create(2048);
         var now = DateTime.UtcNow;
         var claims = new List<Claim>();
         if (failure != "missing-sub") claims.Add(new Claim("sub", failure == "empty-sub" ? " " : "test-traveller"));
+        if (role is not null) claims.Add(new Claim("role", role));
         if (scopes is not null)
             foreach (var value in failure == "repeated-scopes" ? scopes.Split(' ') : new[] { scopes })
                 claims.Add(new Claim(claimType ?? ScopeClaimType, value));
@@ -86,7 +92,9 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Transport
                 ["Authentication:Bearer:Audience"] = Audience,
                 ["Authentication:Bearer:ScopeClaimType"] = ScopeClaimType,
                 ["Authentication:Bearer:ClockSkewSeconds"] = ClockSkewSeconds.ToString(),
-                ["Authentication:Bearer:ValidAlgorithms:0"] = ValidAlgorithms[0]
+                ["Authentication:Bearer:ValidAlgorithms:0"] = ValidAlgorithms[0],
+                ["Users:InternalBaseUrl"] = "https://users.example.test",
+                ["Users:ServiceAccessToken"] = UsersServiceToken
             }));
         builder.ConfigureTestServices(services =>
         {
@@ -105,6 +113,8 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Transport
                 options.Backchannel = backchannel;
             });
             services.AddControllers().AddApplicationPart(typeof(IdentityProbeController).Assembly);
+            services.AddHttpClient<UsersAccessClient>()
+                .ConfigurePrimaryHttpMessageHandler(() => Users);
         });
         builder.ConfigureLogging(logging => logging.ClearProviders());
     }

@@ -14,6 +14,7 @@ namespace TravelTracker.Transport.Api.Controllers;
  */
 [ApiController]
 [Route("api/v1/transport-modes")]
+[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
 public sealed class TransportModesController(ITransportModeService service) : ControllerBase
 {
 
@@ -25,6 +26,7 @@ public sealed class TransportModesController(ITransportModeService service) : Co
      */
     [HttpGet]
     [Authorize(Policy = ScopePolicies.CatalogueRead)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<TransportModeRecord>>> GetAll(
         [FromQuery, RegularExpression("^(car|bus|train|pedestrian|bike|plane)$")] string? code,
         [FromQuery] string? name, CancellationToken cancellationToken)
@@ -44,6 +46,7 @@ public sealed class TransportModesController(ITransportModeService service) : Co
      */
     [HttpGet("{id}")]
     [Authorize(Policy = ScopePolicies.CatalogueRead)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TransportModeRecord>> GetById(Guid id, CancellationToken cancellationToken)
     {
@@ -59,6 +62,7 @@ public sealed class TransportModesController(ITransportModeService service) : Co
      */
     [HttpPost]
     [Authorize(Policy = ScopePolicies.CatalogueWrite)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(TransportModeRecord), StatusCodes.Status201Created)]
     public async Task<ActionResult<TransportModeRecord>> Create(CreateTransportModeRequest request, CancellationToken cancellationToken)
     {
