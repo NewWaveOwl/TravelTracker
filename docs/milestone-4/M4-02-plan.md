@@ -3,7 +3,7 @@
 **Issue:** audit and enforce role, scope, standing and owner checks at protected API boundaries.
 **Branch:** `privileged-API-access-policies`
 **Dependency:** blocked by #97 (validated identity contract), as recorded in the issue.
-**Status:** matrix approved by the developer on 2026-11-16. Stage 1 (Users administrator scope) is committed. Stage 2 (Transport live standing and role checks) is implemented and ready for review/commit before the remaining APIs are audited. Validation is currently blocked: the targeted Transport build exits with code 1 before reporting compiler diagnostics, and no tests ran.
+**Status:** matrix approved by the developer on 2026-11-16. Stage 1 (Users administrator scope) and Stage 2 (Transport live standing and role checks) are committed. Stage 3 (Attractions authorization audit) found no production gap and adds only regression tests. A missing test namespace import found during Stage 2 verification is fixed. Transport API build passes with one MSBuild worker; test execution is blocked because VSTest cannot connect to the testhost within 180 seconds. Pause here for review/commit before auditing the remaining APIs.
 
 ## Goal and scope
 

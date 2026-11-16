@@ -141,7 +141,9 @@ public sealed class PrivacyPersistenceTests
     [InlineData("ownerSubject")]
     [InlineData("ownerIssuer")]
     [InlineData("id")]
-    public async Task ClientCannotSupplyOwnerOrInternalKey(string field)
+    [InlineData("role")]
+    [InlineData("status")]
+    public async Task ClientCannotSupplyOwnerIdentityOrAccountState(string field)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
@@ -159,14 +161,21 @@ public sealed class PrivacyPersistenceTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(subject: "alice"));
         using var created = await client.PostAsJsonAsync("/api/v1/attractions", Place());
-        var saved = await HttpTestSupport.AssertCreatedAsync(client, created);
+        await HttpTestSupport.AssertCreatedAsync(client, created);
         var location = created.Headers.Location!;
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(subject: "admin"));
+        using var sharedCreate = await client.PostAsJsonAsync("/api/v1/attractions", Place("Shared place", "shared"));
+        await HttpTestSupport.AssertCreatedAsync(client, sharedCreate);
+        var sharedLocation = sharedCreate.Headers.Location!;
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(subject: "alice"));
         factory.Users!.ForcedStatus = "banned";
         using var readOwn = await client.GetAsync(location);
+        using var readShared = await client.GetAsync(sharedLocation);
         using var create = await client.PostAsJsonAsync("/api/v1/attractions", Place("Forbidden"));
         using var patch = await client.PatchAsJsonAsync(location, new { name = "Forbidden" });
         var list = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions");
         Assert.Equal(HttpStatusCode.OK, readOwn.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, readShared.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, patch.StatusCode);
         Assert.Single(list!);

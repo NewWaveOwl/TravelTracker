@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using TravelTracker.Transport.Api.Tests.Support;
 
 namespace TravelTracker.Transport.Api.Tests;
 
