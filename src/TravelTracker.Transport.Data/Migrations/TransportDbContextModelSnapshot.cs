@@ -89,9 +89,6 @@ namespace TravelTracker.Transport.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Code")
-                        .IsUnique();
-
                     b.HasIndex("PublicId")
                         .IsUnique();
 

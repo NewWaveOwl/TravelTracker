@@ -29,7 +29,6 @@ public sealed class TransportDbContext(DbContextOptions<TransportDbContext> opti
         modes.HasKey(row => row.Id);
         modes.Property(row => row.Id).ValueGeneratedNever();
         modes.HasIndex(row => row.PublicId).IsUnique();
-        modes.HasIndex(row => row.Code).IsUnique();
         modes.Property(row => row.Code).IsRequired();
         modes.Property(row => row.DisplayName).IsRequired();
         var points = model.Entity<RoutePointRow>();
