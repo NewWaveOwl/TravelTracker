@@ -33,5 +33,5 @@ public sealed class SupabaseFrontendFactory(string? provider = "Supabase", bool 
      * Creates a browser whose cookies are restored through the production middleware on every request.
      * @return The cookie-keeping browser without automatic redirect following.
      */
-    public HttpClient CreateBrowser() => CreateDefaultClient(new CookieJarHandler());
+    public HttpClient CreateBrowser() => CreateDefaultClient(new CookieJarHandler(TimeProvider.System));
 }

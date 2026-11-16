@@ -26,10 +26,10 @@ public static class TransportSeedData
      * @return Accommodation, attraction and transport-stop examples.
      */
     public static IReadOnlyList<RoutePoint> Points() => [
-        new(PointId(1, "00000000-0000-0000-0000-000000000201"), "accommodation", "Example Hotel", "Montreal", 45.5m, -73.57m, null),
-        new(PointId(2, "00000000-0000-0000-0000-000000000202"), "attraction", "Montreal Museum", "Montreal", 45.4987m, -73.5793m,
+        new(PointId(7, "00000000-0000-0000-0000-000000000201"), "accommodation", "Example Hotel", "Montreal", 45.5m, -73.57m, null),
+        new(PointId(8, "00000000-0000-0000-0000-000000000202"), "attraction", "Montreal Museum", "Montreal", 45.4987m, -73.5793m,
             Guid.Parse("11111111-1111-1111-1111-111111111111")),
-        new(PointId(3, "00000000-0000-0000-0000-000000000203"), "transport_stop", "Example Station", "Montreal", 45.499m, -73.566m, null)
+        new(PointId(9, "00000000-0000-0000-0000-000000000203"), "transport_stop", "Example Station", "Montreal", 45.499m, -73.566m, null)
     ];
 
     private static EntityId<TransportMode> TransportId(long key, string publicId) => new(new Id64(key), Guid.Parse(publicId));

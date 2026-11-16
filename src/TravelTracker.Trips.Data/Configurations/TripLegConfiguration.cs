@@ -5,15 +5,15 @@ using TravelTracker.Trips.Data.Entities;
 namespace TravelTracker.Trips.Data.Configurations;
 
 /**
- * Defines PostgreSQL mapping for ordered legs. Place and transport types are short codes; snapshot names and
+ * defines PostgreSQL mapping for ordered legs. Place and transport types are short codes; snapshot names and
  * addresses are unbounded because their limits belong to the owning catalogue services.
  */
 internal sealed class TripLegConfiguration : IEntityTypeConfiguration<TripLegRow>
 {
     /**
-     * Configures the composite key, ordering rule, snapshot columns and time ordering.
+     * configures the composite key, ordering rule, snapshot columns and time ordering.
      *
-     * @param builder Leg row mapping.
+     * @param builder leg row mapping.
      */
     public void Configure(EntityTypeBuilder<TripLegRow> builder)
     {

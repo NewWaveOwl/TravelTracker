@@ -1,10 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 using TravelTracker.Accommodations.Api.Contracts;
 using TravelTracker.Accommodations.Api.Services;
 using TravelTracker.Accommodations.Domain.Models;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 
 namespace TravelTracker.Accommodations.Api.Controllers;
 
@@ -22,6 +21,8 @@ public sealed class AccommodationsController(IAccommodationService service) : Co
     [HttpGet("{id}")]
     [Authorize(Policy = ScopePolicies.CatalogueRead)]
     [ProducesResponseType(typeof(AccommodationRecord), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AccommodationRecord>> GetById(Guid id)
     {
@@ -38,6 +39,8 @@ public sealed class AccommodationsController(IAccommodationService service) : Co
     [Authorize(Policy = ScopePolicies.CatalogueRead)]
     [ProducesResponseType(typeof(List<AccommodationRecord>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<AccommodationRecord>>> GetAll([FromQuery] string? name)
     {
         if (Request.Query.TryGetValue("name", out var names) && names.Count > 1)
@@ -58,6 +61,9 @@ public sealed class AccommodationsController(IAccommodationService service) : Co
     [HttpPost]
     [Authorize(Policy = ScopePolicies.CatalogueWrite)]
     [ProducesResponseType(typeof(AccommodationRecord), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<AccommodationRecord>> Create(CreateAccommodationRequest request)
     {
         var candidate = new Accommodation
@@ -68,9 +74,16 @@ public sealed class AccommodationsController(IAccommodationService service) : Co
             Latitude = request.Lat!.Value,
             Longitude = request.Lon!.Value
         };
-        var saved = await service.CreateAsync(candidate, HttpContext.RequestAborted);
-        var response = ToResponse(saved);
-        return CreatedAtAction(nameof(GetById), new { id = saved.AccommodationId }, response);
+        try
+        {
+            var saved = await service.CreateAsync(candidate, HttpContext.RequestAborted);
+            var response = ToResponse(saved);
+            return CreatedAtAction(nameof(GetById), new { id = saved.AccommodationId }, response);
+        }
+        catch (AccommodationValidationException exception)
+        {
+            return ValidationProblem(new ValidationProblemDetails(exception.Errors));
+        }
     }
 
     /**

@@ -18,7 +18,7 @@ public sealed class EfAccommodationRepository(AccommodationsDbContext database) 
     public async Task<List<Accommodation>> GetVisibleAsync(string issuer, string subject, bool includeShared,
         CancellationToken cancellationToken = default) =>
         (await database.Accommodations.AsNoTracking().Where(row =>
-            row.IsShared && includeShared || !row.IsShared && row.OwnerIssuer == issuer && row.OwnerSubject == subject)
+            (row.IsShared && includeShared) || (!row.IsShared && row.OwnerIssuer == issuer && row.OwnerSubject == subject))
             .ToListAsync(cancellationToken)).Select(ToDomain).ToList();
 
     /**
@@ -33,8 +33,9 @@ public sealed class EfAccommodationRepository(AccommodationsDbContext database) 
     public async Task<Accommodation?> GetVisibleByIdAsync(Guid accommodationId, string issuer, string subject,
         bool includeShared, CancellationToken cancellationToken = default)
     {
-        var row = await database.Accommodations.AsNoTracking().SingleOrDefaultAsync(row => row.AccommodationId == accommodationId &&
-            (row.IsShared && includeShared || !row.IsShared && row.OwnerIssuer == issuer && row.OwnerSubject == subject),
+        var row = await database.Accommodations.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.AccommodationId == accommodationId &&
+            ((candidate.IsShared && includeShared) ||
+                (!candidate.IsShared && candidate.OwnerIssuer == issuer && candidate.OwnerSubject == subject)),
             cancellationToken);
         return row is null ? null : ToDomain(row);
     }

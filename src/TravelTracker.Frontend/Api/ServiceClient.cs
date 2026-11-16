@@ -20,24 +20,10 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
      * Reads a public JSON contract.
      * @param url Destination URL.
      * @param cancellationToken Cancels when the view closes.
-     * @param accessToken Optional token supplied only by ProtectedClient.
      * @return Parsed response or a categorized failure.
      */
-    public Task<T?> GetJsonAsync<T>(string url, CancellationToken cancellationToken = default, string? accessToken = null) =>
-        SendJsonAsync<T>(HttpMethod.Get, url, null, cancellationToken, accessToken);
-
-    /**
-     * Sends one JSON request without retrying writes whose outcome may be unknown.
-     * @param method GET, POST, PUT or PATCH.
-     * @param url Validated destination.
-     * @param body Public writable contract, or null for a read.
-     * @param cancellationToken Cancels work when the consuming view closes.
-     * @param accessToken Optional bearer supplied by ProtectedClient.
-     * @param bootstrapSecret Optional server-held first-administrator secret, restricted to the exact HTTPS bootstrap endpoint.
-     * @return Parsed response; throws ApiError or caller cancellation.
-     */
-    public async Task<T?> SendJsonAsync<T>(HttpMethod method, string url, object? body, CancellationToken cancellationToken = default, string? accessToken = null, string? bootstrapSecret = null) =>
-        (await SendAsync<T>(method, url, body, cancellationToken, accessToken, bootstrapSecret)).Body;
+    public async Task<T?> GetJsonAsync<T>(string url, CancellationToken cancellationToken = default) =>
+        (await SendAsync<T>(HttpMethod.Get, url, null, cancellationToken)).Body;
 
     /**
      * Sends one JSON request and keeps the response entity tag, which optimistic-concurrency writes need.
@@ -70,29 +56,35 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
         }
         try
         {
-            using var response = await httpClient.SendAsync(request, bounded.Token);
+            // headers first, so a body that fails mid-read is handled where the status is still known
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, bounded.Token);
             if (!response.IsSuccessStatusCode)
             {
                 var status = (int)response.StatusCode;
                 var trips = request.RequestUri!.AbsolutePath.StartsWith("/api/v1/trips", StringComparison.Ordinal);
                 var errors = status is 400 or 422 || (trips && status == 404)
                     ? await FieldErrorsAsync(response, trips, bounded.Token) : null;
-                throw Fail(Classify(status), MessageFor(status), method, status, errors);
+                var message = trips && status == 404 ? "This trip is no longer available. Refresh your trips." : MessageFor(status);
+                throw Fail(Classify(status), message, method, status, errors, ResourceOf(request));
             }
             return new ServiceResponse<T>(await response.Content.ReadFromJsonAsync<T>(bounded.Token), response.Headers.ETag?.Tag);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException)
         {
-            throw Fail(FailureKind.Network, method == HttpMethod.Get ? "Check your connection and try again." : "The save could not be confirmed. Check the catalogue before retrying to avoid creating a duplicate.", method);
+            throw Fail(FailureKind.Network, method == HttpMethod.Get ? "Check your connection and try again." : "The save could not be confirmed. Check the saved record before retrying to avoid creating a duplicate.", method, resource: ResourceOf(request), exception: exception);
         }
-        catch (JsonException)
+        // ReadFromJsonAsync reports an unusable charset or body with these exception types.
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
         {
-            throw Fail(FailureKind.Unexpected, method == HttpMethod.Get ? "The service returned an unreadable response." : "The save response could not be read. Check the catalogue before retrying.", method);
+            throw Fail(FailureKind.Unexpected, method == HttpMethod.Get ? "The service returned an unreadable response." : "The save response could not be read. Check the saved record before retrying.", method, resource: ResourceOf(request), exception: exception);
         }
     }
 
-    static async Task<IReadOnlyDictionary<string, string[]>> FieldErrorsAsync(HttpResponseMessage response, bool trips, CancellationToken token)
+    async Task<IReadOnlyDictionary<string, string[]>> FieldErrorsAsync(HttpResponseMessage response, bool trips, CancellationToken token)
     {
         var result = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
         try
@@ -101,10 +93,20 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
             if (json.RootElement.ValueKind == JsonValueKind.Object && json.RootElement.TryGetProperty("errors", out var fields) && fields.ValueKind == JsonValueKind.Object)
                 foreach (var field in fields.EnumerateObject())
                     if ((WritableFields.Contains(field.Name) || (trips && TripField().IsMatch(field.Name))) && field.Value.ValueKind == JsonValueKind.Array)
-                        result[char.ToLowerInvariant(field.Name[0]) + field.Name[1..]] = field.Value.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String)
-                            .Take(4).Select(v => v.GetString()!).Where(s => s.Length <= 300).ToArray();
+                        result[char.ToLowerInvariant(field.Name[0]) + field.Name[1..]] = field.Value.EnumerateArray().Where(value => value.ValueKind == JsonValueKind.String)
+                            .Select(value => value.GetString()!).Where(text => text.Length <= 300).Take(4).ToArray();
         }
-        catch (JsonException) { /* Non-JSON failures still have a usable status-based message. */ }
+        catch (JsonException exception)
+        {
+            // non-JSON failures still have a usable status-based message
+            logger.LogWarning(exception, "Field errors in a failure response were not valid JSON; the status-based message is shown instead");
+        }
+        catch (HttpRequestException exception)
+        {
+            // the connection dropped while the error body was read; the status still tells the caller what failed
+            logger.LogWarning(exception, "Field errors in a failure response could not be read; the status-based message is shown instead");
+            return new Dictionary<string, string[]>();
+        }
         return result;
     }
 
@@ -122,15 +124,30 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
     static string MessageFor(int status) => status switch
     {
         400 or 422 => "Check the submitted details and try again.",
-        404 => "This record is no longer available. Refresh the catalogue.",
+        404 => "This record is no longer available. Reload the page to see the current records.",
         409 or 412 => "This record changed while you were editing. Review the latest version before saving again.",
         >= 500 => "The requested service is unavailable. Your entries are retained; try again shortly.",
         _ => "The request could not be completed.",
     };
 
-    ApiError Fail(FailureKind kind, string message, HttpMethod method, int? status = null, IReadOnlyDictionary<string, string[]>? errors = null)
+    // first three path segments only (for example /api/v1/trips), so record identifiers never reach the log
+    static string ResourceOf(HttpRequestMessage request) => string.Concat(request.RequestUri!.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Take(3).Select(segment => "/" + segment));
+
+    /**
+     * Logs a failed request by route and category, then builds the error the view shows.
+     * @param kind The failure category the view branches on.
+     * @param message The fixed message the view shows.
+     * @param method The HTTP method that failed.
+     * @param status The response status, when the server answered.
+     * @param errors Field errors the server listed, when present.
+     * @param resource The route-only resource name, never record identifiers.
+     * @param exception The underlying cause, so network, TLS and charset problems stay in the log.
+     * @return The error to throw.
+     */
+    ApiError Fail(FailureKind kind, string message, HttpMethod method, int? status = null, IReadOnlyDictionary<string, string[]>? errors = null, string? resource = null, Exception? exception = null)
     {
-        logger.LogWarning("{Method} service request failed as {Kind} (status {Status})", method, kind, status);
+        // a 404 is an expected answer for lookups (for example a first sign-in with no account yet), so it is not a warning
+        logger.Log(status == 404 ? LogLevel.Information : LogLevel.Warning, exception, "{Method} service request to {Resource} failed as {Kind} (status {Status})", method, resource, kind, status);
         return new ApiError(kind, message, status, errors);
     }
 }

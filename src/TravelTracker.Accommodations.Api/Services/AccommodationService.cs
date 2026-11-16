@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using TravelTracker.Accommodations.Api.Access;
 using TravelTracker.Accommodations.Data.Repositories;
 using TravelTracker.Accommodations.Domain.Models;
@@ -13,10 +12,11 @@ public sealed class AccommodationService(IAccommodationRepository repository, Ca
      * @param nameFilter Optional case-insensitive substring.
      * @param cancellationToken Cancels database I/O.
      * @return Visible records ordered by name and then public identifier.
+     * @throws UnauthorizedAccessException when the validated identity is missing.
      */
     public async Task<List<Accommodation>> GetAllAsync(string? nameFilter, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(caller.Issuer) || string.IsNullOrWhiteSpace(caller.Subject)) return [];
+        RequireIdentity();
         var records = await repository.GetVisibleAsync(caller.Issuer, caller.Subject, !caller.IsBanned, cancellationToken);
         IEnumerable<Accommodation> filtered = records;
         if (!string.IsNullOrWhiteSpace(nameFilter))
@@ -34,11 +34,11 @@ public sealed class AccommodationService(IAccommodationRepository repository, Ca
      * @param accommodationId Public identifier.
      * @param cancellationToken Cancels database I/O.
      * @return The visible record, or null if absent or private to another caller.
+     * @throws UnauthorizedAccessException when the validated identity is missing.
      */
     public Task<Accommodation?> GetByIdAsync(Guid accommodationId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(caller.Issuer) || string.IsNullOrWhiteSpace(caller.Subject))
-            return Task.FromResult<Accommodation?>(null);
+        RequireIdentity();
         return repository.GetVisibleByIdAsync(accommodationId, caller.Issuer, caller.Subject,
             !caller.IsBanned, cancellationToken);
     }
@@ -48,24 +48,32 @@ public sealed class AccommodationService(IAccommodationRepository repository, Ca
      * @param accommodation Candidate writable values.
      * @param cancellationToken Cancels database I/O.
      * @return The accepted and saved record.
-     * @throws UnauthorizedAccessException when the caller cannot create the requested visibility.
-     * @throws ValidationException when any domain field is invalid.
+     * @throws UnauthorizedAccessException when the identity is missing, the caller is banned, or a non-administrator requests shared visibility.
+     * @throws AccommodationValidationException when any domain field is invalid.
      */
     public async Task<Accommodation> CreateAsync(Accommodation accommodation, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(caller.Issuer) || string.IsNullOrWhiteSpace(caller.Subject) || caller.IsBanned ||
-            accommodation.IsShared && !caller.IsAdministrator)
+        if (!HasIdentity || caller.IsBanned || (accommodation.IsShared && !caller.IsAdministrator))
             throw new UnauthorizedAccessException("Caller cannot create this accommodation.");
 
         accommodation.AccommodationId = Guid.CreateVersion7();
         accommodation.OwnerIssuer = caller.Issuer;
         accommodation.OwnerSubject = caller.Subject;
         accommodation.Name = accommodation.Name.Trim();
+        // a null address is left for Validate to report instead of throwing here
+        if (accommodation.Address is not null) accommodation.Address = accommodation.Address.Trim();
         var errors = accommodation.Validate();
-        if (errors.Count != 0)
-            throw new ValidationException(string.Join(" ", errors.SelectMany(entry => entry.Value).Distinct(StringComparer.Ordinal)));
+        if (errors.Count != 0) throw new AccommodationValidationException(errors);
 
         await repository.AddAsync(accommodation, cancellationToken);
         return accommodation;
+    }
+
+    private bool HasIdentity => !string.IsNullOrWhiteSpace(caller.Issuer) && !string.IsNullOrWhiteSpace(caller.Subject);
+
+    /** Fails closed instead of treating a missing identity as an empty catalogue. */
+    private void RequireIdentity()
+    {
+        if (!HasIdentity) throw new UnauthorizedAccessException("A validated caller identity is required.");
     }
 }

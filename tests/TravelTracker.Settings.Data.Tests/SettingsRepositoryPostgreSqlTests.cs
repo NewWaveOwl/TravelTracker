@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using TravelTracker.Settings.Data;
 using TravelTracker.Settings.Data.Repositories;
+using TravelTracker.Settings.Data.Tests.Support;
 using TravelTracker.Settings.Domain.Models;
 
 namespace TravelTracker.Settings.Data.Tests;
@@ -199,47 +200,5 @@ public sealed class SettingsRepositoryPostgreSqlTests
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);
         Assert.Equal(constraintName, exception.ConstraintName);
-    }
-
-    /**
-     * creates and later drops one random PostgreSQL database for a relational test.
-     */
-    private sealed class PostgresTestDatabase : IAsyncDisposable
-    {
-        private readonly string adminConnectionString;
-        private readonly string databaseName = "traveltracker_settings_test_" + Guid.NewGuid().ToString("N");
-
-        public string ConnectionString { get; }
-
-        /**
-         * creates the isolated database through the explicitly configured test role.
-         */
-        public PostgresTestDatabase()
-        {
-            adminConnectionString = Environment.GetEnvironmentVariable("TRAVELTRACKER_TEST_POSTGRES") ??
-                throw new InvalidOperationException("PostgreSQL settings tests require TRAVELTRACKER_TEST_POSTGRES with CREATEDB permission.");
-            using var admin = new NpgsqlConnection(adminConnectionString);
-            admin.Open();
-            using var create = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", admin);
-            create.ExecuteNonQuery();
-            ConnectionString = new NpgsqlConnectionStringBuilder(adminConnectionString)
-            {
-                Database = databaseName,
-                Pooling = false
-            }.ConnectionString;
-        }
-
-        /**
-         * drops only this randomly named database.
-         * @return a completed task after the database is dropped.
-         */
-        public ValueTask DisposeAsync()
-        {
-            using var admin = new NpgsqlConnection(adminConnectionString);
-            admin.Open();
-            using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)", admin);
-            drop.ExecuteNonQuery();
-            return ValueTask.CompletedTask;
-        }
     }
 }

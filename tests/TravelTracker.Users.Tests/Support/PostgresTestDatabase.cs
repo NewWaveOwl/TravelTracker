@@ -1,17 +1,39 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Npgsql;
 using TravelTracker.Users.Data;
 using TravelTracker.Users.Data.Repositories;
+using ProfileRepository = TravelTracker.Users.Data.Repositories.Profile.UserRepository;
 
 namespace TravelTracker.Users.Tests.Support;
 
 /** Owns one migrated, uniquely named disposable PostgreSQL database per test. */
 internal sealed class PostgresTestDatabase(string administrativeConnection, string name, string connection) : IAsyncDisposable
 {
+    int disposed;
+
     public string ConnectionString => connection;
     public UsersDbContext Context() => new(new DbContextOptionsBuilder<UsersDbContext>().UseNpgsql(connection).Options);
-    public EfUserRepository Repository(TimeProvider? clock = null) => new(new PooledDbContextFactory<UsersDbContext>(new DbContextOptionsBuilder<UsersDbContext>().UseNpgsql(connection).Options), clock);
+    public ProfileRepository Profiles(IInterceptor? interceptor = null)
+    {
+        var options = new DbContextOptionsBuilder<UsersDbContext>().UseNpgsql(connection);
+        if (interceptor is not null) options.AddInterceptors(interceptor);
+        return new(new PooledDbContextFactory<UsersDbContext>(options.Options));
+    }
+
+    /**
+     * Creates a repository over this database, optionally with an interceptor for overlap tests.
+     * @param clock The application clock, or null for the system clock.
+     * @param interceptor An optional EF interceptor, such as a barrier that holds writers at their lock.
+     * @return A repository reading and writing this database.
+     */
+    public EfUserRepository Repository(TimeProvider? clock = null, IInterceptor? interceptor = null)
+    {
+        var options = new DbContextOptionsBuilder<UsersDbContext>().UseNpgsql(connection);
+        if (interceptor is not null) options.AddInterceptors(interceptor);
+        return new(new PooledDbContextFactory<UsersDbContext>(options.Options), clock);
+    }
 
     /**
      * Creates and migrates an isolated database using an explicitly supplied nonproduction connection.
@@ -28,13 +50,23 @@ internal sealed class PostgresTestDatabase(string administrativeConnection, stri
         await create.ExecuteNonQueryAsync();
         var connection = new NpgsqlConnectionStringBuilder(administrativeConnection) { Database = name, Pooling = false }.ConnectionString;
         var database = new PostgresTestDatabase(administrativeConnection, name, connection);
-        try { await using var context = database.Context(); await context.Database.MigrateAsync(); return database; }
-        catch { await database.DisposeAsync(); throw; }
+        try
+        {
+            await using var context = database.Context();
+            await context.Database.MigrateAsync();
+            return database;
+        }
+        catch
+        {
+            await database.DisposeAsync();
+            throw;
+        }
     }
 
     /** Drops only this generated test database after its contexts are disposed. */
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref disposed, 1) != 0) return;
         await using var administrative = new NpgsqlConnection(administrativeConnection);
         await administrative.OpenAsync();
         await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)", administrative);

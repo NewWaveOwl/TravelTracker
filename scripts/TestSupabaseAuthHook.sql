@@ -1,4 +1,4 @@
--- Only for a NEW disposable test database; see test-supabase-auth-hook.sh.
+-- Only for a NEW disposable test database; see the Supabase access-token hook step in .github/workflows/ci.yml.
 -- Fixtures intentionally model only the Supabase Auth columns this hook reads.
 \set ON_ERROR_STOP on
 BEGIN;
@@ -30,7 +30,7 @@ DECLARE
 BEGIN
  result := public.traveltracker_access_token_hook(event);
  scopes := result->'claims'->>'scope';
- IF scopes LIKE '%users.access%' OR scopes NOT LIKE '%trips.write%'
+ IF scopes LIKE '%users.access%' OR scopes NOT LIKE '%trips.write%' OR scopes NOT LIKE '%users.admin%'
     OR result->'claims'->'user_metadata' IS DISTINCT FROM event->'claims'->'user_metadata' THEN
    RAISE EXCEPTION 'Traveller defaults or untrusted metadata boundary failed';
  END IF;

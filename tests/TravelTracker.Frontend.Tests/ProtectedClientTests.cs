@@ -10,7 +10,7 @@ namespace TravelTracker.Frontend.Tests;
 
 public sealed class ProtectedClientTests
 {
-    const string Path = "/api/v1/transport-modes/00000000-0000-0000-0000-000000000101";
+    const string TransportPath = "/api/v1/transport-modes/00000000-0000-0000-0000-000000000101";
 
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
     readonly SwitchableAuthentication authentication;
@@ -31,7 +31,7 @@ public sealed class ProtectedClientTests
         authentication.SignIn("token-1", clock.GetUtcNow().AddMinutes(5));
         var handler = StubHandler.Status(200, """{"name":"Example Bus"}""");
 
-        await ClientFor(handler).GetJsonAsync<object>("Transport", Path);
+        await ClientFor(handler).GetJsonAsync<object>("Transport", TransportPath);
 
         Assert.Equal("Bearer token-1", handler.LastRequest!.Headers.Authorization!.ToString());
         Assert.Equal("http://localhost:5105/api/v1/transport-modes/00000000-0000-0000-0000-000000000101", handler.LastRequest.RequestUri!.ToString());
@@ -42,7 +42,7 @@ public sealed class ProtectedClientTests
     {
         var handler = StubHandler.Status(200, "{}");
 
-        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(handler).GetJsonAsync<object>("Transport", Path));
+        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(handler).GetJsonAsync<object>("Transport", TransportPath));
 
         Assert.Equal(401, error.Status);
         Assert.Null(handler.LastRequest);
@@ -54,7 +54,7 @@ public sealed class ProtectedClientTests
         authentication.SignIn("token-1", clock.GetUtcNow().AddMinutes(-1));
         var handler = StubHandler.Status(200, "{}");
 
-        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(handler).GetJsonAsync<object>("Transport", Path));
+        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(handler).GetJsonAsync<object>("Transport", TransportPath));
 
         Assert.Equal(401, error.Status);
         Assert.Null(handler.LastRequest);
@@ -84,7 +84,7 @@ public sealed class ProtectedClientTests
         authentication.SignIn("token-1", clock.GetUtcNow().AddMinutes(5));
         var handler = StubHandler.Status(200, "{}");
 
-        await Assert.ThrowsAsync<ApiError>(() => ClientFor(handler, serviceUrl).GetJsonAsync<object>("Transport", Path));
+        await Assert.ThrowsAsync<ApiError>(() => ClientFor(handler, serviceUrl).GetJsonAsync<object>("Transport", TransportPath));
 
         Assert.Null(handler.LastRequest);
     }
@@ -94,7 +94,7 @@ public sealed class ProtectedClientTests
     {
         authentication.SignIn("token-1", clock.GetUtcNow().AddMinutes(5));
 
-        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(StubHandler.Status(401)).GetJsonAsync<object>("Transport", Path));
+        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(StubHandler.Status(401)).GetJsonAsync<object>("Transport", TransportPath));
 
         Assert.Equal((FailureKind.Permission, 401), (error.Kind, error.Status));
     }
@@ -104,7 +104,7 @@ public sealed class ProtectedClientTests
     {
         authentication.SignIn("token-1", clock.GetUtcNow().AddMinutes(5));
 
-        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(StubHandler.Status(403)).GetJsonAsync<object>("Transport", Path));
+        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(StubHandler.Status(403)).GetJsonAsync<object>("Transport", TransportPath));
 
         Assert.Equal((FailureKind.Permission, 403), (error.Kind, error.Status));
         Assert.NotNull(AccessTokenClaims.ActiveToken(authentication.User, clock.GetUtcNow()));
@@ -120,17 +120,17 @@ public sealed class ProtectedClientTests
             return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("{}") });
         });
 
-        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(handler).GetJsonAsync<object>("Transport", Path));
+        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(handler).GetJsonAsync<object>("Transport", TransportPath));
 
         Assert.Equal(401, error.Status);
     }
 
     [Fact]
-    public async Task DoesNotFollowRedirectsWithTheToken()
+    public async Task ARedirectStatusIsUnexpected()
     {
         authentication.SignIn("token-1", clock.GetUtcNow().AddMinutes(5));
 
-        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(StubHandler.Status(302)).GetJsonAsync<object>("Transport", Path));
+        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(StubHandler.Status(302)).GetJsonAsync<object>("Transport", TransportPath));
 
         Assert.Equal(FailureKind.Unexpected, error.Kind);
     }

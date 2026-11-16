@@ -37,21 +37,41 @@ public sealed class TransportModeTests
     }
 
     /**
-     * Creates a named plane entry and reads its Location.
+     * Creates a named entry for each supported code and reads its Location.
+     * @param code One of the six permitted transport codes.
      * @return Completion after checking creation and lookup.
      */
-    [Fact]
-    public async Task CreateMode_ValidEntryReturns201AndSavedLocation()
+    [Theory]
+    [InlineData("car")]
+    [InlineData("bus")]
+    [InlineData("train")]
+    [InlineData("pedestrian")]
+    [InlineData("bike")]
+    [InlineData("plane")]
+    public async Task CreateMode_SupportedCodeReturns201AndSavedLocation(string code)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         using var response = await client.PostAsJsonAsync("/api/v1/transport-modes",
-            new { code = "plane", name = " Example Airline ", description = "Manual transport entry." });
+            new { code, name = " Example Airline ", description = "Manual transport entry." });
         var saved = await HttpTestSupport.AssertCreatedAsync(client, response);
         Assert.NotEqual(Guid.Empty, saved.GetProperty("transportModeId").GetGuid());
-        Assert.Equal("plane", saved.GetProperty("code").GetString());
+        Assert.Equal(code, saved.GetProperty("code").GetString());
         Assert.Equal("Example Airline", saved.GetProperty("name").GetString());
         Assert.Equal("Manual transport entry.", saved.GetProperty("description").GetString());
+    }
+
+    /**
+     * Rejects a create body that carries a field the contract does not define, before anything is stored.
+     * @return Completion after checking the rejection.
+     */
+    [Fact]
+    public async Task CreateMode_UnknownFieldReturns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/transport-modes", new { code = "bus", name = "Example", status = "active" });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     /**
@@ -64,7 +84,20 @@ public sealed class TransportModeTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         using var response = await client.PostAsJsonAsync("/api/v1/transport-modes", new { code = "rocket", name = "Example" });
-        await HttpTestSupport.AssertValidationAsync(response);
+        await HttpTestSupport.AssertValidationAsync(response, "code");
+    }
+
+    /**
+     * Rejects a code that only matches before a trailing newline.
+     * @return Completion after checking validation.
+     */
+    [Fact]
+    public async Task CreateMode_CodeWithTrailingNewlineReturns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/transport-modes", new { code = "car\n", name = "Example" });
+        await HttpTestSupport.AssertValidationAsync(response, "code");
     }
 
     /**
@@ -77,6 +110,6 @@ public sealed class TransportModeTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         using var response = await client.PostAsJsonAsync("/api/v1/transport-modes", new { code = "bus", name = "   " });
-        await HttpTestSupport.AssertValidationAsync(response);
+        await HttpTestSupport.AssertValidationAsync(response, "name");
     }
 }

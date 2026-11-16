@@ -3,7 +3,8 @@ namespace TravelTracker.Api.Trips;
 /**
  * Outcome of checking a draft trip before saving. Only Ready allows a write.
  */
-public enum TripReferenceStatus {
+public enum TripReferenceStatus
+{
     /** Every reference and rule passed; the snapshot trip may be saved. */
     Ready,
     /** A referenced place or transport mode is absent or not available to the caller. */

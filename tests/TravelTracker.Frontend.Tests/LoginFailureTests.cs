@@ -17,6 +17,12 @@ public sealed class LoginFailureTests
     }
 
     [Fact]
+    public void IncompleteSignInHasItsOwnMessage()
+    {
+        Assert.Equal("The sign-in service returned an incomplete response. Please try again.", LoginFailure.MessageFor(LoginFailure.IncompleteSignIn));
+    }
+
+    [Fact]
     public void NeverEchoesUnknownCodes()
     {
         var message = LoginFailure.MessageFor("<script>secret</script>");

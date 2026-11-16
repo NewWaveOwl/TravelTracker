@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../TravelTracker.Attractions.Domain/TravelTracker.Attractions.Domain.csproj" />
     <ProjectReference Include="../TravelTracker.Attractions.Data/TravelTracker.Attractions.Data.csproj" />
     <ProjectReference Include="../TravelTracker.Security/TravelTracker.Security.csproj" />
   </ItemGroup>

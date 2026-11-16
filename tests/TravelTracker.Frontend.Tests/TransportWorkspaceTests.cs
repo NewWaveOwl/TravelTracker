@@ -16,14 +16,14 @@ using TravelTracker.Frontend.Tests.Support;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** Isolated frontend authorization and public HTTP contract tests; not real bearer validation. */
+/** isolated frontend authorization and public HTTP contract tests; not real bearer validation. */
 public sealed class TransportWorkspaceTests : BunitContext
 {
     static readonly TransportDto Train = new(Guid.Parse("00000000-0000-0000-0000-000000000141"), "train", "Saved train", "Reusable rail entry");
     static readonly RoutePointDto Station = new(Guid.Parse("00000000-0000-0000-0000-000000000142"), "transport_stop", "Saved station", "1 Station Road", 43.6m, -79.3m, null);
 
     /**
-     * Wires the actual protected HTTP client to a deterministic service stub.
+     * wires the actual protected HTTP client to a deterministic service stub.
      * @param handler Handles public service requests.
      * @param write Grants catalogue write for form scenarios.
      * @return A switchable fake validated identity.
@@ -33,10 +33,12 @@ public sealed class TransportWorkspaceTests : BunitContext
         var clock = new FakeTimeProvider(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
-        authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10));
-        ((ClaimsIdentity)authentication.User.Identity!).AddClaim(new Claim(AccessTokenClaims.GrantedScope, write ? "catalogue.read catalogue.write" : "catalogue.read"));
+        authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10), write ? "catalogue.read catalogue.write" : "catalogue.read");
         var client = new ProtectedClient(authentication, new ServiceDirectory(new Dictionary<string, string> { ["Transport"] = "http://localhost:5105" }), new ServiceClient(new HttpClient(handler), NullLogger<ServiceClient>.Instance), clock, NullLogger<ProtectedClient>.Instance, sessions);
-        Services.AddSingleton<TimeProvider>(clock); Services.AddSingleton(sessions); Services.AddSingleton<AuthenticationStateProvider>(authentication); Services.AddSingleton(new TransportClient(client));
+        Services.AddSingleton<TimeProvider>(clock);
+        Services.AddSingleton(sessions);
+        Services.AddSingleton<AuthenticationStateProvider>(authentication);
+        Services.AddSingleton(new TransportClient(client));
         Services.AddSingleton(new TravelTracker.Frontend.Api.Settings.SettingsClient(client));
         Services.AddScoped<TravelTracker.Frontend.Services.UserPreferences>();
         Services.AddLogging();
@@ -52,7 +54,7 @@ public sealed class TransportWorkspaceTests : BunitContext
     }
 
     /**
-     * Chooses an explicit saved location for each endpoint through the default map.
+     * chooses an explicit saved location for each endpoint through the default map.
      * @param page The rendered selection workspace.
      */
     static void ChooseEndpoints(IRenderedComponent<TransportWorkspace> page)
@@ -68,10 +70,10 @@ public sealed class TransportWorkspaceTests : BunitContext
     {
         Configure(new StubHandler((request, _) => Task.FromResult(Read(request))), false);
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
         page.FindAll("button.transport-card").First().Click();
-        page.FindAll("button").Single(b => b.TextContent == "Choose on map").Click();
+        page.FindAll("button").Single(button => button.TextContent == "Choose on map").Click();
         ChooseEndpoints(page);
         page.WaitForAssertion(() => Assert.Contains("Reusable location; no timetable", page.Markup));
         page.Find(".transport-add").Click();
@@ -89,29 +91,45 @@ public sealed class TransportWorkspaceTests : BunitContext
         var posts = 0;
         Configure(new StubHandler((request, _) =>
         {
-            if (request.Method == HttpMethod.Post) { posts++; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)); }
+            if (request.Method == HttpMethod.Post)
+            {
+                posts++;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+            }
             return Task.FromResult(Read(request));
         }));
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
         page.FindAll("button.transport-card").First().Click();
-        page.Find("#new-point-name").Change("Pending location"); page.Find("#new-point-lat").Change("45"); page.Find("#new-point-lon").Change("-73");
+        page.Find("#new-point-name").Change("Pending location");
+        page.Find("#new-point-lat").Change("45");
+        page.Find("#new-point-lon").Change("-73");
         page.Find(".point-create").Submit();
         page.WaitForAssertion(() => Assert.Contains("permission", page.Find("[role=alert]").TextContent));
         Assert.Equal("Pending location", page.Find("#new-point-name").GetAttribute("value"));
-        Assert.Empty(page.FindAll(".transport-chain li")); Assert.Equal(1, posts);
+        Assert.Empty(page.FindAll(".transport-chain li"));
+        Assert.Equal(1, posts);
     }
 
     [Fact]
-    public void InvalidCoordinatesNeverWriteAndKeepPendingFields()
+    public async Task InvalidCoordinatesNeverWriteAndKeepPendingFields()
     {
         var posts = 0;
-        Configure(new StubHandler((request, _) => { if (request.Method == HttpMethod.Post) posts++; return Task.FromResult(Read(request)); }));
+        Configure(new StubHandler((request, _) =>
+        {
+            if (request.Method == HttpMethod.Post)
+                posts++;
+            return Task.FromResult(Read(request));
+        }));
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
         page.FindAll("button.transport-card").First().Click();
-        page.Find("#new-point-name").Change("Draft"); page.Find("#new-point-lat").Change("91"); page.Find("#new-point-lon").Change("0"); page.Find(".point-create").Submit();
-        Assert.Contains("valid latitude", page.Find("[role=alert]").TextContent); Assert.Equal(0, posts);
+        page.Find("#new-point-name").Change("Draft");
+        page.Find("#new-point-lat").Change("91");
+        page.Find("#new-point-lon").Change("0");
+        await page.Find(".point-create").SubmitAsync();
+        Assert.Contains("valid latitude", page.Find("[role=alert]").TextContent);
+        Assert.Equal(0, posts);
         Assert.Equal("91", page.Find("#new-point-lat").GetAttribute("value"));
     }
 
@@ -141,9 +159,14 @@ public sealed class TransportWorkspaceTests : BunitContext
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
         page.FindAll("button.transport-card").First().Click();
-        page.Find("#new-point-name").Change("Saved station"); page.Find("#new-point-lat").Change("43.6"); page.Find("#new-point-lon").Change("-79.3"); page.Find(".point-create").Submit();
+        page.Find("#new-point-name").Change("Saved station");
+        page.Find("#new-point-lat").Change("43.6");
+        page.Find("#new-point-lon").Change("-79.3");
+        page.Find(".point-create").Submit();
         page.WaitForAssertion(() => Assert.Contains("Location saved.", page.Markup));
-        Assert.NotNull(fields); Assert.DoesNotContain("routePointId", fields.Keys); Assert.DoesNotContain("departure", fields.Keys);
+        Assert.NotNull(fields);
+        Assert.DoesNotContain("routePointId", fields.Keys);
+        Assert.DoesNotContain("departure", fields.Keys);
         Assert.Equal(43.6m, fields["lat"].GetDecimal());
     }
 
@@ -152,7 +175,7 @@ public sealed class TransportWorkspaceTests : BunitContext
     {
         var authentication = Configure(new StubHandler((request, _) => Task.FromResult(Read(request))), false);
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
         for (var i = 0; i < 2; i++)
         {
@@ -173,10 +196,13 @@ public sealed class TransportWorkspaceTests : BunitContext
         var reject = false;
         Configure(new StubHandler((request, _) => Task.FromResult(reject ? new HttpResponseMessage(HttpStatusCode.Unauthorized) : Read(request))), false);
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
-        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page); page.Find(".transport-add").Click();
-        page.WaitForAssertion(() => Assert.Single(draft)); reject = true;
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+        ChooseEndpoints(page);
+        page.Find(".transport-add").Click();
+        page.WaitForAssertion(() => Assert.Single(draft));
+        reject = true;
         page.FindAll(".transport-columns > section")[1].QuerySelector("form")!.Submit();
         page.WaitForAssertion(() => Assert.Empty(draft));
         Assert.Contains("Sign in", page.Markup);
@@ -191,7 +217,10 @@ public sealed class TransportWorkspaceTests : BunitContext
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
         page.FindAll("button.transport-card").First().Click();
-        page.Find("#new-point-name").Change("Point"); page.Find("#new-point-lat").Change("0"); page.Find("#new-point-lon").Change("0"); page.Find(".point-create").Submit();
+        page.Find("#new-point-name").Change("Point");
+        page.Find("#new-point-lat").Change("0");
+        page.Find("#new-point-lon").Change("0");
+        page.Find(".point-create").Submit();
         page.WaitForAssertion(() => Assert.Equal("Source identifier is invalid.", page.Find("#new-point-source-error").TextContent));
         Assert.Equal("new-point-source-error", page.Find("#new-point-source").GetAttribute("aria-describedby"));
     }
@@ -204,13 +233,18 @@ public sealed class TransportWorkspaceTests : BunitContext
         var confirm = false;
         var authentication = Configure(new StubHandler((request, _) =>
         {
-            if (confirm && request.RequestUri!.AbsolutePath.EndsWith(Station.RoutePointId.ToString())) { started.TrySetResult(); return delayed.Task; }
+            if (confirm && request.RequestUri!.AbsolutePath.EndsWith(Station.RoutePointId.ToString()))
+            {
+                started.TrySetResult();
+                return delayed.Task;
+            }
             return Task.FromResult(Read(request));
         }));
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
-        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+        ChooseEndpoints(page);
         confirm = true;
         var click = page.Find(".transport-add").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -218,7 +252,8 @@ public sealed class TransportWorkspaceTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("Sign in", page.Markup));
         delayed.SetResult(new(HttpStatusCode.OK) { Content = JsonContent.Create(Station) });
         await click;
-        Assert.Empty(draft); Assert.DoesNotContain("Saved station", page.Markup);
+        Assert.Empty(draft);
+        Assert.DoesNotContain("Saved station", page.Markup);
     }
 
     [Fact]
@@ -228,9 +263,9 @@ public sealed class TransportWorkspaceTests : BunitContext
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.Contains("No locations found", page.Markup));
         Assert.Contains("No saved transport entries", page.Markup);
-        Assert.False(page.FindAll("button").Single(b => b.TextContent == "Reload transport").HasAttribute("disabled"));
+        Assert.False(page.FindAll("button").Single(button => button.TextContent == "Reload transport").HasAttribute("disabled"));
         Assert.False(page.Find("#point-query").HasAttribute("disabled"));
-        page.FindAll("button").Single(b => b.TextContent == "Choose on map").Click();
+        page.FindAll("button").Single(button => button.TextContent == "Choose on map").Click();
         Assert.Empty(page.FindAll("svg g[role=button]"));
         Assert.True(page.Find(".transport-add").HasAttribute("disabled"));
     }
@@ -243,7 +278,9 @@ public sealed class TransportWorkspaceTests : BunitContext
             : Task.FromResult(Read(request))));
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
-        page.Find("#new-transport-name").Change("Pending train"); page.Find("#new-transport-code").Change("train"); page.Find(".transport-create").Submit();
+        page.Find("#new-transport-name").Change("Pending train");
+        page.Find("#new-transport-code").Change("train");
+        page.Find(".transport-create").Submit();
         page.WaitForAssertion(() => Assert.Contains("could not be confirmed", page.Find("[role=alert]").TextContent));
         Assert.Equal("Pending train", page.Find("#new-transport-name").GetAttribute("value"));
         Assert.Equal("train", page.Find("#new-transport-code").GetAttribute("value"));
@@ -254,14 +291,19 @@ public sealed class TransportWorkspaceTests : BunitContext
     public void FiltersSendEncodedNamesAndExactSupportedCodeAndType()
     {
         var requests = new List<string>();
-        Configure(new StubHandler((request, _) => { requests.Add(request.RequestUri!.OriginalString); return Task.FromResult(Read(request)); }), false);
+        Configure(new StubHandler((request, _) =>
+        {
+            requests.Add(request.RequestUri!.OriginalString);
+            return Task.FromResult(Read(request));
+        }), false);
         var page = Render<TransportWorkspace>();
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
         Assert.Empty(page.FindAll("#transport-query, #transport-code"));
         Assert.Equal(4, page.FindAll("#point-type option").Count);
         page.FindAll("button.transport-card").First().Click();
 
-        page.Find("#point-query").Change("museum/park"); page.Find("#point-type").Change("attraction");
+        page.Find("#point-query").Change("museum/park");
+        page.Find("#point-type").Change("attraction");
         page.FindAll(".transport-columns > section")[1].QuerySelector("form")!.Submit();
         page.WaitForAssertion(() => Assert.Contains(requests, url => url.EndsWith("/api/v1/transport-modes?name=&code=", StringComparison.Ordinal)));
         Assert.Contains(requests, url => url.EndsWith("/api/v1/route-points?name=museum%2Fpark&type=attraction", StringComparison.Ordinal));
@@ -279,11 +321,12 @@ public sealed class TransportWorkspaceTests : BunitContext
             return Task.FromResult(Read(request));
         }), false);
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved bus", page.Markup));
         page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
         ChooseEndpoints(page);
-        page.Find(".transport-add").Click(); page.WaitForAssertion(() => Assert.Single(draft));
+        page.Find(".transport-add").Click();
+        page.WaitForAssertion(() => Assert.Single(draft));
         Assert.Equal(Train.TransportModeId, draft[0].Transport.TransportModeId);
         page.Find(".transport-chain button.transport-card").Click();
         page.FindAll(".transport-columns > section")[0].QuerySelectorAll("button.transport-card")[1].Click();
@@ -292,7 +335,8 @@ public sealed class TransportWorkspaceTests : BunitContext
         Assert.Equal(Station.RoutePointId, draft[0].Destination.RoutePointId);
         Assert.Empty(page.FindAll(".chain-remove"));
         page.Find(".transport-chain button.transport-card").Click();
-        page.Find(".chain-remove").Click(); page.WaitForAssertion(() => Assert.Empty(draft));
+        page.Find(".chain-remove").Click();
+        page.WaitForAssertion(() => Assert.Empty(draft));
         Assert.Empty(page.FindAll(".transport-chain li"));
     }
 
@@ -325,7 +369,7 @@ public sealed class TransportWorkspaceTests : BunitContext
     public void DirectTransportOpensMapAndRequiresBothSavedEndpointsBeforePublishing(bool initiallyEmpty)
     {
         var museum = new RoutePointDto(Guid.Parse("00000000-0000-0000-0000-000000000144"), "attraction", "Saved museum", "2 Museum Road", 43.7m, -79.4m, null);
-        var outlier = museum with { RoutePointId = Guid.NewGuid(), Name = "Outlier", Lat = 46m, Lon = -81m };
+        var outlier = museum with { RoutePointId = Guid.Parse("00000000-0000-0000-0000-000000009201"), Name = "Outlier", Lat = 46m, Lon = -81m };
         var requests = 0;
         Configure(new StubHandler((request, _) =>
         {
@@ -340,10 +384,10 @@ public sealed class TransportWorkspaceTests : BunitContext
             return Task.FromResult(Read(request));
         }), false);
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
         Assert.Empty(page.FindAll("#transport-query, #transport-code"));
-        Assert.DoesNotContain(page.FindAll("button"), b => b.TextContent == "Search transport");
+        Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent == "Search transport");
         page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
         if (initiallyEmpty)
         {
@@ -353,21 +397,23 @@ public sealed class TransportWorkspaceTests : BunitContext
         }
         Assert.Equal(3, page.FindAll("svg g[role=button]").Count);
         Assert.False(page.Find(".destination-panel").HasAttribute("inert"));
-        page.Find("#choose-destination").Click(); page.FindAll("svg g[role=button]")[1].Click();
+        page.Find("#choose-destination").Click();
+        page.FindAll("svg g[role=button]")[1].Click();
         Assert.True(page.Find(".transport-add").HasAttribute("disabled"));
-        page.Find("#choose-departure").Click(); page.FindAll("svg g[role=button]")[0].Click();
+        page.Find("#choose-departure").Click();
+        page.FindAll("svg g[role=button]")[0].Click();
         Assert.Equal("assets/attractions-map-placeholder.png", page.Find(".destination-map image").GetAttribute("href"));
         var beforeToggle = requests;
-        page.FindAll("button").Single(b => b.TextContent == "Choose on map").Click();
-        page.FindAll("button").Single(b => b.TextContent == "Choose on map").Click();
-        page.FindAll("button").Single(b => b.TextContent == "Saved list").Click();
-        page.FindAll("button").Single(b => b.TextContent == "Choose on map").Click();
+        page.FindAll("button").Single(button => button.TextContent == "Choose on map").Click();
+        page.FindAll("button").Single(button => button.TextContent == "Choose on map").Click();
+        page.FindAll("button").Single(button => button.TextContent == "Saved list").Click();
+        page.FindAll("button").Single(button => button.TextContent == "Choose on map").Click();
         Assert.Equal(beforeToggle, requests);
-        var positions = page.FindAll("svg g[role=button] circle").Take(2).Select(c => (c.GetAttribute("cx"), c.GetAttribute("cy"))).ToArray();
+        var positions = page.FindAll("svg g[role=button] circle").Take(2).Select(circle => (circle.GetAttribute("cx"), circle.GetAttribute("cy"))).ToArray();
         page.Find("#point-query").Change("missing");
         page.Find(".destination-panel form").Submit();
         page.WaitForAssertion(() => Assert.Contains("No locations found", page.Markup));
-        Assert.Equal(positions, page.FindAll("svg g[role=button] circle").Select(c => (c.GetAttribute("cx"), c.GetAttribute("cy"))).ToArray());
+        Assert.Equal(positions, page.FindAll("svg g[role=button] circle").Select(circle => (circle.GetAttribute("cx"), circle.GetAttribute("cy"))).ToArray());
         Assert.Contains("departure", page.FindAll("svg g[role=button]")[0].GetAttribute("aria-label"));
         Assert.Contains("destination", page.FindAll("svg g[role=button]")[1].GetAttribute("aria-label"));
         page.Find(".transport-add").Click();
@@ -377,7 +423,9 @@ public sealed class TransportWorkspaceTests : BunitContext
         page.Find(".transport-chain button.transport-card").Click();
         Assert.Contains("Saved station", page.Find("#choose-departure").TextContent);
         Assert.Contains("Saved museum", page.Find("#choose-destination").TextContent);
-        page.Find("#choose-departure").Click(); page.FindAll("svg g[role=button]")[1].Click(); page.Find(".transport-add").Click();
+        page.Find("#choose-departure").Click();
+        page.FindAll("svg g[role=button]")[1].Click();
+        page.Find(".transport-add").Click();
         page.WaitForAssertion(() => Assert.Equal(museum.RoutePointId, draft.Single().Departure.RoutePointId));
         page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
         Assert.Contains("Saved museum", page.Find("#choose-departure").TextContent);
@@ -386,7 +434,7 @@ public sealed class TransportWorkspaceTests : BunitContext
     [Fact]
     public void CreatedLocationsPopulateTheExplicitDepartureThenDestination()
     {
-        var destination = Station with { RoutePointId = Guid.Parse("00000000-0000-0000-0000-000000000145"), Name = "New destination" };
+        var destination = Station with { RoutePointId = Guid.Parse("00000000-0000-0000-0000-000000009200"), Name = "New destination" };
         var posts = 0;
         Configure(new StubHandler((request, _) =>
         {
@@ -395,10 +443,12 @@ public sealed class TransportWorkspaceTests : BunitContext
             return Task.FromResult(Read(request));
         }));
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
         page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
-        page.Find("#new-point-name").Change("New departure"); page.Find("#new-point-lat").Change("43.6"); page.Find("#new-point-lon").Change("-79.3");
+        page.Find("#new-point-name").Change("New departure");
+        page.Find("#new-point-lat").Change("43.6");
+        page.Find("#new-point-lon").Change("-79.3");
         page.Find(".point-create").Submit();
         page.WaitForAssertion(() => Assert.Contains("Saved station", page.Find("#choose-departure").TextContent));
         Assert.Contains("Choose destination", page.Find("#choose-destination").TextContent);
@@ -426,16 +476,23 @@ public sealed class TransportWorkspaceTests : BunitContext
     public void InvalidPlanningMinutesRetainInputsAndNeverReadOrWrite(string travel, string change)
     {
         var requests = 0;
-        Configure(new StubHandler((request, _) => { requests++; return Task.FromResult(Read(request)); }), false);
+        Configure(new StubHandler((request, _) =>
+        {
+            requests++;
+            return Task.FromResult(Read(request));
+        }), false);
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
-        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
-        page.Find("#route-travel-minutes").Change(travel); page.Find("#route-change-minutes").Change(change);
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+        ChooseEndpoints(page);
+        page.Find("#route-travel-minutes").Change(travel);
+        page.Find("#route-change-minutes").Change(change);
         var before = requests;
         page.Find(".transport-add").Click();
         Assert.Contains("Check your planning times", page.Find(".transport-error").TextContent);
-        Assert.Equal(before, requests); Assert.Empty(draft);
+        Assert.Equal(before, requests);
+        Assert.Empty(draft);
         Assert.Equal(travel, page.Find("#route-travel-minutes").GetAttribute("value"));
         Assert.Equal(change, page.Find("#route-change-minutes").GetAttribute("value"));
     }
@@ -445,34 +502,48 @@ public sealed class TransportWorkspaceTests : BunitContext
     {
         var authentication = Configure(new StubHandler((request, _) => Task.FromResult(Read(request))), false);
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
-        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+        ChooseEndpoints(page);
         var review = page.Find("section[aria-labelledby=route-review-heading]");
-        Assert.Contains("Saved train", review.TextContent); Assert.Contains("From", review.TextContent); Assert.Contains("To", review.TextContent);
+        var reviewFields = review.QuerySelectorAll("dt").ToDictionary(term => term.TextContent, term => term.NextElementSibling!.TextContent);
+        Assert.Equal("Saved train", reviewFields["Transport"]);
+        Assert.Equal("Saved station", reviewFields["From"]);
+        Assert.Equal("Saved station", reviewFields["To"]);
         Assert.Empty(review.QuerySelectorAll(".point-create"));
-        page.Find("#route-travel-minutes").Change("35"); page.Find("#route-change-minutes").Change("8"); page.Find(".transport-add").Click();
+        page.Find("#route-travel-minutes").Change("35");
+        page.Find("#route-change-minutes").Change("8");
+        page.Find(".transport-add").Click();
         page.WaitForAssertion(() => Assert.Single(draft));
-        Assert.Equal(35, draft[0].TravelMinutes); Assert.Equal(8, draft[0].ChangeMinutes);
+        Assert.Equal(35, draft[0].TravelMinutes);
+        Assert.Equal(8, draft[0].ChangeMinutes);
         var occurrence = draft[0].OccurrenceId;
         Assert.Contains("Total planning time: 35 min", page.Find(".planning-total").TextContent);
         Assert.Equal("", page.Find("#route-travel-minutes").GetAttribute("value"));
-        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
-        page.Find("#route-change-minutes").Change("99"); page.Find(".transport-add").Click();
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+        ChooseEndpoints(page);
+        page.Find("#route-change-minutes").Change("99");
+        page.Find(".transport-add").Click();
         page.WaitForAssertion(() => Assert.Equal(2, draft.Count));
-        Assert.Contains("Known time: 43 min", page.Find(".planning-total").TextContent); Assert.Contains("incomplete", page.Find(".planning-total").TextContent);
+        Assert.Contains("Known time: 43 min", page.Find(".planning-total").TextContent);
+        Assert.Contains("incomplete", page.Find(".planning-total").TextContent);
         page.FindAll(".transport-chain button.transport-card")[1].Click();
         Assert.Equal("99", page.Find("#route-change-minutes").GetAttribute("value"));
-        page.Find("#route-travel-minutes").Change("5"); page.Find(".transport-add").Click();
+        page.Find("#route-travel-minutes").Change("5");
+        page.Find(".transport-add").Click();
         Assert.Contains("Total planning time: 48 min", page.Find(".planning-total").TextContent);
         Assert.Contains("Change ≈ 8 min", page.Find(".transport-chain").TextContent);
         page.FindAll(".transport-chain button.transport-card")[0].Click();
         Assert.Equal("35", page.Find("#route-travel-minutes").GetAttribute("value"));
-        page.Find(".transport-add").Click(); Assert.Equal(occurrence, draft[0].OccurrenceId);
+        page.Find(".transport-add").Click();
+        Assert.Equal(occurrence, draft[0].OccurrenceId);
         page.FindAll(".transport-chain button.transport-card")[0].Click();
-        page.FindAll("button").Single(b => b.TextContent == "+ Add transport").Click();
-        Assert.Equal("", page.Find("#route-travel-minutes").GetAttribute("value")); Assert.Equal("", page.Find("#route-change-minutes").GetAttribute("value"));
-        authentication.SignOut(); page.WaitForAssertion(() => Assert.Empty(draft));
+        page.FindAll("button").Single(button => button.TextContent == "+ Add transport").Click();
+        Assert.Equal("", page.Find("#route-travel-minutes").GetAttribute("value"));
+        Assert.Equal("", page.Find("#route-change-minutes").GetAttribute("value"));
+        authentication.SignOut();
+        page.WaitForAssertion(() => Assert.Empty(draft));
         Assert.Empty(page.FindAll("#route-travel-minutes"));
     }
 
@@ -481,12 +552,15 @@ public sealed class TransportWorkspaceTests : BunitContext
     {
         Configure(new StubHandler((request, _) => Task.FromResult(Read(request))), false);
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
         for (var i = 0; i < 2; i++)
         {
-            page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
-            page.Find("#route-travel-minutes").Change("2147483647"); page.Find("#route-change-minutes").Change(i == 0 ? "2147483647" : "0"); page.Find(".transport-add").Click();
+            page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+            ChooseEndpoints(page);
+            page.Find("#route-travel-minutes").Change("2147483647");
+            page.Find("#route-change-minutes").Change(i == 0 ? "2147483647" : "0");
+            page.Find(".transport-add").Click();
         }
         Assert.Equal(0, draft[1].ChangeMinutes);
         Assert.Contains("6442450941 min", page.Find(".planning-total").TextContent);
@@ -498,14 +572,22 @@ public sealed class TransportWorkspaceTests : BunitContext
         var fail = false;
         Configure(new StubHandler((request, _) => Task.FromResult(fail ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : Read(request))), false);
         IReadOnlyList<TransportSelection> draft = [];
-        var page = Render<TransportWorkspace>(p => p.Add(v => v.SelectionChanged, value => draft = value));
+        var page = Render<TransportWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, value => draft = value));
         page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
-        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click(); ChooseEndpoints(page);
-        page.Find("#route-travel-minutes").Change("0"); page.Find("#route-change-minutes").Change("3");
-        fail = true; page.Find(".transport-add").Click();
+        page.FindAll(".transport-columns > section")[0].QuerySelector("button.transport-card")!.Click();
+        ChooseEndpoints(page);
+        page.Find("#route-travel-minutes").Change("0");
+        page.Find("#route-change-minutes").Change("3");
+        fail = true;
+        page.Find(".transport-add").Click();
         page.WaitForAssertion(() => Assert.Contains("unavailable", page.Find(".transport-error").TextContent));
-        Assert.Empty(draft); Assert.Equal("0", page.Find("#route-travel-minutes").GetAttribute("value")); Assert.Equal("3", page.Find("#route-change-minutes").GetAttribute("value"));
-        fail = false; page.Find(".transport-add").Click();
-        page.WaitForAssertion(() => Assert.Single(draft)); Assert.Equal(0, draft[0].TravelMinutes); Assert.Equal(3, draft[0].ChangeMinutes);
+        Assert.Empty(draft);
+        Assert.Equal("0", page.Find("#route-travel-minutes").GetAttribute("value"));
+        Assert.Equal("3", page.Find("#route-change-minutes").GetAttribute("value"));
+        fail = false;
+        page.Find(".transport-add").Click();
+        page.WaitForAssertion(() => Assert.Single(draft));
+        Assert.Equal(0, draft[0].TravelMinutes);
+        Assert.Equal(3, draft[0].ChangeMinutes);
     }
 }

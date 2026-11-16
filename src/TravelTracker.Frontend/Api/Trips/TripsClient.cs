@@ -19,47 +19,48 @@ public sealed class TripsClient(ProtectedClient client)
 
     /**
      * Loads an existing trip and its stored snapshots.
-     * @param id Public trip identifier.
-     * @param token Cancels a closed editor.
+     * @param identifier Public trip identifier.
+     * @param cancellationToken Cancels a closed editor.
      * @return The current user's saved trip.
      */
-    public async Task<TripDto> GetAsync(Guid id, CancellationToken token) =>
-        await client.GetJsonAsync<TripDto>("Trips", $"{Path}/{id:D}", token)
+    public async Task<TripDto> GetAsync(Guid identifier, CancellationToken cancellationToken) =>
+        await client.GetJsonAsync<TripDto>("Trips", $"{Path}/{identifier:D}", cancellationToken)
         ?? throw new ApiError(FailureKind.Unexpected, "The Trips service returned no trip.");
 
     /**
      * Loads the saved itinerary and the entity tag needed to replace it.
-     * @param id Public trip identifier.
-     * @param token Cancels a closed editor.
+     * @param identifier Public trip identifier.
+     * @param cancellationToken Cancels a closed editor.
      * @return The current trip and its entity tag.
      */
-    public async Task<TripRevision> GetRevisionAsync(Guid id, CancellationToken token) =>
-        ReadRevision(await client.SendAsync<TripDto>("Trips", HttpMethod.Get, $"{Path}/{id:D}", null, null, token));
+    public async Task<TripRevision> GetRevisionAsync(Guid identifier, CancellationToken cancellationToken) =>
+        ReadRevision(await client.SendAsync<TripDto>("Trips", HttpMethod.Get, $"{Path}/{identifier:D}", null, null, cancellationToken));
 
     /**
      * Creates a trip or saves edits to the same trip.
-     * @param id Public identifier for edits, or null for a new trip.
+     * @param identifier Public identifier for edits, or null for a new trip.
      * @param request Validated trip details and catalogue references.
      * @param etag Entity tag from the last read or save for an existing trip.
-     * @param token Cancels a closed editor.
+     * @param cancellationToken Cancels a closed editor.
      * @return The trip confirmed by the service.
+     * @throws ApiError With status 428 and no request sent when an existing trip has no entity tag; the status mirrors the service's own precondition-required code.
      */
-    public async Task<TripRevision> SaveAsync(Guid? id, SaveTripRequest request, string? etag, CancellationToken token)
+    public async Task<TripRevision> SaveAsync(Guid? identifier, SaveTripRequest request, string? etag, CancellationToken cancellationToken)
     {
-        if (id is not null && etag is null)
+        if (identifier is not null && etag is null)
             throw new ApiError(FailureKind.Unexpected, "Reopen the saved trip before saving changes.", 428);
-        return ReadRevision(await client.SendAsync<TripDto>("Trips", id is null ? HttpMethod.Post : HttpMethod.Put,
-            id is null ? Path : $"{Path}/{id:D}", request, etag, token));
+        return ReadRevision(await client.SendAsync<TripDto>("Trips", identifier is null ? HttpMethod.Post : HttpMethod.Put,
+            identifier is null ? Path : $"{Path}/{identifier:D}", request, etag, cancellationToken));
     }
 
     /**
      * Creates a trip from the form planner.
      * @param request Validated trip details and catalogue references.
-     * @param token Cancels a closed editor.
+     * @param cancellationToken Cancels a closed editor.
      * @return The trip confirmed by the service.
      */
-    public async Task<TripDto> CreateAsync(SaveTripRequest request, CancellationToken token) =>
-        await client.SendJsonAsync<TripDto>("Trips", HttpMethod.Post, Path, request, token)
+    public async Task<TripDto> CreateAsync(SaveTripRequest request, CancellationToken cancellationToken) =>
+        await client.SendJsonAsync<TripDto>("Trips", HttpMethod.Post, Path, request, cancellationToken)
         ?? throw new ApiError(FailureKind.Unexpected, "The trip save could not be confirmed.");
 
     static TripRevision ReadRevision(ServiceResponse<TripDto> response) =>

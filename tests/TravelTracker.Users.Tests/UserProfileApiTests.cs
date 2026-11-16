@@ -195,7 +195,7 @@ public sealed class UserProfileApiTests
         using var backend = app.Browser(app.Token(subject: UsersApiFactory.ServiceSubject, scope: "users.access"));
         using var access = await backend.GetFromJsonAsync<JsonDocument>($"/internal/users/{profile.PublicId}/access");
         var result = access!.RootElement;
-        Assert.Equal(new[] { "role", "status", "userId" }, result.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { "role", "status", "userId" }, result.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(profile.PublicId, result.GetProperty("userId").GetGuid());
         Assert.Equal("deactivated", result.GetProperty("status").GetString());
         Assert.Equal("traveller", result.GetProperty("role").GetString());

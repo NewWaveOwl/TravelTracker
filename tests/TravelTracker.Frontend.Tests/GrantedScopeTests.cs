@@ -2,7 +2,7 @@ using TravelTracker.Frontend.Tests.Support;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** Verifies scope metadata through the real OIDC callback and encrypted session cookie. */
+/** verifies scope metadata through the real OIDC callback and encrypted session cookie. */
 public sealed class GrantedScopeTests
 {
     [Theory]

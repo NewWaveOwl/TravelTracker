@@ -29,11 +29,11 @@ public sealed class AttractionsClientTests
     public async Task SearchEncodesLiteralNameAsOneParameterAndPreservesServerOrder()
     {
         var handler = new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-        { Content = JsonContent.Create(new[] { Original, Original with { AttractionId = Guid.NewGuid(), Name = "Z Museum" } }) }));
+        { Content = JsonContent.Create(new[] { Original, Original with { AttractionId = Guid.Parse("00000000-0000-0000-0000-000000009001"), Name = "Z Museum" } }) }));
         var result = await Client(handler).SearchAsync(" Musée & ?name=x#rail% ");
         Assert.Equal("?name=Mus%C3%A9e%20%26%20%3Fname%3Dx%23rail%25", handler.LastRequest!.RequestUri!.Query);
         Assert.Equal("Bearer test-session-token", handler.LastRequest.Headers.Authorization!.ToString());
-        Assert.Equal(new[] { "Museum", "Z Museum" }, result.Select(r => r.Name));
+        Assert.Equal(new[] { "Museum", "Z Museum" }, result.Select(attraction => attraction.Name));
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public sealed class AttractionsClientTests
             if (request.Method == HttpMethod.Patch)
             {
                 var json = await request.Content!.ReadFromJsonAsync<JsonElement>(token);
-                Assert.Equal(new[] { "description", "rating" }, json.EnumerateObject().Select(p => p.Name));
+                Assert.Equal(new[] { "description", "rating" }, json.EnumerateObject().Select(property => property.Name));
                 Assert.Equal(JsonValueKind.Null, json.GetProperty("description").ValueKind);
                 Assert.Equal(JsonValueKind.Null, json.GetProperty("rating").ValueKind);
                 saved = saved! with { Description = null, Rating = null };
@@ -106,7 +106,11 @@ public sealed class AttractionsClientTests
     public async Task RejectedWritesNeverClaimSuccessOrRetry(int status, FailureKind kind)
     {
         var calls = 0;
-        var handler = new StubHandler((_, _) => { calls++; return Task.FromResult(new HttpResponseMessage((HttpStatusCode)status)); });
+        var handler = new StubHandler((_, _) =>
+        {
+            calls++;
+            return Task.FromResult(new HttpResponseMessage((HttpStatusCode)status));
+        });
         var error = await Assert.ThrowsAsync<ApiError>(() => Client(handler).CreateAsync(new() { ["name"] = "Museum" }));
         Assert.Equal(kind, error.Kind);
         Assert.Equal(1, calls);
@@ -128,7 +132,11 @@ public sealed class AttractionsClientTests
     public async Task UnconfirmedNetworkSaveWarnsAboutDuplicatesWithoutRetrying()
     {
         var calls = 0;
-        var handler = new StubHandler((_, _) => { calls++; throw new HttpRequestException("secret provider diagnostic"); });
+        var handler = new StubHandler((_, _) =>
+        {
+            calls++;
+            throw new HttpRequestException("secret provider diagnostic");
+        });
         var error = await Assert.ThrowsAsync<ApiError>(() => Client(handler).CreateAsync(new()));
         Assert.Equal(FailureKind.Network, error.Kind);
         Assert.Contains("before retrying", error.Message);

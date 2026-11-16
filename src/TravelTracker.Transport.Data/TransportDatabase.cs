@@ -4,30 +4,45 @@ using TravelTracker.Transport.Data.SeedData;
 
 namespace TravelTracker.Transport.Data;
 
-/** Applies migrations and optional stable sample data to this service only. */
+/**
+ * Applies migrations and optional stable sample data to this service only.
+ * Seeding checks for empty tables before inserting, so it assumes a single starting instance.
+ */
 public static class TransportDatabase
 {
-    /** Migrates and seeds only empty resource tables without resetting saved data.
+    /**
+     * Migrates and seeds only empty resource tables without resetting saved data.
      * @param database Service-owned context.
      * @param seedExamples Enables first-run sample records.
      * @param cancellationToken Cancels initialization.
-     * @return Completion after initialization.
+     * @return The number of sample records inserted; zero when seeding is off or the tables already had rows.
      */
-    public static async Task InitializeAsync(TransportDbContext database, bool seedExamples, CancellationToken cancellationToken = default)
+    public static async Task<int> InitializeAsync(TransportDbContext database, bool seedExamples, CancellationToken cancellationToken = default)
     {
         await database.Database.MigrateAsync(cancellationToken);
-        if (!seedExamples) return;
+        if (!seedExamples) return 0;
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        var modeRepository = new EfTransportModeRepository(database);
+        var pointRepository = new EfRoutePointRepository(database);
+        var inserted = 0;
         if (!await database.TransportModes.AnyAsync(cancellationToken))
             foreach (var record in TransportSeedData.Transports())
-                await new EfTransportModeRepository(database).AddAsync(record, cancellationToken);
+            {
+                await modeRepository.AddAsync(record, cancellationToken);
+                inserted++;
+            }
         if (!await database.RoutePoints.AnyAsync(cancellationToken))
             foreach (var record in TransportSeedData.Points())
-                await new EfRoutePointRepository(database).AddAsync(record, cancellationToken);
+            {
+                await pointRepository.AddAsync(record, cancellationToken);
+                inserted++;
+            }
         await transaction.CommitAsync(cancellationToken);
+        return inserted;
     }
 
-    /** Rebuilds the single-process allocator from both persisted tables.
+    /**
+     * Rebuilds the single-process allocator from both persisted tables.
      * @param factory Context factory independent of request scopes.
      * @param cancellationToken Cancels lookup.
      * @return Largest stored internal key, or zero.

@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Data.Repositories;
-using TravelTracker.Users.Domain.Models;
 
 namespace TravelTracker.Users.Api.Services;
 
@@ -10,8 +9,9 @@ namespace TravelTracker.Users.Api.Services;
  * @param configuration Operator-owned bootstrap target and secret.
  * @param identities Verifies provider email ownership.
  * @param repository Stores service-owned account data and the permanent bootstrap-consumed marker.
+ * @param logger Records setup decisions without identities, emails or credentials.
  */
-public sealed class BootstrapService(IConfiguration configuration, VerifiedIdentityClient identities, IUserRepository repository)
+public sealed class BootstrapService(IConfiguration configuration, VerifiedIdentityClient identities, IUserRepository repository, ILogger<BootstrapService> logger)
 {
     /**
      * Provisions only the configured, verified account. Request body values can never select an identity or role.
@@ -26,20 +26,35 @@ public sealed class BootstrapService(IConfiguration configuration, VerifiedIdent
         var expectedEmail = configuration["Bootstrap:Email"];
         var expectedIssuer = configuration["Bootstrap:Issuer"];
         if (string.IsNullOrWhiteSpace(expectedEmail) || string.IsNullOrWhiteSpace(expectedIssuer) || configuration["Bootstrap:Secret"] is not { Length: >= 32 })
-            return Results.Problem(statusCode: 404, title: "First-administrator setup is unavailable.");
-        if (!SecretVerifier.Matches(configuration["Bootstrap:Secret"], secret)) return Results.Forbid();
+        {
+            logger.LogWarning("First-administrator setup refused: Bootstrap:Email, Bootstrap:Issuer or a Bootstrap:Secret of at least 32 characters is not configured.");
+            return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "First-administrator setup is unavailable.");
+        }
+        if (!SecretVerifier.Matches(configuration["Bootstrap:Secret"], secret))
+        {
+            logger.LogWarning("First-administrator setup refused: the setup secret did not match.");
+            return Results.Forbid();
+        }
         var issuer = user.FindFirstValue("iss");
         var subject = user.FindFirstValue("sub");
-        if (issuer != expectedIssuer || string.IsNullOrWhiteSpace(subject)) return Results.Forbid();
+        if (issuer != expectedIssuer || string.IsNullOrWhiteSpace(subject))
+        {
+            logger.LogWarning("First-administrator setup refused: the token issuer or subject claim is not the configured one.");
+            return Results.Forbid();
+        }
         var email = await identities.EmailAsync(issuer, subject, token, cancellationToken);
-        if (email is null || !string.Equals(email, expectedEmail, StringComparison.OrdinalIgnoreCase)) return Results.Forbid();
+        if (email is null || !string.Equals(email, expectedEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogWarning("First-administrator setup refused: the verified provider email was missing or not the configured one.");
+            return Results.Forbid();
+        }
         var account = await repository.BootstrapAsync(issuer, subject, email, cancellationToken);
-        return account is null
-            ? Results.Problem(statusCode: 409, title: "First-administrator setup has already been completed.")
-            : Results.Ok(new UserProfileResponse(
-                account.PublicId,
-                account.VerifiedEmail,
-                account.Role == UserRole.User ? "traveller" : "administrator",
-                account.Status.ToString().ToLowerInvariant()));
+        if (account is null)
+        {
+            logger.LogWarning("First-administrator setup refused: it was already completed for a different account or is no longer possible.");
+            return Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "First-administrator setup has already been completed.");
+        }
+        logger.LogInformation("First-administrator setup confirmed.");
+        return Results.Ok(UserProfileResponse.From(account));
     }
 }

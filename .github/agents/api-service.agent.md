@@ -17,7 +17,7 @@ The dependency direction is Api → Data → Domain.
 
 ## Allowed production paths
 
-- `src/TravelTracker.Api/**` (Transport and Route Points)
+- `src/TravelTracker.Transport.Api/**` (Transport and Route Points)
 - `src/TravelTracker.Attractions.Api/**` (Attractions HTTP contracts, access checks and application services)
 - `src/TravelTracker.Users.Api/**`
 - `src/TravelTracker.Security/**` (shared bearer infrastructure; verify both consuming hosts)
@@ -26,24 +26,25 @@ The dependency direction is Api → Data → Domain.
 
 The API agent may edit only these existing HTTP behavior test files:
 
-- `tests/TravelTracker.Api.Tests/AuthenticationTests.cs`
-- `tests/TravelTracker.Api.Tests/HealthTests.cs`
-- `tests/TravelTracker.Api.Tests/RoutePointTests.cs`
-- `tests/TravelTracker.Api.Tests/TransportModeTests.cs`
+- `tests/TravelTracker.Transport.Api.Tests/AuthenticationTests.cs`
+- `tests/TravelTracker.Transport.Api.Tests/HealthTests.cs`
+- `tests/TravelTracker.Transport.Api.Tests/RoutePointTests.cs`
+- `tests/TravelTracker.Transport.Api.Tests/TransportModeTests.cs`
 - `tests/TravelTracker.Attractions.Api.Tests/AttractionTests.cs`
 - `tests/TravelTracker.Attractions.Api.Tests/AuthenticationTests.cs`
 - `tests/TravelTracker.Attractions.Api.Tests/FailureBoundaryTests.cs`
 - `tests/TravelTracker.Attractions.Api.Tests/PrivacyPersistenceTests.cs`
 - `tests/TravelTracker.Attractions.Api.Tests/ReviewRegressionTests.cs`
 
-For approved M3-11 Users work, the API agent may also create or edit these files:
+For approved M3-11 Users work, the API agent may also edit these files in the Users API test project `tests/TravelTracker.Users.Tests/`:
 
-- `tests/TravelTracker.Users.Api.Tests/TravelTracker.Users.Api.Tests.csproj`
-- `tests/TravelTracker.Users.Api.Tests/UserProfileTests.cs`
-- `tests/TravelTracker.Users.Api.Tests/AuthenticationTests.cs`
-- `tests/TravelTracker.Users.Api.Tests/InternalUserAccessTests.cs`
-- `tests/TravelTracker.Users.Api.Tests/StorageFailureTests.cs`
-- `tests/TravelTracker.Users.Api.Tests/UserProfilePostgreSqlTests.cs`
+- `tests/TravelTracker.Users.Tests/TravelTracker.Users.Tests.csproj`
+- `tests/TravelTracker.Users.Tests/UserProfileApiTests.cs`
+- `tests/TravelTracker.Users.Tests/UserProfilePostgreSqlTests.cs`
+- `tests/TravelTracker.Users.Tests/UserProfileScopeMatrixTests.cs`
+- `tests/TravelTracker.Users.Tests/UserAdministrationApiTests.cs`
+- `tests/TravelTracker.Users.Tests/BootstrapApiTests.cs`
+- `tests/TravelTracker.Users.Tests/UsersStartupTests.cs`
 
 Coordinate those tests with the testing agent, who is authorized to create and maintain tests across all three Users test directories. Do not edit the Users Domain or Data test directories.
 

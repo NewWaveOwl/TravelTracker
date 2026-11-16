@@ -6,7 +6,8 @@ namespace TravelTracker.Domain.Types;
  * Internal on purpose: only Domain and Data can see it, so the Api can
  * neither name nor expose it. The public face of an entity is its Guid.
  */
-internal readonly record struct Id64 {
+internal readonly record struct Id64
+{
     private readonly long value;
 
     public Id64(long value) => this.value = value;

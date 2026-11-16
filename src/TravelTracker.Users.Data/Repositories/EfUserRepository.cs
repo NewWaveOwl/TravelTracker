@@ -12,7 +12,7 @@ namespace TravelTracker.Users.Data.Repositories;
  */
 public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, TimeProvider? timeProvider = null) : IUserRepository
 {
-    static readonly EntityIdGenerator IdGenerator = new();
+    private static readonly EntityIdGenerator IdGenerator = new();
 
     /**
      * Reads the latest persisted account for an exact validated provider identity.
@@ -23,8 +23,8 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
      */
     public async Task<UserAccount?> FindAsync(string issuer, string subject, CancellationToken cancellationToken)
     {
-        await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        var row = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Issuer == issuer && x.Subject == subject, cancellationToken);
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        var row = await database.Accounts.AsNoTracking().SingleOrDefaultAsync(entry => entry.Issuer == issuer && entry.Subject == subject, cancellationToken);
         return row is null ? null : Account(row);
     }
 
@@ -39,23 +39,23 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
     public async Task<UserAccount?> BootstrapAsync(string issuer, string subject, string email, CancellationToken cancellationToken)
     {
         var candidate = UserAccount.CreateAdministrator(new ProviderIdentity(issuer, subject), PersistedNow()) with { VerifiedEmail = email };
-        await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
-        var consumed = await db.Bootstrap.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, cancellationToken);
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await database.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
+        var consumed = await database.Bootstrap.AsNoTracking().SingleOrDefaultAsync(entry => entry.Id == 1, cancellationToken);
         if (consumed is not null)
         {
             if (consumed.Issuer != issuer || consumed.Subject != subject) return null;
-            var previous = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.PublicId == consumed.UserId && x.Issuer == issuer && x.Subject == subject, cancellationToken);
+            var previous = await database.Accounts.AsNoTracking().SingleOrDefaultAsync(entry => entry.PublicId == consumed.UserId && entry.Issuer == issuer && entry.Subject == subject, cancellationToken);
             return previous is null ? null : Account(previous);
         }
-        if (await db.Accounts.AnyAsync(x => x.Role == "administrator", cancellationToken)) return null;
-        var row = await db.Accounts.SingleOrDefaultAsync(x => x.Issuer == issuer && x.Subject == subject, cancellationToken);
+        if (await database.Accounts.AnyAsync(entry => entry.Role == "administrator", cancellationToken)) return null;
+        var row = await database.Accounts.SingleOrDefaultAsync(entry => entry.Issuer == issuer && entry.Subject == subject, cancellationToken);
         if (row is not null && row.Status != "active") return null;
         if (row is null)
         {
-            row = await NewRecordAsync(db, candidate, cancellationToken);
-            db.Accounts.Add(row);
+            row = await NewRecordAsync(database, candidate, cancellationToken);
+            database.Accounts.Add(row);
         }
         else
         {
@@ -63,32 +63,9 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
             row.VerifiedEmail = candidate.VerifiedEmail;
             row.ConcurrencyToken = Guid.NewGuid();
         }
-        db.Bootstrap.Add(new BootstrapRow { Id = 1, UserId = row.PublicId, Issuer = issuer, Subject = subject, CompletedAt = candidate.CreatedAt });
-        db.AdministratorAudit.Add(new AdministratorAuditRow { AuditId = Guid.CreateVersion7(), UserId = row.PublicId, Reason = "Initial administrator setup", NewRole = "administrator", RecordedAt = candidate.CreatedAt });
-        await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return Account(row);
-    }
-
-    /**
-     * Creates only an ordinary active traveller; a repeated login never changes saved role, email or standing.
-     * @param issuer Validated issuer.
-     * @param subject Validated subject.
-     * @param email Verified provider email.
-     * @param cancellationToken Request cancellation.
-     * @return The existing or newly saved local account.
-     */
-    public async Task<UserAccount> GetOrCreateTravellerAsync(string issuer, string subject, string email, CancellationToken cancellationToken)
-    {
-        var candidate = UserAccount.CreateTraveller(new ProviderIdentity(issuer, subject), PersistedNow()) with { VerifiedEmail = email };
-        await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
-        var saved = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Issuer == issuer && x.Subject == subject, cancellationToken);
-        if (saved is not null) return Account(saved);
-        var row = await NewRecordAsync(db, candidate, cancellationToken);
-        db.Accounts.Add(row);
-        await db.SaveChangesAsync(cancellationToken);
+        database.Bootstrap.Add(new BootstrapRow { Id = 1, UserId = row.PublicId, Issuer = issuer, Subject = subject, CompletedAt = candidate.CreatedAt });
+        database.AdministratorAudit.Add(new AdministratorAuditRow { AuditId = Guid.CreateVersion7(), UserId = row.PublicId, Reason = "Initial administrator setup", NewRole = "administrator", RecordedAt = candidate.CreatedAt });
+        await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return Account(row);
     }
@@ -98,15 +75,15 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
      * @param issuer Validated actor issuer.
      * @param subject Validated actor subject.
      * @param cancellationToken Request cancellation.
-     * @return Accounts ordered by email and public ID, or null for an unauthorized actor.
+     * @return Accounts ordered by verified email and public ID, or null for an unauthorized actor.
      */
     public async Task<IReadOnlyList<UserAccount>?> ListForAdministratorAsync(string issuer, string subject, CancellationToken cancellationToken)
     {
-        await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
-        if (!await db.Accounts.AnyAsync(x => x.Issuer == issuer && x.Subject == subject && x.Role == "administrator" && x.Status == "active", cancellationToken)) return null;
-        var rows = await db.Accounts.AsNoTracking().OrderBy(x => x.VerifiedEmail).ThenBy(x => x.PublicId).ToListAsync(cancellationToken);
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await database.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
+        if (!await database.Accounts.AnyAsync(entry => entry.Issuer == issuer && entry.Subject == subject && entry.Role == "administrator" && entry.Status == "active", cancellationToken)) return null;
+        var rows = await database.Accounts.AsNoTracking().OrderBy(entry => entry.VerifiedEmail).ThenBy(entry => entry.PublicId).ToListAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return rows.Select(Account).ToArray();
     }
@@ -127,29 +104,30 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
         if (role is not ("traveller" or "administrator") || expectedRole is not ("traveller" or "administrator") ||
             targetId == Guid.Empty || string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 500)
             return new("invalid", null);
-        await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
-        var actor = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Issuer == actorIssuer && x.Subject == actorSubject, cancellationToken);
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await database.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
+        var actor = await database.Accounts.AsNoTracking().SingleOrDefaultAsync(entry => entry.Issuer == actorIssuer && entry.Subject == actorSubject, cancellationToken);
         if (actor is null || actor.Role != "administrator" || actor.Status != "active") return new("forbidden", null);
-        var target = await db.Accounts.SingleOrDefaultAsync(x => x.PublicId == targetId, cancellationToken);
+        var target = await database.Accounts.SingleOrDefaultAsync(entry => entry.PublicId == targetId, cancellationToken);
         if (target is null) return new("notfound", null);
-        if (target.Role != expectedRole || target.Role == role) return new("conflict", null);
+        if (target.Role != expectedRole) return new("conflict", null);
+        if (target.Role == role) return new("unchanged", null);
         if (role == "administrator" && target.Status != "active") return new("invalid", null);
         if (target.Role == "administrator" && target.Status == "active" && role == "traveller" &&
-            await db.Accounts.CountAsync(x => x.Role == "administrator" && x.Status == "active", cancellationToken) <= 1)
+            await database.Accounts.CountAsync(entry => entry.Role == "administrator" && entry.Status == "active", cancellationToken) <= 1)
             return new("last-administrator", null);
         var previous = target.Role;
         target.Role = role;
         target.ConcurrencyToken = Guid.NewGuid();
-        db.AdministratorAudit.Add(new AdministratorAuditRow
+        database.AdministratorAudit.Add(new AdministratorAuditRow
         {
             AuditId = Guid.CreateVersion7(), UserId = target.PublicId, ActorUserId = actor.PublicId,
             PreviousRole = previous, NewRole = role, Action = "role-change", Reason = reason.Trim(), RecordedAt = PersistedNow(),
         });
         try
         {
-            await db.SaveChangesAsync(cancellationToken);
+            await database.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -159,7 +137,11 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
         return new("changed", Account(target));
     }
 
-    DateTimeOffset PersistedNow()
+    /**
+     * Reads the clock and trims it to the precision PostgreSQL stores, so confirmed writes equal later reads.
+     * @return The current UTC time with microsecond precision.
+     */
+    private DateTimeOffset PersistedNow()
     {
         var now = (timeProvider ?? TimeProvider.System).GetUtcNow().ToUniversalTime();
         // PostgreSQL timestamptz stores microseconds; confirmed writes must equal later reads.
@@ -168,14 +150,14 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
 
     /**
      * Converts a domain account into a new row with Data-owned identifiers and concurrency state.
-     * @param db The context that will persist the record.
+     * @param database The context that will persist the record.
      * @param account The account values to store.
      * @param cancellationToken Cancels internal identifier allocation.
      * @return A new unsaved user record.
      */
-    async Task<UserRecord> NewRecordAsync(UsersDbContext db, UserAccount account, CancellationToken cancellationToken) => new()
+    private async Task<UserRecord> NewRecordAsync(UsersDbContext database, UserAccount account, CancellationToken cancellationToken) => new()
     {
-        Id = await IdGenerator.NextAsync(db, cancellationToken),
+        Id = await IdGenerator.NextAsync(database, cancellationToken),
         PublicId = account.PublicId,
         Issuer = account.ProviderIdentity.Issuer,
         Subject = account.ProviderIdentity.Subject,
@@ -207,7 +189,7 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
      * @param row The persisted account record.
      * @return The matching domain account.
      */
-    static UserAccount Account(UserRecord row) =>
+    private static UserAccount Account(UserRecord row) =>
         new(
             row.PublicId,
             new ProviderIdentity(row.Issuer, row.Subject),

@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TravelTracker.Settings.Api.Access;
@@ -75,7 +77,7 @@ internal sealed class UsersBackchannelHandler : HttpMessageHandler
         lock (gate)
         {
             if (idsBySubject.TryGetValue(subject, out var id)) return id;
-            id = Guid.CreateVersion7();
+            id = new Guid(MD5.HashData(Encoding.UTF8.GetBytes(subject)));
             idsBySubject[subject] = id;
             subjectsById[id] = subject;
             return id;

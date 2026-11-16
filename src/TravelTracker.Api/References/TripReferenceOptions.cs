@@ -5,7 +5,8 @@ namespace TravelTracker.Api.References;
  * Bound from the TripReferences configuration section and validated at startup. Never commit the credential;
  * supply it through the environment or user secrets.
  */
-public sealed class TripReferenceOptions {
+public sealed class TripReferenceOptions
+{
     /** Configuration section these options bind from. */
     public const string SectionName = "TripReferences";
 

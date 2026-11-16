@@ -1,7 +1,11 @@
 namespace TravelTracker.Frontend.Tests.Support;
 
-/** A minimal browser cookie jar: replays every cookie to every request and drops cookies the server expires. */
-public sealed class CookieJarHandler : DelegatingHandler
+/**
+ * a minimal browser cookie jar: replays every cookie to every request and drops cookies the server expires.
+ *
+ * @param clock Judges cookie expiry on the same fake clock the host uses, so expiry tests stay deterministic.
+ */
+public sealed class CookieJarHandler(TimeProvider clock) : DelegatingHandler
 {
     readonly Dictionary<string, string> cookies = [];
 
@@ -20,7 +24,7 @@ public sealed class CookieJarHandler : DelegatingHandler
     {
         var parts = setCookie.Split(';', StringSplitOptions.TrimEntries);
         var pair = parts[0].Split('=', 2);
-        var expired = parts.Any(part => part.StartsWith("expires=", StringComparison.OrdinalIgnoreCase) && DateTimeOffset.TryParse(part[8..], out var at) && at < DateTimeOffset.UtcNow);
+        var expired = parts.Any(part => part.StartsWith("expires=", StringComparison.OrdinalIgnoreCase) && DateTimeOffset.TryParse(part[8..], out var at) && at < clock.GetUtcNow());
         if (expired || pair[1].Length == 0)
             cookies.Remove(pair[0]);
         else

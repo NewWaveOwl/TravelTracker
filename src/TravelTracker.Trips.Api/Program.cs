@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 using TravelTracker.Api.References;
 using TravelTracker.Api.Trips;
 using TravelTracker.Security.Hosting;
@@ -12,14 +12,14 @@ using TravelTracker.Trips.Data.Repositories;
 
 namespace TravelTracker.Trips.Api;
 
-/** Composes the independent Trips HTTP service and its PostgreSQL store. */
-public partial class TripsProgram
+/** composes the independent Trips HTTP service and its PostgreSQL store. */
+public class TripsProgram
 {
     /**
-     * Starts the Trips host without starting the catalogue or Users services.
+     * starts the Trips host without starting the catalogue or Users services.
      *
-     * @param args Host arguments.
-     * @return Completion after the host shuts down.
+     * @param args host arguments.
+     * @return completion after the host shuts down.
      */
     public static async Task Main(string[] args)
     {

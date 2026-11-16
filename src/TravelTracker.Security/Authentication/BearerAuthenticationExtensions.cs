@@ -6,13 +6,13 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Protocols;
 
-namespace TravelTracker.Api.Authentication;
+namespace TravelTracker.Security.Authentication;
 
 /**
- * Registers real bearer validation and least-privilege catalogue policies.
+ * Registers real bearer validation and the least-privilege scope policies for every TravelTracker API.
  */
 public static class BearerAuthenticationExtensions
 {
@@ -108,6 +108,10 @@ public static class BearerAuthenticationExtensions
                         var subjects = context.Principal?.FindAll("sub").ToArray();
                         if (subjects is not { Length: 1 } || string.IsNullOrWhiteSpace(subjects[0].Value))
                         {
+                            // log the category only: never the subject value or the token.
+                            context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                                .CreateLogger("TravelTracker.Authentication").LogWarning(
+                                    "Bearer token rejected: the subject claim is missing, blank or ambiguous.");
                             context.Fail("A single subject is required.");
                             return;
                         }
@@ -116,7 +120,12 @@ public static class BearerAuthenticationExtensions
                              context.Principal!.FindAll("role").Select(claim => claim.Value).ToArray() is not ["authenticated"] ||
                              context.Principal.FindAll("is_anonymous").Any(claim =>
                                  string.Equals(claim.Value, "true", StringComparison.OrdinalIgnoreCase))))
+                        {
+                            context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                                .CreateLogger("TravelTracker.Authentication").LogWarning(
+                                    "Bearer token rejected: not a non-anonymous authenticated Supabase user.");
                             context.Fail("A non-anonymous authenticated Supabase user is required.");
+                        }
                     },
                     OnAuthenticationFailed = context =>
                     {

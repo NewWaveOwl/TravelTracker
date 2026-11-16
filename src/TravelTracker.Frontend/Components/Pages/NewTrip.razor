@@ -47,7 +47,7 @@ else
                 <h1>Trip editor</h1>
                 <p>Plan your trip with places, transport and times.</p>
             </div>
-            <div class="trip-actions" aria-label="Trip view">
+            <div class="trip-actions" role="group" aria-label="Trip view">
                 @if (draft.Id is null)
                 {
                     <a class="button secondary" href="new-trip/form">Step-by-step form</a>
@@ -77,7 +77,7 @@ else
                     <input class="map-trip-name" aria-label="Map trip name" placeholder="Untitled trip" disabled="@busy"
                            @bind:get="draft.Name" @bind:set="value => EditTripValue(draft.Name, value ?? string.Empty, next => draft.Name = next)" />
                 </h1>
-                <div class="trip-actions trip-steps" aria-label="Planning steps">
+                <div class="trip-actions trip-steps" role="group" aria-label="Planning steps">
                     <button type="button" class="secondary" aria-pressed="@Pressed(review)" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review on map</button>
                 </div>
                 <details class="browser-draft-actions">
@@ -201,9 +201,14 @@ else
 
     @if (errors.Count > 0)
     {
-        <div class="trip-message @(saveFailed ? "failure" : "validation")" role="alert">
-            <strong>@(saveFailed ? "Action could not be completed" : "Check your trip details")</strong>
-            <ul>@foreach (var error in errors) { <li>@error</li> }</ul>
+        <div class="trip-message @(actionFailed ? "failure" : "validation")" role="alert">
+            <strong>@(actionFailed ? "Action could not be completed" : "Check your trip details")</strong>
+            <ul>
+            @foreach (var error in errors)
+            {
+                <li>@error</li>
+            }
+            </ul>
         </div>
     }
 
@@ -232,7 +237,7 @@ else
                         }
                         else
                         {
-                            <button type="button" disabled="@busy" @onclick="SaveAsync">@(busy ? "Saving trip" : saveFailed ? "Retry save" : "Save trip")</button>
+                            <button type="button" disabled="@busy" @onclick="SaveAsync">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</button>
                         }
                     }
                     <button type="button" class="secondary" disabled="@busy" @onclick="BackFromReview">@(savedReview ? "Back to editor" : "Back to stops")</button>
@@ -299,10 +304,10 @@ else
                             var duration = DisplayedDuration(leg);
                             <fieldset class="leg-fields trip-fields" disabled="@busy">
                                 <label>Departure <input type="datetime-local" step="60" value="@DateTimeValue(leg.Departure)"
-                                                        @onchange="e => SetDateTime(e, leg.Departure, value => leg.Departure = value)" /></label>
+                                                        @onchange="change => SetDateTime(change, leg.Departure, value => leg.Departure = value)" /></label>
                                 @OffsetPicker("Departure UTC offset", leg.Departure, leg.SavedDeparture, leg.DepartureOffset, value => leg.DepartureOffset = value)
                                 <label>Arrival <input type="datetime-local" step="60" value="@DateTimeValue(draft.ArrivalFor(leg))"
-                                                      @onchange="e => SetDateTime(e, draft.ArrivalFor(leg), value => { leg.Arrival = value; leg.DurationMinutes = null; })" /></label>
+                                                      @onchange="change => SetDateTime(change, draft.ArrivalFor(leg), value => { leg.Arrival = value; leg.DurationMinutes = null; })" /></label>
                                 @if (leg.DurationMinutes is null)
                                 {
                                     @OffsetPicker("Arrival UTC offset", leg.Arrival, leg.SavedArrival, leg.ArrivalOffset, value => leg.ArrivalOffset = value)
@@ -313,13 +318,13 @@ else
                                         <label>
                                             <span aria-hidden="true">h</span>
                                             <input @ref="durationHoursInput" type="number" min="0" step="1" aria-label="Duration hours"
-                                                   value="@(duration / 60)" @onchange="e => SetDurationPart(leg, e, hours: true)" />
+                                                   value="@(duration / 60)" @onchange="change => SetDurationPart(leg, change, hours: true)" />
                                         </label>
                                         <span aria-hidden="true">:</span>
                                         <label>
                                             <span aria-hidden="true">m</span>
                                             <input type="number" min="0" max="59" step="1" aria-label="Duration minutes"
-                                                   value="@(duration % 60)" @onchange="e => SetDurationPart(leg, e, hours: false)" />
+                                                   value="@(duration % 60)" @onchange="change => SetDurationPart(leg, change, hours: false)" />
                                         </label>
                                     </div>
                                 </div>
@@ -410,9 +415,9 @@ else
             }
             <label>Time zone <input type="text" @bind:get="draft.TimeZone"
                                     @bind:set="value => EditTripValue(draft.TimeZone, value ?? string.Empty, next => draft.TimeZone = next)" placeholder="America/Toronto" /></label>
-            <label>Trip starts <input type="datetime-local" step="60" value="@DateTimeValue(draft.Start)" @onchange="e => SetDateTime(e, draft.Start, value => draft.Start = value)" /></label>
+            <label>Trip starts <input type="datetime-local" step="60" value="@DateTimeValue(draft.Start)" @onchange="change => SetDateTime(change, draft.Start, value => draft.Start = value)" /></label>
             @OffsetPicker("Trip start UTC offset", draft.Start, draft.SavedStart, draft.StartOffset, value => draft.StartOffset = value)
-            <label>Trip ends <input type="datetime-local" step="60" value="@DateTimeValue(draft.End)" @onchange="e => SetDateTime(e, draft.End, value => draft.End = value)" /></label>
+            <label>Trip ends <input type="datetime-local" step="60" value="@DateTimeValue(draft.End)" @onchange="change => SetDateTime(change, draft.End, value => draft.End = value)" /></label>
             @OffsetPicker("Trip end UTC offset", draft.End, draft.SavedEnd, draft.EndOffset, value => draft.EndOffset = value)
             <label class="trip-checkbox"><input type="checkbox" @bind:get="draft.RoundTrip"
                                                 @bind:set="value => EditTripValue(draft.RoundTrip, value, next => draft.RoundTrip = next)" /> Return to start</label>

@@ -17,6 +17,8 @@ public partial class PlaceSelector : IDisposable
     [Inject] AttractionsClient Attractions { get; set; } = default!;
     [Inject] TransportClient Transport { get; set; } = default!;
     [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
+    [Inject] SessionRegistry Sessions { get; set; } = default!;
+    [Inject] TimeProvider Clock { get; set; } = default!;
     [Inject] ILogger<PlaceSelector> Logger { get; set; } = default!;
 
     /** Visible name of the field group. */
@@ -48,13 +50,51 @@ public partial class PlaceSelector : IDisposable
 
     protected override async Task OnInitializedAsync()
     {
-        var user = (await Authentication.GetAuthenticationStateAsync()).User;
-        canWriteCatalogue = user.FindAll(AccessTokenClaims.GrantedScope).SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Contains("catalogue.write", StringComparer.Ordinal);
+        Authentication.AuthenticationStateChanged += AuthenticationChanged;
+        await UpdateAccessAsync(Authentication.GetAuthenticationStateAsync());
+    }
+
+    /**
+     * rechecks the catalogue write hint when the signed-in account or its scopes change.
+     * @param state The latest validated authentication state.
+     */
+    void AuthenticationChanged(Task<AuthenticationState> state) => _ = RefreshAccessAsync(state);
+
+    async Task RefreshAccessAsync(Task<AuthenticationState> state)
+    {
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                await UpdateAccessAsync(state);
+                StateHasChanged();
+            });
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.LogError(exception, "Refreshing the catalogue write hint failed");
+        }
+    }
+
+    async Task UpdateAccessAsync(Task<AuthenticationState> state)
+    {
+        var user = (await state).User;
+        // a revoked or expired session must not keep the add control visible, so the scope check needs the live session too
+        canWriteCatalogue = AccessTokenClaims.IsSignedIn(user, Sessions, Clock.GetUtcNow()) && AccessTokenClaims.GrantedScopes(user).Contains("catalogue.write");
+        if (!canWriteCatalogue) adding = false;
     }
 
     protected override void OnParametersSet()
     {
         if (type.Length == 0 || !Types.Contains(type)) type = Types[0];
+    }
+
+    /** Drops results and messages from the previous kind so they cannot be picked for the new one. */
+    void ClearResults()
+    {
+        results = [];
+        searched = false;
+        failure = null;
     }
 
     static string TypeLabel(string kind) => kind switch
@@ -64,9 +104,9 @@ public partial class PlaceSelector : IDisposable
         _ => "Transport stop",
     };
 
-    async Task KeyPressedAsync(KeyboardEventArgs key)
+    async Task KeyPressedAsync(KeyboardEventArgs eventArgs)
     {
-        if (key.Key == "Enter") await SearchAsync();
+        if (eventArgs.Key == "Enter") await SearchAsync();
     }
 
     async Task SearchAsync()
@@ -94,8 +134,14 @@ public partial class PlaceSelector : IDisposable
             failure = error.Message;
             Logger.LogWarning("Searching {Type} places failed as {Kind} (status {Status})", type, error.Kind, error.Status);
         }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        finally { busy = false; }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+            // the view closed while the search was running
+        }
+        finally
+        {
+            busy = false;
+        }
     }
 
     async Task AddedAsync(AccommodationDto saved)
@@ -115,6 +161,7 @@ public partial class PlaceSelector : IDisposable
     /** Cancels a search that is still running when the view closes. */
     public void Dispose()
     {
+        Authentication.AuthenticationStateChanged -= AuthenticationChanged;
         lifetime.Cancel();
         lifetime.Dispose();
     }

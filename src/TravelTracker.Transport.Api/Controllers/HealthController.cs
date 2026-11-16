@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace TravelTracker.Transport.Api.Controllers;
 
 /**
- * Reports the health of the combined API.
+ * Reports the health of the Transport service.
  */
 [AllowAnonymous]
 [ApiController]
@@ -12,7 +12,7 @@ namespace TravelTracker.Transport.Api.Controllers;
 public sealed class HealthController : ControllerBase
 {
     /**
-     * Returns the shared API health status.
+     * Returns the Transport service health status.
      * @return 200 with the service identity.
      */
     [HttpGet]

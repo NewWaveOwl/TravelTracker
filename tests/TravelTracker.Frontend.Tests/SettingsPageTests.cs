@@ -15,7 +15,7 @@ using TravelTracker.Frontend.Tests.Support;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** Settings page journeys against a stateful fake Settings service; authorization here is fake-identity only. */
+/** settings page journeys against a stateful fake Settings service; authorization here is fake-identity only. */
 public sealed class SettingsPageTests : BunitContext
 {
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-06T10:00:00Z"));
@@ -31,8 +31,7 @@ public sealed class SettingsPageTests : BunitContext
     {
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
-        if (signedIn) authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10));
-        if (signedIn) ((ClaimsIdentity)authentication.User.Identity!).AddClaim(new Claim(AccessTokenClaims.GrantedScope, write ? "settings.read settings.write" : "settings.read"));
+        if (signedIn) authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10), write ? "settings.read settings.write" : "settings.read");
         var client = new ProtectedClient(authentication,
             new ServiceDirectory(new Dictionary<string, string> { ["Settings"] = "http://localhost:5107" }),
             new ServiceClient(new HttpClient(service), NullLogger<ServiceClient>.Instance), clock, NullLogger<ProtectedClient>.Instance, sessions);
@@ -108,7 +107,7 @@ public sealed class SettingsPageTests : BunitContext
         Assert.Equal("Saved for future map support.", page.Find("#settings-latitude-hint").TextContent);
         Assert.Equal("Saved for future map support.", page.Find("#settings-longitude-hint").TextContent);
         Assert.Equal("Saved for future map support.", page.Find("#settings-zoom-hint").TextContent);
-        Assert.Contains("The preferred transport mode is applied now", page.Find("#settings-transport-hint").TextContent);
+        Assert.Contains("selected by default for each new leg", page.Find("#settings-transport-hint").TextContent);
         Assert.Empty(page.FindAll("datalist"));
         Assert.Equal("Save changes", page.Find("button[type=submit]").TextContent.Trim());
     }

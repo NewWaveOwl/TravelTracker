@@ -4,7 +4,7 @@
     <header class="accommodation-heading">
         <div>
             <small>YOUR TRIP / LODGING</small>
-            <h1 id="accommodation-heading" tabindex="-1" @ref="workspaceHeading">Find a place to stay</h1>
+            <h2 id="accommodation-heading" tabindex="-1" @ref="workspaceHeading">Find a place to stay</h2>
             <p>Search visible stays or add a place to your trip draft.</p>
         </div>
         @if (canWrite && signedIn)
@@ -20,20 +20,34 @@
     else if (signedIn && !canRead)
     {
         <div class="accommodation-feedback" role="alert"><h2>Accommodation read access required</h2><p>Your session does not have <code>catalogue.read</code>. Sign in with the approved catalogue read grant to browse accommodations.</p></div>
-        @if (status is not null) { <p class="accommodation-status" role="status">@status</p> }
+        @if (status is not null)
+        {
+            <p class="accommodation-status" role="status">@status</p>
+        }
     }
     else if (signedIn)
     {
-        @if (status is not null) { <p class="accommodation-status" role="status">@status</p> }
+        @if (status is not null)
+        {
+            <p class="accommodation-status" role="status">@status</p>
+        }
         @if (error is not null)
         {
             <section class="accommodation-error" role="alert" tabindex="-1" @ref="errorSummary">
                 <h2>@ErrorHeading</h2><p>@error.Message</p>
-                @if (errors.Count > 0)
+                @if (VisibleErrors.Any())
                 {
-                    <ul>@foreach (var field in errors) { <li><a href="@("#accommodation-" + field.Key)">@string.Join(" ", field.Value)</a></li> }</ul>
+                    <ul>
+                    @foreach (var field in VisibleErrors)
+                    {
+                        <li><a href="@("#accommodation-" + field.Key)">@string.Join(" ", field.Value)</a></li>
+                    }
+                    </ul>
                 }
-                @if (retrySearch) { <button class="secondary" type="button" @onclick="SearchAsync" disabled="@busy">Retry search</button> }
+                @if (retrySearch)
+                {
+                    <button class="secondary" type="button" @onclick="SearchAsync" disabled="@busy">Retry search</button>
+                }
             </section>
         }
         <div class="accommodation-columns">
@@ -43,15 +57,21 @@
                     <label for="accommodation-query">Place name<input id="accommodation-query" @bind="query" placeholder="Search by name" disabled="@busy" /></label>
                     <div class="actions"><button type="submit" class="secondary" disabled="@busy">Search</button><button type="button" class="secondary" @onclick="ClearSearchAsync" disabled="@busy">Clear</button></div>
                 </form>
-                @if (searching) { <p role="status">Searching accommodations…</p> }
-                else if (!loaded) { <p role="status">Loading visible accommodations…</p> }
+                @if (searching)
+                {
+                    <p role="status">Searching accommodations…</p>
+                }
+                else if (!loaded)
+                {
+                    <p role="status">Loading visible accommodations…</p>
+                }
                 else if (results.Count == 0)
                 {
                     <div class="accommodation-empty" role="status"><h3>No accommodations found</h3><p>Try a different name or clear your search to browse all visible places.</p></div>
                 }
                 else
                 {
-                    <p class="accommodation-count" role="status">@results.Count VISIBLE PLACES / NAME A–Z</p>
+                    <p class="accommodation-count" role="status">@results.Count VISIBLE PLACES / SORTED BY NAME</p>
                     <div class="accommodation-results">
                         @foreach (var item in results)
                         {
@@ -64,7 +84,10 @@
                         }
                     </div>
                 }
-                @if (!canWrite) { <p class="accommodation-readonly" role="status">Read-only catalogue. Adding places requires <code>catalogue.write</code>.</p> }
+                @if (!canWrite)
+                {
+                    <p class="accommodation-readonly" role="status">Read-only catalogue. Adding places requires <code>catalogue.write</code>.</p>
+                }
             </section>
 
             <section class="accommodation-details" aria-labelledby="accommodation-details-heading" aria-busy="@loadingDetails.ToString().ToLowerInvariant()">
@@ -84,7 +107,7 @@
                     }
                     else
                     {
-                        <button type="button" @onclick="SelectCurrentAsync" disabled="@busy">Select this place</button>
+                        <button type="button" @onclick="SelectCurrent" disabled="@busy">Select this place</button>
                     }
                 }
                 else
@@ -102,7 +125,10 @@
                 <span class="visually-hidden" tabindex="0" @onfocus="FocusLastModalControl"></span>
                 <header><div><small>ADD TO YOUR CATALOGUE</small><h2 id="accommodation-create-heading">Add an accommodation</h2></div><button type="button" class="secondary" aria-label="Close add accommodation form" @onclick="CloseCreate" disabled="@saving">Close</button></header>
                 <p>Your place is private by default. Shared places are available to all travellers.</p>
-                @if (formError is not null) { <div class="accommodation-error" role="alert" tabindex="-1" @ref="createErrorSummary"><h3>@ErrorHeading</h3><p>@formError</p></div> }
+                @if (formError is not null)
+                {
+                    <div class="accommodation-error" role="alert" tabindex="-1" @ref="createErrorSummary"><h3>@ErrorHeading</h3><p>@formError</p></div>
+                }
                 <form @onsubmit="CreateAsync" @onsubmit:preventDefault>
                     <fieldset disabled="@saving">
                         <AccommodationFormFields @ref="fields" Draft="draft" Errors="errors" Prefix="accommodation" CanShare="canShare" />

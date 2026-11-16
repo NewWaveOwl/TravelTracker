@@ -160,6 +160,8 @@ namespace TravelTracker.Trips.Data.Migrations
                             t.HasCheckConstraint("CK_Trips_Name", "length(btrim(\"Name\")) > 0");
 
                             t.HasCheckConstraint("CK_Trips_Owner", "length(btrim(\"OwnerIssuer\")) > 0 AND length(btrim(\"OwnerSubject\")) > 0");
+
+                            t.HasCheckConstraint("CK_Trips_Revision", "\"Revision\" >= 1");
                         });
                 });
 

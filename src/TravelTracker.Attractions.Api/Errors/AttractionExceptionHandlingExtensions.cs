@@ -15,17 +15,20 @@ public static class AttractionExceptionHandlingExtensions
         app.UseExceptionHandler(new ExceptionHandlerOptions
         {
             ExceptionHandler = AttractionExceptionHandler.HandleAsync,
-            // The handler emits safe diagnostics; suppress duplicate raw framework exception logs.
+            // the handler emits safe diagnostics; suppress duplicate raw framework exception logs.
             SuppressDiagnosticsCallback = _ => true
         });
         return app.Use(async (context, next) =>
         {
-            try { await next(context); }
+            try
+            {
+                await next(context);
+            }
             catch (Exception exception) when (context.RequestAborted.IsCancellationRequested &&
                 exception is OperationCanceledException or IOException)
             {
-                // ASP.NET Core handles these before invoking the configured exception delegate.
-                context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("AttractionFailures")
+                // aborted requests are skipped by the exception handler delegate, so log them here
+                context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(AttractionExceptionHandler.LoggerCategory)
                     .LogWarning("Attraction request was canceled by the caller; status {StatusCode}.", 499);
                 throw;
             }

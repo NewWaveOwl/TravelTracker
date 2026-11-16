@@ -2,7 +2,9 @@ using TravelTracker.Users.Domain.Models;
 
 namespace TravelTracker.Users.Data.Repositories;
 
-/** Persists account lookup and the atomic one-time administrator setup. */
+/**
+ * Persists account lookup and provisioning, administrator account listing, role changes and the atomic one-time administrator setup.
+ */
 public interface IUserRepository
 {
     /**
@@ -23,16 +25,6 @@ public interface IUserRepository
      * @return Saved account, or the original account on exact-identity replay without re-elevation; null when setup is consumed by another identity or prohibited.
      */
     Task<UserAccount?> BootstrapAsync(string issuer, string subject, string email, CancellationToken cancellationToken);
-
-    /**
-     * Provisions a verified identity as an active traveller without replacing saved roles or standing.
-     * @param issuer Validated issuer.
-     * @param subject Validated subject.
-     * @param email Verified provider email.
-     * @param cancellationToken Request cancellation.
-     * @return The existing or newly provisioned account.
-     */
-    Task<UserAccount> GetOrCreateTravellerAsync(string issuer, string subject, string email, CancellationToken cancellationToken);
 
     /**
      * Lists local accounts only for a currently active administrator.

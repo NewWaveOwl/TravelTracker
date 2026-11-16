@@ -28,7 +28,7 @@ dotnet user-secrets set "Auth0:Audience" "traveltracker-api"
 dotnet user-secrets set "Auth0:ClientSecret" "only-for-a-regular-web-application"
 ```
 
-`Auth0:Scope` defaults to `openid profile email catalogue.read catalogue.write users.read users.write settings.read trips.read trips.write`. If you override this setting, include the scopes needed by the features you use and sign in again. The account page uses `users.read` to load the Users profile and `users.write` to offer profile editing. Users without the write permission can still view the profile when they have `users.read`; the Users API independently enforces both permissions and account standing. Environment variables such as `Auth0__Domain` work too. The audience must exactly equal the API identifier. Restart the app after changing settings. Missing or malformed settings leave navigation usable, log a warning at startup, and show a setup-pending account page.
+`Auth0:Scope` defaults to `openid profile email catalogue.read catalogue.write users.read users.write users.admin settings.read trips.read trips.write`. If you override this setting, include the scopes needed by the features you use and sign in again. The account page uses `users.read` to load the Users profile and `users.write` to offer profile editing. Users without the write permission can still view the profile when they have `users.read`; the Users API independently enforces both permissions and account standing. Environment variables such as `Auth0__Domain` work too. The audience must exactly equal the API identifier. Restart the app after changing settings. Missing or malformed settings leave navigation usable, log a warning at startup, and show a setup-pending account page.
 
 ### Run the Users API for the profile page
 
@@ -121,7 +121,7 @@ Run `dotnet test tests/TravelTracker.Frontend.Tests`. The tests use stub HTTP ha
 Live checklist after registration:
 
 1. Open the account page and select **Sign in**. Confirm the browser redirects to the configured Auth0 tenant and returns to `/account` with no callback code or state left in the URL.
-2. Start Transport (`TravelTracker.Api`, port 5105) with the Auth0 bearer settings above. Select **Check API access**. The app reads the Example Bus sample through `GET /api/v1/transport-modes/00000000-0000-0000-0000-000000000101`, requiring `catalogue.read`. This proves a protected public DTO read without depending on Attractions' PostgreSQL/Users setup. Do not paste tokens into logs or screenshots.
+2. Start Transport (`dotnet run --project src/TravelTracker.Transport.Api --launch-profile http`, port 5105) with the Auth0 bearer settings above. Select **Check API access**. The app reads the Example Bus sample through `GET /api/v1/transport-modes/00000000-0000-0000-0000-000000000101`, requiring `catalogue.read`. This proves a protected public DTO read without depending on Attractions' PostgreSQL/Users setup. Do not paste tokens into logs or screenshots.
 3. Cancel or deny login and verify recoverable messaging. An invalid callback must not authenticate.
 4. Use a test account without `catalogue.read`; verify `403` and no retry or sign-out loop. Verify an expired or rejected session offers sign-in and stops protected calls.
 5. Sign out during an API call; verify no late success appears and that after a refresh protected access stays unavailable until an explicit sign-in.

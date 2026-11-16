@@ -2,12 +2,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using TravelTracker.Users.Data.Repositories.Profile;
+using TravelTracker.Users.Data.Tests.Support;
 using TravelTracker.Users.Domain.Models;
 using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Data.Tests;
 
-/** Proves a profile save cannot land on an account whose standing changed after the account was loaded. */
+/** proves a profile save cannot land on an account whose standing changed after the account was loaded. */
 public sealed partial class UserRepositoryPostgreSqlTests
 {
     [Fact]

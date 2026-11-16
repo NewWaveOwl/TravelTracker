@@ -8,9 +8,9 @@ public sealed class UsersDesignTimeFactory : IDesignTimeDbContextFactory<UsersDb
 {
     /**
      * Creates a PostgreSQL context for migration tooling.
-     * @param args EF tooling arguments.
+     * @param _arguments EF tooling arguments, unused.
      * @return Context using an explicit deployment connection or a non-secret tooling default.
      */
-    public UsersDbContext CreateDbContext(string[] args) => new(new DbContextOptionsBuilder<UsersDbContext>()
+    public UsersDbContext CreateDbContext(string[] _arguments) => new(new DbContextOptionsBuilder<UsersDbContext>()
         .UseNpgsql(Environment.GetEnvironmentVariable("ConnectionStrings__Users") ?? "Host=localhost;Database=traveltracker_users").Options);
 }

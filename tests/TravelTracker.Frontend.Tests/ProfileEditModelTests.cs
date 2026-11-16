@@ -9,19 +9,19 @@ public sealed class ProfileEditModelTests
     [Fact]
     public void MissingInitialUsernameAndEmailStayOptionalWhenAddressChanges()
     {
-        var model = new ProfileEditModel(new SelfUserProfile(Guid.NewGuid(), "traveller", "active", null, null));
+        var model = new ProfileEditModel(new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009001"), "traveller", "active", null, null));
         model.Address = "1 Main Street";
 
         Assert.Empty(Validate(model));
         var body = new UpdateSelfProfileRequest(model.Username, model.Email, model.Address)
-            .ChangedFields(new SelfUserProfile(Guid.NewGuid(), "traveller", "active", null, null));
+            .ChangedFields(new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009002"), "traveller", "active", null, null));
         Assert.Equal(["address"], body.Keys);
     }
 
     [Fact]
     public void ExistingUsernameAndEmailCannotBeCleared()
     {
-        var model = new ProfileEditModel(new SelfUserProfile(Guid.NewGuid(), "traveller", "active", "traveller", "traveller@example.test"));
+        var model = new ProfileEditModel(new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009003"), "traveller", "active", "traveller", "traveller@example.test"));
         model.Username = " ";
         model.Email = " ";
 
@@ -33,7 +33,7 @@ public sealed class ProfileEditModelTests
     [Fact]
     public void InvalidUsernameProducesFieldAssociatedError()
     {
-        var model = new ProfileEditModel(new SelfUserProfile(Guid.NewGuid(), "traveller", "active", "traveller", "traveller@example.test"));
+        var model = new ProfileEditModel(new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009004"), "traveller", "active", "traveller", "traveller@example.test"));
         model.Username = "abc!";
 
         var errors = Validate(model);
@@ -45,7 +45,7 @@ public sealed class ProfileEditModelTests
     [Fact]
     public void UpdateRequestPreservesOmittedValuesAndClearsOnlyAddressExplicitly()
     {
-        var original = new SelfUserProfile(Guid.NewGuid(), "traveller", "active", "traveller", "traveller@example.test", "1 Main St");
+        var original = new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009005"), "traveller", "active", "traveller", "traveller@example.test", "1 Main St");
 
         var fields = new UpdateSelfProfileRequest("traveller", "traveller@example.test", " ").ChangedFields(original);
 
@@ -57,7 +57,7 @@ public sealed class ProfileEditModelTests
     [Fact]
     public void CaseOnlyContactEmailChangeIsDetectedAndIncludedInPatch()
     {
-        var original = new SelfUserProfile(Guid.NewGuid(), "traveller", "active", "traveller", "traveller@example.test");
+        var original = new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009006"), "traveller", "active", "traveller", "traveller@example.test");
         var model = new ProfileEditModel(original) { Email = "Traveller@example.test" };
 
         Assert.True(model.HasChanges);

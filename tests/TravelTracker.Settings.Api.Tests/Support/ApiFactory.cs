@@ -34,7 +34,9 @@ internal sealed class ApiFactory(string? connectionString = null) : WebApplicati
     private HttpClient? discoveryClient;
 
     internal UsersBackchannelHandler? Users { get; private set; }
-    internal DiscoveryBackchannelHandler? Discovery { get; private set; }
+
+    /** Optional write interceptor for relational races; it has no effect on the in-memory provider. */
+    internal RendezvousCommandInterceptor? WriteInterceptor { get; init; }
 
     /**
      * creates a JWT signed by the isolated test key; production still uses real issuer discovery.
@@ -104,14 +106,17 @@ internal sealed class ApiFactory(string? connectionString = null) : WebApplicati
                 services.RemoveAll<IDbContextOptionsConfiguration<SettingsDbContext>>();
                 services.AddDbContextFactory<SettingsDbContext>(options => options.UseInMemoryDatabase(memoryDatabaseName));
             }
+            else if (WriteInterceptor is not null)
+            {
+                services.ConfigureDbContext<SettingsDbContext>(options => options.AddInterceptors(WriteInterceptor));
+            }
 
             services.AddControllers().AddApplicationPart(typeof(FallbackProbeController).Assembly);
             Users = new UsersBackchannelHandler();
             services.AddHttpClient<UsersAccessClient>().ConfigurePrimaryHttpMessageHandler(() => Users);
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
-                Discovery = new DiscoveryBackchannelHandler(signingKey.ExportParameters(false), Issuer);
-                discoveryClient = new HttpClient(Discovery);
+                discoveryClient = new HttpClient(new DiscoveryBackchannelHandler(signingKey.ExportParameters(false), Issuer));
                 options.Backchannel = discoveryClient;
             });
         });

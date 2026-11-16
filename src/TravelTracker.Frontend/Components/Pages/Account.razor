@@ -32,14 +32,21 @@ else if (!signedIn)
         }
         @if (SignedOut == "local")
         {
-            <p role="status">Your TravelTracker session has ended. Provider sign-out could not be completed; sign in again when you're ready.</p>
+            <p role="status">Your TravelTracker session has ended. Provider sign-out could not be completed; sign in again when you’re ready.</p>
         }
         <div class="actions"><button @onclick="SignIn">Sign in</button></div>
     </section>
 }
 else if (profile is null)
 {
-    <Feedback Kind="loadFailureKind" Title="@loadFailureTitle" Retry="RetryLoadAsync">@loadFailure</Feedback>
+    @if (noAccount)
+    {
+        <Feedback Kind="FeedbackKind.Empty" Title="No TravelTracker profile yet">Your sign-in works, but TravelTracker has no profile for it yet. Try again later, or contact support if this continues.</Feedback>
+    }
+    else
+    {
+        <Feedback Kind="loadFailureKind" Title="@loadFailureTitle" Retry="RetryLoadAsync">@loadFailure</Feedback>
+    }
     <form method="post" action="auth/logout" class="profile-signout">
         <AntiforgeryToken />
         <button type="submit" class="secondary">Sign out</button>
@@ -55,6 +62,10 @@ else
         @if (profile.Status == "banned")
         {
             <aside class="profile-notice" role="status"><strong>Read-only profile</strong><p>Your account is read-only. You can view your profile, but changes are unavailable.</p></aside>
+        }
+        else if (profile.Status == "deactivated")
+        {
+            <aside class="profile-notice" role="status"><strong>Account deactivated</strong><p>This account is deactivated, so profile changes are unavailable. Contact support if you believe this is an error.</p></aside>
         }
         else if (!HasScope("users.write"))
         {
@@ -80,7 +91,7 @@ else
                     <div class="profile-field">
                         <label for="profile-username">Username</label>
                         <InputText id="profile-username" @bind-Value="editModel.Username" autocomplete="username" maxlength="32" aria-describedby="profile-username-help" disabled="@(busy || writeDenied)" />
-                        <small id="profile-username-help">3–32 characters: letters, numbers, periods, underscores or hyphens.</small>
+                        <small id="profile-username-help">3 to 32 characters: letters, numbers, periods, underscores or hyphens.</small>
                         <ValidationMessage For="() => editModel.Username" />
                     </div>
                     <div class="profile-field">

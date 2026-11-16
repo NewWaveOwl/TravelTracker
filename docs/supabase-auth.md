@@ -34,9 +34,10 @@ The other services continue to own their databases and enforce private ownership
    needs a Supabase secret key or `service_role` key.
 
 Ordinary confirmed travellers receive `catalogue.read`, `catalogue.write`,
-`users.read`, `users.write`, `settings.read`, `settings.write`, `trips.read` and
-`trips.write`. These permissions enable features, not administrator authority;
-Users still checks live role and standing. An operator can restrict an account by
+`users.read`, `users.write`, `users.admin`, `settings.read`, `settings.write`, `trips.read` and
+`trips.write`. These permissions enable features, not administrator authority; `users.admin`
+only reaches the administrator endpoints, where Users still checks live role and
+standing (and the setup secret for bootstrap). An operator can restrict an account by
 setting `app_metadata.traveltracker_scopes` to an array of these exact strings.
 An empty array grants none. Unknown strings and `users.access` are excluded from
 the traveller list. User-editable `user_metadata` never grants permissions.
@@ -156,7 +157,7 @@ service-account authorization, API 401/403, provider outage and access to an old
 account's data. Run the PostgreSQL relational suites with an isolated database;
 SQL cutover and hook execution need a PostgreSQL/Supabase staging validation.
 
-CI runs `bash scripts/test-supabase-auth-hook.sh` against a fresh disposable
+CI runs `scripts/TestSupabaseAuthHook.sql` (the Supabase access-token hook step in `.github/workflows/ci.yml`) against a fresh disposable
 PostgreSQL database. It checks traveller defaults, service-only access, metadata
 spoofing, scope restrictions, anonymous/privileged-role rejection and execution
 grants. This fixture verifies SQL behavior; live Supabase hook selection and

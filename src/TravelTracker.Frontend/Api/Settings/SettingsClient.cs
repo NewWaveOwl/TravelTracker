@@ -55,7 +55,8 @@ public sealed class SettingsClient(ProtectedClient client)
      */
     static string MessageFor(ApiError failure) => failure.Status switch
     {
-        (int)HttpStatusCode.BadRequest => "Check the highlighted settings. Your edits are kept.",
+        (int)HttpStatusCode.BadRequest or (int)HttpStatusCode.UnprocessableEntity => "Check the highlighted settings. Your edits are kept.",
+        (int)HttpStatusCode.NotFound => "Your settings could not be found. Reload the saved settings, then save again.",
         (int)HttpStatusCode.Forbidden => "Your account or permission does not allow changing settings. Your edits are kept.",
         (int)HttpStatusCode.PreconditionFailed => "These settings changed since you loaded them. Reload the saved settings, review them, then save again.",
         (int)HttpStatusCode.PreconditionRequired => "The settings must be reloaded before saving. Nothing was saved.",
@@ -72,6 +73,7 @@ public sealed class SettingsClient(ProtectedClient client)
     static string ReadMessageFor(ApiError failure) => failure.Status switch
     {
         (int)HttpStatusCode.Forbidden => "Your account or permission does not allow reading these settings.",
+        (int)HttpStatusCode.NotFound => "Your settings could not be found. Try again shortly.",
         >= 500 => "Settings are temporarily unavailable. Try again shortly.",
         null when failure.Kind == FailureKind.Network => "Check your connection and try again.",
         _ => failure.Message,

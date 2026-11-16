@@ -16,17 +16,18 @@ using TravelTracker.Frontend.Api.Users;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Components.Accommodations;
 using TravelTracker.Frontend.Tests.Support;
+using static TravelTracker.Frontend.Tests.Support.JsonResponses;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** Component journeys use authenticated session fixtures and HTTP stubs, not the services' internals. */
+/** component journeys use authenticated session fixtures and HTTP stubs, not the services' internals. */
 public sealed class AccommodationWorkspaceTests : BunitContext
 {
     static readonly Guid Id = Guid.Parse("00000000-0000-0000-0000-000000000421");
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-08T10:00:00Z"));
 
     /**
-     * Connects the component to the real protected client and deterministic Users/catalogue HTTP responses.
+     * connects the component to the real protected client and deterministic Users/catalogue HTTP responses.
      * @param handler Answers the public service requests.
      * @param write Grants catalogue.write when true.
      * @param read Grants catalogue.read when true.
@@ -37,12 +38,11 @@ public sealed class AccommodationWorkspaceTests : BunitContext
     {
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
-        authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10));
         var scopes = new List<string>();
         if (read) scopes.Add("catalogue.read");
         if (usersRead) scopes.Add("users.read");
         if (write) scopes.Add("catalogue.write");
-        ((ClaimsIdentity)authentication.User.Identity!).AddClaim(new Claim(AccessTokenClaims.GrantedScope, string.Join(' ', scopes)));
+        authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10), string.Join(' ', scopes));
         var protectedClient = new ProtectedClient(authentication,
             new ServiceDirectory(new Dictionary<string, string>
             {
@@ -68,8 +68,16 @@ public sealed class AccommodationWorkspaceTests : BunitContext
             return await accommodation(request);
         });
 
-    static HttpResponseMessage Json<T>(T body, HttpStatusCode status = HttpStatusCode.OK) =>
-        new(status) { Content = JsonContent.Create(body) };
+    /**
+     * Wraps a recorder as a trip draft that accepts every selection.
+     * @param record Receives each selected or cleared place.
+     * @return A selection callback that reports acceptance.
+     */
+    static Func<AccommodationDto?, bool> Recording(Action<AccommodationDto?> record) => value =>
+    {
+        record(value);
+        return true;
+    };
 
     [Fact]
     public void SearchThenDetailsSelectsTheServerConfirmedPublicRecord()
@@ -80,7 +88,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
             : Json(new[] { item }))));
         AccommodationDto? chosen = null;
         var page = Render<AccommodationWorkspace>(parameters => parameters.Add(component => component.SelectionChanged,
-            EventCallback.Factory.Create<AccommodationDto?>(this, value => chosen = value)));
+            Recording(value => chosen = value)));
 
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".accommodation-card")));
         page.Find(".accommodation-card button").Click();
@@ -110,7 +118,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         }));
         AccommodationDto? chosen = null;
         var page = Render<AccommodationWorkspace>(parameters => parameters.Add(component => component.SelectionChanged,
-            EventCallback.Factory.Create<AccommodationDto?>(this, value => chosen = value)));
+            Recording(value => chosen = value)));
         page.WaitForAssertion(() => Assert.Contains("No accommodations found", page.Markup));
         Assert.Empty(page.FindAll("#accommodation-visibility"));
         page.Find(".accommodation-heading button").Click();
@@ -140,7 +148,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
     }
 
     [Fact]
-    public void InvalidCoordinatesKeepDraftAndSendNoCreate()
+    public async Task InvalidCoordinatesKeepDraftAndSendNoCreate()
     {
         var writes = 0;
         Configure(Handler(request =>
@@ -154,12 +162,12 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         page.Find("#accommodation-name").Change("Typed lodging");
         page.Find("#accommodation-lat").Change("90.1");
         page.Find("#accommodation-lon").Change("-73");
-        page.Find(".accommodation-modal form").Submit();
+        await page.Find(".accommodation-modal form").SubmitAsync();
 
         Assert.Equal(0, writes);
         Assert.Equal("Typed lodging", page.Find("#accommodation-name").GetAttribute("value"));
         Assert.Equal("true", page.Find("#accommodation-lat").GetAttribute("aria-invalid"));
-        Assert.Contains("latitude from −90 to 90", page.Markup);
+        Assert.Contains("latitude from -90 to 90", page.Markup);
     }
 
     [Fact]
@@ -195,7 +203,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         var selectionChanges = new List<AccommodationDto?>();
         var page = Render<AccommodationWorkspace>(parameters => parameters
             .Add(component => component.SelectedAccommodationId, Id)
-            .Add(component => component.SelectionChanged, EventCallback.Factory.Create<AccommodationDto?>(this, value => selectionChanges.Add(value))));
+            .Add(component => component.SelectionChanged, Recording(value => selectionChanges.Add(value))));
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".accommodation-card")));
         page.Find(".accommodation-card button").Click();
         page.WaitForAssertion(() => Assert.Contains("Saved place selected", page.Markup));
@@ -208,6 +216,23 @@ public sealed class AccommodationWorkspaceTests : BunitContext
     }
 
     [Fact]
+    public void ARefusedSelectionIsNotReportedAsSelected()
+    {
+        var item = new AccommodationDto(Id, "Bay Hotel", "Toronto", 45.5m, -73.5m, "shared");
+        Configure(Handler(request => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith(Id.ToString(), StringComparison.Ordinal)
+            ? Json(item)
+            : Json(new[] { item }))));
+        var page = Render<AccommodationWorkspace>(parameters => parameters.Add(component => component.SelectionChanged, _ => false));
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".accommodation-card")));
+        page.Find(".accommodation-card button").Click();
+        page.WaitForAssertion(() => Assert.Contains("Bay Hotel", page.Find(".accommodation-details").TextContent));
+        page.Find(".accommodation-details button").Click();
+
+        Assert.Contains("was not selected", page.Markup);
+        Assert.DoesNotContain("Saved place selected for this trip draft", page.Markup);
+    }
+
+    [Fact]
     public void ForbiddenSearchClearsCachedResultsAndTripDraftSelection()
     {
         var item = new AccommodationDto(Id, "Bay Hotel", "Toronto", 45.5m, -73.5m, "private");
@@ -217,7 +242,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         Configure(handler);
         AccommodationDto? chosen = null;
         var page = Render<AccommodationWorkspace>(parameters => parameters.Add(component => component.SelectionChanged,
-            EventCallback.Factory.Create<AccommodationDto?>(this, value => chosen = value)));
+            Recording(value => chosen = value)));
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".accommodation-card")));
         page.Find(".accommodation-card button").Click();
         page.WaitForAssertion(() => Assert.Contains("Bay Hotel", page.Find(".accommodation-details").TextContent));
@@ -251,7 +276,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         }));
         AccommodationDto? chosen = null;
         var page = Render<AccommodationWorkspace>(parameters => parameters.Add(component => component.SelectionChanged,
-            EventCallback.Factory.Create<AccommodationDto?>(this, value => chosen = value)));
+            Recording(value => chosen = value)));
         page.WaitForAssertion(() => Assert.Equal(2, page.FindAll(".accommodation-card").Count));
         page.FindAll(".accommodation-card button")[0].Click();
         page.WaitForAssertion(() => Assert.Contains("Bay Hotel", page.Find(".accommodation-details").TextContent));
@@ -323,7 +348,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         }), read: false, usersRead: false);
         AccommodationDto? chosen = null;
         var page = Render<AccommodationWorkspace>(parameters => parameters.Add(component => component.SelectionChanged,
-            EventCallback.Factory.Create<AccommodationDto?>(this, value => chosen = value)));
+            Recording(value => chosen = value)));
         Assert.Contains("Accommodation read access required", page.Markup);
         Assert.Empty(page.FindAll(".accommodation-results"));
         page.Find(".accommodation-heading button").Click();
@@ -366,7 +391,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         Configure(handler);
         AccommodationDto? chosen = null;
         var page = Render<AccommodationWorkspace>(parameters => parameters.Add(component => component.SelectionChanged,
-            EventCallback.Factory.Create<AccommodationDto?>(this, value => chosen = value)));
+            Recording(value => chosen = value)));
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".accommodation-card")));
         page.Find(".accommodation-card button").Click();
         page.WaitForAssertion(() => Assert.Contains("Bay Hotel", page.Find(".accommodation-details").TextContent));
@@ -490,7 +515,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         }));
         AccommodationDto? chosen = null;
         var page = Render<AccommodationWorkspace>(parameters => parameters.Add(component => component.SelectionChanged,
-            EventCallback.Factory.Create<AccommodationDto?>(this, value => chosen = value)));
+            Recording(value => chosen = value)));
         page.WaitForAssertion(() => Assert.Contains("No accommodations found", page.Markup));
         page.Find(".accommodation-heading button").Click();
         page.Find("#accommodation-name").Change("Saved Stay");
@@ -523,7 +548,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         }));
         AccommodationDto? chosen = null;
         var page = Render<AccommodationWorkspace>(parameters => parameters.Add(component => component.SelectionChanged,
-            EventCallback.Factory.Create<AccommodationDto?>(this, value => chosen = value)));
+            Recording(value => chosen = value)));
         page.WaitForAssertion(() => Assert.Contains("No accommodations found", page.Markup));
         page.Find(".accommodation-heading button").Click();
         page.Find("#accommodation-name").Change("Saved Stay");

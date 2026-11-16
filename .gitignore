@@ -430,3 +430,8 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# TravelTracker CI and smoke outputs
+test-results/
+smoke-logs/
+*.health

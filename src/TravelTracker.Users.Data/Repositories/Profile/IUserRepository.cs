@@ -44,6 +44,7 @@ public interface IUserRepository
      * @param cancellationToken Cancels the read or save.
      * @return Saved profile, unchanged inactive account, or null when absent.
      * @throws DbUpdateConcurrencyException when a concurrent update changed the loaded record.
+     * @throws UserProfileUsernameConflictException when the normalized username belongs to another account.
      */
     Task<UserAccount?> UpdateProfileAsync(
         ProviderIdentity identity,

@@ -8,7 +8,7 @@
 
 Keep each service's database ownership separate. Domain models remain free of EF Core/Npgsql dependencies; provider configuration, mappings and migrations belong in Data and API composition. Generate and verify migrations against PostgreSQL, and use isolated PostgreSQL databases for relational persistence tests. EF InMemory is the default test-only provider for application/domain/HTTP/security tests; run `dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!=PostgreSQL"` without PostgreSQL. Tests marked `Category=PostgreSQL` retain real constraints, migrations, locking, rollback and restart checks with `TRAVELTRACKER_TEST_POSTGRES` (CREATEDB). EF InMemory and SQLite do not substitute for that relational evidence. Production remains PostgreSQL; no runtime in-memory switch is added. Connection strings and credentials come from environment-specific configuration and must not be committed or logged.
 
-PostgreSQL is implemented for the independent Attractions, Accommodations, Users and Transport services. Transport/Route Points share their Transport service database; see [Transport service](transport-service.md). The existing SQL schema remains a historical foundation, separate from each service's migrations. See [Npgsql's provider documentation](https://www.npgsql.org/efcore/).
+PostgreSQL is implemented for the independent Attractions, Accommodations, Users, Transport, Settings and Trips services. Transport/Route Points share their Transport service database; see [Transport service](transport-service.md). The existing SQL schema remains a historical foundation, separate from each service's migrations. See [Npgsql's provider documentation](https://www.npgsql.org/efcore/).
 
 ## Schema
 
@@ -24,13 +24,13 @@ public account IDs and never merges accounts based on matching email addresses.
 
 `TravelTracker.Users.Data` references its own Domain and EF Core/Npgsql only. Its committed migrations create account, permanent bootstrap-consumption and administrator-audit records. Public IDs are application-issued UUIDv7 values. Role changes and bootstrap share a transaction advisory lock, recheck live actor/target standing and roles, protect the last active administrator, and save the role plus actor/target/before/after/reason audit atomically. Listing also checks live administrator authority within the database transaction. First-use provisioning creates an active traveller and preserves existing standing and roles. The account row stores editable profile fields separately from verified provider email. A filtered unique index enforces case-insensitive username uniqueness. Profile writes check active standing and use an optimistic concurrency token.
 
-Use a separate `ConnectionStrings:Users`; the Attractions service consumes the authenticated HTTPS access contract and never reads Users tables. Production uses PostgreSQL. Users HTTP tests use an isolated test repository; Marked PostgreSQL tests exercise migrations, profile persistence, concurrency, permanent bootstrap consumption and audit rollback against disposable databases.
+Use a separate `ConnectionStrings:Users`; the Attractions service consumes the authenticated HTTPS access contract and never reads Users tables. Production uses PostgreSQL. Users HTTP tests use an isolated test repository; marked PostgreSQL tests exercise migrations, profile persistence, concurrency, permanent bootstrap consumption and audit rollback against disposable databases.
 
 ## Accommodations persistence
 
 `TravelTracker.Accommodations.Data` references its service-owned Domain and EF Core/Npgsql. Its initial migration creates the `Accommodations` catalogue table with a UUID primary key, name, address, decimal coordinates, validated owner issuer/subject and `IsShared`. Database checks enforce nonblank names, coordinate ranges and nonblank owner identity. The repository applies private/shared visibility predicates in PostgreSQL before materializing search or detail results. The Accommodations database is separate from the historical shared schema and every other service database. Configure `ConnectionStrings:Accommodations`; migrations are opt-in at startup through `Database:ApplyMigrations`.
 
-Enums: `TransportMode` (`car`, `bus`, `train`, `pedestrian`, `plane`), `TripType` (`one_way`, `round_trip`).
+Transport mode codes: `car`, `bus`, `train`, `pedestrian`, `bike`, `plane` (`TransportMode` is a class, not an enum). Historical `TripType` codes: `one_way`, `round_trip`; no `TripType` is declared in source now.
 
 | Table | Columns |
 |---|---|
@@ -39,7 +39,7 @@ Enums: `TransportMode` (`car`, `bus`, `train`, `pedestrian`, `plane`), `TripType
 | `Attractions` | `Id` bigint PK (app-issued), `Uuid` unique, `Name`, `Address` |
 | `Trips` | `Id` bigint PK (app-issued), `Uuid` unique, `UserId` FK -> `Users`, `Transport`, `Type`, `DeparturePlaceId` FK -> `Accommodations`, `DestinationPlaceId` FK -> `Attractions` |
 
-No tables yet for `TripLegs`, `Stays`, `Visits`, `TicketImports`, route points, scheduled transport routes or intermediate stops.
+No historical tables yet for `Stays`, `Visits`, `TicketImports`, scheduled transport routes or intermediate stops. `TripLegs` and route points are implemented in the Trips and Transport service databases.
 
 Note: the historical `Trips` row above describes the legacy shape. The independent Trips service (`TravelTracker.Trips.Data`) stores trips in a `Trips` table with owner columns and a `TripLegs` table with ordered legs and snapshot columns. It creates or replaces each owned trip and its legs in one PostgreSQL transaction. See [Trips service](trips-service.md).
 
@@ -47,16 +47,14 @@ Note: the historical `Trips` row above describes the legacy shape. The independe
 
 | Preserved interface | Accessibility / ID type | Declared methods |
 |---|---|---|
-| [IUserRepository](../src/TravelTracker.Data/Repositories/IUserRepository.cs) | internal / `Guid` | `GetByIdAsync`, `GetByEmailAsync`, `GetAllAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`, `ChangeStatusAsync` |
-| [IAccomadationRepository](../src/TravelTracker.Data/Repositories/IAccomadationRepository.cs) | internal / `Guid` | `GetByIdAsync`, `GetAllAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync` |
 | [IAccommodationRepository](../src/TravelTracker.Accommodations.Data/Repositories/IAccommodationRepository.cs) | public / `Guid` | `GetVisibleAsync`, `GetVisibleByIdAsync`, `AddAsync` |
-| [IAttractionRepository](../src/TravelTracker.Attractions.Data/Repositories/IAttractionRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync` |
+| [IAttractionRepository](../src/TravelTracker.Attractions.Data/Repositories/IAttractionRepository.cs) | public / `Guid` | `GetVisibleAsync`, `BeginWriteAsync`, `GetAllAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync` |
 | [ITransportModeRepository](../src/TravelTracker.Transport.Data/Repositories/ITransportModeRepository.cs) | public / `Guid` | `GetAllAsync`, `GetByIdAsync`, `GetByCodeAsync`, `AddAsync`, `UpdateAsync` |
-| [ITripRepository](../src/TravelTracker.Trips.Data/Repositories/ITripRepository.cs) (Trips.Data) | public / `Guid` (public id) | owner-scoped `AddAsync(trip, issuer, subject)` and `GetOwnedByIdAsync`; history, update and delete are not in the contract yet |
+| [ITripRepository](../src/TravelTracker.Trips.Data/Repositories/ITripRepository.cs) (Trips.Data) | public / `Guid` (public id) | owner-scoped `AddAsync(trip, issuer, subject)`, `ReplaceOwnedAsync`, `GetOwnedRevisionAsync` and `GetOwnedByIdAsync`; history and delete are not in the contract yet |
 
-`IUserRepository` and `IAccomadationRepository` are `internal`, no public path out of `TravelTracker.Data` for them yet.
+The legacy `IUserRepository` and `IAccomadationRepository` were internal and have been removed from source; accounts are persisted by `TravelTracker.Users.Data`.
 
-The existing `IAccomadationRepository`/`Accomodation` spellings and all signatures are kept. User/accommodation create/update methods return the saved entity; attraction/transport add/update, trip replace-legs methods return task completion. Trip referenced types now have empty partial declarations for compilation; their data contracts and persistence remain unfinished.
+Attraction and transport add/update methods return task completion, and the trip replace method returns a `TripReplacementStatus`. Trip referenced types now have empty partial declarations for compilation; their data contracts and persistence remain unfinished.
 
 ## Ownership
 
