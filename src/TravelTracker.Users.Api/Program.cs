@@ -25,7 +25,7 @@ public partial class UsersProgram
         builder.Services.AddApiBearerAuthentication(builder.Configuration);
         builder.Services.AddOptions<AuthorizationOptions>().Configure<IOptions<BearerSettings>>((options, settings) =>
         {
-            foreach (var scope in new[] { "users.read", "users.write", "users.access" })
+            foreach (var scope in new[] { "users.read", "users.write", "users.access", "users.admin" })
                 options.AddPolicy(scope, policy => policy.RequireAuthenticatedUser().RequireAssertion(context =>
                     ScopePolicies.HasScope(context.User, settings.Value.ScopeClaimType, scope) &&
                     (scope != "users.access" || builder.Configuration.GetSection("UsersAccess:AllowedServiceSubjects")

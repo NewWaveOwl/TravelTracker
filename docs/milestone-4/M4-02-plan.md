@@ -3,7 +3,7 @@
 **Issue:** audit and enforce role, scope, standing and owner checks at protected API boundaries.
 **Branch:** `privileged-API-access-policies`
 **Dependency:** blocked by #97 (validated identity contract), as recorded in the issue.
-**Status:** research and proposed authorization matrix; waiting for developer approval before implementation.
+**Status:** matrix approved by the developer on 2026-11-16. Stage 1 (Users administrator scope) is ready for review/commit; stage 2 (Transport live standing and role checks) has not started.
 
 ## Goal and scope
 
@@ -42,10 +42,10 @@ Scope is necessary but never sufficient by itself. “Active” and “banned”
 | Users: `/internal/users/identity` and `/internal/users/{id}/access` | `users.access` plus allowlisted validated service subject | Authorized backend service only | Resolve/check supplied end-user `(iss, sub)` only when supplied by the allowlisted service after its own token validation; never provision from this lookup. | Non-allowlisted/missing scope `403`; unavailable lookup `503`; unknown identity `404` |
 | Users: legacy `/api/v1/users/access` | Separate legacy service bearer credential (anonymous at ASP.NET policy layer) | Configured service credential only | Service-supplied identity is trusted only at this explicitly documented backend boundary; no traveler token or public API key. | Invalid credential `401`; invalid request `400`; must not expose privileged account fields |
 
-### Decisions needing approval with this plan
+### Approved policy decisions
 
-1. **Dedicated Users administrator scope:** approve `users.admin` for account listing and role changes, replacing the current `catalogue.read` requirement. This prevents catalogue readers from inheriting account-administration permission. It requires a corresponding trusted Supabase hook grant for administrator tokens and docs/configuration updates, but no UI changes.
-2. **Transport role and standing policy:** approve live Users checks on Transport/Route Points reads and writes, with active-only reads and administrator-only writes as the shared-catalogue interpretation of `docs/design.md`. Current controllers enforce scopes but do not resolve live standing or role.
+1. **Dedicated Users administrator scope:** use `users.admin` for account listing and role changes, replacing the current `catalogue.read` requirement. This prevents catalogue readers from inheriting account-administration permission. Trusted Supabase hook grants are supported for administrators; ordinary traveller defaults exclude this scope. There are no UI changes.
+2. **Transport role and standing policy:** add live Users checks on Transport/Route Points reads and writes, with active-only reads and active-administrator-only writes as the shared-catalogue interpretation of `docs/design.md`. Current controllers enforce scopes but do not resolve live standing or role.
 
 If either policy is not approved, keep the existing behavior for that decision and document the exception explicitly; do not infer the missing rule during implementation.
 

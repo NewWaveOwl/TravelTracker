@@ -3,7 +3,7 @@ using System.Security.Claims;
 namespace TravelTracker.Api.Authentication;
 
 /**
- * Names the separate permissions used by the catalogue and Trips APIs.
+ * Names the separate permissions used by service APIs.
  */
 public static class ScopePolicies
 {
@@ -13,6 +13,7 @@ public static class ScopePolicies
     public const string SettingsWrite = "settings.write";
     public const string TripsRead = "trips.read";
     public const string TripsWrite = "trips.write";
+    public const string UsersAdmin = "users.admin";
 
     /**
      * Matches exact, case-sensitive OAuth scopes in space-separated or repeated claims.
