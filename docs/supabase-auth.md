@@ -34,9 +34,10 @@ The other services continue to own their databases and enforce private ownership
    needs a Supabase secret key or `service_role` key.
 
 Ordinary confirmed travellers receive `catalogue.read`, `catalogue.write`,
-`users.read`, `users.write`, `settings.read`, `settings.write`, `trips.read` and
-`trips.write`. These permissions enable features, not administrator authority;
-Users still checks live role and standing. An operator can restrict an account by
+`users.read`, `users.write`, `users.admin`, `settings.read`, `settings.write`, `trips.read` and
+`trips.write`. These permissions enable features, not administrator authority; `users.admin`
+only reaches the administrator endpoints, where Users still checks live role and
+standing (and the setup secret for bootstrap). An operator can restrict an account by
 setting `app_metadata.traveltracker_scopes` to an array of these exact strings.
 An empty array grants none. Unknown strings and `users.access` are excluded from
 the traveller list. User-editable `user_metadata` never grants permissions.

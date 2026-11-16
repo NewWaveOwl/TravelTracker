@@ -30,7 +30,7 @@ DECLARE
 BEGIN
  result := public.traveltracker_access_token_hook(event);
  scopes := result->'claims'->>'scope';
- IF scopes LIKE '%users.access%' OR scopes NOT LIKE '%trips.write%'
+ IF scopes LIKE '%users.access%' OR scopes NOT LIKE '%trips.write%' OR scopes NOT LIKE '%users.admin%'
     OR result->'claims'->'user_metadata' IS DISTINCT FROM event->'claims'->'user_metadata' THEN
    RAISE EXCEPTION 'Traveller defaults or untrusted metadata boundary failed';
  END IF;
