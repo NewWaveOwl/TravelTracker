@@ -155,6 +155,51 @@ public sealed class TripReplacementTests
         Assert.Equal(winner.Headers.ETag, reopened.Headers.ETag);
     }
 
+    /**
+     * A replacement the old rules refused is saved for the owner, and another caller still sees the trip as absent.
+     */
+    [Fact]
+    public async Task Replace_FormerlyRejectedComposition_SavesForOwnerAndHidesFromOthers()
+    {
+        using var factory = new TripsApiFactory();
+        TripTestData.SeedAccounts(factory.Upstream);
+        TripTestData.SeedHealthyCatalogue(factory.Upstream);
+        var trip = TripTestData.SeedTrip(factory, "alice");
+        using var owner = factory.CreateClientFor("alice");
+        using var other = factory.CreateClientFor("bob");
+        owner.DefaultRequestHeaders.IfMatch.ParseAdd("\"1\"");
+        other.DefaultRequestHeaders.IfMatch.ParseAdd("\"1\"");
+        var path = $"/api/v1/trips/{trip.TripId:D}";
+        var body = new
+        {
+            name = "Hotel to hotel",
+            timeZone = "Europe/Paris",
+            start = TripTestData.Start,
+            end = TripTestData.Start.AddHours(4),
+            isRoundTrip = true,
+            legs = new object[]
+            {
+                new
+                {
+                    sequence = 1,
+                    from = new { placeId = TripTestData.Hotel, type = "accommodation" },
+                    to = new { placeId = TripTestData.Hotel, type = "accommodation" },
+                    transportModeId = TripTestData.Train,
+                    departure = TripTestData.Start.AddHours(1),
+                    arrival = TripTestData.Start.AddHours(2)
+                }
+            }
+        };
+
+        using var saved = await owner.PutAsJsonAsync(path, body);
+        using var denied = await other.PutAsJsonAsync(path, body);
+
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+        var stored = await factory.Repository.GetOwnedByIdAsync(trip.TripId, TripsApiFactory.Issuer, "alice");
+        Assert.Equal("Hotel to hotel", stored!.Name);
+    }
+
     [Theory]
     [InlineData(null, HttpStatusCode.Unauthorized)]
     [InlineData("trips.read catalogue.read", HttpStatusCode.Forbidden)]
