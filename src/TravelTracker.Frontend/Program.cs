@@ -43,6 +43,7 @@ builder.Services.AddScoped<AdminAccessState>();
 builder.Services.AddScoped<SettingsClient>();
 builder.Services.AddScoped<RoutingClient>();
 builder.Services.AddScoped<UserPreferences>();
+builder.Services.AddScoped<MapQualityPreference>();
 
 var usersConfigured = serviceUrls.ContainsKey("Users");
 builder.Services.AddSingleton(new AuthSetup(usersConfigured));
