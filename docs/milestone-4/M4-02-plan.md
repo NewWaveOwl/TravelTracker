@@ -3,7 +3,15 @@
 **Issue:** audit and enforce role, scope, standing and owner checks at protected API boundaries.
 **Branch:** `privileged-API-access-policies`
 **Dependency:** blocked by #97 (validated identity contract), as recorded in the issue.
-**Status:** matrix approved by the developer on 2026-11-16. Stages 1 (Users administrator scope), 2 (Transport live standing and role checks), 3 (Attractions authorization audit), 4 (Accommodations authorization audit), 5 (Settings authorization audit), and 6 (Trips authorization audit) are committed. Stage 7 (Users authorization audit) found no production gap and adds direct HTTP coverage for the `users.access` identity-resolution boundary, including allowlisting, no provisioning, minimal public ID response, and safe storage outage behavior. The Users API and test assemblies compile after offline restore with NuGet audit disabled; VSTest still cannot connect to the testhost within 90 seconds, so no tests executed. The per-API audit is complete; final cross-service validation remains pending the test runner issue. Pause here for review/commit.
+**Status:** matrix approved by the developer on 2026-11-16. All seven API audit stages are committed. The per-API audit is complete; final test validation is blocked by VSTest failing to connect to testhost. See the validation record below.
+
+## Final validation record
+
+- Restore: `dotnet restore TravelTracker.slnx --disable-parallel -m:1 -p:NuGetAudit=false --ignore-failed-sources` succeeded; all projects were up to date. NuGet audit was disabled because this environment could not reach the vulnerability-data feed.
+- Build: `dotnet build TravelTracker.slnx --configuration Release --no-restore -m:1 -p:NuGetAudit=false` succeeded with 0 warnings and 0 errors (6m 13s).
+- Application tests: `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL" -m:1 -p:NuGetAudit=false` was attempted with a 90-second testhost connection timeout. VSTest aborted `TravelTracker.Accommodations.Api.Tests` and `TravelTracker.Accommodations.Data.Tests` because it could not connect to their testhost processes. No test cases completed and no pass/fail counts were produced; the run was stopped after the same failure repeated.
+- PostgreSQL tests were not run because `TRAVELTRACKER_TEST_POSTGRES` is not configured in this environment.
+- The Attractions test attempt exited 1 during restore/test setup without diagnostics; no tests ran. The Accommodations, Settings, Trips, and Users test projects compiled with one worker, but each testhost timed out before cases ran. The Transport API build passed with one MSBuild worker, and the Transport test project compiled before its testhost timed out. Scoped `git diff --check` passed at each audit checkpoint.
 
 ## Goal and scope
 
