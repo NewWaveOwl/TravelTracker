@@ -5,6 +5,7 @@ using TravelTracker.Frontend.Api.Settings;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Components.Shared;
 using TravelTracker.Frontend.Features.Settings;
+using TravelTracker.Frontend.Features.Trips;
 using TravelTracker.Frontend.Services;
 
 namespace TravelTracker.Frontend.Components.Pages;
@@ -28,8 +29,11 @@ public partial class Settings : IDisposable
     [Inject] SessionRegistry Sessions { get; set; } = default!;
     [Inject] TimeProvider Clock { get; set; } = default!;
     [Inject] ILogger<Settings> Logger { get; set; } = default!;
+    [Inject] MapQualityPreference MapQualityPreferences { get; set; } = default!;
 
     SettingsDraft draft = new();
+    string mapQuality = MapQuality.Automatic;
+    string? mapQualityNotice;
     SettingsDto? saved;
     string? etag;
     IReadOnlyDictionary<string, string[]> errors = new Dictionary<string, string[]>();
@@ -76,13 +80,31 @@ public partial class Settings : IDisposable
         else loaded = true;
     }
 
-    protected override async Task OnAfterRenderAsync(bool _firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            mapQuality = await MapQualityPreferences.GetAsync();
+            StateHasChanged();
+        }
         if (focusError)
         {
             focusError = false;
             await errorSummary.FocusAsync();
         }
+    }
+
+    /**
+     * saves the device-only map quality choice in this browser; it never touches the account settings.
+     * @param change The select change carrying the chosen quality value.
+     */
+    async Task SaveMapQualityAsync(ChangeEventArgs change)
+    {
+        if (change.Value is not string choice || !MapQuality.Choices.Contains(choice)) return;
+
+        var saved = await MapQualityPreferences.SetAsync(choice);
+        if (saved) mapQuality = choice;
+        mapQualityNotice = saved ? "Map quality saved in this browser." : "Map quality could not be saved in this browser.";
     }
 
     /**
