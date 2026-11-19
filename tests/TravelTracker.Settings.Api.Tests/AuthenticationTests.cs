@@ -26,6 +26,7 @@ public sealed class AuthenticationTests
         using var response = await client.GetAsync("/api/v1/settings");
 
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        if (status != 200) Assert.Equal(0, factory.Users!.Calls);
     }
 
     [Theory]
@@ -43,6 +44,7 @@ public sealed class AuthenticationTests
         using var response = await client.PutSettingsAsync(ValidPreferences(), "\"0\"");
 
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        if (status != 200) Assert.Equal(0, factory.Users!.Calls);
     }
 
     [Theory]

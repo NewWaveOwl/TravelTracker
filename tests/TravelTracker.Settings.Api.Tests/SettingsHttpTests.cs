@@ -151,6 +151,8 @@ public sealed class SettingsHttpTests
     [InlineData("ownerSubject")]
     [InlineData("ownerIssuer")]
     [InlineData("subject")]
+    [InlineData("role")]
+    [InlineData("status")]
     public async Task Put_IdentityFieldInBody_IsRejectedAndSavesNothing(string field)
     {
         using var factory = new ApiFactory();
@@ -241,6 +243,21 @@ public sealed class SettingsHttpTests
     }
 
     [Fact]
+    public async Task UnknownAccount_IsForbiddenForReadAndWrite()
+    {
+        using var factory = new ApiFactory();
+        using var unknown = factory.CreateClientFor("unknown");
+        factory.Users!.UnknownSubject = "unknown";
+
+        using var read = await unknown.GetAsync("/api/v1/settings");
+        using var write = await unknown.PutAsJsonAsync("/api/v1/settings", ValidPreferences());
+
+        Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, write.StatusCode);
+        Assert.Equal(2, factory.Users.Calls);
+    }
+
+    [Fact]
     public async Task UsersUnavailable_FailsProtectedOperationsClosed()
     {
         using var factory = new ApiFactory();
@@ -253,6 +270,23 @@ public sealed class SettingsHttpTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, read.StatusCode);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, write.StatusCode);
         factory.Users.Unavailable = false;
+        using var recovered = await client.GetAsync("/api/v1/settings");
+        AssertPreferences(await recovered.Content.ReadFromJsonAsync<JsonElement>(), DefaultPreferences());
+    }
+
+    [Fact]
+    public async Task MalformedUsersStanding_FailsProtectedOperationsClosedWithoutSaving()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClientFor("alice");
+        factory.Users!.MalformedStandingResponse = true;
+
+        using var read = await client.GetAsync("/api/v1/settings");
+        using var write = await client.PutSettingsAsync(ValidPreferences());
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, read.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, write.StatusCode);
+        factory.Users.MalformedStandingResponse = false;
         using var recovered = await client.GetAsync("/api/v1/settings");
         AssertPreferences(await recovered.Content.ReadFromJsonAsync<JsonElement>(), DefaultPreferences());
     }
