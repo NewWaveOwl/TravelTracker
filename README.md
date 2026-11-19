@@ -168,10 +168,10 @@ for the separate image-size and routing/tunnel failures.
 
 ### Initialize a new Supabase project (maintainer)
 
-Create the service databases with [the bootstrap SQL](src/Database/supabase-bootstrap.sql), using the project's default `postgres` database and a role with `CREATEDB`. With PostgreSQL client tools installed:
+Create the service databases with [the bootstrap SQL](src/Database/bootstrap.sql), using the project's default `postgres` database and a role with `CREATEDB`. With PostgreSQL client tools installed:
 
 ```sh
-psql -X -W "host=your-region.pooler.supabase.com port=5432 user=postgres.yourprojectref dbname=postgres sslmode=verify-full sslrootcert='/path/to/supabase-ca.crt'" -f src/Database/supabase-bootstrap.sql
+psql -X -W "host=your-region.pooler.supabase.com port=5432 user=postgres.yourprojectref dbname=postgres sslmode=verify-full sslrootcert='/path/to/supabase-ca.crt'" -f src/Database/bootstrap.sql
 ```
 
 Run `dotnet run --file scripts/StartSupabaseDev.cs -- --apply-migrations` for initial schema setup or new EF migrations. A maintainer must use a migration-capable database role. Teammates use their assigned runtime role for normal development. Never recreate the existing shared databases to resolve an authentication error.

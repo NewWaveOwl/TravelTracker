@@ -61,21 +61,29 @@ try
         ?? Path.Combine(repo, ".traveltracker-launch.json"));
     var config = LoadConfiguration(configPath);
     var interactive = !checkOnly && !Console.IsInputRedirected;
-    var (poolerHost, connectionUser) = ParseConnection(Setting(config, "PoolerHost", null,
-        "Supabase > Connect > Direct > Session pooler: paste Host or connection URI (input hidden)",
-        interactive, hidden: true, cancellationToken: shutdown.Token));
-    config["PoolerHost"] = poolerHost;
-    if (connectionUser is not null)
-        config["DatabaseUser"] = connectionUser;
-    var databaseUser = Setting(config, "DatabaseUser", null,
-        "Supabase Session pooler User (include the .project-reference suffix)", interactive);
-    if (!Regex.IsMatch(databaseUser, @"\A[a-z0-9_]+\.[a-z0-9]+\z"))
-        throw new LaunchConfigurationException("DatabaseUser must be the Session pooler username including its .project-reference suffix.");
-    var rootCertificate = Path.GetFullPath(Setting(config, "RootCertificate", null,
-        "Supabase root certificate file path on THIS machine (download from Database Settings > SSL)", interactive).Trim('"', '\''));
-    if (!File.Exists(rootCertificate))
-        throw new LaunchConfigurationException("RootCertificate file does not exist on this machine. Run with --setup to correct its path.");
-    config["RootCertificate"] = rootCertificate;
+    // any raw postgres server works: set TRAVELTRACKER_DATABASE to an Npgsql connection string (see scripts/StartLocalDb.cs) to skip the Supabase pooler prompts.
+    var rawDatabase = Environment.GetEnvironmentVariable("TRAVELTRACKER_DATABASE");
+    string? poolerHost = null, databaseUser = null, rootCertificate = null;
+    if (rawDatabase is null)
+    {
+        (poolerHost, var connectionUser) = ParseConnection(Setting(config, "PoolerHost", null,
+            "Supabase > Connect > Direct > Session pooler: paste Host or connection URI (input hidden)",
+            interactive, hidden: true, cancellationToken: shutdown.Token));
+        config["PoolerHost"] = poolerHost;
+        if (connectionUser is not null)
+            config["DatabaseUser"] = connectionUser;
+        databaseUser = Setting(config, "DatabaseUser", null,
+            "Supabase Session pooler User (include the .project-reference suffix)", interactive);
+        if (!Regex.IsMatch(databaseUser, @"\A[a-z0-9_]+\.[a-z0-9]+\z"))
+            throw new LaunchConfigurationException("DatabaseUser must be the Session pooler username including its .project-reference suffix.");
+        rootCertificate = Path.GetFullPath(Setting(config, "RootCertificate", null,
+            "Supabase root certificate file path on THIS machine (download from Database Settings > SSL)", interactive).Trim('"', '\''));
+        if (!File.Exists(rootCertificate))
+            throw new LaunchConfigurationException("RootCertificate file does not exist on this machine. Run with --setup to correct its path.");
+        config["RootCertificate"] = rootCertificate;
+    }
+    else
+        Console.WriteLine("Using the database from TRAVELTRACKER_DATABASE; Supabase pooler settings are skipped.");
     var supabase = ParseSupabaseUrl(Setting(config, "SupabaseUrl", "Supabase__Url",
         "Supabase > Project Settings > API: Project URL (https://project.supabase.co)", interactive));
     config["SupabaseUrl"] = supabase.AbsoluteUri.TrimEnd('/');
@@ -108,12 +116,14 @@ try
     await RunDotnetAsync(repo, ["build", solution, "--configuration", "Debug"], "TravelTracker build failed.", shutdown.Token);
 
     var (token, subject, expiry) = await GetServiceTokenAsync(supabase, publicKey, serviceEmail, shutdown.Token);
-    var connection = new DbConnectionStringBuilder
-    {
-        ["Host"] = poolerHost, ["Port"] = 5432, ["Username"] = databaseUser,
-        ["SSL Mode"] = "VerifyFull", ["Root Certificate"] = rootCertificate, ["Maximum Pool Size"] = 5,
-        ["Password"] = ReadSecret("Supabase database password", shutdown.Token)
-    };
+    var connection = rawDatabase is not null
+        ? new DbConnectionStringBuilder { ConnectionString = rawDatabase }
+        : new DbConnectionStringBuilder
+        {
+            ["Host"] = poolerHost, ["Port"] = 5432, ["Username"] = databaseUser,
+            ["SSL Mode"] = "VerifyFull", ["Root Certificate"] = rootCertificate, ["Maximum Pool Size"] = 5,
+            ["Password"] = ReadSecret("Supabase database password", shutdown.Token)
+        };
 
     using var probe = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false })
     {
