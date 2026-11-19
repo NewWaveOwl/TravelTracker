@@ -40,17 +40,16 @@ public sealed class TokenIssuer(IConfiguration configuration, TimeProvider timeP
      * @return The token, or null when the account is not active.
      */
     public TokenResponse? ForAccount(UserAccount account) => account.Status != UserStatus.Active ? null
-        : Issue(account.ProviderIdentity.Subject, string.Join(' ', TravellerScopes));
+        : Issue(account.ProviderIdentity.Subject, string.Join(' ', TravellerScopes), configuration.GetValue("Authentication:Issuer:LifetimeMinutes", 60));
 
     /**
      * Issues the backend-only token that carries users.access and nothing else.
      * @return The service token.
      */
-    public TokenResponse ForService() => Issue(ServiceSubject, "users.access");
+    public TokenResponse ForService() => Issue(ServiceSubject, "users.access", configuration.GetValue("Authentication:Issuer:ServiceLifetimeMinutes", 60));
 
-    private TokenResponse Issue(string subject, string scope)
+    private TokenResponse Issue(string subject, string scope, int minutes)
     {
-        var minutes = configuration.GetValue("Authentication:Issuer:LifetimeMinutes", 60);
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
         {

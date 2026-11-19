@@ -89,7 +89,9 @@ public sealed class PasswordAuthTests : IDisposable
         request.Headers.Add("Authorization", "Bearer " + UsersApiFactory.ServiceToken);
         var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("users.access", (await Body(response)).GetProperty("scope").GetString());
+        var body = await Body(response);
+        Assert.Equal("users.access", body.GetProperty("scope").GetString());
+        Assert.Equal(3600, body.GetProperty("expiresIn").GetInt32());
     }
 
     [Fact]

@@ -51,7 +51,7 @@ jobs:
         run: dotnet run --file scripts/SmokeHosts.cs
       - name: Bootstrap and migrate the six service databases
         env:
-          SMOKE_LOGS: smoke-logs/supabase-layout
+          SMOKE_LOGS: smoke-logs/migrated
           SMOKE_POSTGRES: Host=127.0.0.1;Port=5432;Username=postgres
         run: |
           psql -X -h 127.0.0.1 -U postgres -d postgres -f src/Database/bootstrap.sql
@@ -66,17 +66,6 @@ jobs:
         run: dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --filter "Category!=PostgreSQL" --logger "trx;LogFilePrefix=application" --results-directory test-results
       - name: PostgreSQL relational tests
         run: dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --filter "Category=PostgreSQL" --logger "trx;LogFilePrefix=postgresql" --results-directory test-results
-      - name: Supabase access-token hook permissions (disposable database)
-        env:
-          PGHOST: 127.0.0.1
-          PGPORT: 5432
-          PGUSER: postgres
-        # a fresh disposable database per run; never point this at the shared Supabase project.
-        run: |
-          database="traveltracker_auth_hook_test_${RANDOM}_$$"
-          createdb "$database"
-          trap 'dropdb --if-exists "$database"' EXIT
-          psql -X -v ON_ERROR_STOP=1 -d "$database" -f scripts/TestSupabaseAuthHook.sql
       # publish results even when tests fail so reviewers can inspect them
       - uses: actions/upload-artifact@v4
         if: always()

@@ -1,11 +1,6 @@
 # First administrator setup
 
-**Current provider: Supabase Auth.** Use [Supabase setup and identity cutover](supabase-auth.md).
-Set `Bootstrap:Issuer` to the new `/auth/v1` issuer; verified email is fetched from
-the trusted Supabase user endpoint. Application administrator roles remain in
-Users. The Auth0-specific setup and live evidence below are historical; they do
-not establish a completed Supabase cutover. A migrated administrator keeps its
-public account ID, role and durable bootstrap marker and must not be re-created.
+**Current identity: built-in password accounts** (see [API authentication](authentication.md)). Register the account that should become the administrator, set `Bootstrap:Email` to its email and `Bootstrap:Issuer` to the configured `Authentication:Bearer:Issuer`, then complete the setup action below. The Users API finds the account registered under `Bootstrap:Email` and requires the token to belong to it; the setup secret is the proof of ownership, since emails are not verified. The Auth0, OIDC and Supabase details further down are historical. An existing administrator keeps its public account ID, role and durable bootstrap marker and must not be re-created.
 
 Owner explicitly approved implementing a one-time first-administrator setup after requesting promotion of a named account. New Users Domain/Data/Api projects and tests under tests/TravelTracker.Users.Tests are assigned to the corresponding layer agents; frontend and solution wiring are handled by the coordinating agent.
 

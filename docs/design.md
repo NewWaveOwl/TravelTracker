@@ -48,7 +48,7 @@ The planned backend has six logical services. Each is intended to own its data a
 
 ## 3. Accounts and access
 
-TravelTracker uses **Supabase Auth** for email/password authentication (owner decision, 2026-11-12, replacing Auth0). The Blazor server sends sign-in requests to Supabase and forwards validated access tokens to the APIs. Supabase manages login credentials and identities; TravelTracker's Users service retains profiles, roles, account standing and audit history. Interactive sign-in depends on Supabase connectivity. Existing accounts and private ownership require the explicit [identity cutover](supabase-auth.md); matching email addresses never silently merge accounts. Auth0 remains an explicit compatibility path during migration.
+TravelTracker has built-in email and password accounts. The Users service checks passwords against its own PostgreSQL database and issues short-lived signed access tokens; the Blazor server signs travellers in through it and forwards the token to the APIs, which verify it with a shared public key. There is no email confirmation or password reset. The Users service also keeps profiles, roles, account standing and audit history. See [API authentication](authentication.md).
 
 Every account is a traveller or an administrator, and is active, banned or deactivated.
 

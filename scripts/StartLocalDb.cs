@@ -87,7 +87,7 @@ if (bootstrapped.Code != 0)
 
 Console.WriteLine("INFO service databases are ready");
 Console.WriteLine($"TRAVELTRACKER_DATABASE=\"{connectionString}\"");
-Console.WriteLine("INFO then run: dotnet run --file scripts/StartSupabaseDev.cs -- --apply-migrations (first run only)");
+Console.WriteLine("INFO then run: dotnet run --file scripts/StartDev.cs -- --apply-migrations (first run only)");
 return 0;
 
 string? ResolveRuntime()
