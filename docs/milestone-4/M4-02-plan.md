@@ -3,7 +3,7 @@
 **Issue:** audit and enforce role, scope, standing and owner checks at protected API boundaries.
 **Branch:** `privileged-API-access-policies`
 **Dependency:** blocked by #97 (validated identity contract), as recorded in the issue.
-**Status:** matrix approved by the developer on 2026-11-16. Stages 1 (Users administrator scope), 2 (Transport live standing and role checks), 3 (Attractions authorization audit), and 4 (Accommodations authorization audit) are committed. Stage 5 (Settings authorization audit) found no production gap and adds regression coverage for missing-scope lookup avoidance, unknown users, malformed Users responses, and role/status spoofing. Settings API and test assemblies compile with one MSBuild worker; test execution remains blocked because VSTest cannot connect to testhost (90 seconds). Pause here for review/commit before auditing Trips and Users.
+**Status:** matrix approved by the developer on 2026-11-16. Stages 1 (Users administrator scope), 2 (Transport live standing and role checks), 3 (Attractions authorization audit), 4 (Accommodations authorization audit), and 5 (Settings authorization audit) are committed. Stage 6 (Trips authorization audit) found no production gap and adds regression coverage for forged owner identity, subject, role and status fields, including rejection before upstream calls or persistence. Trips API and test assemblies compile with one MSBuild worker; test execution remains blocked because VSTest cannot connect to testhost (90 seconds). Pause here for review/commit before the final Users audit.
 
 ## Goal and scope
 
