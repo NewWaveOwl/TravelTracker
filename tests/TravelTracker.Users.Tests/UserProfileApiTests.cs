@@ -172,15 +172,55 @@ public sealed class UserProfileApiTests
     {
         using var app = new UsersApiFactory();
         var path = $"/internal/users/{Guid.CreateVersion7()}/access";
+        const string identityPath = "/internal/users/identity";
+        var unknownIdentity = new { issuer = UsersApiFactory.Issuer, subject = "unknown-service-lookup" };
         using var anonymous = app.Browser();
         using var frontend = app.Browser(app.Token(scope: "users.access"));
         using var wrongScope = app.Browser(app.Token(subject: UsersApiFactory.ServiceSubject, scope: "Users.Access"));
         using var backend = app.Browser(app.Token(subject: UsersApiFactory.ServiceSubject, scope: "users.access"));
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync(identityPath, unknownIdentity)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await frontend.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await frontend.PostAsJsonAsync(identityPath, unknownIdentity)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await wrongScope.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await wrongScope.PostAsJsonAsync(identityPath, unknownIdentity)).StatusCode);
         Assert.Equal(0, app.Repository.ReadCalls);
         Assert.Equal(HttpStatusCode.NotFound, (await backend.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await backend.PostAsJsonAsync(identityPath, unknownIdentity)).StatusCode);
+        Assert.Null(app.Repository.Account);
+    }
+
+    [Fact]
+    public async Task InternalIdentityLookupReturnsOnlyAnExistingPublicId()
+    {
+        using var app = new UsersApiFactory();
+        const string subject = "lookup-existing-account";
+        using var traveller = app.Browser(app.Token(subject: subject, scope: "users.read"));
+        var profile = (await traveller.GetFromJsonAsync<SelfProfileResponse>(Me))!;
+
+        using var backend = app.Browser(app.Token(subject: UsersApiFactory.ServiceSubject, scope: "users.access"));
+        using var response = await backend.PostAsJsonAsync("/internal/users/identity",
+            new { issuer = UsersApiFactory.Issuer, subject });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = await response.Content.ReadFromJsonAsync<JsonDocument>();
+        Assert.Equal(new[] { "userId" }, result!.RootElement.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(profile.PublicId, result.RootElement.GetProperty("userId").GetGuid());
+        Assert.Equal(subject, app.Repository.Account!.ProviderIdentity.Subject);
+    }
+
+    [Fact]
+    public async Task InternalIdentityLookupFailsClosedWhenUserStorageIsUnavailable()
+    {
+        using var app = new UsersApiFactory();
+        app.Repository.StorageUnavailable = true;
+        using var backend = app.Browser(app.Token(subject: UsersApiFactory.ServiceSubject, scope: "users.access"));
+
+        using var response = await backend.PostAsJsonAsync("/internal/users/identity",
+            new { issuer = UsersApiFactory.Issuer, subject = "lookup-subject" });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.DoesNotContain("test-storage-details", await response.Content.ReadAsStringAsync());
         Assert.Null(app.Repository.Account);
     }
 
