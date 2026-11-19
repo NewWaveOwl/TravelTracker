@@ -169,6 +169,8 @@
     /** Confirmed provider routes keyed by the destination stop occurrence in the ordered itinerary. */
     [Parameter] public IReadOnlyDictionary<int, RouteItinerary> RoutedConnections { get; set; } = new Dictionary<int, RouteItinerary>();
     [Parameter] public (decimal Lat, decimal Lon)? PreviewLocation { get; set; }
+    /** the saved quality choice: automatic, standard or low. the device decides what automatic means. */
+    [Parameter] public string QualityPreference { get; set; } = MapQuality.Automatic;
 
     int ViewportWidth = 768;
     int ViewportHeight = 432;
@@ -189,6 +191,8 @@
     private IJSObjectReference? mapViewport;
     private DotNetObjectReference<TripMapCanvas>? mapReference;
     private (double X, double Y, int Zoom)? basemapCamera;
+    private MapCapabilities? capabilities;
+    private string? basemapQuality;
     private bool? basemapReady;
     private bool disposed;
     private (decimal Lat, decimal Lon)[] previousStops = [];
@@ -227,7 +231,9 @@
                 pointerModule = module;
                 mapReference ??= DotNetObjectReference.Create(this);
                 var initial = (center.X, center.Y, zoom);
-                var instance = await module.InvokeAsync<IJSObjectReference>("watchViewport", viewport, basemap, mapReference, CameraArguments());
+                capabilities ??= await ReadCapabilitiesAsync(module);
+                basemapQuality = MapQuality.Resolve(QualityPreference, capabilities);
+                var instance = await module.InvokeAsync<IJSObjectReference>("watchViewport", viewport, basemap, mapReference, CameraArguments(), basemapQuality);
                 if (disposed)
                 {
                     if (instance is not null) await ReleaseViewportAsync(instance);
@@ -244,6 +250,13 @@
                 basemapCamera = camera;
                 await mapViewport.InvokeVoidAsync("setCamera", CameraArguments());
             }
+
+            if (!disposed && mapViewport is not null && capabilities is not null &&
+                MapQuality.Resolve(QualityPreference, capabilities) is var quality && quality != basemapQuality)
+            {
+                basemapQuality = quality;
+                await mapViewport.InvokeVoidAsync("setQuality", quality);
+            }
         }
         catch (JSDisconnectedException)
         {
@@ -254,6 +267,20 @@
             Logger.LogWarning("Map background failed to load or update ({FailureType})", exception.GetType().Name);
             await SetBasemapReady(false);
         }
+    }
+
+    /**
+     * asks the browser what it can draw with. a missing answer counts as the least capable device, so automatic picks low.
+     * @param module The loaded map module.
+     * @return The reported capabilities, or the conservative fallback when the browser sent nothing.
+     */
+    async Task<MapCapabilities> ReadCapabilitiesAsync(IJSObjectReference module)
+    {
+        var reported = await module.InvokeAsync<MapCapabilities?>("mapCapabilities");
+        if (reported is not null) return reported;
+
+        Logger.LogWarning("Map capabilities were not reported by the browser; automatic quality uses low");
+        return new MapCapabilities(WebGl: false, DeviceMemoryGigabytes: null, LogicalCores: null, CoarsePointer: false);
     }
 
     double[] CameraArguments()

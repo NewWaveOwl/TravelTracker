@@ -59,9 +59,38 @@ function loadMapLibre() {
     return mapLibreAssets;
 }
 
-function attachBasemap(container, planner, initialCamera) {
+// low quality: one pixel per point, no antialiasing and no fades; 3D layers are hidden once the style loads.
+const lowQualityOptions = {
+    pixelRatio: 1,
+    fadeDuration: 0,
+    maxPitch: 0,
+    canvasContextAttributes: { antialias: false, powerPreference: "low-power" }
+};
+
+function hideExtrusions(map) {
+    map.setTerrain(null);
+    for (const layer of map.getStyle().layers) {
+        if (layer.type === "fill-extrusion") map.setLayoutProperty(layer.id, "visibility", "none");
+    }
+}
+
+/** reports what this device can draw with; the Blazor side turns it into an automatic quality choice. */
+export function mapCapabilities() {
+    const probe = document.createElement("canvas");
+    const context = probe.getContext("webgl2") ?? probe.getContext("webgl");
+    context?.getExtension("WEBGL_lose_context")?.loseContext();
+    return {
+        webGl: context !== null,
+        deviceMemoryGigabytes: navigator.deviceMemory ?? null,
+        logicalCores: navigator.hardwareConcurrency ?? null,
+        coarsePointer: matchMedia("(pointer: coarse)").matches
+    };
+}
+
+function attachBasemap(container, planner, initialCamera, initialQuality) {
     let basemap;
     let camera = initialCamera;
+    let quality = initialQuality;
     let attempt = 0;
     let timeout;
 
@@ -101,11 +130,19 @@ function attachBasemap(container, planner, initialCamera) {
                 interactive: false,
                 trackResize: false,
                 // The C# camera owns bounds; a second clamp would misalign tiles and stop markers near tile edges.
-                transformConstrain: (center, zoom) => ({ center, zoom })
+                transformConstrain: (center, zoom) => ({ center, zoom }),
+                ...(quality === "low" ? lowQualityOptions : {})
             });
             const canvas = basemap.getCanvas();
             canvas.tabIndex = -1;
             canvas.setAttribute("aria-hidden", "true");
+            // a lost WebGL context leaves a blank canvas; show the retry state instead of waiting for the timeout.
+            canvas.addEventListener("webglcontextlost", () => {
+                if (generation !== attempt) return;
+                console.error("TripMapCanvas: WebGL context lost");
+                fail();
+            }, { once: true });
+            if (quality === "low") basemap.once("style.load", () => hideExtrusions(basemap));
             basemap.once("load", () => {
                 if (generation !== attempt) return;
                 clearTimeout(timeout);
@@ -126,6 +163,11 @@ function attachBasemap(container, planner, initialCamera) {
         },
         resize() { basemap?.resize(); },
         retry() { void load(); },
+        setQuality(next) {
+            if (next === quality) return;
+            quality = next;
+            void load();
+        },
         disconnect() {
             attempt++;
             clearMap();
@@ -138,8 +180,8 @@ export function viewBoxPoint(svg, clientX, clientY) {
     return [point.x, point.y];
 }
 
-export function watchViewport(svg, container, map, camera) {
-    const basemap = attachBasemap(container, map, camera);
+export function watchViewport(svg, container, map, camera, quality) {
+    const basemap = attachBasemap(container, map, camera, quality);
     const observer = new ResizeObserver(([entry]) => {
         basemap.resize();
         const { width, height } = entry.contentRect;
@@ -297,6 +339,7 @@ export function watchViewport(svg, container, map, camera) {
     return {
         setCamera: basemap.setCamera,
         retryBasemap: basemap.retry,
+        setQuality: basemap.setQuality,
         disconnect() {
             events.abort();
             observer.disconnect();
