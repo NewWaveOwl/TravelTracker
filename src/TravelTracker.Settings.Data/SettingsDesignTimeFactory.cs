@@ -8,9 +8,9 @@ public sealed class SettingsDesignTimeFactory : IDesignTimeDbContextFactory<Sett
 {
     /**
      * creates a PostgreSQL context for migration tooling.
-     * @param args EF tooling arguments.
+     * @param _arguments EF tooling arguments, unused.
      * @return context using an explicit deployment connection or a non-secret tooling default.
      */
-    public SettingsDbContext CreateDbContext(string[] args) => new(new DbContextOptionsBuilder<SettingsDbContext>()
+    public SettingsDbContext CreateDbContext(string[] _arguments) => new(new DbContextOptionsBuilder<SettingsDbContext>()
         .UseNpgsql(Environment.GetEnvironmentVariable("ConnectionStrings__Settings") ?? "Host=localhost;Database=traveltracker_settings").Options);
 }

@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql;
 using TravelTracker.Users.Data.Repositories.Profile;
+using TravelTracker.Users.Data.Tests.Support;
 using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Data.Tests;
@@ -10,6 +12,7 @@ namespace TravelTracker.Users.Data.Tests;
 public sealed partial class UserRepositoryPostgreSqlTests
 {
     const string LegacyMigration = "20261104171950_AdministratorRoleAudit";
+    const string UpgradeMigration = "20261105152600_SeparateVerifiedEmail";
 
     [Fact]
     public async Task Rollback_RestoresTheVerifiedEmailEvenAfterTheContactEmailWasEdited()
@@ -52,13 +55,18 @@ public sealed partial class UserRepositoryPostgreSqlTests
             await repository.UpdateProfileAsync(identity, null, contactEmail, null, false, CreatedAt.AddMinutes(1), CancellationToken.None);
 
         await using var context = await factory.CreateDbContextAsync();
-        var failure = await Assert.ThrowsAnyAsync<Exception>(() => context.GetService<IMigrator>().MigrateAsync(LegacyMigration));
-        Assert.Contains("no provider-verified email", failure.ToString());
+        var failure = await Assert.ThrowsAsync<PostgresException>(() => context.GetService<IMigrator>().MigrateAsync(LegacyMigration));
+        Assert.Equal("P0001", failure.SqlState);
+        Assert.Contains("no provider-verified email", failure.MessageText);
 
         // the failed rollback must leave the account exactly as it was: still upgraded, contact email not promoted to verified
         var saved = await new UserRepository(factory).FindByProviderIdentityAsync(identity, CancellationToken.None);
         Assert.NotNull(saved);
         Assert.Equal(contactEmail, saved.Email);
         Assert.Null(saved.VerifiedEmail);
+
+        // the upgrade migration must still be recorded as applied, so the database stays at the upgraded schema
+        await using var history = await factory.CreateDbContextAsync();
+        Assert.Contains(UpgradeMigration, await history.Database.GetAppliedMigrationsAsync());
     }
 }

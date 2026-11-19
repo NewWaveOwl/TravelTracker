@@ -41,7 +41,7 @@ public sealed class AuthenticationTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClientFor("alice", scopes);
 
-        using var response = await client.PutSettingsAsync(ValidPreferences(), "\"0\"");
+        using var response = await client.PutSettingsAsync(SettingsTestData.ValidPreferences(), "\"0\"");
 
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
         if (status != 200) Assert.Equal(0, factory.Users!.Calls);
@@ -66,7 +66,7 @@ public sealed class AuthenticationTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var read = await client.GetAsync("/api/v1/settings");
-        using var write = await client.PutAsJsonAsync("/api/v1/settings", ValidPreferences());
+        using var write = await client.PutAsJsonAsync("/api/v1/settings", SettingsTestData.ValidPreferences());
 
         Assert.Equal(HttpStatusCode.Unauthorized, read.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, write.StatusCode);
@@ -95,18 +95,4 @@ public sealed class AuthenticationTests
         Assert.Equal("Settings", body.GetProperty("service").GetString());
         Assert.Equal(0, factory.Users!.Calls);
     }
-
-    /**
-     * the complete valid preference set used by scope and failure tests.
-     * @return a JSON-serializable preference object.
-     */
-    private static object ValidPreferences() => new
-    {
-        theme = "dark",
-        defaultMapLatitude = 45.5m,
-        defaultMapLongitude = -73.5m,
-        defaultMapZoom = 12,
-        preferredTransportMode = "train",
-        timeZone = "America/Montreal"
-    };
 }

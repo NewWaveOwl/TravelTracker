@@ -23,10 +23,12 @@ public sealed class InMemoryRoutePointRepository : IRoutePointRepository
      * Stores a newly created location.
      * @param point Point with a generated identifier.
      * @return Completion after storage.
+     * @throws InvalidOperationException when a point with the same identifier is already stored.
      */
     public Task AddAsync(RoutePoint point)
     {
-        records[point.RoutePointId.PublicId] = point;
+        if (!records.TryAdd(point.RoutePointId.PublicId, point))
+            throw new InvalidOperationException("A route point with this identifier already exists.");
         return Task.CompletedTask;
     }
 }

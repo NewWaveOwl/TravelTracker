@@ -1,10 +1,6 @@
 namespace TravelTracker.Attractions.Data.Repositories;
 
-/**
-
- * Holds a single row's transactional write boundary until validation completes.
-
- */
+/** Holds a single row's transactional write boundary until validation completes. */
 public interface IAttractionWriteSession : IAsyncDisposable
 {
     /**

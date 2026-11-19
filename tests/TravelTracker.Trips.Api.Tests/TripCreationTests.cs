@@ -296,6 +296,7 @@ public sealed class TripCreationTests
         using var response = await client.PostAsJsonAsync("/api/v1/trips", body);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, factory.Repository.Count);
     }
 
     [Fact]

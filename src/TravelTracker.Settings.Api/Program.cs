@@ -1,18 +1,18 @@
-using TravelTracker.Security.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 using TravelTracker.Settings.Api.Access;
 using TravelTracker.Settings.Api.Errors;
 using TravelTracker.Settings.Api.Services;
 using TravelTracker.Settings.Data;
 using TravelTracker.Settings.Data.Repositories;
+using TravelTracker.Security.Hosting;
 
 namespace TravelTracker.Settings.Api;
 
 /** composes the independent Settings HTTP service and its PostgreSQL store. */
-public partial class SettingsProgram
+public class SettingsProgram
 {
     /**
      * starts the Settings host without starting other TravelTracker services.
@@ -67,10 +67,15 @@ public partial class SettingsProgram
             ExceptionHandler = SettingsExceptionHandler.HandleAsync,
             SuppressDiagnosticsCallback = _ => true
         });
+        if (Uri.TryCreate(app.Configuration["Users:InternalBaseUrl"], UriKind.Absolute, out var usersUri) && usersUri.Scheme == Uri.UriSchemeHttps)
+            app.Logger.LogInformation("Users access endpoint configured at {UsersEndpoint}.", usersUri.GetLeftPart(UriPartial.Authority));
+        else
+            app.Logger.LogError("Users:InternalBaseUrl must be an absolute HTTPS URL; protected requests will fail closed.");
         if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
         {
             await using var scope = app.Services.CreateAsyncScope();
             await SettingsDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<SettingsDbContext>());
+            app.Logger.LogInformation("Settings database migrations applied.");
         }
         if (app.Environment.IsDevelopment())
         {

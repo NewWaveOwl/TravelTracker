@@ -3,10 +3,12 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using TravelTracker.Frontend.Api.Users
 @using TravelTracker.Frontend.Auth
+@using TravelTracker.Frontend.Services
 @inject UsersClient Users
 @inject AuthenticationStateProvider Authentication
 @inject SessionRegistry Sessions
 @inject TimeProvider Clock
+@inject ILogger<AdminSetup> Logger
 
 <PageHeading Title="First administrator setup" />
 <p>Complete the one-time setup using the verified account selected by the website owner.</p>
@@ -27,7 +29,7 @@ else
 {
     @if (error is not null)
     {
-        <section role="alert" tabindex="-1" @ref="errorSummary" class="feedback error"><h2>Setup was not completed</h2><p>@error</p></section>
+        <section role="alert" tabindex="-1" @ref="errorSummary" class="feedback error"><h2>@errorTitle</h2><p>@error</p></section>
     }
     @if (Users.SetupEnabled)
     {
@@ -45,7 +47,9 @@ else
 
 @code {
     bool signedIn, loading = true, busy, disposed, focusError;
+    int generation;
     string? error;
+    string errorTitle = "Setup was not completed";
     bool isAdministrator;
     ElementReference errorSummary;
     readonly CancellationTokenSource closed = new();
@@ -56,22 +60,49 @@ else
         await LoadAsync();
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool _firstRender)
     {
-        if (focusError) { focusError = false; await errorSummary.FocusAsync(); }
+        if (focusError)
+        {
+            focusError = false;
+            await errorSummary.FocusAsync();
+        }
     }
 
+    /**
+     * Looks up the signed-in account; only the newest lookup may publish its result, so a stale answer cannot overwrite it.
+     * @return Completion of the lookup, or nothing when a newer lookup or the closed view superseded it.
+     */
     async Task LoadAsync()
     {
+        // a queued account change can arrive after disposal, when the token source is already closed
+        if (disposed) return;
+        var version = ++generation;
         try
         {
             var user = (await Authentication.GetAuthenticationStateAsync()).User;
-            signedIn = user.Identity?.IsAuthenticated == true && Sessions.IsActive(user) && AccessTokenClaims.ActiveToken(user, Clock.GetUtcNow()) is not null;
-            isAdministrator = signedIn && await Users.GetMeAsync(closed.Token) is { Role: "administrator", Status: "active" };
+            var currentlySignedIn = AccessTokenClaims.IsSignedIn(user, Sessions, Clock.GetUtcNow());
+            var administrator = currentlySignedIn && await Users.GetMeAsync(closed.Token) is { Role: AdminAccessState.AdministratorRole, Status: AdminAccessState.ActiveStatus };
+            if (disposed || version != generation) return;
+            signedIn = currentlySignedIn;
+            isAdministrator = administrator;
         }
-        catch (ApiError failure) { error = failure.Message; }
-        catch (OperationCanceledException) when (closed.IsCancellationRequested) { }
-        finally { loading = false; }
+        catch (ApiError failure)
+        {
+            Logger.LogWarning("Administrator status lookup failed as {Kind} (status {Status})", failure.Kind, failure.Status);
+            if (disposed || version != generation) return;
+            errorTitle = "Unable to check your account";
+            error = failure.Message;
+            focusError = true;
+        }
+        catch (OperationCanceledException) when (closed.IsCancellationRequested)
+        {
+            // the view closed while the lookup was running
+        }
+        finally
+        {
+            if (!disposed && version == generation) loading = false;
+        }
     }
 
     /**
@@ -81,25 +112,67 @@ else
     async Task CompleteAsync()
     {
         if (busy || !signedIn) return;
-        busy = true; error = null;
+        // a lookup started before this setup must not publish its older answer over the result
+        generation++;
+        busy = true;
+        error = null;
+        errorTitle = "Setup was not completed";
         try
         {
             var profile = await Users.BootstrapAsync(closed.Token);
-            isAdministrator = profile is { Role: "administrator", Status: "active" };
+            isAdministrator = profile is { Role: AdminAccessState.AdministratorRole, Status: AdminAccessState.ActiveStatus };
             if (!isAdministrator) error = "Administrator access was not granted.";
         }
-        catch (ApiError failure) { error = failure.Status == 403 ? "This verified account is not allowed to perform first-administrator setup." : failure.Message; }
-        catch (OperationCanceledException) when (closed.IsCancellationRequested) { }
-        finally { busy = false; focusError = error is not null; }
+        catch (ApiError failure)
+        {
+            Logger.LogWarning("First-administrator setup failed as {Kind} (status {Status})", failure.Kind, failure.Status);
+            error = failure.Status == 403 ? "This verified account is not allowed to perform first-administrator setup." : failure.Message;
+        }
+        catch (OperationCanceledException) when (closed.IsCancellationRequested)
+        {
+            // the view closed while setup was running
+        }
+        finally
+        {
+            busy = false;
+            focusError = error is not null;
+        }
     }
 
-    void Changed(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
+    void Changed(Task<AuthenticationState> _state) => _ = ChangedAsync();
+
+    /**
+     * Rechecks administrator status after an account change and logs a failure instead of leaving it unobserved.
+     * @return Completion of the status lookup and the render.
+     */
+    async Task ChangedAsync()
     {
-        isAdministrator = false; error = null; loading = true;
-        await LoadAsync();
-        if (!disposed) StateHasChanged();
-    });
+        if (disposed) return;
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (disposed) return;
+                isAdministrator = false;
+                error = null;
+                errorTitle = "Setup was not completed";
+                loading = true;
+                await LoadAsync();
+                if (!disposed) StateHasChanged();
+            });
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.LogError(exception, "Administrator setup account change failed");
+        }
+    }
 
     /** Prevents closed views from retaining authenticated role data. */
-    public void Dispose() { disposed = true; Authentication.AuthenticationStateChanged -= Changed; closed.Cancel(); closed.Dispose(); }
+    public void Dispose()
+    {
+        disposed = true;
+        Authentication.AuthenticationStateChanged -= Changed;
+        closed.Cancel();
+        closed.Dispose();
+    }
 }

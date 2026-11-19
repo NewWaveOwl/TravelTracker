@@ -16,7 +16,10 @@ else
             <h1 tabindex="-1">Find your next stop</h1>
             <p>Find attractions, choose their location and plan how long to stay.</p>
         </div>
-        @if (canWrite) { <button disabled="@saving" @onclick="BeginCreate">Create attraction</button> }
+        @if (canWrite)
+        {
+            <button disabled="@(saving || editing)" @onclick="BeginCreate">Create attraction</button>
+        }
     </div>
     @if (!signedIn && loaded)
     {
@@ -24,16 +27,27 @@ else
     }
     else
     {
-        @if (status is not null) { <p class="attraction-status" role="status">@status</p> }
+        @if (status is not null)
+        {
+            <p class="attraction-status" role="status">@status</p>
+        }
         @if (error is not null)
         {
             <section class="attraction-error" role="alert" tabindex="-1" @ref="errorSummary">
                 <h2>@ErrorHeading</h2><p>@error.Message</p>
-                @if (errors.Count > 0)
+                @if (VisibleErrors.Any())
                 {
-                    <ul>@foreach (var field in errors) { <li><a href="@("#attraction-" + field.Key)">@string.Join(" ", field.Value)</a></li> }</ul>
+                    <ul>
+                    @foreach (var field in VisibleErrors)
+                    {
+                        <li><a href="@("#attraction-" + field.Key)">@string.Join(" ", field.Value)</a></li>
+                    }
+                    </ul>
                 }
-                @if (retrySearch) { <button @onclick="SearchAsync" disabled="@saving">Retry search</button> }
+                @if (retrySearch)
+                {
+                    <button @onclick="SearchAsync" disabled="@saving">Retry search</button>
+                }
             </section>
         }
         <div class="attraction-columns">
@@ -43,18 +57,24 @@ else
                     <label for="attraction-search">Attraction name<input id="attraction-search" @bind="query" placeholder="Search by name" disabled="@saving" /></label>
                     <button class="secondary" type="submit" disabled="@saving">Search</button>
                 </form>
-                @if (searching) { <p role="status">Searching attractions…</p> }
-                else if (results.Count == 0 && loaded) { <div role="status"><h3>No attractions found</h3><p>Try another name, or clear the search to browse all attractions.</p><button class="secondary" @onclick="ClearSearchAsync" disabled="@saving">Clear search</button></div> }
+                @if (searching)
+                {
+                    <p role="status">Searching attractions…</p>
+                }
+                else if (results.Count == 0 && loaded)
+                {
+                    <div role="status"><h3>No attractions found</h3><p>Try another name, or clear the search to browse all attractions.</p><button class="secondary" @onclick="ClearSearchAsync" disabled="@saving">Clear search</button></div>
+                }
                 else
                 {
-                    <p class="attraction-count" role="status">@results.Count ATTRACTIONS / NAME A–Z</p>
+                    <p class="attraction-count" role="status">@results.Count ATTRACTIONS / SORTED BY NAME</p>
                     <div class="attraction-grid">
                     @foreach (var item in results)
                     {
                         <article @key="item.AttractionId" class="attraction-card @(selected?.AttractionId == item.AttractionId ? "selected" : "")">
                             <h3>@item.Name</h3><p>@item.Address</p>
                             <p>@(item.Rating is null ? "No rating" : $"{item.Rating:0.##} / 5") · @item.EstimatedVisitMinutes min</p>
-                            <button class="secondary" disabled="@(saving || loadingDetails)" @onclick="() => ShowDetailsAsync(item.AttractionId)">View details<span class="visually-hidden"> for @item.Name</span></button>
+                            <button class="secondary" disabled="@(saving || loadingDetails || editing)" @onclick="() => ShowDetailsAsync(item.AttractionId)">View details<span class="visually-hidden"> for @item.Name</span></button>
                         </article>
                     }
                     </div>
@@ -62,7 +82,10 @@ else
                 <small>Select a place to view or edit its details.</small>
             </section>
             <section class="attraction-editor" aria-labelledby="editor-heading" aria-busy="@(saving || loadingDetails ? "true" : "false")">
-            @if (loadingDetails) { <h2 id="editor-heading">Loading attraction…</h2><p role="status">Fetching saved details.</p> }
+            @if (loadingDetails)
+            {
+                <h2 id="editor-heading">Loading attraction…</h2><p role="status">Fetching saved details.</p>
+            }
             else if (editing)
             {
                 <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
@@ -73,18 +96,21 @@ else
                             <div><AttractionField Id="attraction-address" Label="Address" @bind-Value="draft.Address" Error="@FieldError("address")" /></div>
                         </div>
                         <div class="attraction-field-row">
-                            <div><AttractionField Id="attraction-lat" Label="Latitude * (−90 to 90)" @bind-Value="draft.Lat" InputMode="decimal" Error="@FieldError("lat")" /></div>
-                            <div><AttractionField Id="attraction-lon" Label="Longitude * (−180 to 180)" @bind-Value="draft.Lon" InputMode="decimal" Error="@FieldError("lon")" /></div>
+                            <div><AttractionField Id="attraction-lat" Label="Latitude * (-90 to 90)" @bind-Value="draft.Lat" InputMode="decimal" Error="@FieldError("lat")" /></div>
+                            <div><AttractionField Id="attraction-lon" Label="Longitude * (-180 to 180)" @bind-Value="draft.Lon" InputMode="decimal" Error="@FieldError("lon")" /></div>
                         </div>
                         <div class="attraction-map-action"><button type="button" class="secondary" @onclick="OpenLocation" @ref="locationEntry">Choose on map</button><small>Or enter coordinates above.</small></div>
                         <div class="attraction-field-row visit-fields">
                             <div><AttractionField Id="attraction-estimatedVisitMinutes" Label="Visit duration * (min)" @bind-Value="draft.EstimatedVisitMinutes" InputMode="numeric" Error="@FieldError("estimatedVisitMinutes")" /></div>
                             <div><AttractionField Id="attraction-approximationMinutes" Label="Visit duration ± (min)" @bind-Value="draft.ApproximationMinutes" InputMode="numeric" Error="@FieldError("approximationMinutes")" /></div>
-                            <div><AttractionField Id="attraction-rating" Label="Rating (optional, 0–5)" @bind-Value="draft.Rating" InputMode="decimal" Error="@FieldError("rating")" /></div>
+                            <div><AttractionField Id="attraction-rating" Label="Rating (optional, 0 to 5)" @bind-Value="draft.Rating" InputMode="decimal" Error="@FieldError("rating")" /></div>
                         </div>
                         <small class="duration-preview">@(draft.RangePreview() is { } range ? $"Approximate visit: {range}. " : "")± is an optional planning preview; it is not saved.</small>
-                        <label for="attraction-description">Description (optional)<textarea id="attraction-description" @bind="draft.Description" aria-invalid="@(FieldError("description") is null ? null : "true")" aria-describedby="optional-fields-help"></textarea></label>
-                        @if (FieldError("description") is { } descriptionError) { <small class="field-error">@descriptionError</small> }
+                        <label for="attraction-description">Description (optional)<textarea id="attraction-description" @bind="draft.Description" aria-invalid="@(FieldError("description") is null ? null : "true")" aria-describedby="@(FieldError("description") is null ? "optional-fields-help" : "optional-fields-help attraction-description-error")"></textarea></label>
+                        @if (FieldError("description") is { } descriptionError)
+                        {
+                            <small id="attraction-description-error" class="field-error">@descriptionError</small>
+                        }
                         <small id="optional-fields-help">Clear description or rating to remove it. Fields marked * are required.</small>
                         <div class="actions"><button type="submit" disabled="@(!canWrite || saving)">@(saving ? "Saving…" : original is null ? "Create attraction" : "Save changes")</button><button type="button" class="secondary" @onclick="CancelEdit">Cancel</button></div>
                     </fieldset>
@@ -94,10 +120,23 @@ else
             {
                 <h2 id="editor-heading" tabindex="-1" @ref="detailsHeading">@selected.Name</h2>
                 <p>@selected.Address</p><dl class="attraction-facts"><dt>Estimated visit</dt><dd>@selected.EstimatedVisitMinutes minutes</dd><dt>Rating</dt><dd>@(selected.Rating is null ? "No rating" : $"{selected.Rating:0.##} / 5")</dd><dt>Latitude</dt><dd>@selected.Lat</dd><dt>Longitude</dt><dd>@selected.Lon</dd></dl><p>@(selected.Description ?? "No description yet.")</p>
-                @if (canWrite) { <button @onclick="BeginEdit" disabled="@saving">Edit attraction</button> }
-                else { <p role="status">Read-only access. You can browse details, but cannot create or edit attractions.</p> }
+                @if (canWrite)
+                {
+                    <button @onclick="BeginEdit" disabled="@saving">Edit attraction</button>
+                }
+                else
+                {
+                    <p role="status">Read-only access. You can browse details, but cannot create or edit attractions.</p>
+                }
             }
-            else { <h2 id="editor-heading">Attraction details</h2><p>Select an attraction to see its saved details.</p>@if (!canWrite) { <p>Read-only access. Creating or editing requires catalogue write permission.</p> } }
+            else
+            {
+                <h2 id="editor-heading">Attraction details</h2><p>Select an attraction to see its saved details.</p>
+                @if (!canWrite)
+                {
+                    <p>Read-only access. Creating or editing requires catalogue write permission.</p>
+                }
+            }
             </section>
         </div>
     }

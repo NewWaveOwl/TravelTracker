@@ -67,6 +67,11 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
         {
             services.RemoveAll<IUserRepository>();
             services.AddSingleton<IUserRepository>(Repository);
+            if (ProfileDatabaseConnection is null && ProfileSaveInterceptor is not null)
+            {
+                throw new InvalidOperationException("ProfileSaveInterceptor needs ProfileDatabaseConnection; the in-memory repository never calls SaveChanges.");
+            }
+
             if (ProfileDatabaseConnection is null)
             {
                 services.RemoveAll<TravelTracker.Users.Data.Repositories.Profile.IUserRepository>();
@@ -94,7 +99,7 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
      * @param scope Granted scope.
      * @return Signed test-only bearer token.
      */
-    public string Token(string? failure = null, string subject = "admin-subject", string scope = "catalogue.read users.read", string? role = null)
+    public string Token(string? failure = null, string subject = "admin-subject", string scope = "catalogue.read users.read users.admin", string? role = null)
     {
         if (failure == "malformed") return "M4_TOKEN_SENTINEL_malformed";
         using var other = RSA.Create(2048);
@@ -118,5 +123,9 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
         return client;
     }
 
-    protected override void Dispose(bool disposing) { base.Dispose(disposing); if (disposing) key.Dispose(); }
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing) key.Dispose();
+    }
 }

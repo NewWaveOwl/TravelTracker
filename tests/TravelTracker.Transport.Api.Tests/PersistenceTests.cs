@@ -17,6 +17,7 @@ public sealed class PersistenceTests
     {
         using var store = new PostgresTestDatabase();
         Guid modeId, pointId;
+        int modeCountBeforeRestart, pointCountBeforeRestart;
         var sourceId = Guid.NewGuid();
         using (var factory = new ApiFactory { PostgresConnection = store.ConnectionString })
         using (var client = factory.CreateClient())
@@ -27,6 +28,8 @@ public sealed class PersistenceTests
             var point = await client.PostAsJsonAsync("/api/v1/route-points", new { type = "transport_stop", name = "Saved stop", lat = 45.5m, lon = -73.5m, sourceId });
             Assert.Equal(HttpStatusCode.Created, point.StatusCode);
             pointId = (await point.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("routePointId").GetGuid();
+            modeCountBeforeRestart = (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/transport-modes"))!.Length;
+            pointCountBeforeRestart = (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/route-points"))!.Length;
         }
         using (var factory = new ApiFactory { PostgresConnection = store.ConnectionString })
         using (var client = factory.CreateClient())
@@ -36,14 +39,21 @@ public sealed class PersistenceTests
             var point = await client.GetFromJsonAsync<JsonElement>($"/api/v1/route-points/{pointId}");
             Assert.Equal(sourceId, point.GetProperty("sourceId").GetGuid());
             Assert.Equal(45.5m, point.GetProperty("lat").GetDecimal());
-            Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/v1/transport-modes", new { code = "bike", name = "After restart" })).StatusCode);
-            Assert.Equal(8, (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/transport-modes"))!.Length);
-            Assert.Equal(4, (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/route-points"))!.Length);
+
+            var modesBeforeCreate = (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/transport-modes"))!;
+            Assert.Equal(modeCountBeforeRestart, modesBeforeCreate.Length);
+            var existingModeIds = modesBeforeCreate.Select(existing => existing.GetProperty("transportModeId").GetGuid()).ToHashSet();
+            var created = await client.PostAsJsonAsync("/api/v1/transport-modes", new { code = "bike", name = "After restart" });
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            var createdId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("transportModeId").GetGuid();
+            Assert.DoesNotContain(createdId, existingModeIds);
+            Assert.Equal(modeCountBeforeRestart + 1, (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/transport-modes"))!.Length);
+            Assert.Equal(pointCountBeforeRestart, (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/route-points"))!.Length);
         }
         await using var database = Context(store.ConnectionString);
         Assert.Empty(await database.Database.GetPendingMigrationsAsync());
-        Assert.Equal(8, await database.TransportModes.CountAsync());
-        Assert.Equal(4, await database.RoutePoints.CountAsync());
+        Assert.Equal(modeCountBeforeRestart + 1, await database.TransportModes.CountAsync());
+        Assert.Equal(pointCountBeforeRestart, await database.RoutePoints.CountAsync());
     }
 
     [Theory]

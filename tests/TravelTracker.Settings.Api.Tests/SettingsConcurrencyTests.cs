@@ -28,7 +28,7 @@ public sealed class SettingsConcurrencyTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClientFor("alice");
 
-        using var response = await client.PutSettingsAsync(ValidPreferences(), null);
+        using var response = await client.PutSettingsAsync(SettingsTestData.ValidPreferences(), null);
 
         Assert.Equal(HttpStatusCode.PreconditionRequired, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -49,7 +49,7 @@ public sealed class SettingsConcurrencyTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClientFor("alice");
 
-        using var response = await client.PutSettingsAsync(ValidPreferences(), ifMatch);
+        using var response = await client.PutSettingsAsync(SettingsTestData.ValidPreferences(), ifMatch);
 
         Assert.Equal(HttpStatusCode.PreconditionFailed, response.StatusCode);
         using var get = await client.GetAsync("/api/v1/settings");
@@ -62,7 +62,7 @@ public sealed class SettingsConcurrencyTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClientFor("alice");
 
-        using var response = await client.PutSettingsAsync(ValidPreferences(), "\"0\"");
+        using var response = await client.PutSettingsAsync(SettingsTestData.ValidPreferences(), "\"0\"");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("\"1\"", response.Headers.ETag?.Tag);
@@ -77,7 +77,7 @@ public sealed class SettingsConcurrencyTests
         using var client = factory.CreateClientFor("alice");
         using var read = await client.GetAsync("/api/v1/settings");
 
-        using var response = await client.PutSettingsAsync(ValidPreferences(), read.Headers.ETag!.Tag);
+        using var response = await client.PutSettingsAsync(SettingsTestData.ValidPreferences(), read.Headers.ETag!.Tag);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotEqual(read.Headers.ETag.Tag, response.Headers.ETag?.Tag);
@@ -91,7 +91,7 @@ public sealed class SettingsConcurrencyTests
         using var client = factory.CreateClientFor("alice");
         using var read = await client.GetAsync("/api/v1/settings");
         var staleTag = read.Headers.ETag!.Tag;
-        using var first = await client.PutSettingsAsync(ValidPreferences(), staleTag);
+        using var first = await client.PutSettingsAsync(SettingsTestData.ValidPreferences(), staleTag);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 
         using var second = await client.PutSettingsAsync(new
@@ -121,7 +121,7 @@ public sealed class SettingsConcurrencyTests
         using var readA = await tabA.GetAsync("/api/v1/settings");
         using var readB = await tabB.GetAsync("/api/v1/settings");
 
-        using var savedA = await tabA.PutSettingsAsync(ValidPreferences(), readA.Headers.ETag!.Tag);
+        using var savedA = await tabA.PutSettingsAsync(SettingsTestData.ValidPreferences(), readA.Headers.ETag!.Tag);
         using var savedB = await tabB.PutSettingsAsync(new
         {
             theme = "light",
@@ -187,18 +187,4 @@ public sealed class SettingsConcurrencyTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
-
-    /**
-     * the complete valid preference set used by the precondition tests.
-     * @return a JSON-serializable preference object.
-     */
-    private static object ValidPreferences() => new
-    {
-        theme = "dark",
-        defaultMapLatitude = 45.5m,
-        defaultMapLongitude = -73.5m,
-        defaultMapZoom = 12,
-        preferredTransportMode = "train",
-        timeZone = "America/Montreal"
-    };
 }

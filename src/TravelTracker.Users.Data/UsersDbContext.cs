@@ -24,18 +24,18 @@ public sealed class UsersDbContext(DbContextOptions<UsersDbContext> options) : D
         modelBuilder.Entity<BootstrapRow>(row =>
         {
             row.ToTable("AdministratorBootstrap", table => table.HasCheckConstraint("CK_AdministratorBootstrap_Singleton", "\"Id\" = 1"));
-            row.HasKey(x => x.Id);
-            row.Property(x => x.Id).ValueGeneratedNever();
-            row.Property(x => x.Issuer).IsRequired();
-            row.Property(x => x.Subject).IsRequired();
+            row.HasKey(entity => entity.Id);
+            row.Property(entity => entity.Id).ValueGeneratedNever();
+            row.Property(entity => entity.Issuer).IsRequired();
+            row.Property(entity => entity.Subject).IsRequired();
         });
         modelBuilder.Entity<AdministratorAuditRow>(row =>
         {
             row.ToTable("AdministratorAudit");
-            row.HasKey(x => x.AuditId);
-            row.Property(x => x.AuditId).ValueGeneratedNever();
-            row.Property(x => x.Reason).IsRequired();
-            row.Property(x => x.Action).IsRequired().HasDefaultValue("bootstrap");
+            row.HasKey(entity => entity.AuditId);
+            row.Property(entity => entity.AuditId).ValueGeneratedNever();
+            row.Property(entity => entity.Reason).IsRequired();
+            row.Property(entity => entity.Action).IsRequired().HasDefaultValue("bootstrap");
         });
     }
 }

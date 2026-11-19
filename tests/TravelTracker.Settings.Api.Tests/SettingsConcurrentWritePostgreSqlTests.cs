@@ -6,39 +6,44 @@ using TravelTracker.Settings.Api.Tests.Support;
 namespace TravelTracker.Settings.Api.Tests;
 
 /**
- * proves If-Match compare-and-set holds when two writers really race on PostgreSQL, not only when they run one after another.
+ * stress evidence that If-Match compare-and-set holds when two writers race on PostgreSQL. each race holds both writers at
+ * their settings INSERT or UPDATE until both have arrived, so the two reads really happen before either write.
  * each iteration uses a fresh account so the races do not depend on each other.
  */
 [Trait("Category", "PostgreSQL")]
 public sealed class SettingsConcurrentWritePostgreSqlTests
 {
-    /** races per test run; each race starts both writers together behind a barrier. */
+    /** races per test run; each race holds both writers at their database write until both arrive. */
     private const int RaceIterations = 20;
 
     /**
-     * races two replacements that carry the same If-Match value, released together by a barrier.
+     * races two replacements that carry the same If-Match value; both are held at their database write until both arrive.
+     * @param interceptor the host's write interceptor, armed for this race only.
      * @param firstClient the first writer's authenticated client.
      * @param secondClient the second writer's authenticated client.
      * @param firstBody the first writer's preferences.
      * @param secondBody the second writer's preferences.
      * @param ifMatch the ETag both writers echo.
      * @return both responses, in the order the writers were passed in.
+     * @throws Xunit.Sdk.XunitException when the writers did not reach the database write together.
      */
-    private static async Task<(HttpResponseMessage First, HttpResponseMessage Second)> RaceAsync(HttpClient firstClient,
-        HttpClient secondClient, object firstBody, object secondBody, string ifMatch)
+    private static async Task<(HttpResponseMessage First, HttpResponseMessage Second)> RaceAsync(RendezvousCommandInterceptor interceptor,
+        HttpClient firstClient, HttpClient secondClient, object firstBody, object secondBody, string ifMatch)
     {
-        using var barrier = new Barrier(2);
-        var first = Task.Run(() =>
+        var rendezvous = new WriteRendezvous(2);
+        interceptor.Current = rendezvous;
+        try
         {
-            barrier.SignalAndWait();
-            return firstClient.PutSettingsAsync(firstBody, ifMatch);
-        });
-        var second = Task.Run(() =>
+            var first = Task.Run(() => firstClient.PutSettingsAsync(firstBody, ifMatch));
+            var second = Task.Run(() => secondClient.PutSettingsAsync(secondBody, ifMatch));
+            var responses = (await first, await second);
+            Assert.True(rendezvous.Completed, "both writers must reach the settings write together.");
+            return responses;
+        }
+        finally
         {
-            barrier.SignalAndWait();
-            return secondClient.PutSettingsAsync(secondBody, ifMatch);
-        });
-        return (await first, await second);
+            interceptor.Current = null;
+        }
     }
 
     /**
@@ -87,7 +92,8 @@ public sealed class SettingsConcurrentWritePostgreSqlTests
     public async Task ConcurrentReplaceWithSameIfMatch_OneWinsAndTheOtherGetsPreconditionFailed()
     {
         using var database = new PostgresTestDatabase();
-        using var host = new ApiFactory(database.ConnectionString);
+        var interceptor = new RendezvousCommandInterceptor();
+        using var host = new ApiFactory(database.ConnectionString) { WriteInterceptor = interceptor };
         for (var iteration = 0; iteration < RaceIterations; iteration++)
         {
             var subject = $"update-racer-{iteration}";
@@ -95,7 +101,9 @@ public sealed class SettingsConcurrentWritePostgreSqlTests
             using var seeded = await seedClient.PutSettingsAsync(Preferences("dark", 12), "\"0\"");
             Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
 
-            var race = await RaceAsync(host.CreateClientFor(subject), host.CreateClientFor(subject),
+            using var firstWriter = host.CreateClientFor(subject);
+            using var secondWriter = host.CreateClientFor(subject);
+            var race = await RaceAsync(interceptor, firstWriter, secondWriter,
                 Preferences("light", 4), Preferences("system", 8), "\"1\"");
             await AssertOneWinnerAsync(seedClient, race, "\"2\"");
         }
@@ -105,13 +113,16 @@ public sealed class SettingsConcurrentWritePostgreSqlTests
     public async Task ConcurrentFirstSaveWithIfMatchZero_OneInsertsAndTheOtherGetsPreconditionFailed()
     {
         using var database = new PostgresTestDatabase();
-        using var host = new ApiFactory(database.ConnectionString);
+        var interceptor = new RendezvousCommandInterceptor();
+        using var host = new ApiFactory(database.ConnectionString) { WriteInterceptor = interceptor };
         for (var iteration = 0; iteration < RaceIterations; iteration++)
         {
             var subject = $"first-racer-{iteration}";
             using var reader = host.CreateClientFor(subject);
 
-            var race = await RaceAsync(host.CreateClientFor(subject), host.CreateClientFor(subject),
+            using var firstWriter = host.CreateClientFor(subject);
+            using var secondWriter = host.CreateClientFor(subject);
+            var race = await RaceAsync(interceptor, firstWriter, secondWriter,
                 Preferences("light", 4), Preferences("system", 8), "\"0\"");
             await AssertOneWinnerAsync(reader, race, "\"1\"");
         }

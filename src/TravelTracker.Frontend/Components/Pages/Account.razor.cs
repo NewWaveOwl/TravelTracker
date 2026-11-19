@@ -7,6 +7,7 @@ using TravelTracker.Frontend.Api.Users;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Features.Users;
 using TravelTracker.Frontend.Components.Shared;
+using TravelTracker.Frontend.Services;
 
 namespace TravelTracker.Frontend.Components.Pages;
 
@@ -34,15 +35,14 @@ public partial class Account : IDisposable
     ValidationMessageStore? serverValidation;
     CancellationTokenSource? request;
     ITimer? expiryTimer;
-    IReadOnlyDictionary<string, string[]> saveFieldErrors = new Dictionary<string, string[]>();
     string? sessionMessage, loadFailure, saveError, statusMessage;
     string loadFailureTitle = "Unable to load your profile";
     FeedbackKind loadFailureKind = FeedbackKind.Unexpected;
-    bool loaded, loadingProfile, signedIn, editing, busy, writeDenied, disposed;
+    bool loaded, loadingProfile, signedIn, editing, busy, writeDenied, disposed, noAccount;
     int generation;
     HashSet<string> grantedScopes = new(StringComparer.Ordinal);
 
-    bool CanEdit => profile is { Status: "active" } && HasScope("users.write") && !writeDenied;
+    bool CanEdit => profile is { Status: AdminAccessState.ActiveStatus } && HasScope("users.write") && !writeDenied;
 
     protected override async Task OnInitializedAsync()
     {
@@ -71,20 +71,20 @@ public partial class Account : IDisposable
         expiryTimer?.Dispose();
         expiryTimer = null;
         var previouslySignedIn = signedIn;
-        signedIn = Sessions.IsActive(user) && AccessTokenClaims.ActiveToken(user, Clock.GetUtcNow()) is not null;
-        grantedScopes = GrantedScopes(user);
+        signedIn = AccessTokenClaims.IsSignedIn(user, Sessions, Clock.GetUtcNow());
+        grantedScopes = AccessTokenClaims.GrantedScopes(user);
         request?.Cancel();
         profile = null;
         editModel = null;
-        editContext = null;
+        ClearEditContext();
         serverValidation = null;
-        saveFieldErrors = new Dictionary<string, string[]>();
         editing = false;
         busy = false;
         writeDenied = false;
         saveError = null;
         statusMessage = null;
         loadFailure = null;
+        noAccount = false;
 
         if (!signedIn)
         {
@@ -110,24 +110,41 @@ public partial class Account : IDisposable
         await LoadProfileAsync(version);
     }
 
-    void AuthenticationChanged(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
+    void AuthenticationChanged(Task<AuthenticationState> state) => _ = AuthenticationChangedAsync(state);
+
+    /**
+     * Applies an account change on the render thread; failures are logged instead of left unobserved.
+     * @param state The replacement or revoked authentication state.
+     * @return Completion of the reset and the matching profile load.
+     */
+    async Task AuthenticationChangedAsync(Task<AuthenticationState> state)
     {
-        var version = ++generation;
-        await ApplyAuthenticationStateAsync(state, version);
-        if (!disposed) StateHasChanged();
-    });
+        if (disposed) return;
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                var version = ++generation;
+                await ApplyAuthenticationStateAsync(state, version);
+                if (!disposed) StateHasChanged();
+            });
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.LogError(exception, "Account authentication change failed");
+        }
+    }
 
     /**
      * Schedules a fresh authentication check for the current access token's expiry.
      * @param user The server-authenticated principal whose profile is displayed.
      * @param version The authentication generation that owns this timer.
-     * @return Nothing; the timer updates the component when the token expires.
      */
     void ScheduleSessionExpiry(ClaimsPrincipal user, int version)
     {
         if (!long.TryParse(user.FindFirstValue(AccessTokenClaims.ExpiresAt), out var expiresAt)) return;
         var delay = DateTimeOffset.FromUnixTimeSeconds(expiresAt) - Clock.GetUtcNow();
-        expiryTimer = Clock.CreateTimer(_ => _ = InvokeAsync(() => RevalidateExpiredSessionAsync(version)), null,
+        expiryTimer = Clock.CreateTimer(_ => _ = RevalidateFromTimerAsync(version), null,
             delay > TimeSpan.Zero ? delay : TimeSpan.Zero, Timeout.InfiniteTimeSpan);
     }
 
@@ -145,6 +162,24 @@ public partial class Account : IDisposable
     }
 
     /**
+     * Runs a scheduled expiry check on the render context and logs a failure instead of leaving it unobserved.
+     * @param version The authentication generation that scheduled the timer.
+     * @return Completion of the expiry check.
+     */
+    async Task RevalidateFromTimerAsync(int version)
+    {
+        if (disposed) return;
+        try
+        {
+            await InvokeAsync(() => RevalidateExpiredSessionAsync(version));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.LogError(exception, "Session expiry check failed");
+        }
+    }
+
+    /**
      * Loads the server-confirmed own profile over the Users public HTTP contract.
      * @param version The authentication generation authorized to accept the result.
      * @return Completion of the guarded GET operation.
@@ -154,19 +189,24 @@ public partial class Account : IDisposable
         var current = BeginRequest();
         loadingProfile = true;
         loadFailure = null;
+        noAccount = false;
         try
         {
             var result = await Users.GetMeAsync(current.Token);
             if (!Current(version) || current.IsCancellationRequested) return;
             if (result is null)
             {
-                SetLoadFailure(FailureKind.Unexpected, "The Users service did not return a profile.");
+                noAccount = true;
+                Logger.LogInformation("Profile page opened for a sign-in with no Users account yet");
                 return;
             }
 
             profile = result;
         }
-        catch (OperationCanceledException) when (current.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (current.IsCancellationRequested)
+        {
+            // superseded or closed, nothing to publish
+        }
         catch (ApiError failure)
         {
             if (Current(version))
@@ -213,11 +253,11 @@ public partial class Account : IDisposable
     void BeginEdit()
     {
         if (!CanEdit || profile is null || busy) return;
+        ClearEditContext();
         editModel = new ProfileEditModel(profile);
         editContext = new EditContext(editModel);
         serverValidation = new ValidationMessageStore(editContext);
         editContext.OnFieldChanged += OnEditFieldChanged;
-        saveFieldErrors = new Dictionary<string, string[]>();
         saveError = null;
         statusMessage = null;
         editing = true;
@@ -233,10 +273,9 @@ public partial class Account : IDisposable
         statusMessage = null;
     }
 
-    void OnEditFieldChanged(object? sender, FieldChangedEventArgs args)
+    void OnEditFieldChanged(object? _sender, FieldChangedEventArgs eventArgs)
     {
-        serverValidation?.Clear(args.FieldIdentifier);
-        saveFieldErrors = new Dictionary<string, string[]>();
+        serverValidation?.Clear(eventArgs.FieldIdentifier);
         saveError = null;
         statusMessage = null;
         editContext?.NotifyValidationStateChanged();
@@ -266,10 +305,12 @@ public partial class Account : IDisposable
             profile = confirmed;
             ClearEditContext();
             editing = false;
-            saveFieldErrors = new Dictionary<string, string[]>();
             statusMessage = "Your profile has been updated.";
         }
-        catch (OperationCanceledException) when (current.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (current.IsCancellationRequested)
+        {
+            // superseded or closed, nothing to publish
+        }
         catch (ApiError failure)
         {
             if (!Current(version)) return;
@@ -278,7 +319,7 @@ public partial class Account : IDisposable
                 signedIn = false;
                 profile = null;
                 editModel = null;
-                editContext = null;
+                ClearEditContext();
                 sessionMessage = "Your session was rejected. Sign in again to continue.";
                 editing = false;
                 return;
@@ -294,7 +335,6 @@ public partial class Account : IDisposable
 
             if (failure.Status is 400 or 422)
             {
-                var messages = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
                 foreach (var (field, errors) in failure.Errors)
                 {
                     var identifier = field.ToLowerInvariant() switch
@@ -306,11 +346,9 @@ public partial class Account : IDisposable
                     };
                     if (identifier is { } fieldIdentifier)
                         serverValidation?.Add(fieldIdentifier, errors);
-                    messages[field] = errors;
                 }
-                saveFieldErrors = messages;
                 editContext?.NotifyValidationStateChanged();
-                saveError = messages.Count == 0
+                saveError = failure.Errors.Count == 0
                     ? failure.Message
                     : "Check the highlighted fields and try again.";
                 return;
@@ -352,7 +390,10 @@ public partial class Account : IDisposable
             }
             profile = latest;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // superseded or closed, nothing to publish
+        }
         catch (ApiError failure) when (failure.Status == 403)
         {
             if (Current(version)) ClearDeniedProfile();
@@ -374,7 +415,6 @@ public partial class Account : IDisposable
 
     /**
      * Removes profile and draft data after a fresh Users profile read is denied.
-     * @return Nothing; the page renders its denied state on the next component render.
      */
     void ClearDeniedProfile()
     {
@@ -426,22 +466,19 @@ public partial class Account : IDisposable
 
     bool HasScope(string permission) => grantedScopes.Contains(permission);
 
-    static HashSet<string> GrantedScopes(ClaimsPrincipal user) => user.FindAll(AccessTokenClaims.GrantedScope)
-        .SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-        .ToHashSet(StringComparer.Ordinal);
-
     static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
 
     static string RoleLabel(string role) => role switch
     {
-        "administrator" => "Administrator",
+        AdminAccessState.AdministratorRole => "Administrator",
         _ => "Traveller"
     };
 
     static string StatusLabel(string status) => status switch
     {
-        "active" => "Active",
+        AdminAccessState.ActiveStatus => "Active",
         "banned" => "Read-only",
+        "deactivated" => "Deactivated",
         _ => "Unavailable"
     };
 

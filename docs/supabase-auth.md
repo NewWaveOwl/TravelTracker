@@ -164,7 +164,7 @@ service-account authorization, API 401/403, provider outage and access to an old
 account's data. Run the PostgreSQL relational suites with an isolated database;
 SQL cutover and hook execution need a PostgreSQL/Supabase staging validation.
 
-CI runs `bash scripts/test-supabase-auth-hook.sh` against a fresh disposable
+CI runs `scripts/TestSupabaseAuthHook.sql` (the Supabase access-token hook step in `.github/workflows/ci.yml`) against a fresh disposable
 PostgreSQL database. It checks traveller defaults, service-only access, metadata
 spoofing, scope restrictions, anonymous/privileged-role rejection and execution
 grants. This fixture verifies SQL behavior; live Supabase hook selection and

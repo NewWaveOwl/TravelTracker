@@ -1,4 +1,4 @@
--- Only for a NEW disposable test database; see test-supabase-auth-hook.sh.
+-- Only for a NEW disposable test database; see the Supabase access-token hook step in .github/workflows/ci.yml.
 -- Fixtures intentionally model only the Supabase Auth columns this hook reads.
 \set ON_ERROR_STOP on
 BEGIN;

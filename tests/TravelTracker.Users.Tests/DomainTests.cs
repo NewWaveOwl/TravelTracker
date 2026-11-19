@@ -3,6 +3,7 @@ using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Tests;
 
+/** verifies provisioning defaults and unknown enum handling in the Users Domain. */
 public sealed class DomainTests
 {
     static readonly DateTimeOffset Created = DateTimeOffset.Parse("2026-11-04T16:00:00Z");

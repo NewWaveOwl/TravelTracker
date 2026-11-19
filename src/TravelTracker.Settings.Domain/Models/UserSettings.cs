@@ -1,16 +1,16 @@
 namespace TravelTracker.Settings.Domain.Models;
 
 /**
- * Holds one traveller's preferences: theme, default map view, preferred transport and time zone.
- * Property initializers are the documented defaults returned before the first save.
+ * holds one traveller's preferences: theme, default map view, preferred transport and time zone.
+ * property initializers are the documented defaults returned before the first save.
  */
 public sealed class UserSettings
 {
     /** theme values the service accepts. */
-    public static readonly string[] Themes = ["system", "light", "dark"];
+    public static readonly IReadOnlyList<string> Themes = Array.AsReadOnly(["system", "light", "dark"]);
 
     /** transport codes the service accepts; these match the Transport catalogue codes. */
-    public static readonly string[] TransportModes = ["car", "bus", "train", "pedestrian", "bike", "plane"];
+    public static readonly IReadOnlyList<string> TransportModes = Array.AsReadOnly(["car", "bus", "train", "pedestrian", "bike", "plane"]);
 
     /**
      * gets or sets the colour theme: system, light or dark.

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Settings;
 using TravelTracker.Frontend.Auth;
+using TravelTracker.Frontend.Components.Shared;
 using TravelTracker.Frontend.Features.Settings;
 using TravelTracker.Frontend.Services;
 
@@ -39,15 +40,25 @@ public partial class Settings : IDisposable
     CancellationTokenSource? request;
     int generation;
 
-    /** time zone names this host knows, offered as suggestions; the service still decides what it accepts. */
-    static readonly IReadOnlyList<string> TimeZoneNames = TimeZoneInfo.GetSystemTimeZones().Select(zone => zone.Id).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+    IReadOnlyList<string> timeZoneOptions = TimeZoneNames.All;
+    string? timeZoneOptionsFor;
 
     /**
      * zone choices: every zone this host knows, plus the saved value when the host does not know it, so it stays selectable and validation can explain it.
+     * the list is rebuilt only when the draft time zone changes, not on every render.
      */
-    IReadOnlyList<string> TimeZoneOptions => TimeZoneNames.Contains(draft.TimeZone)
-        ? TimeZoneNames
-        : TimeZoneNames.Append(draft.TimeZone).OrderBy(zone => zone, StringComparer.Ordinal).ToArray();
+    IReadOnlyList<string> TimeZoneOptions
+    {
+        get
+        {
+            if (timeZoneOptionsFor == draft.TimeZone) return timeZoneOptions;
+            timeZoneOptionsFor = draft.TimeZone;
+            timeZoneOptions = TimeZoneNames.All.Contains(draft.TimeZone)
+                ? TimeZoneNames.All
+                : TimeZoneNames.All.Append(draft.TimeZone).OrderBy(zone => zone, StringComparer.Ordinal).ToArray();
+            return timeZoneOptions;
+        }
+    }
 
     /** saving needs a confirmed revision to echo, write access and no unresolved conflict. */
     bool CanSave => signedIn && canWrite && hasValues && !saving && !loading && !conflict && etag is not null;
@@ -55,24 +66,17 @@ public partial class Settings : IDisposable
     /** field errors whose inputs exist on this form, so summary links always land on a control. */
     IEnumerable<KeyValuePair<string, string[]>> VisibleErrors => errors.Where(entry => FieldIds.ContainsKey(entry.Key));
 
-    string ErrorHeading => conflict ? "Your settings changed" : error?.Kind switch
-    {
-        FailureKind.Validation => "Check your details",
-        FailureKind.Permission => "Permission denied",
-        FailureKind.Network => "Unable to connect",
-        FailureKind.Unavailable => "Service unavailable",
-        _ => "Unable to complete the request",
-    };
+    string ErrorHeading => conflict ? "Your settings changed" : ErrorHeadings.For(error);
 
     protected override async Task OnInitializedAsync()
     {
         Authentication.AuthenticationStateChanged += AuthenticationChanged;
-        await UpdateAccessAsync(await Authentication.GetAuthenticationStateAsync());
+        ApplyAccess(await Authentication.GetAuthenticationStateAsync());
         if (signedIn) await LoadAsync();
         else loaded = true;
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool _firstRender)
     {
         if (focusError)
         {
@@ -85,32 +89,49 @@ public partial class Settings : IDisposable
      * drops account-specific values and pending requests when the signed-in identity changes.
      * @param state The latest validated authentication state.
      */
-    void AuthenticationChanged(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
+    void AuthenticationChanged(Task<AuthenticationState> state) => _ = AuthenticationChangedAsync(state);
+
+    /**
+     * Resets the form for the new identity on the render thread; failures are logged instead of left unobserved.
+     * @param state The latest validated authentication state.
+     * @return Completion of the reset and the reload for the new identity.
+     */
+    async Task AuthenticationChangedAsync(Task<AuthenticationState> state)
     {
-        CancelRequest();
-        saved = null; etag = null; hasValues = false; draft = new(); status = null; conflict = saving = loading = false;
-        ClearError();
-        loaded = false;
-        await UpdateAccessAsync(await state);
-        if (signedIn) await LoadAsync();
-        else loaded = true;
-        StateHasChanged();
-    });
+        if (disposed) return;
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (disposed) return;
+                CancelRequest();
+                saved = null; etag = null; hasValues = false; draft = new(); status = null; conflict = saving = loading = false;
+                ClearError();
+                loaded = false;
+                ApplyAccess(await state);
+                if (signedIn) await LoadAsync();
+                else loaded = true;
+                if (!disposed) StateHasChanged();
+            });
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.LogError(exception, "Settings authentication change failed");
+        }
+    }
 
     /**
      * refreshes the sign-in and write hints from the server-owned session, never from a browser-decoded token.
      * @param state The current authentication state.
-     * @return Completion once the hints are updated.
      */
-    Task UpdateAccessAsync(AuthenticationState state)
+    void ApplyAccess(AuthenticationState state)
     {
-        signedIn = state.User.Identity?.IsAuthenticated == true && Sessions.IsActive(state.User) && AccessTokenClaims.ActiveToken(state.User, Clock.GetUtcNow()) is not null;
-        canWrite = signedIn && state.User.FindAll(AccessTokenClaims.GrantedScope).SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Contains("settings.write", StringComparer.Ordinal);
-        return Task.CompletedTask;
+        signedIn = AccessTokenClaims.IsSignedIn(state.User, Sessions, Clock.GetUtcNow());
+        canWrite = signedIn && AccessTokenClaims.GrantedScopes(state.User).Contains("settings.write");
     }
 
     /**
-     * reads the saved values and replaces the form with them. this is the only path that clears a stale conflict, and only when the read succeeds; a failed reload keeps the conflict so the old etag cannot be saved.
+     * reads the saved values and replaces the form with them. a successful read or save clears a stale conflict; a failed reload keeps it so the old etag cannot be saved.
      * @return Completion of the read and its user-facing state.
      */
     async Task LoadAsync()
@@ -126,6 +147,7 @@ public partial class Settings : IDisposable
         }
         catch (OperationCanceledException) when (current.IsCancellationRequested)
         {
+            // superseded or closed, nothing to publish
         }
         catch (ApiError failure)
         {
@@ -179,6 +201,7 @@ public partial class Settings : IDisposable
         }
         catch (OperationCanceledException) when (current.IsCancellationRequested)
         {
+            // superseded or closed, nothing to publish
         }
         catch (ApiError failure)
         {
@@ -295,6 +318,7 @@ public partial class Settings : IDisposable
      * @return true when the response may update the view.
      */
     bool Current(int version) => !disposed && version == generation;
+
     /**
      * cancels any earlier request and starts a new one.
      * @return the new cancellation source and its generation.
@@ -305,6 +329,7 @@ public partial class Settings : IDisposable
         request = new();
         return (request, generation);
     }
+
     /** cancels the pending request and advances the generation so late answers are ignored. */
     void CancelRequest()
     {

@@ -10,17 +10,21 @@ namespace TravelTracker.Transport.Domain.Types;
  * Only Data can create one (through its generator or from a stored row); the
  * default value means "no identity yet".
  */
-public readonly record struct EntityId<TEntity> {
+public readonly record struct EntityId<TEntity>
+{
     /** The secret database identifier. Visible to Data via InternalsVisibleTo. */
     internal Id64 Key { get; }
 
     /** The external uuidv7, safe to expose. */
     public Guid PublicId { get; }
 
-    internal EntityId(Id64 key, Guid publicId) {
+    /** Pairs a database key with its public identifier. */
+    internal EntityId(Id64 key, Guid publicId)
+    {
         Key = key;
         PublicId = publicId;
     }
 
+    /** Formats the public identifier, the only form of this identity that clients see. */
     public override string ToString() => PublicId.ToString();
 }

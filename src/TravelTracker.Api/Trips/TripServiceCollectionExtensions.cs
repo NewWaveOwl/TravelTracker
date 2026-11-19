@@ -1,6 +1,6 @@
-using TravelTracker.Trips.Data.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TravelTracker.Api.References;
 
@@ -9,7 +9,8 @@ namespace TravelTracker.Api.Trips;
 /**
  * Registers the trip reference clients, validator and save service. The host still supplies ITripRepository.
  */
-public static class TripServiceCollectionExtensions {
+public static class TripServiceCollectionExtensions
+{
     /**
      * Binds and validates the TripReferences section, then registers typed HTTP clients for the four upstream
      * services and the trip services that use them. Invalid settings fail when the options are first resolved,
@@ -19,7 +20,8 @@ public static class TripServiceCollectionExtensions {
      * @param configuration Deployment configuration containing the TripReferences section.
      * @return The services for further composition.
      */
-    public static IServiceCollection AddTripReferences(this IServiceCollection services, IConfiguration configuration) {
+    public static IServiceCollection AddTripReferences(this IServiceCollection services, IConfiguration configuration)
+    {
         services.AddOptions<TripReferenceOptions>().Bind(configuration.GetSection(TripReferenceOptions.SectionName))
             .Validate(options => IsAbsoluteUrl(options.AccommodationsBaseUrl, allowHttp: true),
                 "TripReferences:AccommodationsBaseUrl must be an absolute http or https URL.")
@@ -34,18 +36,38 @@ public static class TripServiceCollectionExtensions {
             .Validate(options => options.Timeout > TimeSpan.Zero && options.Timeout <= TimeSpan.FromSeconds(60),
                 "TripReferences:Timeout must be greater than zero and at most 60 seconds.")
             .ValidateOnStart();
+        // plain http is allowed for local catalogue hosts only; say so loudly because the caller's own token travels to them.
+        services.AddOptions<TripReferenceOptions>().PostConfigure<ILoggerFactory>((options, loggerFactory) =>
+        {
+            var logger = loggerFactory.CreateLogger("TravelTracker.Api.Trips.TripReferences");
+            foreach (var (name, address) in new[]
+            {
+                ("Accommodations", options.AccommodationsBaseUrl), ("Attractions", options.AttractionsBaseUrl), ("Transport", options.TransportBaseUrl)
+            })
+                if (address is not null && address.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                    logger.LogWarning("TripReferences {Service} base address uses plain http, so caller bearer tokens are sent unencrypted. Use https outside local development.", name);
+        });
 
+        // the reference clients forward a bearer credential, so redirects and cookies stay off. this default covers every HttpClient in the Trips host, not only the reference clients.
+        services.ConfigureHttpClientDefaults(builder =>
+            builder.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }));
         services.AddSingleton<ReferenceSender>();
+        // the reference paths carry public resource ids, so the framework's per-request URL logging is switched off for every client.
         services.AddHttpClient<AccommodationReferenceClient>((provider, client) =>
-            client.BaseAddress = BaseAddressOf(provider, options => options.AccommodationsBaseUrl));
+            client.BaseAddress = BaseAddressOf(provider, options => options.AccommodationsBaseUrl))
+            .RemoveAllLoggers();
         services.AddHttpClient<AttractionReferenceClient>((provider, client) =>
-            client.BaseAddress = BaseAddressOf(provider, options => options.AttractionsBaseUrl));
+            client.BaseAddress = BaseAddressOf(provider, options => options.AttractionsBaseUrl))
+            .RemoveAllLoggers();
         services.AddHttpClient<RoutePointReferenceClient>((provider, client) =>
-            client.BaseAddress = BaseAddressOf(provider, options => options.TransportBaseUrl));
+            client.BaseAddress = BaseAddressOf(provider, options => options.TransportBaseUrl))
+            .RemoveAllLoggers();
         services.AddHttpClient<TransportModeReferenceClient>((provider, client) =>
-            client.BaseAddress = BaseAddressOf(provider, options => options.TransportBaseUrl));
+            client.BaseAddress = BaseAddressOf(provider, options => options.TransportBaseUrl))
+            .RemoveAllLoggers();
         services.AddHttpClient<UsersStandingClient>((provider, client) =>
-            client.BaseAddress = BaseAddressOf(provider, options => options.UsersBaseUrl));
+            client.BaseAddress = BaseAddressOf(provider, options => options.UsersBaseUrl))
+            .RemoveAllLoggers();
         services.AddTransient<TripReferenceValidator>();
         services.AddTransient<TripSaveService>();
         return services;
@@ -58,7 +80,8 @@ public static class TripServiceCollectionExtensions {
      * @param select Picks the base address for one upstream service.
      * @return The absolute base address.
      */
-    private static Uri BaseAddressOf(IServiceProvider provider, Func<TripReferenceOptions, string?> select) {
+    private static Uri BaseAddressOf(IServiceProvider provider, Func<TripReferenceOptions, string?> select)
+    {
         var address = select(provider.GetRequiredService<IOptions<TripReferenceOptions>>().Value)!;
         return new Uri(address.EndsWith('/') ? address : address + "/");
     }

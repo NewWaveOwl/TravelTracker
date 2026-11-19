@@ -6,16 +6,16 @@ using Npgsql;
 namespace TravelTracker.Trips.Api.Errors;
 
 /**
- * Maps unexpected failures to safe HTTP responses. Storage failures become 503 and are logged by exception type only,
+ * maps unexpected failures to safe HTTP responses. Storage failures become 503 and are logged by exception type only,
  * because provider messages can contain connection details.
  */
 public static class TripExceptionHandler
 {
     /**
-     * Converts a failed request to a safe problem response and logs the failure category.
+     * converts a failed request to a safe problem response and logs the failure category.
      *
-     * @param context The failed request and exception feature.
-     * @return Completion after writing a problem response or ending an aborted request.
+     * @param context the failed request and exception feature.
+     * @return completion after writing a problem response or ending an aborted request.
      */
     public static async Task HandleAsync(HttpContext context)
     {
@@ -32,6 +32,8 @@ public static class TripExceptionHandler
         var status = exception switch
         {
             ValidationException => StatusCodes.Status400BadRequest,
+            _ when postgres?.SqlState == PostgresErrorCodes.UniqueViolation => StatusCodes.Status409Conflict,
+            _ when postgres?.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected => StatusCodes.Status503ServiceUnavailable,
             _ when postgres?.SqlState.StartsWith("22", StringComparison.Ordinal) == true => StatusCodes.Status400BadRequest,
             _ when postgres?.SqlState.StartsWith("23", StringComparison.Ordinal) == true => StatusCodes.Status400BadRequest,
             OperationCanceledException => StatusCodes.Status408RequestTimeout,
@@ -42,10 +44,13 @@ public static class TripExceptionHandler
         {
             StatusCodes.Status400BadRequest => "The trip contains values the store cannot accept; nothing was saved.",
             StatusCodes.Status408RequestTimeout => "The operation timed out.",
+            StatusCodes.Status409Conflict => "The trip conflicts with an existing trip; nothing was saved.",
             StatusCodes.Status503ServiceUnavailable => "Trip storage is unavailable; nothing was saved.",
             _ => "The request could not be completed."
         };
+        // 503 storage messages can carry connection details, so only the type is logged; unexpected 500s keep the full exception for diagnosis.
         logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning,
+            status == StatusCodes.Status500InternalServerError ? exception : null,
             "Trip request failed with HTTP {StatusCode} ({FailureType}); exception type {ExceptionType}.", status,
             status == StatusCodes.Status503ServiceUnavailable ? "dependency failure" : "request failure",
             exception?.GetType().Name ?? "none");

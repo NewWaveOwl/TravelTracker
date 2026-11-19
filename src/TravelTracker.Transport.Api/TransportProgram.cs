@@ -10,12 +10,8 @@ using TravelTracker.Transport.Data.Repositories;
 
 namespace TravelTracker.Transport.Api;
 
-/**
-
- * Independently composes Transport, its PostgreSQL store and its HTTP access boundaries.
-
- */
-public partial class TransportProgram
+/** Independently composes Transport, its PostgreSQL store and its HTTP access boundaries. */
+public class TransportProgram
 {
     /**
      * Starts the independent host without starting other TravelTracker hosts.
@@ -47,13 +43,22 @@ public partial class TransportProgram
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         var app = builder.Build();
         app.UseTransportExceptionHandling();
-        if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<TransportProgram>();
+        var applyMigrations = app.Configuration.GetValue<bool>("Database:ApplyMigrations");
+        var seedExamples = app.Configuration.GetValue<bool>("Database:SeedExamples");
+        logger.LogInformation("Transport starting in {Environment} (apply migrations: {ApplyMigrations}, seed examples: {SeedExamples}).", app.Environment.EnvironmentName, applyMigrations, seedExamples);
+        if (applyMigrations)
         {
             await using var scope = app.Services.CreateAsyncScope();
-            await TransportDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<TransportDbContext>(),
-                app.Configuration.GetValue<bool>("Database:SeedExamples"));
+            var seededCount = await TransportDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<TransportDbContext>(), seedExamples);
+            var seedState = !seedExamples ? "disabled" : seededCount > 0 ? $"inserted {seededCount} record(s)" : "skipped, the tables already have rows";
+            logger.LogInformation("Transport migrations applied (seeding {SeedState}).", seedState);
         }
-        if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI();
+        }
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseMiddleware<TransportAccessMiddleware>();

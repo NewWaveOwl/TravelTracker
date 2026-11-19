@@ -1,10 +1,6 @@
 namespace TravelTracker.Attractions.Data.Entities;
 
-/**
-
- * Stores persistence-only identity and ownership alongside attraction values.
-
- */
+/** Stores persistence-only identity and ownership alongside attraction values. */
 internal sealed class AttractionRow
 {
     public long Id { get; set; }

@@ -70,7 +70,7 @@ Development Swagger has an **Authorize** control for an access token and documen
 
 Inbound claim mapping is disabled and `User.Identity.Name` is the validated `sub`. Each accepted user token must contain exactly one nonblank `sub`; Supabase tokens must also have exactly the `authenticated` role and must not identify an anonymous user. The issuer must match the configured project issuer. Use the validated `(iss, sub)` pair for Users mapping: `sub` is not assumed to be a TravelTracker UUID. Request headers, query values and bodies cannot replace this identity. No production identity-debug endpoint is exposed.
 
-Bearer validation establishes only the caller identity and token permissions. Each owning service separately enforces account-standing and resource-ownership rules where its contract requires them. A token with write permission authorizes only the operations listed for that host; the identity provider must grant permissions only to authorized callers. Do not treat scopes as a substitute for ownership or account-status enforcement.
+Bearer validation establishes only the caller identity and token permissions. Each owning service separately enforces account-standing and resource-ownership rules where its contract requires them. A token with write permission authorizes only the operations listed for that host; the identity provider must grant permissions only to authorized callers. Do not treat scopes as a substitute for ownership or account-status enforcement. The Users service additionally enforces its own `users.admin` scope (`ScopePolicies.UsersAdministration`) on the account list, role changes and bootstrap, and rechecks live administrator standing there.
 
 ## Adoption recipe
 

@@ -2,7 +2,7 @@ using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 
-namespace TravelTracker.Api.Authentication;
+namespace TravelTracker.Security.Authentication;
 
 /**
  * Loads rotating public signing keys from the configured Supabase issuer, without OIDC discovery.

@@ -21,7 +21,7 @@ using TravelTracker.Transport.Api.Tests.Support;
 namespace TravelTracker.Transport.Api.Tests;
 
 /**
- * Creates an isolated in-memory HTTP host for each test.
+ * Creates an isolated HTTP host for each test, backed by an in-memory store or a disposable PostgreSQL database.
  */
 internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Transport.Api.TransportProgram>
 {

@@ -1,6 +1,4 @@
 using System.Globalization;
-using TravelTracker.Frontend.Features.Settings;
-
 using TravelTracker.Frontend.Api.Trips;
 
 namespace TravelTracker.Frontend.Features.Trips;
@@ -31,7 +29,7 @@ public sealed class TripDraft
     /** Ordered legs. */
     public List<TripLegDraft> Legs { get; } = [];
 
-    /** True once the traveller has entered anything worth warning about before leaving. */
+    /** true once the traveller has entered anything worth warning about before leaving; the name, either date or any leg counts. */
     public bool HasEntries => Name.Length > 0 || Start.Length > 0 || End.Length > 0 || Legs.Count > 0;
 
     /**
@@ -43,7 +41,7 @@ public sealed class TripDraft
         var errors = new Errors();
         if (string.IsNullOrWhiteSpace(Name)) errors.Add("name", "Enter a trip name.");
         var zone = FindZone();
-        if (zone is null) errors.Add("timeZone", "Enter a time zone the server knows, such as Europe/Paris.");
+        if (zone is null) errors.Add("timeZone", "Enter a time zone this app recognizes, such as Europe/Paris.");
         var start = Read(Start, zone, "start", errors);
         var end = Read(End, zone, "end", errors);
         if (start is not null && end is not null && end < start) errors.Add("end", "The trip end must not be before the trip start.");
@@ -81,7 +79,7 @@ public sealed class TripDraft
             if (index > 0)
             {
                 var previous = Legs[index - 1];
-                if (leg.From is not null && previous.To is not null && leg.From.PlaceId != previous.To.PlaceId)
+                if (leg.From is not null && previous.To is not null && !SamePlace(leg.From, previous.To))
                     errors.Add($"{path}.from", "This leg must start where the previous leg ended.");
                 if (departure is not null && previousArrival is not null && departure < previousArrival)
                     errors.Add($"{path}.departure", "This leg overlaps the previous one; depart at or after its arrival.");
@@ -94,7 +92,7 @@ public sealed class TripDraft
         if (first.From is not null && first.From.Type != "accommodation") errors.Add("legs[0].from", "A trip must start at an accommodation.");
         if (IsRoundTrip)
         {
-            if (last.To is not null && first.From is not null && last.To.PlaceId != first.From.PlaceId) errors.Add(lastPath, "A round trip must return to where it started.");
+            if (last.To is not null && first.From is not null && !SamePlace(last.To, first.From)) errors.Add(lastPath, "A round trip must return to where it started.");
             if (!Legs.Any(leg => leg.To?.Type == "attraction")) errors.Add("legs", "A round trip must include at least one attraction.");
         }
         else if (last.To is not null && last.To.Type != "attraction") errors.Add(lastPath, "A one-way trip must end at an attraction.");
@@ -108,18 +106,18 @@ public sealed class TripDraft
     public SaveTripRequest ToRequest()
     {
         var zone = FindZone() ?? throw new InvalidOperationException("The draft has no valid time zone.");
-        DateTimeOffset At(string local) => ToOffset(local, zone, out var instant, out _) ? instant : throw new InvalidOperationException("The draft has an unusable time.");
+        DateTimeOffset At(string local) => TryResolveInstant(local, zone, out var instant, out _) ? instant : throw new InvalidOperationException("The draft has an unusable time.");
         return new SaveTripRequest(Name.Trim(), TimeZone.Trim(), At(Start), At(End), IsRoundTrip,
             Legs.Select((leg, index) => new SaveTripRequest.Leg(index + 1,
                 new(leg.From!.PlaceId, leg.From.Type), new(leg.To!.PlaceId, leg.To.Type),
                 leg.TransportModeId!.Value, At(leg.Departure), At(leg.Arrival))).ToArray());
     }
 
-    TimeZoneInfo? FindZone()
-    {
-        if (!SettingsRules.IsKnownTimeZone(TimeZone.Trim())) return null;
-        return TimeZoneInfo.FindSystemTimeZoneById(TimeZone.Trim());
-    }
+    // a place is the same when its identifier and type match; choices always come from a service search, so an empty identifier never reaches here (unlike the map planner's rule)
+    static bool SamePlace(TripPlaceChoice first, TripPlaceChoice second) => first.PlaceId == second.PlaceId && first.Type == second.Type;
+
+    TimeZoneInfo? FindZone() =>
+        !string.IsNullOrWhiteSpace(TimeZone) && TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone) ? zone : null;
 
     DateTimeOffset? Read(string local, TimeZoneInfo? zone, string? field, Errors errors)
     {
@@ -129,7 +127,7 @@ public sealed class TripDraft
             if (field is not null) errors.Add(field, "Enter a date and time.");
             return null;
         }
-        if (ToOffset(local, zone, out var instant, out var problem)) return instant;
+        if (TryResolveInstant(local, zone, out var instant, out var problem)) return instant;
         if (field is not null) errors.Add(field, problem);
         return null;
     }
@@ -142,7 +140,7 @@ public sealed class TripDraft
      * @param problem Why the time cannot be used, when it cannot.
      * @return True when the local time exists exactly once in the zone.
      */
-    public static bool ToOffset(string local, TimeZoneInfo zone, out DateTimeOffset instant, out string problem)
+    public static bool TryResolveInstant(string local, TimeZoneInfo zone, out DateTimeOffset instant, out string problem)
     {
         instant = default;
         problem = "";

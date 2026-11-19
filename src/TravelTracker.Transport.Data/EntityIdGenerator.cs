@@ -1,4 +1,3 @@
-using TravelTracker.Transport.Data.SeedData;
 using TravelTracker.Transport.Domain.Types;
 
 namespace TravelTracker.Transport.Data;
@@ -8,36 +7,42 @@ namespace TravelTracker.Transport.Data;
  * The first call reads the highest stored key (once, under a private async
  * lock), then every later call is an in-memory increment. The database stays
  * a dumb store: no counter is persisted, it is rebuilt from the data on restart.
- * One counter serves every table, so keys stay unique across entities.
+ * One counter serves every table, so issued keys never repeat within a table
+ * (seed rows carry fixed low keys in each table, below any key issued afterwards).
  * Assumes a single backend instance; two instances would hand out the same
  * keys, so switch to a node-aware scheme (snowflake) before scaling out.
  *
  * @param readHighestKey Reads the highest key currently stored, or 0 when empty.
  */
-public sealed class EntityIdGenerator(Func<CancellationToken, Task<long>> readHighestKey) {
+public sealed class EntityIdGenerator(Func<CancellationToken, Task<long>> readHighestKey)
+{
     private readonly SemaphoreSlim seedLock = new(1, 1);
-    private long last;
+    private long lastIssuedKey;
     private bool seeded;
 
     /**
      * Issues the next identity. Safe to call concurrently; gaps after a crash are harmless.
      * @param cancellationToken Cancels initial database lookup or lock acquisition.
-     *
      * @return A task containing a fresh identity for the entity type.
      */
-    public async ValueTask<EntityId<TEntity>> NextAsync<TEntity>(CancellationToken cancellationToken = default) {
+    public async ValueTask<EntityId<TEntity>> NextAsync<TEntity>(CancellationToken cancellationToken = default)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         if (!Volatile.Read(ref seeded)) await SeedAsync(cancellationToken);
-        return new(new Id64(Interlocked.Increment(ref last)), Guid.CreateVersion7());
+        return new(new Id64(Interlocked.Increment(ref lastIssuedKey)), Guid.CreateVersion7());
     }
 
-    private async Task SeedAsync(CancellationToken cancellationToken) {
+    private async Task SeedAsync(CancellationToken cancellationToken)
+    {
         await seedLock.WaitAsync(cancellationToken);
-        try {
+        try
+        {
             if (seeded) return;
-            last = await readHighestKey(cancellationToken);
+            lastIssuedKey = await readHighestKey(cancellationToken);
             Volatile.Write(ref seeded, true);
-        } finally {
+        }
+        finally
+        {
             seedLock.Release();
         }
     }

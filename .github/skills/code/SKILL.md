@@ -17,7 +17,7 @@ Course material informs the requested work; exercises are not additional tasks. 
 
 ## Structure
 
-- **Historical demo context (reinspect before use):** Attractions, Transport entries and Route Points, served by one host (`TravelTracker.Api`, Development Swagger on port 5104). Listing, search, PATCH, scheduled journeys and stop-time calculations are future work unless requested.
+- **Historical demo context (reinspect before use):** Attractions (`TravelTracker.Attractions.Api`, Development Swagger on port 5104) and Transport entries and Route Points (`TravelTracker.Transport.Api`, port 5105). Listing, search, PATCH, scheduled journeys and stop-time calculations are future work unless requested.
 - **One resource, one cohesive feature.** GET-by-ID and POST live together in that resource's controller, service and repository. Avoid per-action partial files and duplicate entities or interfaces. Preserve the host layout for a scoped feature; a requested SOA milestone can require additional independently runnable services.
 - **One primary type per file.** Models, DTOs, requests, interfaces, repositories and strategies each get their own file. Small private helpers can stay with the type they support. Use a named feature folder when it helps.
 - **`Program.cs` is the composition root:** configuration, DI registration, middleware, route mapping. Feature handlers live elsewhere.
@@ -26,11 +26,11 @@ Course material informs the requested work; exercises are not additional tasks. 
 
 ## Layers and DI
 
-**Selected persistence:** PostgreSQL with `Npgsql.EntityFrameworkCore.PostgreSQL` (owner decision, 2026-10-28; [Data contract](../../../docs/data.md)). Attractions now has dedicated Api/Data/Domain projects and implemented PostgreSQL migrations on port 5104; the remaining Transport/Route Points host uses memory on 5105. Both use the shared TravelTracker.Security bearer infrastructure library; never reference another host's Api/Data projects. Use compatible .NET/EF Core/Npgsql versions and environment-specific connection configuration. Keep provider types out of Domain and HTTP DTOs. Production remains PostgreSQL. Test-only EF InMemory is approved for application/domain/HTTP behavior; marked relational tests must still use PostgreSQL. Do not replace runtime PostgreSQL with SQLite or infer untested provider guarantees. Use [Attractions access/startup rules](../../../docs/attractions-service.md), including live Users checks and server-owned private/shared ownership.
+**Selected persistence:** PostgreSQL with `Npgsql.EntityFrameworkCore.PostgreSQL` (owner decision, 2026-10-28; [Data contract](../../../docs/data.md)). Attractions now has dedicated Api/Data/Domain projects and implemented PostgreSQL migrations on port 5104; the Transport/Route Points host uses PostgreSQL on 5105. Both use the shared TravelTracker.Security bearer infrastructure library; never reference another host's Api/Data projects. Use compatible .NET/EF Core/Npgsql versions and environment-specific connection configuration. Keep provider types out of Domain and HTTP DTOs. Production remains PostgreSQL. Test-only EF InMemory is approved for application/domain/HTTP behavior; marked relational tests must still use PostgreSQL. Do not replace runtime PostgreSQL with SQLite or infer untested provider guarantees. Use [Attractions access/startup rules](../../../docs/attractions-service.md), including live Users checks and server-owned private/shared ownership.
 
 | Project | Owns |
 | --- | --- |
-| `TravelTracker.Api` | Thin HTTP handlers (bind, validate, call, map to a response) and services (business rules, coordination). |
+| `TravelTracker.<Service>.Api` | Thin HTTP handlers (bind, validate, call, map to a response) and services (business rules, coordination). |
 | `TravelTracker.Data` | Repositories and persistence. Loads and stores; does not decide permissions or trip validity. |
 | `TravelTracker.Domain` | Entities, value types, enums, domain rules. No HTTP, EF Core or vendor SDK dependencies. |
 

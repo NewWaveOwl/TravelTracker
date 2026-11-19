@@ -5,7 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 using Swashbuckle.AspNetCore.Swagger;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -82,7 +82,7 @@ public sealed class AuthenticationTests
     [Fact]
     public async Task Development_ShippedConfigurationStartsWithPublicHealthAndProtectedCatalogue()
     {
-        // No ApiFactory configuration overrides: load the repository's actual Development settings.
+        // no ApiFactory configuration overrides: load the repository's actual Development settings.
         using var factory = new WebApplicationFactory<TravelTracker.Attractions.Api.AttractionsProgram>().WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
         using var client = factory.CreateClient();
         using var health = await client.GetAsync("/health");
@@ -111,21 +111,21 @@ public sealed class AuthenticationTests
     }
 
     [Theory]
-    [InlineData("fallback", "missing-token", 401)]
-    [InlineData("fallback", null, 403)]
-    [InlineData("fallback", "catalogue.write", 403)]
-    [InlineData("fallback", "catalogue.read", 200)]
-    [InlineData("default", "missing-token", 401)]
-    [InlineData("default", null, 403)]
-    [InlineData("default", "catalogue.write", 403)]
-    [InlineData("default", "catalogue.read", 200)]
-    public async Task ImplicitPolicy_RequiresReadScope(string policy, string? scopes, int status)
+    [InlineData("fallback", null, false, HttpStatusCode.Unauthorized)]
+    [InlineData("fallback", null, true, HttpStatusCode.Forbidden)]
+    [InlineData("fallback", "catalogue.write", true, HttpStatusCode.Forbidden)]
+    [InlineData("fallback", "catalogue.read", true, HttpStatusCode.OK)]
+    [InlineData("default", null, false, HttpStatusCode.Unauthorized)]
+    [InlineData("default", null, true, HttpStatusCode.Forbidden)]
+    [InlineData("default", "catalogue.write", true, HttpStatusCode.Forbidden)]
+    [InlineData("default", "catalogue.read", true, HttpStatusCode.OK)]
+    public async Task ImplicitPolicy_RequiresReadScope(string policy, string? scopes, bool sendToken, HttpStatusCode status)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = scopes == "missing-token" ? null : new("Bearer", factory.CreateToken(scopes));
+        client.DefaultRequestHeaders.Authorization = sendToken ? new("Bearer", factory.CreateToken(scopes)) : null;
         using var response = await client.GetAsync($"/test/identity/{policy}");
-        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal(status, response.StatusCode);
     }
 
     [Theory]
@@ -143,15 +143,15 @@ public sealed class AuthenticationTests
     }
 
     [Theory]
-    [InlineData("RS256", "algorithm", 401)]
-    [InlineData("RS512", "algorithm", 200)]
-    public async Task Signature_RequiresAnExplicitlyAllowedAlgorithm(string algorithm, string failure, int status)
+    [InlineData("RS256", "algorithm", HttpStatusCode.Unauthorized)]
+    [InlineData("RS512", "algorithm", HttpStatusCode.OK)]
+    public async Task Signature_RequiresAnExplicitlyAllowedAlgorithm(string algorithm, string failure, HttpStatusCode status)
     {
         using var factory = new ApiFactory { ValidAlgorithms = [algorithm] };
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(failure: failure));
         using var response = await client.GetAsync("/api/v1/attractions");
-        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal(status, response.StatusCode);
     }
 
     [Fact]
@@ -210,7 +210,9 @@ public sealed class AuthenticationTests
         var document = factory.Services.GetRequiredService<ISwaggerProvider>().GetSwagger("v1");
         Assert.NotNull(document.Components?.SecuritySchemes);
         Assert.True(document.Components.SecuritySchemes.ContainsKey("Bearer"));
-        foreach (var (path, item) in document.Paths.Where(entry => entry.Key.StartsWith("/api/v1/", StringComparison.Ordinal)))
+        var protectedPaths = document.Paths.Where(entry => entry.Key.StartsWith("/api/v1/", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(protectedPaths);
+        foreach (var (path, item) in protectedPaths)
         {
             Assert.NotNull(item.Operations);
             foreach (var (method, operation) in item.Operations)
@@ -256,21 +258,21 @@ public sealed class AuthenticationTests
     }
 
     [Theory]
-    [InlineData(null, 403)]
-    [InlineData("trips.read", 403)]
-    [InlineData("catalogue.write", 403)]
-    [InlineData("catalogue.read.extra", 403)]
-    [InlineData("CATALOGUE.READ", 403)]
-    [InlineData("catalogue.read,catalogue.write", 403)]
-    [InlineData("catalogue.read", 200)]
-    [InlineData("trips.read catalogue.read catalogue.write", 200)]
-    public async Task Read_RequiresExactReadScope(string? scopes, int status)
+    [InlineData(null, HttpStatusCode.Forbidden)]
+    [InlineData("trips.read", HttpStatusCode.Forbidden)]
+    [InlineData("catalogue.write", HttpStatusCode.Forbidden)]
+    [InlineData("catalogue.read.extra", HttpStatusCode.Forbidden)]
+    [InlineData("CATALOGUE.READ", HttpStatusCode.Forbidden)]
+    [InlineData("catalogue.read,catalogue.write", HttpStatusCode.Forbidden)]
+    [InlineData("catalogue.read", HttpStatusCode.OK)]
+    [InlineData("trips.read catalogue.read catalogue.write", HttpStatusCode.OK)]
+    public async Task Read_RequiresExactReadScope(string? scopes, HttpStatusCode status)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(scopes));
         using var response = await client.GetAsync("/api/v1/attractions");
-        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal(status, response.StatusCode);
     }
 
     [Theory]
@@ -330,9 +332,9 @@ public sealed class AuthenticationTests
     }
 
     [Theory]
-    [InlineData("catalogue.read", 403)]
-    [InlineData("catalogue.write", 201)]
-    public async Task Create_RequiresWriteScopeAndRejectedWriteDoesNotPersist(string scopes, int status)
+    [InlineData("catalogue.read", 403, 0)]
+    [InlineData("catalogue.write", 201, 1)]
+    public async Task Create_RequiresWriteScopeAndRejectedWriteDoesNotPersist(string scopes, int status, int expectedRecords)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
@@ -342,7 +344,7 @@ public sealed class AuthenticationTests
         Assert.Equal((HttpStatusCode)status, response.StatusCode);
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken("catalogue.read"));
         var records = await client.GetFromJsonAsync<JsonElement>("/api/v1/attractions?name=Permission%20test");
-        Assert.Equal(status == 201 ? 1 : 0, records.GetArrayLength());
+        Assert.Equal(expectedRecords, records.GetArrayLength());
     }
 
     [Fact]

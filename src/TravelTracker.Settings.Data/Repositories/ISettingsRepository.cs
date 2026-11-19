@@ -16,7 +16,7 @@ public interface ISettingsRepository
 
     /**
      * replaces the saved preferences only when the stored revision still equals the expected one.
-     * the check and the write happen in one statement, so two racing saves cannot both succeed.
+     * the stored revision is a concurrency token on the write, so two racing saves cannot both succeed.
      * an expected revision of 0 means the caller saw no saved row and inserts the first one.
      * @param issuer the validated token issuer.
      * @param subject the validated token subject.

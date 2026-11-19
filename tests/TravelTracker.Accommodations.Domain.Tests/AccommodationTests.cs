@@ -75,7 +75,7 @@ public sealed class AccommodationTests
      */
     private static Accommodation ValidAccommodation() => new()
     {
-        AccommodationId = Guid.CreateVersion7(),
+        AccommodationId = Guid.Parse("00000000-0000-0000-0000-000000000931"),
         OwnerIssuer = "https://issuer.example/",
         OwnerSubject = "traveller-1",
         Name = "Harbour Inn",

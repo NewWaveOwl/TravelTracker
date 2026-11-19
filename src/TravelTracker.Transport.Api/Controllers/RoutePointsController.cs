@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 using TravelTracker.Transport.Api.Contracts;
 using TravelTracker.Transport.Api.Services;
 using TravelTracker.Transport.Domain.Models;
@@ -9,7 +9,7 @@ using TravelTracker.Transport.Domain.Models;
 namespace TravelTracker.Transport.Api.Controllers;
 
 /**
- * Exposes creation and lookup using the existing shared project structure.
+ * Exposes listing, lookup and creation of reusable route points.
  * @param service Shared application service for this resource.
  */
 [ApiController]
@@ -17,9 +17,9 @@ namespace TravelTracker.Transport.Api.Controllers;
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
 public sealed class RoutePointsController(IRoutePointService service) : ControllerBase
 {
-
-    /** Lists saved records for selection, without journey scheduling.
-     * @param type Optional exact lowercase category.
+    /**
+     * Lists saved records for selection, without journey scheduling.
+     * @param type Optional exact lowercase category; empty or whitespace is treated as omitted.
      * @param name Optional case-insensitive name substring.
      * @param cancellationToken Cancels storage I/O.
      * @return Deterministically ordered public records, or 400 for invalid filters.
@@ -28,13 +28,13 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
     [Authorize(Policy = ScopePolicies.CatalogueRead)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<RoutePointRecord>>> GetAll(
-        [FromQuery, RegularExpression("^(accommodation|attraction|transport_stop)$")] string? type,
+        [FromQuery, RegularExpression("^(\\s*|accommodation|attraction|transport_stop)\\z")] string? type,
         [FromQuery] string? name, CancellationToken cancellationToken)
     {
         if (Request.Query.Any(pair => (pair.Key.Equals("type", StringComparison.OrdinalIgnoreCase) ||
             pair.Key.Equals("name", StringComparison.OrdinalIgnoreCase)) && pair.Value.Count != 1))
             return ValidationProblem(new ValidationProblemDetails(new Dictionary<string, string[]> { ["query"] = ["Supply each filter once."] }));
-        var records = await service.GetAllAsync(cancellationToken, type, name);
+        var records = await service.GetAllAsync(string.IsNullOrWhiteSpace(type) ? null : type, name, cancellationToken);
         return Ok(records.Select(ToResponse).ToArray());
     }
 
@@ -58,12 +58,13 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
      * Creates a resource from validated request fields.
      * @param request Writable fields accepted by the HTTP contract.
      * @param cancellationToken Cancels I/O.
-     * @return 201 with the saved representation and details Location; invalid input returns 400.
+     * @return 201 with the saved representation and a Location header; invalid input returns 400.
      */
     [HttpPost]
     [Authorize(Policy = ScopePolicies.CatalogueWrite)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(RoutePointRecord), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<RoutePointRecord>> Create(CreateRoutePointRequest request, CancellationToken cancellationToken)
     {
         var saved = await service.CreateAsync(new RoutePoint(default, request.Type!, request.Name!, request.Address!,
@@ -75,7 +76,7 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
     /**
      * Keeps the agreed JSON fields while using the shared Domain entity.
      * @param record Entity returned by the shared service.
-     * @return Its public HTTP response, including the existing name/coordinate aliases.
+     * @return Its public HTTP response, including Lat and Lon as the aliases for Latitude and Longitude.
      */
     private static RoutePointRecord ToResponse(RoutePoint record) => new(record.RoutePointId.PublicId, record.Type, record.Name, record.Address, record.Latitude, record.Longitude, record.SourceId);
 }

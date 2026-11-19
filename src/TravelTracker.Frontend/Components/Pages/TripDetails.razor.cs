@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using TravelTracker.Frontend.Api;
@@ -21,7 +22,7 @@ public sealed partial class TripDetails : IDisposable
 
     TripDto? trip;
     ApiError? failure;
-    bool loading = true, justSaved;
+    bool loading = true, justSaved, disposed;
     Guid loadedId;
     CancellationTokenSource? request;
 
@@ -48,18 +49,38 @@ public sealed partial class TripDetails : IDisposable
 
     /**
      * drops the loaded trip when the signed-in identity changes, then asks again as the new identity.
-     * @param state The latest validated authentication state.
+     * @param _state The latest validated authentication state, unused because the view reloads as the current identity.
      */
-    void AuthenticationChanged(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
+    void AuthenticationChanged(Task<AuthenticationState> _state) => _ = AuthenticationChangedAsync();
+
+    /**
+     * Reloads the trip as the new identity; failures are logged instead of left unobserved.
+     * @return Completion of the reset and the reload.
+     */
+    async Task AuthenticationChangedAsync()
     {
-        trip = null;
-        justSaved = false;
-        await LoadAsync();
-        StateHasChanged();
-    });
+        if (disposed) return;
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (disposed) return;
+                trip = null;
+                justSaved = false;
+                await LoadAsync();
+                StateHasChanged();
+            });
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.LogError(exception, "Trip details account change failed");
+        }
+    }
 
     async Task LoadAsync()
     {
+        // a queued account change can arrive after disposal, when the request source is already closed
+        if (disposed) return;
         request?.Cancel();
         request?.Dispose();
         var current = request = new CancellationTokenSource();
@@ -72,13 +93,16 @@ public sealed partial class TripDetails : IDisposable
             trip = loaded;
             justSaved = Saved;
         }
-        catch (OperationCanceledException) when (current.IsCancellationRequested) { return; }
+        catch (OperationCanceledException) when (current.IsCancellationRequested)
+        {
+            return;
+        }
         catch (ApiError error)
         {
             if (current != request) return;
             trip = null;
             failure = error;
-            Logger.LogWarning("Reading trip {TripId} failed as {Kind} (status {Status})", TripId, error.Kind, error.Status);
+            Logger.LogWarning("Reading a trip failed as {Kind} (status {Status})", error.Kind, error.Status);
         }
         loading = false;
     }
@@ -88,11 +112,12 @@ public sealed partial class TripDetails : IDisposable
      * @param time A stored trip time.
      * @return The local clock time and its offset.
      */
-    static string When(DateTimeOffset time) => time.ToString("yyyy-MM-dd HH:mm zzz", System.Globalization.CultureInfo.InvariantCulture);
+    static string When(DateTimeOffset time) => time.ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture);
 
     /** cancels a read that is still running when the view closes. */
     public void Dispose()
     {
+        disposed = true;
         Authentication.AuthenticationStateChanged -= AuthenticationChanged;
         request?.Cancel();
         request?.Dispose();

@@ -21,10 +21,10 @@ public sealed class UpdateSelfProfileRequest(string? username, string? email, st
         var normalizedAddress = Normalize(address);
         if (!string.Equals(normalizedUsername, Normalize(current.Username), StringComparison.Ordinal)) fields["username"] = normalizedUsername;
         if (!string.Equals(normalizedEmail, Normalize(current.Email), StringComparison.Ordinal)) fields["email"] = normalizedEmail;
-        if (!string.Equals(normalizedAddress, current.Address, StringComparison.Ordinal)) fields["address"] = normalizedAddress;
+        if (!string.Equals(normalizedAddress, Normalize(current.Address), StringComparison.Ordinal)) fields["address"] = normalizedAddress;
         return fields;
     }
 
     /** Trims non-empty profile text and represents blank optional values as null. */
-    static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    internal static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

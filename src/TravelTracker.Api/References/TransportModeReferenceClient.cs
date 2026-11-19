@@ -8,7 +8,8 @@ namespace TravelTracker.Api.References;
  * @param http Typed client whose base address points at the Transport service.
  * @param sender Sends the request and logs failures.
  */
-public sealed class TransportModeReferenceClient(HttpClient http, ReferenceSender sender) {
+public sealed class TransportModeReferenceClient(HttpClient http, ReferenceSender sender)
+{
     /**
      * Reads one transport mode and copies it into a snapshot.
      *
@@ -17,8 +18,9 @@ public sealed class TransportModeReferenceClient(HttpClient http, ReferenceSende
      * @param cancellationToken Cancels the lookup.
      * @return A transport snapshot when found, otherwise the non-found outcome.
      */
-    public async Task<ReferenceResult<TripTransport>> GetModeAsync(Guid transportModeId, string bearerToken, CancellationToken cancellationToken) {
-        var operation = $"transport mode {transportModeId:D} lookup";
+    public async Task<ReferenceResult<TripTransport>> GetModeAsync(Guid transportModeId, string bearerToken, CancellationToken cancellationToken)
+    {
+        var operation = "transport mode lookup";
         var result = await sender.SendAsync<TransportModeResponse>(http,
             ReferenceRequest.Get($"api/v1/transport-modes/{transportModeId:D}", bearerToken), operation, cancellationToken);
         if (result.Status != ReferenceStatus.Found) return result.Forward<TripTransport>();

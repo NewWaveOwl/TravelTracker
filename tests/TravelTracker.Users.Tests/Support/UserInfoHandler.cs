@@ -10,7 +10,6 @@ public sealed class UserInfoHandler : HttpMessageHandler
     public string Email { get; set; } = UsersApiFactory.Email;
     public bool Verified { get; set; } = true;
     public string? RawResponse { get; set; }
-    public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
     public bool Unavailable { get; set; }
     public int Calls { get; private set; }
     public Uri? Destination { get; private set; }
@@ -18,9 +17,11 @@ public sealed class UserInfoHandler : HttpMessageHandler
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        Calls++; Destination = request.RequestUri; Authorization = request.Headers.Authorization?.ToString();
+        Calls++;
+        Destination = request.RequestUri;
+        Authorization = request.Headers.Authorization?.ToString();
         if (Unavailable) throw new HttpRequestException("provider-secret-diagnostic");
-        return Task.FromResult(new HttpResponseMessage(Status)
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         { Content = RawResponse is null ? JsonContent.Create(new { sub = Subject, email = Email, email_verified = Verified }) : new StringContent(RawResponse) });
     }
 }

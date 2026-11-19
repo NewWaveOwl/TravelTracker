@@ -7,14 +7,15 @@ namespace TravelTracker.Api.Tests.Support;
  * In-memory stand-in for trip storage, so save tests can prove whether a write happened and who owns it.
  * It enforces owner filtering like the PostgreSQL store, and can be told to fail the next write.
  */
-public sealed class FakeTripRepository : ITripRepository {
+public sealed class FakeTripRepository : ITripRepository
+{
     private readonly List<Trip> stored = [];
     private readonly Dictionary<Guid, (string Issuer, string Subject)> owners = [];
 
     /** Trips in the order they were added. */
     public IReadOnlyList<Trip> Stored => stored;
 
-    /** Exception thrown by the next AddAsync call, and nothing is stored when it is set. */
+    /** Exception thrown by the next write that reaches storage (an add, or a replace of an owned trip with the right revision); nothing is stored then. A replace that is refused as absent or stale never reaches storage and leaves it set. */
     public Exception? NextWriteFailure { get; set; }
 
     /**
@@ -26,8 +27,10 @@ public sealed class FakeTripRepository : ITripRepository {
      * @param cancellationToken Ignored by this fake.
      * @return A completed task, or a faulted task when a failure was set.
      */
-    public Task AddAsync(Trip trip, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default) {
-        if (NextWriteFailure is { } failure) {
+    public Task AddAsync(Trip trip, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default)
+    {
+        if (NextWriteFailure is { } failure)
+        {
             NextWriteFailure = null;
             return Task.FromException(failure);
         }
@@ -46,13 +49,15 @@ public sealed class FakeTripRepository : ITripRepository {
      * @param cancellationToken Ignored by this fake.
      * @return Whether it was stored, absent, or stale.
      */
-    public Task<TripReplacementStatus> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, long expectedRevision, CancellationToken cancellationToken = default) {
+    public Task<TripReplacementStatus> ReplaceOwnedAsync(Trip trip, string ownerIssuer, string ownerSubject, long expectedRevision, CancellationToken cancellationToken = default)
+    {
         if (!owners.TryGetValue(trip.TripId, out var owner) || owner != (ownerIssuer, ownerSubject))
             return Task.FromResult(TripReplacementStatus.NotFound);
         var index = stored.FindIndex(candidate => candidate.TripId == trip.TripId);
         if (stored[index].Revision != expectedRevision)
             return Task.FromResult(TripReplacementStatus.Stale);
-        if (NextWriteFailure is { } failure) {
+        if (NextWriteFailure is { } failure)
+        {
             NextWriteFailure = null;
             return Task.FromException<TripReplacementStatus>(failure);
         }
@@ -73,7 +78,8 @@ public sealed class FakeTripRepository : ITripRepository {
      * @param cancellationToken Ignored by this fake.
      * @return The trip, or null when absent or owned by someone else.
      */
-    public Task<Trip?> GetOwnedByIdAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default) {
+    public Task<Trip?> GetOwnedByIdAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default)
+    {
         var trip = stored.FirstOrDefault(candidate => candidate.TripId == tripId);
         var owned = trip is not null && owners.TryGetValue(tripId, out var owner) && owner == (ownerIssuer, ownerSubject);
         return Task.FromResult(owned ? trip : null);

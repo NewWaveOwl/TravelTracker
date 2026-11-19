@@ -2,7 +2,7 @@ using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 
 namespace TravelTracker.Transport.Api.Tests;
 

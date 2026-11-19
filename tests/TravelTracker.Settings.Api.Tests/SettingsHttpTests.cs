@@ -36,13 +36,13 @@ public sealed class SettingsHttpTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClientFor("alice");
 
-        using var put = await client.PutSettingsAsync(ValidPreferences());
+        using var put = await client.PutSettingsAsync(SettingsTestData.ValidPreferences());
         using var get = await client.GetAsync("/api/v1/settings");
 
         Assert.Equal(HttpStatusCode.OK, put.StatusCode);
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
-        AssertPreferences(await put.Content.ReadFromJsonAsync<JsonElement>(), ValidPreferences());
-        AssertPreferences(await get.Content.ReadFromJsonAsync<JsonElement>(), ValidPreferences());
+        AssertPreferences(await put.Content.ReadFromJsonAsync<JsonElement>(), SettingsTestData.ValidPreferences());
+        AssertPreferences(await get.Content.ReadFromJsonAsync<JsonElement>(), SettingsTestData.ValidPreferences());
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed class SettingsHttpTests
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClientFor("alice");
-        await client.PutSettingsAsync(ValidPreferences());
+        await client.PutSettingsAsync(SettingsTestData.ValidPreferences());
 
         using var put = await client.PutSettingsAsync(new
         {
@@ -103,16 +103,19 @@ public sealed class SettingsHttpTests
     [Theory]
     [InlineData("theme", "neon")]
     [InlineData("defaultMapLatitude", 91)]
+    [InlineData("defaultMapLatitude", -91)]
     [InlineData("defaultMapLongitude", -181)]
+    [InlineData("defaultMapLongitude", 181)]
     [InlineData("defaultMapZoom", 21)]
+    [InlineData("defaultMapZoom", -1)]
     [InlineData("preferredTransportMode", "boat")]
     [InlineData("timeZone", "Mars/Olympus_Mons")]
     public async Task Put_InvalidValue_ReturnsFieldErrorAndKeepsPreviousSettings(string field, object value)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClientFor("alice");
-        await client.PutSettingsAsync(ValidPreferences());
-        var rejected = Override(ValidPreferences(), field, value);
+        await client.PutSettingsAsync(SettingsTestData.ValidPreferences());
+        var rejected = Override(SettingsTestData.ValidPreferences(), field, value);
 
         using var response = await client.PutSettingsAsync(rejected);
 
@@ -121,7 +124,7 @@ public sealed class SettingsHttpTests
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(problem.GetProperty("errors").TryGetProperty(field, out _));
         using var get = await client.GetAsync("/api/v1/settings");
-        AssertPreferences(await get.Content.ReadFromJsonAsync<JsonElement>(), ValidPreferences());
+        AssertPreferences(await get.Content.ReadFromJsonAsync<JsonElement>(), SettingsTestData.ValidPreferences());
     }
 
     [Fact]
@@ -159,7 +162,7 @@ public sealed class SettingsHttpTests
         using var client = factory.CreateClientFor("alice");
 
         using var response = await client.PutAsJsonAsync("/api/v1/settings",
-            Override(ValidPreferences(), field, "bob"));
+            Override(SettingsTestData.ValidPreferences(), field, "bob"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var get = await client.GetAsync("/api/v1/settings");
@@ -185,10 +188,10 @@ public sealed class SettingsHttpTests
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClientFor("alice");
-        var otherAccount = Guid.CreateVersion7();
+        var otherAccount = Guid.Parse("00000000-0000-0000-0000-000000000942");
 
         using var read = await client.GetAsync($"/api/v1/settings/{otherAccount:D}");
-        using var write = await client.PutAsJsonAsync($"/api/v1/settings/{otherAccount:D}", ValidPreferences());
+        using var write = await client.PutAsJsonAsync($"/api/v1/settings/{otherAccount:D}", SettingsTestData.ValidPreferences());
 
         // no route matches; the fallback passes unmatched requests through, so routing answers 404.
         Assert.Equal(HttpStatusCode.NotFound, read.StatusCode);
@@ -201,7 +204,7 @@ public sealed class SettingsHttpTests
         using var factory = new ApiFactory();
         using var alice = factory.CreateClientFor("alice");
         using var bob = factory.CreateClientFor("bob");
-        await alice.PutSettingsAsync(ValidPreferences());
+        await alice.PutSettingsAsync(SettingsTestData.ValidPreferences());
 
         using var bobRead = await bob.GetAsync("/api/v1/settings");
         using var bobSpoofed = new HttpRequestMessage(HttpMethod.Get, "/api/v1/settings");
@@ -212,7 +215,7 @@ public sealed class SettingsHttpTests
 
         AssertPreferences(await bobRead.Content.ReadFromJsonAsync<JsonElement>(), DefaultPreferences());
         AssertPreferences(await spoofedResponse.Content.ReadFromJsonAsync<JsonElement>(), DefaultPreferences());
-        AssertPreferences(await aliceRead.Content.ReadFromJsonAsync<JsonElement>(), ValidPreferences());
+        AssertPreferences(await aliceRead.Content.ReadFromJsonAsync<JsonElement>(), SettingsTestData.ValidPreferences());
     }
 
     [Fact]
@@ -221,7 +224,7 @@ public sealed class SettingsHttpTests
         using var factory = new ApiFactory();
         using var banned = factory.CreateClientFor("banned");
 
-        using var write = await banned.PutAsJsonAsync("/api/v1/settings", ValidPreferences());
+        using var write = await banned.PutAsJsonAsync("/api/v1/settings", SettingsTestData.ValidPreferences());
         using var read = await banned.GetAsync("/api/v1/settings");
 
         Assert.Equal(HttpStatusCode.Forbidden, write.StatusCode);
@@ -236,7 +239,7 @@ public sealed class SettingsHttpTests
         using var deactivated = factory.CreateClientFor("deactivated");
 
         using var read = await deactivated.GetAsync("/api/v1/settings");
-        using var write = await deactivated.PutAsJsonAsync("/api/v1/settings", ValidPreferences());
+        using var write = await deactivated.PutAsJsonAsync("/api/v1/settings", SettingsTestData.ValidPreferences());
 
         Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, write.StatusCode);
@@ -265,7 +268,7 @@ public sealed class SettingsHttpTests
         factory.Users!.Unavailable = true;
 
         using var read = await client.GetAsync("/api/v1/settings");
-        using var write = await client.PutAsJsonAsync("/api/v1/settings", ValidPreferences());
+        using var write = await client.PutAsJsonAsync("/api/v1/settings", SettingsTestData.ValidPreferences());
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, read.StatusCode);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, write.StatusCode);
@@ -290,20 +293,6 @@ public sealed class SettingsHttpTests
         using var recovered = await client.GetAsync("/api/v1/settings");
         AssertPreferences(await recovered.Content.ReadFromJsonAsync<JsonElement>(), DefaultPreferences());
     }
-
-    /**
-     * the complete valid preference set shared by the contract tests.
-     * @return a JSON-serializable preference object.
-     */
-    private static object ValidPreferences() => new
-    {
-        theme = "dark",
-        defaultMapLatitude = 45.5m,
-        defaultMapLongitude = -73.5m,
-        defaultMapZoom = 12,
-        preferredTransportMode = "train",
-        timeZone = "America/Montreal"
-    };
 
     /**
      * the documented values returned before any save.
@@ -344,6 +333,9 @@ public sealed class SettingsHttpTests
         var values = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(JsonSerializer.Serialize(expected))!;
         Assert.Equal(values.Count, actual.EnumerateObject().Count());
         foreach (var pair in values)
-            Assert.Equal(pair.Value.ToString(), actual.GetProperty(pair.Key).ToString());
+            if (pair.Value.ValueKind == JsonValueKind.Number)
+                Assert.Equal(pair.Value.GetDecimal(), actual.GetProperty(pair.Key).GetDecimal());
+            else
+                Assert.Equal(pair.Value.GetString(), actual.GetProperty(pair.Key).GetString());
     }
 }

@@ -5,31 +5,32 @@ using TravelTracker.Attractions.Data.SeedData;
 namespace TravelTracker.Attractions.Data;
 
 /**
-
  * Hosts explicit database migration and optional first-run demo initialization.
-
  */
 public static class AttractionsDatabase
 {
     /**
      * Applies committed migrations without resetting persisted records.
      * @param database The service-owned context.
-     * @param seedExamples Whether to insert missing shared demo records.
+     * @param seedExamples Whether to insert the shared demo records, only when the table is empty.
      * @param cancellationToken Cancels initialization.
-     * @return Completion after durable initialization.
+     * @return The number of example attractions inserted; zero when seeding is off or the table already had rows.
      */
-    public static async Task InitializeAsync(AttractionsDbContext database, bool seedExamples, CancellationToken cancellationToken = default)
+    public static async Task<int> InitializeAsync(AttractionsDbContext database, bool seedExamples, CancellationToken cancellationToken = default)
     {
         await database.Database.MigrateAsync(cancellationToken);
-        if (!seedExamples || await database.Attractions.AnyAsync(cancellationToken)) return;
+        if (!seedExamples || await database.Attractions.AnyAsync(cancellationToken)) return 0;
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         var repository = new EfAttractionRepository(database);
+        var inserted = 0;
         foreach (var attraction in AttractionSeedData.Create())
         {
             attraction.IsShared = true;
             await repository.AddAsync(attraction, cancellationToken);
+            inserted++;
         }
         await transaction.CommitAsync(cancellationToken);
+        return inserted;
     }
 
     /**

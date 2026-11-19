@@ -11,7 +11,7 @@ using TravelTracker.Frontend.Tests.Support;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** Drives hosted sign-in, the session and sign-out through the real middleware with a fake Auth0 tenant. */
+/** drives hosted sign-in, the session and sign-out through the real middleware with a fake Auth0 tenant. */
 public sealed class SignInFlowTests
 {
     static async Task<string> AccountHtmlAsync(HttpClient browser) => await (await browser.GetAsync("/account")).Content.ReadAsStringAsync();
@@ -30,8 +30,7 @@ public sealed class SignInFlowTests
         Assert.Equal("S256", query["code_challenge_method"]);
         Assert.Equal("traveltracker-api", query["audience"]);
         Assert.Equal("test-client", query["client_id"]);
-        Assert.Contains("catalogue.read", query["scope"]);
-        Assert.Contains("users.read", query["scope"]);
+        Assert.Equal(FrontendFactory.RequestedScope, query["scope"]);
         Assert.False(string.IsNullOrEmpty(query["nonce"]));
     }
 
@@ -184,7 +183,6 @@ public sealed class SignInFlowTests
     }
 
     // what live Auth0 can send that the handler must refuse
-
     [Theory]
     [InlineData("issuer")]
     [InlineData("audience")]
@@ -198,7 +196,8 @@ public sealed class SignInFlowTests
             case "issuer": factory.Auth0.IdTokenIssuer = "https://other-tenant.example.test/"; break;
             case "audience": factory.Auth0.IdTokenAudience = "another-client"; break;
             case "signature": factory.Auth0.SignWithUnpublishedKey = true; break;
-            default: factory.Auth0.IdTokenLifetime = TimeSpan.FromMinutes(-5); break;
+            case "expired": factory.Auth0.IdTokenLifetime = TimeSpan.FromMinutes(-5); break;
+            default: throw new ArgumentOutOfRangeException(nameof(defect), defect, "unknown id token defect");
         }
         var browser = factory.CreateBrowser();
 
@@ -266,6 +265,21 @@ public sealed class SignInFlowTests
         await SignInAsync(factory, browser);
 
         Assert.False(await SignedInAsync(browser));
+    }
+
+    [Fact]
+    public async Task ATokenResponseWithoutAnAccessTokenShowsItsOwnFixedCode()
+    {
+        using var factory = new FrontendFactory();
+        factory.Auth0.OmitAccessToken = true;
+        var browser = factory.CreateBrowser();
+
+        var callback = await SignInAsync(factory, browser);
+        var page = await (await browser.GetAsync(callback.Headers.Location!.OriginalString)).Content.ReadAsStringAsync();
+
+        Assert.Equal($"/account?signin={LoginFailure.IncompleteSignIn}", callback.Headers.Location!.OriginalString);
+        Assert.Contains("returned an incomplete response", page);
+        Assert.DoesNotContain("Sign-in was canceled", page);
     }
 
     [Fact]
@@ -446,7 +460,7 @@ public sealed class SignInFlowTests
         var sessions = new SessionRegistry(TimeProvider.System);
         try
         {
-            // Share sessions here to isolate an uncached discovery outage; a real process restart invalidates sessions.
+            // share sessions here to isolate an uncached discovery outage; a real process restart invalidates sessions.
             string sessionCookie;
             using (var first = new FrontendFactory(keyDirectory: keys, sessionRegistry: sessions))
             {
@@ -496,7 +510,7 @@ public sealed class SignInFlowTests
     }
 
     /**
-     * Reads a test cookie using the real cookie handler's data protection format.
+     * reads a test cookie using the real cookie handler's data protection format.
      *
      * @param factory The host that issued the encrypted cookie.
      * @param callback The successful OIDC callback response.
@@ -525,7 +539,11 @@ public sealed class SignInFlowTests
         ((IHostEnvironmentAuthenticationStateProvider)second).SetAuthenticationState(Task.FromResult(new AuthenticationState(user)));
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completion = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var handler = new StubHandler((_, _) => { entered.TrySetResult(); return completion.Task; });
+        var handler = new StubHandler((_, _) =>
+        {
+            entered.TrySetResult();
+            return completion.Task;
+        });
         var client = new ProtectedClient(second, factory.Services.GetRequiredService<ServiceDirectory>(),
             new ServiceClient(new HttpClient(handler), NullLogger<ServiceClient>.Instance), factory.Clock,
             NullLogger<ProtectedClient>.Instance, factory.Services.GetRequiredService<SessionRegistry>());
@@ -585,7 +603,11 @@ public sealed class SignInFlowTests
         ((IHostEnvironmentAuthenticationStateProvider)oldCircuit).SetAuthenticationState(Task.FromResult(new AuthenticationState(firstUser)));
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completion = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var handler = new StubHandler((_, _) => { entered.TrySetResult(); return completion.Task; });
+        var handler = new StubHandler((_, _) =>
+        {
+            entered.TrySetResult();
+            return completion.Task;
+        });
         var client = new ProtectedClient(oldCircuit, factory.Services.GetRequiredService<ServiceDirectory>(),
             new ServiceClient(new HttpClient(handler), NullLogger<ServiceClient>.Instance), factory.Clock,
             NullLogger<ProtectedClient>.Instance, factory.Services.GetRequiredService<SessionRegistry>());

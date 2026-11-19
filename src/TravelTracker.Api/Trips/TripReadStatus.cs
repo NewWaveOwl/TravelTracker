@@ -3,7 +3,8 @@ namespace TravelTracker.Api.Trips;
 /**
  * Outcome of reading one of the caller's own trips.
  */
-public enum TripReadStatus {
+public enum TripReadStatus
+{
     /** The trip exists and belongs to the caller, and the caller's account may read it. */
     Found,
     /** No trip with that identifier belongs to the caller. Absent and another user's trips look the same. */

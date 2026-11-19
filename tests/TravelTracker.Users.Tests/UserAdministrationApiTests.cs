@@ -24,7 +24,8 @@ public sealed class UserAdministrationApiTests
     [Fact]
     public async Task AccountListAndRoleChangesRequireAuthenticationBeforeCallingRepository()
     {
-        using var app = new UsersApiFactory(); using var client = app.Browser();
+        using var app = new UsersApiFactory();
+        using var client = app.Browser();
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/users")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Change(client, TargetId)).StatusCode);
         Assert.Null(app.Repository.AdministratorListRequest);
@@ -47,17 +48,17 @@ public sealed class UserAdministrationApiTests
     public async Task ListForwardsValidatedIdentityAndMapsOnlyPublicProfileFields()
     {
         using var app = new UsersApiFactory();
-        // Deliberately retain the repository's order rather than introducing controller-side sorting.
+        // deliberately retain the repository's order rather than introducing controller-side sorting.
         app.Repository.AdministratorListResult = [Account(), Account() with { PublicId = Guid.Parse("019ac550-1000-7000-8000-000000000003"), VerifiedEmail = "another@example.test" }];
         using var client = app.Browser(app.Token(subject: "actor", scope: "users.admin"));
         var response = await client.GetAsync("/api/v1/users");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal((UsersApiFactory.Issuer, "actor"), app.Repository.AdministratorListRequest!.Value);
         var profiles = await response.Content.ReadFromJsonAsync<List<UserProfileResponse>>();
-        Assert.Equal(new[] { "target@example.test", "another@example.test" }, profiles!.Select(a => a.Email));
+        Assert.Equal(new[] { "target@example.test", "another@example.test" }, profiles!.Select(profile => profile.Email));
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         foreach (var account in json.RootElement.EnumerateArray())
-            Assert.Equal(new[] { "email", "role", "status", "userId" }, account.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+            Assert.Equal(new[] { "email", "role", "status", "userId" }, account.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
     }
 
     [Theory]
@@ -78,13 +79,28 @@ public sealed class UserAdministrationApiTests
     }
 
     [Theory]
-    [InlineData("forbidden", HttpStatusCode.Forbidden, null)]
-    [InlineData("notfound", HttpStatusCode.NotFound, null)]
+    [InlineData("forbidden", HttpStatusCode.Forbidden)]
+    [InlineData("notfound", HttpStatusCode.NotFound)]
+    public async Task RepositoryOutcomesWithoutPublicMessageReturnAnEmptyBody(string code, HttpStatusCode expectedStatus)
+    {
+        using var app = new UsersApiFactory();
+        app.Repository.RoleChangeResult = new UserRoleChangeResult(code, null);
+        using var client = app.Browser(app.Token(subject: "actor"));
+        var response = await Change(client, TargetId);
+        Assert.Equal(expectedStatus, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Empty(body);
+        Assert.DoesNotContain("target@example.test", body);
+        Assert.Equal(1, app.Repository.RoleChangeCalls);
+    }
+
+    [Theory]
     [InlineData("conflict", HttpStatusCode.Conflict, "Refresh the user list")]
+    [InlineData("unchanged", HttpStatusCode.Conflict, "already has the requested role")]
     [InlineData("last-administrator", HttpStatusCode.Conflict, "last active administrator")]
     [InlineData("invalid", HttpStatusCode.BadRequest, "not valid for this account")]
     [InlineData("unknown-outcome", HttpStatusCode.ServiceUnavailable, "could not be confirmed")]
-    public async Task RepositoryOutcomesMapToSafePublicFailures(string code, HttpStatusCode expectedStatus, string? message)
+    public async Task RepositoryOutcomesMapToSafePublicFailures(string code, HttpStatusCode expectedStatus, string message)
     {
         using var app = new UsersApiFactory();
         app.Repository.RoleChangeResult = new UserRoleChangeResult(code, null);
@@ -92,7 +108,7 @@ public sealed class UserAdministrationApiTests
         var response = await Change(client, TargetId);
         Assert.Equal(expectedStatus, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
-        if (message is not null) Assert.Contains(message, body);
+        Assert.Contains(message, body);
         Assert.DoesNotContain("target@example.test", body);
         Assert.Equal(1, app.Repository.RoleChangeCalls);
     }
@@ -132,4 +148,16 @@ public sealed class UserAdministrationApiTests
         Assert.Null(app.Repository.RoleChangeRequest);
     }
 
+    [Theory]
+    [InlineData("catalogue.read users.read catalogue.write")]
+    [InlineData("users.read users.write")]
+    public async Task CatalogueAndProfileScopesCannotListOrChangeAccounts(string scope)
+    {
+        using var app = new UsersApiFactory();
+        using var client = app.Browser(app.Token(subject: "actor", scope: scope));
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/users")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Change(client, TargetId)).StatusCode);
+        Assert.Null(app.Repository.AdministratorListRequest);
+        Assert.Null(app.Repository.RoleChangeRequest);
+    }
 }

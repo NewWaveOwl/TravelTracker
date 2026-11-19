@@ -41,7 +41,12 @@
     string? error;
     ElementReference heading;
 
-    protected override void OnInitialized() { latitude = Latitude; longitude = Longitude; }
+    /** Copies the incoming coordinates once; the picker is mounted fresh for each use, so later parameter changes are intentionally ignored. */
+    protected override void OnInitialized()
+    {
+        latitude = Latitude;
+        longitude = Longitude;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -54,8 +59,8 @@
      */
     async Task UseAsync()
     {
-        if (!decimal.TryParse(latitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var lat) || lat is < -90 or > 90 ||
-            !decimal.TryParse(longitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var lon) || lon is < -180 or > 180)
+        if (!decimal.TryParse(latitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedLatitude) || parsedLatitude is < -90 or > 90 ||
+            !decimal.TryParse(longitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedLongitude) || parsedLongitude is < -180 or > 180)
         {
             error = "Enter latitude from −90 to 90 and longitude from −180 to 180.";
             return;

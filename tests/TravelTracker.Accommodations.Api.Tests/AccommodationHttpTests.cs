@@ -51,7 +51,9 @@ public sealed class AccommodationHttpTests
         Assert.DoesNotContain("ownerSubject", saved.EnumerateObject().Select(property => property.Name));
 
         using var details = await client.GetAsync(response.Headers.Location);
+        var detailBody = await details.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(HttpStatusCode.OK, details.StatusCode);
+        Assert.Equal(saved.GetRawText(), detailBody.GetRawText());
     }
 
     [Theory]
@@ -81,6 +83,42 @@ public sealed class AccommodationHttpTests
         Assert.Empty(records!);
     }
 
+    [Theory]
+    [InlineData("hotel")]
+    [InlineData("shared\n")]
+    [InlineData("Private")]
+    public async Task Create_InvalidVisibilityReturnsFieldError(string visibility)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClientFor("admin", "catalogue.write catalogue.read");
+
+        using var response = await client.PostAsJsonAsync("/api/v1/accommodations",
+            new { name = "Inn", visibility, lat = 45m, lon = -73m });
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        using var collection = await client.GetAsync("/api/v1/accommodations");
+        var records = await collection.Content.ReadFromJsonAsync<JsonElement[]>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("visibility", problem.GetProperty("errors").EnumerateObject().Select(error => error.Name));
+        Assert.Empty(records!);
+    }
+
+    [Theory]
+    [InlineData(201, 0, "name")]
+    [InlineData(1, 501, "address")]
+    public async Task Create_OverlongNameOrAddressReturnsFieldError(int nameLength, int addressLength, string field)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClientFor("alice", "catalogue.write");
+
+        using var response = await client.PostAsJsonAsync("/api/v1/accommodations",
+            new { name = new string('n', nameLength), address = new string('a', addressLength), lat = 45m, lon = -73m });
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(field, problem.GetProperty("errors").EnumerateObject().Select(error => error.Name));
+    }
+
     [Fact]
     public async Task Create_ExplicitNullAddressReturnsFieldError()
     {
@@ -101,7 +139,7 @@ public sealed class AccommodationHttpTests
         using var client = factory.CreateClientFor("alice", "catalogue.write catalogue.read");
         using var response = await client.PostAsync("/api/v1/accommodations", JsonContent.Create(new
         {
-            accommodationId = Guid.CreateVersion7(),
+            accommodationId = Guid.Parse("00000000-0000-0000-0000-000000000901"),
             ownerIssuer = "https://spoofed.example/",
             ownerSubject = "admin",
             role = "administrator",
@@ -154,6 +192,8 @@ public sealed class AccommodationHttpTests
         });
         var saved = await create.Content.ReadFromJsonAsync<JsonElement>();
         var id = saved.GetProperty("accommodationId").GetGuid();
+        using var bobCreate = await factory.CreateClientFor("bob", "catalogue.write").PostAsJsonAsync("/api/v1/accommodations",
+            new { name = "Alice Bob Inn", lat = 45m, lon = -73m });
         using var bob = factory.CreateClientFor("bob", "catalogue.read");
 
         using var search = await bob.GetAsync("/api/v1/accommodations?name=Alice");
@@ -161,7 +201,8 @@ public sealed class AccommodationHttpTests
         var results = await search.Content.ReadFromJsonAsync<JsonElement[]>();
 
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
-        Assert.Empty(results!);
+        Assert.Equal(HttpStatusCode.Created, bobCreate.StatusCode);
+        Assert.Equal(new[] { "Alice Bob Inn" }, results!.Select(record => record.GetProperty("name").GetString()));
         Assert.Equal(HttpStatusCode.NotFound, detail.StatusCode);
     }
 
@@ -214,9 +255,9 @@ public sealed class AccommodationHttpTests
     public async Task BannedCallerReadsOnlyOwnPrivateRecord()
     {
         using var factory = new ApiFactory();
-        var ownPrivateId = await AccommodationTestData.SeedAsync(factory, "Banned Own Place", "banned", shared: false);
-        var anotherPrivateId = await AccommodationTestData.SeedAsync(factory, "Alice Private Place", "alice", shared: false);
-        var sharedId = await AccommodationTestData.SeedAsync(factory, "Shared Place", "admin", shared: true);
+        var ownPrivateId = await AccommodationTestData.SeedAsync(factory, Guid.Parse("00000000-0000-0000-0000-000000000911"), "Banned Own Place", "banned", shared: false);
+        var anotherPrivateId = await AccommodationTestData.SeedAsync(factory, Guid.Parse("00000000-0000-0000-0000-000000000912"), "Alice Private Place", "alice", shared: false);
+        var sharedId = await AccommodationTestData.SeedAsync(factory, Guid.Parse("00000000-0000-0000-0000-000000000913"), "Shared Place", "admin", shared: true);
         using var banned = factory.CreateClientFor("banned", "catalogue.read");
 
         using var collection = await banned.GetAsync("/api/v1/accommodations");
@@ -317,6 +358,17 @@ public sealed class AccommodationHttpTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("name", problem.GetProperty("errors").EnumerateObject().Select(error => error.Name));
+    }
+
+    [Fact]
+    public async Task GetById_UnknownWellFormedIdReturns404()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClientFor("alice", "catalogue.read");
+
+        using var response = await client.GetAsync($"/api/v1/accommodations/{Guid.Parse("00000000-0000-0000-0000-000000000902"):D}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

@@ -2,6 +2,7 @@
 @using Microsoft.JSInterop
 @using TravelTracker.Frontend.Api.Trips
 @inject IJSRuntime JavaScript
+@inject ILogger<TripMapCanvas> Logger
 @implements IAsyncDisposable
 
 @{ var connections = ScreenConnections(); }
@@ -39,7 +40,7 @@
                 <g @key="marker.FirstIndex" class="trip-marker" data-move-index="@(StopMoved.HasDelegate ? index.ToString(CultureInfo.InvariantCulture) : null)" transform="@($"translate({Number(marker.X)} {Number(marker.Y)})")"
                        role="button" tabindex="0" aria-label="@($"Stop {index + 1}: {stop.Name}")" aria-description="@description"
                        aria-pressed="@(index == SelectedIndex ? "true" : "false")"
-                       @onclick="() => StopSelected.InvokeAsync(marker.NextIndex)" @onkeydown="e => SelectWithKeyAsync(e, marker.NextIndex)">
+                       @onclick="() => StopSelected.InvokeAsync(marker.NextIndex)" @onkeydown="eventArgs => SelectWithKeyAsync(eventArgs, marker.NextIndex)">
                     @if (UseMarkerBadges)
                     {
                         <circle class="marker-badge" r="16" />
@@ -63,7 +64,7 @@
                     <g class="marker-remove" transform="@($"translate({Number(marker.X + removeX)} {Number(marker.Y + removeY)})")"
                        role="button" tabindex="0" aria-label="@($"Remove {stop.Name} from itinerary")"
                        @onclick="() => StopRemoved.InvokeAsync(index)"
-                       @onkeydown="e => RemoveWithKeyAsync(e, index)">
+                       @onkeydown="eventArgs => RemoveWithKeyAsync(eventArgs, index)">
                         <circle r="11" />
                         <path d="M-4 -4L4 4M4 -4L-4 4" aria-hidden="true" />
                     </g>
@@ -81,7 +82,7 @@
                     {
                         <button type="button" title="@(compact ? connection.Label : "Edit connection duration")"
                                 aria-label="@($"Edit connection {connection.Destination}: {Stops[connection.Destination - 1].Name} to {Stops[connection.Destination].Name}, {connection.Label}")"
-                                @onclick="e => ConnectionSelected.InvokeAsync((connection.Destination, e.Detail == 0))">
+                                @onclick="eventArgs => ConnectionSelected.InvokeAsync((connection.Destination, eventArgs.Detail == 0))">
                             <img src="@Icon(connection.Code)" width="@iconSize" height="@iconSize" alt="" /><span hidden="@compact">@connection.Label</span>
                         </button>
                     }
@@ -130,18 +131,18 @@
     [Parameter] public EventCallback<(string Type, decimal Lat, decimal Lon)> MarkerDropped { get; set; }
     [Parameter] public IReadOnlyList<(string Code, string Label)> Legs { get; set; } = [];
 
-    private int ViewportWidth = 768;
-    private int ViewportHeight = 432;
-    private const int TileSize = 256;
-    private const int MinimumZoom = 2;
-    private const int MaximumZoom = 19;
-    private const int DefaultZoom = 13;
-    private const int MarkerBadgeZoom = 10;
-    private const int FullConnectionLabelDistance = 160;
-    private const int MinimumConnectionBadgeSize = 24;
-    private const int MaximumConnectionBadgeSize = 32;
-    private const int ConnectionCurveSpacing = 72;
-    private const double MaximumLatitude = 85.05112878;
+    int ViewportWidth = 768;
+    int ViewportHeight = 432;
+    const int TileSize = 256;
+    const int MinimumZoom = 2;
+    const int MaximumZoom = 19;
+    const int DefaultZoom = 13;
+    const int MarkerBadgeZoom = 10;
+    const int FullConnectionLabelDistance = 160;
+    const int MinimumConnectionBadgeSize = 24;
+    const int MaximumConnectionBadgeSize = 32;
+    const int ConnectionCurveSpacing = 72;
+    const double MaximumLatitude = 85.05112878;
 
     private ElementReference viewport;
     private ElementReference basemap;
@@ -160,18 +161,18 @@
     private bool UseMarkerBadges => zoom <= MarkerBadgeZoom;
     private (double X, double Y) Origin => (center.X * WorldSize - ViewportWidth / 2d, center.Y * WorldSize - ViewportHeight / 2d);
 
-    private string CenterAction => CanPick ? "Pick map center" : "Fit stops";
-    private string MapInstructions => CanPick
+    string CenterAction => CanPick ? "Pick map center" : "Fit stops";
+    string MapInstructions => CanPick
         ? "Map with numbered trip stops. Right-drag or use the arrow keys to pan. Scroll to zoom."
         : "Map with numbered trip stops. Drag or use the arrow keys to pan. Scroll to zoom.";
 
-    private string Icon(string code) => Assets[$"assets/trip-map/{code}.svg"];
-    private string Pin(string type) => Icon($"pin-{type}");
+    string Icon(string code) => Assets[$"assets/trip-map/{code}.svg"];
+    string Pin(string type) => Icon($"pin-{type}");
 
     /** Keeps the MapLibre basemap aligned with the editable overlay. */
     protected override Task OnAfterRenderAsync(bool firstRender) => UpdateBasemapAsync(firstRender);
 
-    private async Task UpdateBasemapAsync(bool initialize)
+    async Task UpdateBasemapAsync(bool initialize)
     {
         try
         {
@@ -205,11 +206,18 @@
                 await mapViewport.InvokeVoidAsync("setCamera", CameraArguments());
             }
         }
-        catch (JSDisconnectedException) { }
-        catch (JSException) { await SetBasemapReady(false); }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogDebug("Map background not updated because the browser connection closed");
+        }
+        catch (JSException exception)
+        {
+            Logger.LogWarning(exception, "Map background failed to load or update");
+            await SetBasemapReady(false);
+        }
     }
 
-    private double[] CameraArguments()
+    double[] CameraArguments()
     {
         var (latitude, longitude) = GeographicPoint(center);
         // MapLibre uses 512 pixels at zoom zero. The overlay uses 256.
@@ -225,18 +233,30 @@
         StateHasChanged();
     });
 
-    private async Task RetryBasemapAsync()
+    async Task RetryBasemapAsync()
     {
         basemapReady = null;
-        if (mapViewport is null)
-            await UpdateBasemapAsync(initialize: true);
-        else
-            await mapViewport.InvokeVoidAsync("retryBasemap");
+        try
+        {
+            if (mapViewport is null)
+                await UpdateBasemapAsync(initialize: true);
+            else
+                await mapViewport.InvokeVoidAsync("retryBasemap");
+        }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogDebug("Map retry skipped because the browser connection closed");
+        }
+        catch (JSException exception)
+        {
+            Logger.LogWarning(exception, "Map background retry failed");
+            await SetBasemapReady(false);
+        }
     }
 
     /** Updates the map viewport without resetting a traveller's pan or zoom. */
     [JSInvokable]
-    public void ResizeViewport(int width, int height)
+    public Task ResizeViewport(int width, int height) => InvokeAsync(() =>
     {
         if (width < 120 || height < 120)
             return;
@@ -250,7 +270,7 @@
         if (firstMeasurement && Stops.Count > 0) FitStops();
         else SetCenter(center);
         StateHasChanged();
-    }
+    });
 
     /** Fits newly opened itineraries; selection and marker edits within a trip preserve the camera. */
     protected override void OnParametersSet()
@@ -272,7 +292,7 @@
      * @param longitude Longitude in degrees.
      * @return A world point with both axes increasing to the east and south.
      */
-    private static (double X, double Y) Project(decimal latitude, decimal longitude)
+    static (double X, double Y) Project(decimal latitude, decimal longitude)
     {
         var radians = Math.Clamp((double)latitude, -MaximumLatitude, MaximumLatitude) * Math.PI / 180;
         return (((double)longitude + 180) / 360, (1 - Math.Asinh(Math.Tan(radians)) / Math.PI) / 2);
@@ -284,7 +304,7 @@
      * @param longitude Longitude in degrees.
      * @return Coordinates in SVG view-box units.
      */
-    private (double X, double Y) ScreenPoint(decimal latitude, decimal longitude)
+    (double X, double Y) ScreenPoint(decimal latitude, decimal longitude)
     {
         var point = Project(latitude, longitude);
         return (ViewportWidth / 2d + WrappedDifference(point.X - center.X) * WorldSize,
@@ -292,7 +312,7 @@
     }
 
     /** Separates repeated connections and sizes their labels according to the space between projected stops. */
-    private List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY, int BadgeSize)> ScreenConnections()
+    List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY, int BadgeSize)> ScreenConnections()
     {
         var result = new List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY, int BadgeSize)>();
         var groups = Enumerable.Range(0, Math.Min(Legs.Count, Math.Max(0, Stops.Count - 1)))
@@ -309,9 +329,9 @@
             var (first, last) = group.Key;
             var start = ScreenPoint(first.Lat, first.Lon);
             var end = ScreenPoint(last.Lat, last.Lon);
-            var dx = end.X - start.X;
-            var dy = end.Y - start.Y;
-            var distance = Math.Sqrt(dx * dx + dy * dy);
+            var deltaX = end.X - start.X;
+            var deltaY = end.Y - start.Y;
+            var distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
             var length = Math.Max(1, distance);
             var badgeSize = distance < FullConnectionLabelDistance
                 ? MinimumConnectionBadgeSize + (int)Math.Round(
@@ -327,10 +347,10 @@
                 var leg = Legs[index];
                 var from = ScreenPoint(Stops[index].Lat, Stops[index].Lon);
                 var to = ScreenPoint(Stops[index + 1].Lat, Stops[index + 1].Lon);
-                var curveX = x - ConnectionCurveSpacing * slot * dy / length;
-                var curveY = y + ConnectionCurveSpacing * slot * dx / length;
+                var curveX = x - ConnectionCurveSpacing * slot * deltaY / length;
+                var curveY = y + ConnectionCurveSpacing * slot * deltaX / length;
                 if (leg.Code == "plane")
-                    curveY -= Math.Min(90, Math.Abs(dx) / 4);
+                    curveY -= Math.Min(90, Math.Abs(deltaX) / 4);
                 var path = $"M {Number(from.X)} {Number(from.Y)} Q {Number(curveX)} {Number(curveY)} {Number(to.X)} {Number(to.Y)}";
                 var labelX = x + 10;
                 var labelY = count == 1 ? (y + curveY) / 2 - 36 : y + 38 * slot - 36;
@@ -352,7 +372,7 @@
      * Shares a pin between visits at identical coordinates and cycles through those visits on activation.
      * @return Visible pins, with the selected pin drawn on top.
      */
-    private IEnumerable<(int FirstIndex, int Index, int NextIndex, bool Shared, double X, double Y)> ScreenMarkers()
+    IEnumerable<(int FirstIndex, int Index, int NextIndex, bool Shared, double X, double Y)> ScreenMarkers()
     {
         var markers = new List<(int FirstIndex, int Index, int NextIndex, bool Shared, double X, double Y)>();
         foreach (var group in Stops.Select((stop, index) => (stop, index)).GroupBy(item => (item.stop.Lat, item.stop.Lon)))
@@ -371,7 +391,7 @@
     }
 
     /** Centers and zooms the viewport around the planned stops, including routes across the date line. */
-    private void FitStops()
+    void FitStops()
     {
         if (Stops.Count == 0) return;
 
@@ -398,7 +418,7 @@
      * @param horizontal Direction on the east/west axis.
      * @param vertical Direction on the north/south axis.
      */
-    private void Pan(int horizontal, int vertical) =>
+    void Pan(int horizontal, int vertical) =>
         SetCenter((center.X + horizontal * ViewportWidth / (4d * WorldSize),
             center.Y + vertical * ViewportHeight / (4d * WorldSize)));
 
@@ -407,7 +427,7 @@
      * @param delta The number of zoom levels to move.
      * @param offset The zoom origin relative to the viewport center.
      */
-    private void ChangeZoom(int delta, (double X, double Y) offset = default)
+    void ChangeZoom(int delta, (double X, double Y) offset = default)
     {
         var previousScale = 1d / WorldSize;
         zoom = Math.Clamp(zoom + delta, MinimumZoom, MaximumZoom);
@@ -438,7 +458,7 @@
      * Wraps longitude and keeps the viewport within the available tile rows.
      * @param point The requested world center.
      */
-    private void SetCenter((double X, double Y) point)
+    void SetCenter((double X, double Y) point)
     {
         var halfHeight = Math.Min(.5, ViewportHeight / (2d * WorldSize));
         center = (point.X - Math.Floor(point.X), Math.Clamp(point.Y, halfHeight, 1 - halfHeight));
@@ -449,20 +469,45 @@
      * @param pointer The browser's viewport-relative coordinates.
      * @return Completion of the location selection callback.
      */
-    private async Task PickFromPointerAsync(MouseEventArgs pointer)
+    async Task PickFromPointerAsync(MouseEventArgs pointer)
     {
         if (!CanPick || pointer.Button != 0) return;
 
-        // Capture the clicked viewport before the async interop call so a subsequent pan cannot move the pick.
+        // capture the clicked viewport before the async interop call so a subsequent pan cannot move the pick.
         var origin = Origin;
         var worldSize = WorldSize;
-        pointerModule ??= await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Trips/TripMapCanvas.razor.js");
-        var point = await pointerModule.InvokeAsync<double[]>("viewBoxPoint", viewport, pointer.ClientX, pointer.ClientY);
+        double[] point;
+        try
+        {
+            if (pointerModule is null)
+            {
+                var imported = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Trips/TripMapCanvas.razor.js");
+                // the map closed during the import, so the module would otherwise outlive DisposeAsync
+                if (disposed)
+                {
+                    await imported.DisposeAsync();
+                    return;
+                }
+                pointerModule = imported;
+            }
+            point = await pointerModule.InvokeAsync<double[]>("viewBoxPoint", viewport, pointer.ClientX, pointer.ClientY);
+        }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogDebug("Map pick skipped because the browser connection closed");
+            return;
+        }
+        catch (JSException exception)
+        {
+            Logger.LogWarning(exception, "Map pick failed because the pointer position could not be read");
+            return;
+        }
+        if (point.Any(value => !double.IsFinite(value))) return;
         await PickAsync(((origin.X + point[0]) / worldSize, (origin.Y + point[1]) / worldSize));
     }
 
     /** Picks the map center while placing a marker and fits the itinerary otherwise. */
-    private Task UseCenterAsync()
+    Task UseCenterAsync()
     {
         if (CanPick) return PickAsync(center);
 
@@ -471,9 +516,9 @@
     }
 
     /** Pans the focused map using its directional keys. */
-    private void PanWithKey(KeyboardEventArgs args)
+    void PanWithKey(KeyboardEventArgs eventArgs)
     {
-        switch (args.Key)
+        switch (eventArgs.Key)
         {
             case "ArrowLeft": Pan(-1, 0); break;
             case "ArrowRight": Pan(1, 0); break;
@@ -484,11 +529,15 @@
 
     /** Moves the viewport by the drag delta measured in SVG units. */
     [JSInvokable]
-    public Task PanByDrag(double x, double y) => InvokeAsync(() =>
+    public Task PanByDrag(double x, double y)
     {
-        SetCenter((center.X - x / WorldSize, center.Y - y / WorldSize));
-        StateHasChanged();
-    });
+        if (!double.IsFinite(x) || !double.IsFinite(y)) return Task.CompletedTask;
+        return InvokeAsync(() =>
+        {
+            SetCenter((center.X - x / WorldSize, center.Y - y / WorldSize));
+            StateHasChanged();
+        });
+    }
 
     /** Moves a pin by the drag distance while keeping the camera fixed. */
     [JSInvokable]
@@ -503,32 +552,32 @@
         var origin = Origin;
         var targetX = Math.Clamp(point.X + x, 0, ViewportWidth);
         var targetY = Math.Clamp(point.Y + y, 0, ViewportHeight);
-        var (lat, lon) = Unproject(((origin.X + targetX) / WorldSize, (origin.Y + targetY) / WorldSize));
-        return StopMoved.InvokeAsync((index, lat, lon));
+        var (latitude, longitude) = Unproject(((origin.X + targetX) / WorldSize, (origin.Y + targetY) / WorldSize));
+        return StopMoved.InvokeAsync((index, latitude, longitude));
     }
 
     /** Converts a dropped palette marker into a geographic placement. */
     [JSInvokable]
     public Task DropMarker(string type, double x, double y)
     {
-        if (!AllowMarkerDrop) return Task.CompletedTask;
+        if (!AllowMarkerDrop || !double.IsFinite(x) || !double.IsFinite(y)) return Task.CompletedTask;
 
         var origin = Origin;
-        var (lat, lon) = Unproject(((origin.X + x) / WorldSize, (origin.Y + y) / WorldSize));
-        return MarkerDropped.InvokeAsync((type, lat, lon));
+        var (latitude, longitude) = Unproject(((origin.X + x) / WorldSize, (origin.Y + y) / WorldSize));
+        return MarkerDropped.InvokeAsync((type, latitude, longitude));
     }
 
-    private Task PickAsync((double X, double Y) point) =>
+    Task PickAsync((double X, double Y) point) =>
         CanPick ? LocationPicked.InvokeAsync(Unproject(point)) : Task.CompletedTask;
 
     /** @return The latitude and longitude for a world-space point. */
-    private static (decimal Lat, decimal Lon) Unproject((double X, double Y) point)
+    static (decimal Lat, decimal Lon) Unproject((double X, double Y) point)
     {
         var (latitude, longitude) = GeographicPoint(point);
         return (Math.Round((decimal)latitude, 6), Math.Round((decimal)longitude, 6));
     }
 
-    private static (double Lat, double Lon) GeographicPoint((double X, double Y) point) =>
+    static (double Lat, double Lon) GeographicPoint((double X, double Y) point) =>
         (Math.Atan(Math.Sinh(Math.PI * (1 - 2 * Math.Clamp(point.Y, 0, 1)))) * 180 / Math.PI,
             (point.X - Math.Floor(point.X)) * 360 - 180);
 
@@ -538,22 +587,22 @@
      * @param index The marker's position in the itinerary.
      * @return Completion of the selection callback, if activated.
      */
-    private Task SelectWithKeyAsync(KeyboardEventArgs key, int index) =>
+    Task SelectWithKeyAsync(KeyboardEventArgs key, int index) =>
         key.Key is "Enter" or " " ? StopSelected.InvokeAsync(index) : Task.CompletedTask;
 
     /** Allows keyboard removal through the selected pin's delete control. */
-    private Task RemoveWithKeyAsync(KeyboardEventArgs key, int index) =>
+    Task RemoveWithKeyAsync(KeyboardEventArgs key, int index) =>
         key.Key is "Enter" or " " ? StopRemoved.InvokeAsync(index) : Task.CompletedTask;
 
     /** @return Whether the marker's center is within the visible viewport. */
-    private bool IsVisible((double X, double Y) point) =>
+    bool IsVisible((double X, double Y) point) =>
         point.X >= 0 && point.X <= ViewportWidth && point.Y >= 0 && point.Y <= ViewportHeight;
 
     /** @return The equivalent horizontal displacement in the nearest copy of the world. */
-    private static double WrappedDifference(double value) => value - Math.Round(value);
+    static double WrappedDifference(double value) => value - Math.Round(value);
 
     /** @return A culture-independent SVG coordinate. */
-    private static string Number(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+    static string Number(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     /**
      * Releases the browser map, pointer events and JavaScript module when leaving the map.
@@ -564,16 +613,39 @@
         disposed = true;
         try
         {
-            if (mapViewport is not null) await ReleaseViewportAsync(mapViewport);
-            if (pointerModule is not null) await pointerModule.DisposeAsync();
+            try
+            {
+                if (mapViewport is not null) await ReleaseViewportAsync(mapViewport);
+            }
+            finally
+            {
+                // the module is released even when the viewport disconnect fails
+                if (pointerModule is not null) await pointerModule.DisposeAsync();
+            }
         }
-        catch (JSDisconnectedException) { }
-        finally { mapReference?.Dispose(); }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogDebug("Map not released because the browser connection closed");
+        }
+        catch (JSException exception)
+        {
+            Logger.LogWarning(exception, "Map could not be released cleanly");
+        }
+        finally
+        {
+            mapReference?.Dispose();
+        }
     }
 
-    private static async ValueTask ReleaseViewportAsync(IJSObjectReference instance)
+    static async ValueTask ReleaseViewportAsync(IJSObjectReference instance)
     {
-        await instance.InvokeVoidAsync("disconnect");
-        await instance.DisposeAsync();
+        try
+        {
+            await instance.InvokeVoidAsync("disconnect");
+        }
+        finally
+        {
+            await instance.DisposeAsync();
+        }
     }
 }

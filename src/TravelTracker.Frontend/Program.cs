@@ -1,4 +1,11 @@
 using TravelTracker.Frontend.Api;
+using TravelTracker.Frontend.Api.Accommodations;
+using TravelTracker.Frontend.Api.Attractions;
+using TravelTracker.Frontend.Api.Settings;
+using TravelTracker.Frontend.Api.Transport;
+using TravelTracker.Frontend.Api.Trips;
+using TravelTracker.Frontend.Api.Users;
+using TravelTracker.Frontend.Services;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Components;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -7,6 +14,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 var serviceUrls = builder.Configuration.GetSection("Services").Get<Dictionary<string, string>>()
     ?? throw new InvalidOperationException("The Services configuration section is missing.");
+if (serviceUrls.Count == 0)
+    throw new InvalidOperationException("The Services configuration section lists no services.");
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddSingleton(new ServiceDirectory(serviceUrls));
@@ -15,23 +24,25 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<SessionRegistry>();
 builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationStateProvider>();
 builder.Services.AddScoped<ProtectedClient>();
-builder.Services.AddScoped<TravelTracker.Frontend.Api.Trips.TripsClient>();
-builder.Services.AddScoped<TravelTracker.Frontend.Api.Trips.TripPlacesClient>();
-builder.Services.AddScoped<TravelTracker.Frontend.Api.Transport.TransportClient>();
-builder.Services.AddScoped<TravelTracker.Frontend.Api.Attractions.AttractionsClient>();
-builder.Services.AddScoped<TravelTracker.Frontend.Api.Accommodations.AccommodationsClient>();
-builder.Services.AddScoped<TravelTracker.Frontend.Api.Users.UsersClient>();
-builder.Services.AddScoped<TravelTracker.Frontend.Services.AdminAccessState>();
-builder.Services.AddScoped<TravelTracker.Frontend.Api.Settings.SettingsClient>();
-builder.Services.AddScoped<TravelTracker.Frontend.Services.UserPreferences>();
+builder.Services.AddScoped<TripsClient>();
+builder.Services.AddScoped<TripPlacesClient>();
+builder.Services.AddScoped<TransportClient>();
+builder.Services.AddScoped<AttractionsClient>();
+builder.Services.AddScoped<AccommodationsClient>();
+builder.Services.AddScoped<UsersClient>();
+builder.Services.AddScoped<AdminAccessState>();
+builder.Services.AddScoped<SettingsClient>();
+builder.Services.AddScoped<UserPreferences>();
 
+// ponytail: disposed when the process exits, so the sign-in event handlers can keep logging through it while the app runs
+using var startupLoggerFactory = LoggerFactory.Create(logging => logging.AddConfiguration(builder.Configuration.GetSection("Logging")).AddConsole());
+var startupLogger = startupLoggerFactory.CreateLogger("TravelTracker.Frontend.Auth");
 var provider = builder.Configuration["Authentication:Provider"];
 var supabase = string.IsNullOrWhiteSpace(provider) || string.Equals(provider, "Supabase", StringComparison.OrdinalIgnoreCase)
     ? SupabaseSettings.TryRead(builder.Configuration) : null;
 var auth0 = string.Equals(provider, "Auth0", StringComparison.OrdinalIgnoreCase)
-    ? Auth0Settings.TryRead(builder.Configuration) : null;
-builder.Services.AddSingleton(new AuthSetup(auth0, supabase));
-var startupLogger = LoggerFactory.Create(logging => logging.AddConfiguration(builder.Configuration.GetSection("Logging")).AddConsole()).CreateLogger("TravelTracker.Frontend.Auth");
+    ? Auth0Settings.TryRead(builder.Configuration, startupLogger) : null;
+builder.Services.AddSingleton(new AuthSetup(auth0 is not null || supabase is not null, supabase));
 if (supabase is not null)
 {
     builder.Services.AddSupabaseAuth(supabase);
@@ -41,7 +52,7 @@ else if (auth0 is null)
 {
     // no schemes registered: every request stays anonymous and navigation keeps working
     builder.Services.AddAuthentication();
-    startupLogger.LogWarning("Sign-in is not configured. Set Supabase:Url and Supabase:PublishableKey for Supabase Auth.");
+    startupLogger.LogWarning("Sign-in is not configured. Set Supabase:Url and Supabase:PublishableKey for Supabase Auth, or select Auth0 with valid Auth0:Domain, ClientId and Audience.");
 }
 else
 {

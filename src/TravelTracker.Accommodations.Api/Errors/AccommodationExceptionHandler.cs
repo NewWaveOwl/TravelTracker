@@ -30,6 +30,7 @@ public static class AccommodationExceptionHandler
             UnauthorizedAccessException => StatusCodes.Status403Forbidden,
             ValidationException => StatusCodes.Status400BadRequest,
             _ when postgres?.SqlState == PostgresErrorCodes.UniqueViolation => StatusCodes.Status409Conflict,
+            _ when postgres?.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected => StatusCodes.Status503ServiceUnavailable,
             _ when postgres?.SqlState.StartsWith("23", StringComparison.Ordinal) == true => StatusCodes.Status400BadRequest,
             OperationCanceledException => StatusCodes.Status408RequestTimeout,
             NpgsqlException or DbUpdateException => StatusCodes.Status503ServiceUnavailable,
@@ -44,10 +45,16 @@ public static class AccommodationExceptionHandler
             StatusCodes.Status503ServiceUnavailable => "Accommodation storage is unavailable.",
             _ => "The request could not be completed."
         };
-        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning,
-            "Accommodation request failed with HTTP {StatusCode} ({FailureKind}).", status,
-            status == StatusCodes.Status409Conflict ? "conflict" : status == StatusCodes.Status503ServiceUnavailable
-                ? "dependency failure" : "request failure");
+        var failureKind = status switch
+        {
+            StatusCodes.Status409Conflict => "conflict",
+            StatusCodes.Status503ServiceUnavailable => "dependency failure",
+            _ => "request failure"
+        };
+        // only unexpected 500s keep the exception object; provider messages can carry connection details, so other failures log the type name only
+        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning, status == StatusCodes.Status500InternalServerError ? exception : null,
+            "Accommodation request failed with HTTP {StatusCode} ({FailureKind}, {ExceptionType}).", status, failureKind,
+            exception?.GetType().Name ?? "unknown");
         await Results.Problem(statusCode: status, title: title).ExecuteAsync(context);
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Data.Repositories.Profile;
 using TravelTracker.Users.Domain.Models;
@@ -9,9 +10,13 @@ namespace TravelTracker.Users.Api.Services;
 /**
  * Coordinates authenticated self-profile reads and updates.
  * @param profiles Resolves and persists the caller's account profile.
+ * @param logger Records client-facing conflict outcomes without usernames or identity values.
+ * @param timeProvider Supplies the UTC time for provisioning and updates; defaults to the system clock.
  */
-public sealed class UserProfileService(IUserRepository profiles)
+public sealed class UserProfileService(IUserRepository profiles, ILogger<UserProfileService> logger, TimeProvider? timeProvider = null)
 {
+    private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
+
     /**
      * Reads or provisions the caller's account and applies standing rules.
      * @param identity The caller's validated provider identity.
@@ -22,7 +27,7 @@ public sealed class UserProfileService(IUserRepository profiles)
         ProviderIdentity identity,
         CancellationToken cancellationToken)
     {
-        var account = await profiles.GetOrCreateAsync(identity, DateTimeOffset.UtcNow, cancellationToken);
+        var account = await profiles.GetOrCreateAsync(identity, clock.GetUtcNow(), cancellationToken);
         return account.Status == UserStatus.Deactivated
             ? new UserProfileResult(UserProfileResultKind.Forbidden)
             : new UserProfileResult(UserProfileResultKind.Success, account);
@@ -76,17 +81,19 @@ public sealed class UserProfileService(IUserRepository profiles)
         try
         {
             var updated = await profiles.UpdateProfileAsync(identity, username, email, address,
-                request.HasAddress, DateTimeOffset.UtcNow, cancellationToken);
+                request.HasAddress, clock.GetUtcNow(), cancellationToken);
             return updated?.Status == UserStatus.Active
                 ? new UserProfileResult(UserProfileResultKind.Success, updated)
                 : new UserProfileResult(UserProfileResultKind.Forbidden);
         }
         catch (UserProfileUsernameConflictException)
         {
+            logger.LogInformation("Profile update refused: the requested username is already in use.");
             return new UserProfileResult(UserProfileResultKind.UsernameConflict);
         }
         catch (DbUpdateConcurrencyException)
         {
+            logger.LogInformation("Profile update refused: the stored profile changed after it was read.");
             return new UserProfileResult(UserProfileResultKind.ConcurrencyConflict);
         }
     }

@@ -23,7 +23,7 @@ public sealed class AttractionWorkspaceTests : BunitContext
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
 
     /**
-     * Connects the real frontend HTTP stack to an isolated deterministic HTTP stub.
+     * connects the real frontend HTTP stack to an isolated deterministic HTTP stub.
      * @param handler Answers public contract calls without an external service.
      * @param write Whether the fake signed-in grant includes catalogue.write.
      * @return The switchable authenticated session for sign-out scenarios.
@@ -32,8 +32,7 @@ public sealed class AttractionWorkspaceTests : BunitContext
     {
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
-        authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10));
-        ((ClaimsIdentity)authentication.User.Identity!).AddClaim(new Claim(AccessTokenClaims.GrantedScope, write ? "catalogue.read catalogue.write" : "catalogue.read"));
+        authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10), write ? "catalogue.read catalogue.write" : "catalogue.read");
         var client = new ProtectedClient(authentication,
             new ServiceDirectory(new Dictionary<string, string> { ["Attractions"] = "http://localhost:5104" }),
             new ServiceClient(new HttpClient(handler), NullLogger<ServiceClient>.Instance), clock, NullLogger<ProtectedClient>.Instance, sessions);
@@ -107,8 +106,8 @@ public sealed class AttractionWorkspaceTests : BunitContext
     [Fact]
     public void ReadOnlyGrantCanBrowseButCannotOpenWriteForms()
     {
-        var dto = new AttractionDto(Id, "Museum", null, null, "Montreal", 45, -73, 60);
-        Configure(new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = request.RequestUri!.AbsolutePath.EndsWith(Id.ToString()) ? JsonContent.Create(dto) : JsonContent.Create(new[] { dto }) })), false);
+        var attractionDto = new AttractionDto(Id, "Museum", null, null, "Montreal", 45, -73, 60);
+        Configure(new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = request.RequestUri!.AbsolutePath.EndsWith(Id.ToString()) ? JsonContent.Create(attractionDto) : JsonContent.Create(new[] { attractionDto }) })), false);
         var page = Render<Attractions>();
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".attraction-card")));
         page.Find(".attraction-card button").Click();
@@ -118,16 +117,20 @@ public sealed class AttractionWorkspaceTests : BunitContext
     }
 
     [Fact]
-    public void ValidationPreservesEntriesAndDoesNotSendWrites()
+    public async Task ValidationPreservesEntriesAndDoesNotSendWrites()
     {
         var writes = 0;
-        Configure(new StubHandler((request, _) => { if (request.Method != HttpMethod.Get) writes++; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) }); }));
+        Configure(new StubHandler((request, _) =>
+        {
+            if (request.Method != HttpMethod.Get) writes++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) });
+        }));
         var page = Render<Attractions>();
         page.WaitForAssertion(() => Assert.Contains("No attractions found", page.Markup));
         page.Find(".attractions-heading button").Click();
         page.Find("#attraction-name").Input("My typed attraction");
         page.Find("#attraction-lat").Input("999");
-        page.Find(".attraction-editor form").Submit();
+        await page.Find(".attraction-editor form").SubmitAsync();
         Assert.Equal(0, writes);
         Assert.Equal("My typed attraction", page.Find("#attraction-name").GetAttribute("value"));
         Assert.Equal("true", page.Find("#attraction-lat").GetAttribute("aria-invalid"));
@@ -162,6 +165,28 @@ public sealed class AttractionWorkspaceTests : BunitContext
     [InlineData(503)]
     public void RejectedSavesRetainInputsAndNeverAnnounceSuccess(int status)
     {
+        var page = RenderRejectedSave(status);
+
+        Assert.Equal("Montreal Museum", page.Find("#attraction-name").GetAttribute("value"));
+        Assert.Equal("30", page.Find("#attraction-approximationMinutes").GetAttribute("value"));
+        Assert.DoesNotContain("Attraction saved.", page.Markup);
+    }
+
+    [Fact]
+    public void ForbiddenSaveDisablesTheEditorFieldset()
+    {
+        var page = RenderRejectedSave(403);
+
+        Assert.True(page.Find("fieldset").HasAttribute("disabled"));
+    }
+
+    /**
+     * Opens the create form, fills it with valid values and submits it to a service that rejects the write with the given status.
+     * @param status The status the write answers with.
+     * @return The rendered page after the rejection has been shown.
+     */
+    IRenderedComponent<Attractions> RenderRejectedSave(int status)
+    {
         Configure(new StubHandler((request, _) => Task.FromResult(request.Method == HttpMethod.Get
             ? new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) }
             : new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent("""{"errors":{"name":["Check the attraction name."]}}""") })));
@@ -171,10 +196,7 @@ public sealed class AttractionWorkspaceTests : BunitContext
         FillValidDraft(page);
         page.Find(".attraction-editor form").Submit();
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("[role=alert]")));
-        Assert.Equal("Montreal Museum", page.Find("#attraction-name").GetAttribute("value"));
-        Assert.Equal("30", page.Find("#attraction-approximationMinutes").GetAttribute("value"));
-        Assert.DoesNotContain("Attraction saved.", page.Markup);
-        if (status == 403) Assert.True(page.Find("fieldset").HasAttribute("disabled"));
+        return page;
     }
 
     [Fact]
@@ -233,7 +255,7 @@ public sealed class AttractionWorkspaceTests : BunitContext
     }
 
     /**
-     * Exports optional rendered test evidence for browser-based layout review against the design.
+     * exports optional rendered test evidence for browser-based layout review against the design.
      * @param page The tested workspace state.
      * @param fileName The evidence file name within the explicitly configured output folder.
      */

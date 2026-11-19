@@ -3,9 +3,7 @@ using Npgsql;
 namespace TravelTracker.Attractions.Api.Tests;
 
 /**
-
  * Owns one disposable PostgreSQL database; never connects to a production database by default.
-
  */
 internal sealed class PostgresTestDatabase : IDisposable
 {
@@ -15,9 +13,7 @@ internal sealed class PostgresTestDatabase : IDisposable
     internal string ConnectionString { get; }
 
     /**
-
      * Creates an isolated database using an explicitly configured local/test PostgreSQL role.
-
      */
     public PostgresTestDatabase()
     {
@@ -32,9 +28,7 @@ internal sealed class PostgresTestDatabase : IDisposable
     }
 
     /**
-
      * Drops only this randomly named test database after its host has stopped.
-
      */
     public void Dispose()
     {

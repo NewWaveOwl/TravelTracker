@@ -1,18 +1,18 @@
-using TravelTracker.Security.Hosting;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
-using TravelTracker.Api.Authentication;
 using TravelTracker.Accommodations.Api.Access;
 using TravelTracker.Accommodations.Api.Errors;
 using TravelTracker.Accommodations.Api.Services;
 using TravelTracker.Accommodations.Data;
 using TravelTracker.Accommodations.Data.Repositories;
+using TravelTracker.Security.Authentication;
+using TravelTracker.Security.Hosting;
 
 namespace TravelTracker.Accommodations.Api;
 
 /** Composes the independent Accommodations HTTP service and PostgreSQL store. */
-public partial class AccommodationsProgram
+public class AccommodationsProgram
 {
     /**
      * Starts the Accommodations host without starting other TravelTracker services.
@@ -67,11 +67,17 @@ public partial class AccommodationsProgram
             ExceptionHandler = AccommodationExceptionHandler.HandleAsync,
             SuppressDiagnosticsCallback = _ => true
         });
+        var usersBaseUrl = app.Configuration["Users:InternalBaseUrl"];
+        if (Uri.TryCreate(usersBaseUrl, UriKind.Absolute, out var usersUri) && usersUri.Scheme == Uri.UriSchemeHttps)
+            app.Logger.LogInformation("Users access endpoint configured at {UsersEndpoint}.", usersUri.GetLeftPart(UriPartial.Authority));
+        else
+            app.Logger.LogError("Users:InternalBaseUrl must be an absolute HTTPS URL; protected requests will fail closed.");
         if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
         {
             await using var scope = app.Services.CreateAsyncScope();
             await AccommodationsDatabase.InitializeAsync(
                 scope.ServiceProvider.GetRequiredService<AccommodationsDbContext>());
+            app.Logger.LogInformation("Accommodations database migrations applied.");
         }
         if (app.Environment.IsDevelopment())
         {

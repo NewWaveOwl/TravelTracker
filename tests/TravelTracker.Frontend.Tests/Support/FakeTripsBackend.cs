@@ -17,6 +17,7 @@ public sealed class FakeTripsBackend : HttpMessageHandler
     public static readonly Guid Bus = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
     readonly Dictionary<Guid, TripDto> stored = [];
+    int nextTripNumber = 7000;
 
     /** every request as method and path with query, in arrival order. */
     public List<(HttpMethod Method, string Path)> Requests { get; } = [];
@@ -36,20 +37,14 @@ public sealed class FakeTripsBackend : HttpMessageHandler
     /** the trips the service accepted. */
     public IReadOnlyCollection<TripDto> Stored => stored.Values;
 
-    /**
-     * stores a trip as if it had been saved earlier, optionally in another account.
-     * @param trip The trip to hold.
-     */
-    public void Seed(TripDto trip) => stored[trip.TripId] = trip;
-
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var uri = request.RequestUri!;
-        Requests.Add((request.Method, uri.PathAndQuery));
+        var requestUri = request.RequestUri!;
+        Requests.Add((request.Method, requestUri.PathAndQuery));
         if (Override?.Invoke(request) is { } forced) return forced;
-        var path = uri.AbsolutePath;
-        var name = System.Web.HttpUtility.ParseQueryString(uri.Query)["name"] ?? "";
-        return (uri.Port, path) switch
+        var path = requestUri.AbsolutePath;
+        var name = System.Web.HttpUtility.ParseQueryString(requestUri.Query)["name"] ?? "";
+        return (requestUri.Port, path) switch
         {
             (5106, "/api/v1/accommodations") when request.Method == HttpMethod.Post => await CreateAccommodationAsync(request, cancellationToken),
             (5106, "/api/v1/accommodations") => Json(Match(name, new { accommodationId = Hotel, name = "Hotel Lumiere", address = "1 Rue de Rivoli", lat = 48.86m, lon = 2.34m, visibility = "shared" })),
@@ -88,7 +83,7 @@ public sealed class FakeTripsBackend : HttpMessageHandler
         var legs = root.GetProperty("legs").EnumerateArray().Select(leg => new TripDto.Leg(
             leg.GetProperty("sequence").GetInt32(), Place(leg.GetProperty("from")), Place(leg.GetProperty("to")),
             new TripDto.Mode(Bus, "bus", "City bus"), leg.GetProperty("departure").GetDateTimeOffset(), leg.GetProperty("arrival").GetDateTimeOffset())).ToList();
-        var trip = new TripDto(Guid.CreateVersion7(), root.GetProperty("name").GetString()!, root.GetProperty("timeZone").GetString()!,
+        var trip = new TripDto(Guid.Parse($"00000000-0000-0000-0000-{++nextTripNumber:D12}"), root.GetProperty("name").GetString()!, root.GetProperty("timeZone").GetString()!,
             root.GetProperty("start").GetDateTimeOffset(), root.GetProperty("end").GetDateTimeOffset(), root.GetProperty("isRoundTrip").GetBoolean(), legs);
         stored[trip.TripId] = trip;
         return new HttpResponseMessage(HttpStatusCode.Created) { Content = JsonContent.Create(trip) };
