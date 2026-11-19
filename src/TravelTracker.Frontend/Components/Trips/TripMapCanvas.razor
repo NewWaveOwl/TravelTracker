@@ -26,6 +26,12 @@
                 <img src="@Pin("attraction")" alt="" width="24" height="30" />
             </button>
         }
+        <select aria-label="Map quality" title="Map quality on this device" value="@QualityPreference" @onchange="ChooseQualityAsync">
+            @foreach (var choice in MapQuality.Choices)
+            {
+                <option value="@choice">@MapQuality.Label(choice)</option>
+            }
+        </select>
     </div>
     <div class="map-frame">
         <div @ref="basemap" class="map-basemap"></div>
@@ -171,6 +177,8 @@
     [Parameter] public (decimal Lat, decimal Lon)? PreviewLocation { get; set; }
     /** the saved quality choice: automatic, standard or low. the device decides what automatic means. */
     [Parameter] public string QualityPreference { get; set; } = MapQuality.Automatic;
+    /** raised when the traveller picks another quality; the parent saves it and passes it back through QualityPreference. */
+    [Parameter] public EventCallback<string> QualityChanged { get; set; }
 
     int ViewportWidth = 768;
     int ViewportHeight = 432;
@@ -211,6 +219,16 @@
 
     string Icon(string code) => Assets[$"assets/trip-map/{code}.svg"];
     string Pin(string type) => Icon($"pin-{type}");
+
+    /**
+     * passes a valid quality pick to the parent; unknown values from the browser are ignored.
+     * @param change The select change carrying the chosen quality value.
+     */
+    async Task ChooseQualityAsync(ChangeEventArgs change)
+    {
+        if (change.Value is string choice && MapQuality.Choices.Contains(choice))
+            await QualityChanged.InvokeAsync(choice);
+    }
 
     /** Keeps the MapLibre basemap aligned with the editable overlay. */
     protected override Task OnAfterRenderAsync(bool firstRender) => UpdateBasemapAsync(firstRender);

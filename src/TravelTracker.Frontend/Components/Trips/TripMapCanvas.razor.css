@@ -24,6 +24,7 @@
     background: transparent;
 }
 
+.map-controls select { width: 160px; min-height: 40px; padding: 4px 8px; font-size: 20px; }
 .map-controls button:disabled { opacity: .55; cursor: default; }
 .map-controls button:not(:disabled):hover { background: #f0eadf; }
 

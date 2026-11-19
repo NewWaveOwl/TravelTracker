@@ -79,6 +79,7 @@ else
                            Legs="MapLegs" RoutedConnections="MapConfirmedRoutes" PreviewRoute="MapRoutePreview" PreviewLocation="@(placing ? PickedCoordinates : null)" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<(int, bool)>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
                            CanPick="@(!review && !busy && mapTool == MapTool.Markers && placing && !editingStopDetails)"
                            StopMoved="@(!busy && (showMap || !review) ? EventCallback.Factory.Create<(int, decimal, decimal)>(this, MoveMarker) : default)"
+                           QualityPreference="@mapQuality" QualityChanged="SaveMapQualityAsync"
                            StopRemoved="@(!review && !busy ? EventCallback.Factory.Create<int>(this, RemoveStop) : default)" AllowMarkerDrop="@(showMap && !review && !busy)" MarkerDropped="PlaceDroppedMarker" FullScreen="true" />
         </div>
     }

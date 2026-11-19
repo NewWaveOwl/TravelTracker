@@ -23,6 +23,7 @@ using TravelTracker.Frontend.Api.Routing;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Components;
 using TravelTracker.Frontend.Components.Pages;
+using TravelTracker.Frontend.Services;
 using TravelTracker.Frontend.Tests.Support;
 
 namespace TravelTracker.Frontend.Tests;
@@ -1160,7 +1161,7 @@ public sealed class TripPlannerTests : BunitContext
         JSInterop.Setup<string>($"{storage}.getItem", call => Equals(call.Arguments[0], key)).SetResult(value);
         var reopened = Render<NewTrip>();
         Click(reopened, "Restore map draft");
-        Assert.Empty(JSInterop.Invocations[$"{unusedStorage}.getItem"]);
+        Assert.DoesNotContain(JSInterop.Invocations[$"{unusedStorage}.getItem"], call => call.Arguments[0] is string key && key.StartsWith("traveltracker-map-draft", StringComparison.Ordinal));
         Assert.Equal("Unfinished weekend", reopened.Find(".map-trip-name").GetAttribute("value"));
         Assert.Equal(new[] { 45.51m, 45.52m }, reopened
             .FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>().Instance.Stops.Select(stop => stop.Lat));
@@ -1783,6 +1784,36 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Single(JSInterop.Invocations["confirm"]);
         Assert.EndsWith("/map", navigation.Uri);
         Assert.Equal("Unsaved weekend", routes.Find(".map-trip-name, .trip-basics input").GetAttribute("value"));
+    }
+
+    [Fact]
+    public async Task ChangingMapQualityKeepsTheUnsavedDraftAndRemembersTheChoice()
+    {
+        Configure((_, _) => throw new InvalidOperationException("Drafting must not write to a catalogue."));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
+        var page = Render<NewTrip>();
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.MarkerDropped.InvokeAsync(("attraction", 45.51m, -73.58m)));
+        await page.InvokeAsync(() => canvas.Instance.MarkerDropped.InvokeAsync(("transport_stop", 45.52m, -73.59m)));
+        var markers = page.FindAll(".trip-marker").Count;
+        var stops = page.FindAll(".trip-stop").Count;
+
+        page.Find("select[aria-label='Map quality']").Change("low");
+
+        Assert.Equal("low", page.Find("select[aria-label='Map quality']").GetAttribute("value"));
+        Assert.Equal(markers, page.FindAll(".trip-marker").Count);
+        Assert.Equal(stops, page.FindAll(".trip-stop").Count);
+        Assert.Contains(JSInterop.Invocations["localStorage.setItem"], call => Equals(call.Arguments[0], "traveltracker-map-quality-v1"));
+    }
+
+    [Fact]
+    public void MapQualityDefaultsToAutomaticWhenNoChoiceIsSaved()
+    {
+        Configure((_, _) => throw new InvalidOperationException("Drafting must not write to a catalogue."));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
+        var page = Render<NewTrip>();
+
+        Assert.Equal("automatic", page.Find("select[aria-label='Map quality']").GetAttribute("value"));
     }
 
     [Fact]
@@ -2675,6 +2706,9 @@ public sealed class TripPlannerTests : BunitContext
         var authentication = new SwitchableAuthentication(sessions);
         authentication.SignIn("test-token", Start.AddHours(1),
             scopes ?? (withAccommodationCatalogue ? "catalogue.read" : "users.read users.write"));
+        Services.AddSingleton<IDataProtectionProvider, EphemeralDataProtectionProvider>();
+        Services.AddScoped<ProtectedLocalStorage>();
+        Services.AddScoped<MapQualityPreference>();
         Services.AddSingleton<TimeProvider>(clock);
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         var directory = new ServiceDirectory(new Dictionary<string, string>

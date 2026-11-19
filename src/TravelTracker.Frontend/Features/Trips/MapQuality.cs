@@ -16,6 +16,18 @@ public static class MapQuality
     public static readonly IReadOnlyList<string> Choices = [Automatic, Standard, Low];
 
     /**
+     * names a choice for people to read in the map and settings controls.
+     * @param choice Automatic, standard or low.
+     * @return The visible label for the choice.
+     */
+    public static string Label(string choice) => choice switch
+    {
+        Standard => "Standard",
+        Low => "Low",
+        _ => "Automatic (recommended)"
+    };
+
+    /**
      * picks the quality a device should draw with. the default leans low: no WebGL, touch input, or little memory or few cores all point there. unreported values never force low.
      * @param preference The saved choice. Unknown values count as automatic.
      * @param capabilities What the browser reports about this device.

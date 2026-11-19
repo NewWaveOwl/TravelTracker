@@ -15,6 +15,7 @@ using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
 using TravelTracker.Frontend.Components.Shared;
 using TravelTracker.Frontend.Features.Trips;
+using TravelTracker.Frontend.Services;
 
 namespace TravelTracker.Frontend.Components.Pages;
 
@@ -39,6 +40,7 @@ public partial class NewTrip : IAsyncDisposable
     [Inject] TripPlacesClient PlaceCatalogue { get; set; } = default!;
     [Inject] TransportClient Transport { get; set; } = default!;
     [Inject] IJSRuntime JavaScript { get; set; } = default!;
+    [Inject] MapQualityPreference MapQualityPreferences { get; set; } = default!;
     [Inject] IServiceProvider Services { get; set; } = default!;
     [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
     [Inject] ILogger<NewTrip> Logger { get; set; } = default!;
@@ -53,6 +55,7 @@ public partial class NewTrip : IAsyncDisposable
     ElementReference plannerElement;
     Task<IJSObjectReference?>? editorShortcuts;
     TripPlannerDraft draft = new();
+    string mapQuality = MapQuality.Automatic;
     IReadOnlyList<TripPlaceDto> places = [];
     IReadOnlyList<string> errors = [];
     int selected = -1;
@@ -166,7 +169,10 @@ public partial class NewTrip : IAsyncDisposable
         observedEditorReview = review;
         if (showMap && needsAttention) { editorRevealVersion++; StateHasChanged(); }
         if (firstRender)
+        {
             editorShortcuts = RegisterEditorShortcutsAsync();
+            await LoadMapQualityAsync();
+        }
         if (focusDuration)
         {
             focusDuration = false;
@@ -179,6 +185,25 @@ public partial class NewTrip : IAsyncDisposable
         }
         if (firstRender)
             await editorShortcuts!;
+    }
+
+    /** restores the map quality saved in this browser; only the map rendering changes, the trip draft is untouched. */
+    async Task LoadMapQualityAsync()
+    {
+        var saved = await MapQualityPreferences.GetAsync();
+        if (saved == mapQuality) return;
+
+        mapQuality = saved;
+        StateHasChanged();
+    }
+
+    /**
+     * saves a quality pick from the trip map and keeps the previous value when the browser refuses the write.
+     * @param choice Automatic, standard or low.
+     */
+    async Task SaveMapQualityAsync(string choice)
+    {
+        if (await MapQualityPreferences.SetAsync(choice)) mapQuality = choice;
     }
 
     /** @return The browser registration used to release the trip shortcut on navigation. */
