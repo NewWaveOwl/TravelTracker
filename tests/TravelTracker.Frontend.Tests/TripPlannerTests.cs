@@ -2269,7 +2269,7 @@ public sealed class TripPlannerTests : BunitContext
     [Fact]
     public async Task MapPageServesItsFigmaIconsAndUndoShortcut()
     {
-        await using var factory = new FrontendFactory(signInConfigured: false);
+        await using var factory = new FrontendFactory();
         using var browser = factory.CreateBrowser();
         var page = await browser.GetStringAsync("/map");
         var links = System.Text.RegularExpressions.Regex.Matches(page, @"assets/trip-map/[a-z0-9_.-]+\.svg");

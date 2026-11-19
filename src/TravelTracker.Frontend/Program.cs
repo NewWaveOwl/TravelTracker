@@ -44,37 +44,21 @@ builder.Services.AddScoped<SettingsClient>();
 builder.Services.AddScoped<RoutingClient>();
 builder.Services.AddScoped<UserPreferences>();
 
-// ponytail: disposed when the process exits, so the sign-in event handlers can keep logging through it while the app runs
-using var startupLoggerFactory = LoggerFactory.Create(logging => logging.AddConfiguration(builder.Configuration.GetSection("Logging")).AddConsole());
-var startupLogger = startupLoggerFactory.CreateLogger("TravelTracker.Frontend.Auth");
-var provider = builder.Configuration["Authentication:Provider"];
-var supabase = string.IsNullOrWhiteSpace(provider) || string.Equals(provider, "Supabase", StringComparison.OrdinalIgnoreCase)
-    ? SupabaseSettings.TryRead(builder.Configuration) : null;
-var auth0 = string.Equals(provider, "Auth0", StringComparison.OrdinalIgnoreCase)
-    ? Auth0Settings.TryRead(builder.Configuration, startupLogger) : null;
-if (production && supabase is null && auth0?.ClientSecret is null)
-    throw new InvalidOperationException("Production sign-in requires valid Supabase:Url and Supabase:PublishableKey, or Auth0:Domain, ClientId, ClientSecret and Audience when Auth0 is selected.");
-builder.Services.AddSingleton(new AuthSetup(auth0 is not null || supabase is not null, supabase));
-if (supabase is not null)
-{
-    builder.Services.AddSupabaseAuth(supabase);
-    startupLogger.LogInformation("Supabase sign-in configured for {Issuer}", supabase.Issuer);
-}
-else if (auth0 is null)
-{
+var usersConfigured = serviceUrls.ContainsKey("Users");
+builder.Services.AddSingleton(new AuthSetup(usersConfigured));
+if (usersConfigured)
+    builder.Services.AddPasswordAuth();
+else
     // no schemes registered: every request stays anonymous and navigation keeps working
     builder.Services.AddAuthentication();
-    startupLogger.LogWarning("Sign-in is not configured. Set Supabase:Url and Supabase:PublishableKey for Supabase Auth, or select Auth0 with valid Auth0:Domain, ClientId and Audience.");
-}
-else
-{
-    startupLogger.LogInformation("Auth0 sign-in configured.");
-    builder.Services.AddAuth0(auth0, startupLogger);
-}
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+foreach (var (name, url) in serviceUrls)
+    app.Logger.LogInformation("Configured service {Service} at {Url}", name, url);
+if (usersConfigured) app.Logger.LogInformation("Password sign-in goes through the Users API.");
+else app.Logger.LogWarning("Sign-in is not configured. Add a Users entry to Services.");
 app.UseExceptionHandler(new ExceptionHandlerOptions
 {
     ExceptionHandlingPath = "/Error",
@@ -100,14 +84,12 @@ app.Use(async (context, next) =>
 });
 app.UseAuthentication();
 app.UseAuthorization();
-if (supabase is not null) app.UseRateLimiter();
+if (usersConfigured) app.UseRateLimiter();
 app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapTicketDocument();
-if (supabase is not null)
-    app.MapSupabaseAuthEndpoints();
-else if (auth0 is not null)
-    app.MapAuthEndpoints();
+if (usersConfigured)
+    app.MapPasswordAuthEndpoints();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();
 

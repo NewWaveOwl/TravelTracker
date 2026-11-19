@@ -10,7 +10,6 @@ using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Auth;
 using System.Text.RegularExpressions;
 using System.Web;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,20 +17,20 @@ using Microsoft.Extensions.DependencyInjection;
 namespace TravelTracker.Frontend.Tests.Support;
 
 /**
- * hosts the real frontend in memory with Auth0 pointed at FakeAuth0 and Transport at a stub.
+ * hosts the real frontend in memory with the Users API sign-in pointed at FakeUsersAuth and Transport at a stub.
  *
- * @param signInConfigured False to host the app with no Auth0 settings.
- * @param clientSecret Set to host the app as a regular web application with a client secret.
  * @param keyDirectory Share one data protection key ring between hosts, so a second host accepts the first host's session cookie like a restarted app does.
  * @param sessionRegistry Optional shared registry for tests isolating discovery failure from restart invalidation.
  */
-public sealed partial class FrontendFactory(bool signInConfigured = true, string? clientSecret = null, string? keyDirectory = null, SessionRegistry? sessionRegistry = null) : WebApplicationFactory<Program>
+public sealed partial class FrontendFactory(string? keyDirectory = null, SessionRegistry? sessionRegistry = null) : WebApplicationFactory<Program>
 {
     public const string ProtectedReadPath = "/test/protected-read";
-    public const string RequestedScope = "openid profile email catalogue.read users.read users.write";
     public const string SelfProfileJson = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller_1","email":"traveller@example.test","address":"1 Main St"}""";
 
-    public FakeAuth0 Auth0 { get; } = new("test-client");
+    FakeUsersAuth? users;
+
+    /** answers the Users API login and register calls. */
+    public FakeUsersAuth Users => users ??= new(Clock);
 
     /** answers protected transport and Users profile reads; its LastRequest shows what the app sent. */
     public StubHandler Transport { get; } = new((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
@@ -45,25 +44,10 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
-        builder.UseSetting("Authentication:Provider", "Auth0");
-        if (signInConfigured)
-        {
-            builder.UseSetting("Auth0:Domain", "tenant.example.test");
-            builder.UseSetting("Auth0:ClientId", "test-client");
-            builder.UseSetting("Auth0:Audience", "traveltracker-api");
-            builder.UseSetting("Services:Users", "https://localhost:5101");
-            // fake-tenant grants must never inherit the operator's local requested permissions.
-            builder.UseSetting("Auth0:Scope", RequestedScope);
-            if (clientSecret is not null)
-                builder.UseSetting("Auth0:ClientSecret", clientSecret);
-        }
-        else
-        {
-            builder.UseSetting("Auth0:Domain", "");
-        }
+        builder.UseSetting("Services:Users", "https://localhost:5101");
         builder.ConfigureServices(services =>
         {
-            services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options => options.BackchannelHttpHandler = Auth0);
+            services.AddHttpClient<UsersAuthClient>().ConfigurePrimaryHttpMessageHandler(() => Users);
             services.Configure<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme, options => options.TimeProvider = Clock);
             services.AddSingleton<TimeProvider>(Clock);
             if (sessionRegistry is not null)
@@ -75,12 +59,12 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
         });
     }
 
-    /** Releases the fake tenant and the transport stub together with the host. */
+    /** Releases the fake Users API and the transport stub together with the host. */
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
-            Auth0.Dispose();
+            users?.Dispose();
             Transport.Dispose();
         }
         base.Dispose(disposing);
@@ -90,26 +74,19 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
     public HttpClient CreateBrowser() => CreateDefaultClient(new CookieJarHandler(Clock));
 
     /**
-     * starts sign-in and records the nonce and PKCE challenge the fake tenant needs.
+     * signs in through the real form: loads the page for its antiforgery token, then posts the credentials.
      *
      * @param browser The cookie-keeping client.
-     * @return The authorize URL the app redirected to.
+     * @return The login response, which carries the session cookie.
      */
-    public async Task<Uri> StartSignInAsync(HttpClient browser)
+    public async Task<HttpResponseMessage> SignInAsync(HttpClient browser)
     {
-        var response = await browser.GetAsync("/auth/login");
-        var authorize = response.Headers.Location!;
-        var query = HttpUtility.ParseQueryString(authorize.Query);
-        Auth0.Nonce = query["nonce"];
-        Auth0.CodeChallenge = query["code_challenge"];
-        State = query["state"];
-        return authorize;
+        var page = await browser.GetStringAsync("/sign-in");
+        return await browser.PostAsync("/auth/login", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["email"] = "traveller@example.test", ["password"] = "fixture-password", ["__RequestVerificationToken"] = AntiforgeryTokenFrom(page)
+        }));
     }
-
-    public string? State { get; private set; }
-
-    /** returns from the tenant with an authorization code, as the browser would. */
-    public Task<HttpResponseMessage> CompleteSignInAsync(HttpClient browser) => browser.GetAsync($"/signin-oidc?code=fake-code&state={Uri.EscapeDataString(State!)}");
 
     /** reads the antiforgery token the account page renders into its sign-out form. */
     public static string AntiforgeryTokenFrom(string html) => HttpUtility.HtmlDecode(AntiforgeryField().Match(html).Groups[1].Value);

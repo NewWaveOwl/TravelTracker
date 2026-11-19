@@ -6,9 +6,9 @@
 <PageTitle>@(Register ? "Create account" : "Sign in") | TravelTracker</PageTitle>
 <PageHeading Title="@(Register ? "Create your account" : "Sign in")" />
 
-@if (Setup.Supabase is null)
+@if (!Setup.Configured)
 {
-    <Feedback Kind="FeedbackKind.Unavailable">Supabase sign-in is not configured.</Feedback>
+    <Feedback Kind="FeedbackKind.Unavailable">Sign-in is not configured.</Feedback>
 }
 else
 {
@@ -23,21 +23,9 @@ else
         {
             <p role="alert">Sign-in is temporarily unavailable. Please try again later.</p>
         }
-        else if (Error == "confirmation")
-        {
-            <p role="alert">The confirmation link is invalid or expired. Request a new confirmation email or contact the project administrator.</p>
-        }
         else if (Error is not null)
         {
-            <p role="alert">@(Register ? "Registration could not be completed. Check your email and matching passwords (at least 8 characters), or try signing in." : "Sign-in failed. Check your email and password, and confirm your email before signing in.")</p>
-        }
-        @if (Message == "confirmation")
-        {
-            <p role="status">If registration is available for this address, check your email and confirm your account before signing in.</p>
-        }
-        else if (Message == "confirmed")
-        {
-            <p role="status">Your email is confirmed. Sign in to continue.</p>
+            <p role="alert">@(Register ? "Registration could not be completed. Check your email and matching passwords (at least 8 characters), or try signing in if you already have an account." : "Sign-in failed. Check your email and password.")</p>
         }
         <form method="post" action="@(Register ? "/auth/register" : "/auth/login")">
             <AntiforgeryToken />
@@ -69,6 +57,5 @@ else
 @code {
     [SupplyParameterFromQuery(Name = "mode")] public string? Mode { get; set; }
     [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
-    [SupplyParameterFromQuery(Name = "message")] public string? Message { get; set; }
     bool Register => Mode == "register";
 }
