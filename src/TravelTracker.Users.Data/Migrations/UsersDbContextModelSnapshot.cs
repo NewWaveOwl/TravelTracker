@@ -120,7 +120,13 @@ namespace TravelTracker.Users.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("NormalizedLogin")
+                        .HasColumnType("text");
+
                     b.Property<string>("NormalizedUsername")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PasswordHash")
                         .HasColumnType("text");
 
                     b.Property<Guid>("PublicId")
@@ -150,6 +156,11 @@ namespace TravelTracker.Users.Data.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("NormalizedLogin")
+                        .IsUnique()
+                        .HasDatabaseName("IX_UserAccounts_NormalizedLogin")
+                        .HasFilter("\"NormalizedLogin\" IS NOT NULL");
 
                     b.HasIndex("NormalizedUsername")
                         .IsUnique()

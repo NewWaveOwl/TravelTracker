@@ -25,7 +25,7 @@ public class UsersProgram
         builder.Services.AddApiBearerAuthentication(builder.Configuration);
         // lazy so late configuration overrides are honored; read once, not per request
         var allowedServiceSubjects = new Lazy<HashSet<string?>>(() => builder.Configuration.GetSection("UsersAccess:AllowedServiceSubjects")
-            .GetChildren().Select(entry => entry.Value).Where(value => !string.IsNullOrWhiteSpace(value)).ToHashSet(StringComparer.Ordinal));
+            .GetChildren().Select(entry => entry.Value).Where(value => !string.IsNullOrWhiteSpace(value)).Append(TokenIssuer.ServiceSubject).ToHashSet(StringComparer.Ordinal));
         builder.Services.AddOptions<AuthorizationOptions>().Configure<IOptions<BearerSettings>>((options, settings) =>
         {
             options.AddPolicy(ScopePolicies.FirstAdministratorBootstrap, policy => policy.RequireAuthenticatedUser()
@@ -42,6 +42,10 @@ public class UsersProgram
         builder.Services.AddScoped<IUserRepository, EfUserRepository>();
         builder.Services.AddScoped<TravelTracker.Users.Data.Repositories.Profile.IUserRepository,
             TravelTracker.Users.Data.Repositories.Profile.UserRepository>();
+        builder.Services.AddScoped<TravelTracker.Users.Data.Repositories.Credentials.ICredentialRepository,
+            TravelTracker.Users.Data.Repositories.Credentials.CredentialRepository>();
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton<TokenIssuer>();
         builder.Services.AddScoped<UserProfileService>();
         builder.Services.AddScoped<BootstrapService>();
         builder.Services.AddHttpClient<VerifiedIdentityClient>(client => client.Timeout = TimeSpan.FromSeconds(5))

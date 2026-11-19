@@ -42,6 +42,10 @@ internal sealed class UserRecordConfiguration : IEntityTypeConfiguration<UserRec
             .IsUnique()
             .HasFilter("\"NormalizedUsername\" IS NOT NULL")
             .HasDatabaseName("IX_UserAccounts_NormalizedUsername");
+        builder.HasIndex(record => record.NormalizedLogin)
+            .IsUnique()
+            .HasFilter("\"NormalizedLogin\" IS NOT NULL")
+            .HasDatabaseName("IX_UserAccounts_NormalizedLogin");
         builder.HasIndex(record => new { record.Issuer, record.Subject })
             .IsUnique()
             .HasDatabaseName("IX_UserAccounts_Issuer_Subject");

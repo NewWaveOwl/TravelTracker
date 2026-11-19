@@ -19,6 +19,9 @@ internal sealed class UserRecord
     public string? VerifiedEmail { get; set; }
     public string? Address { get; set; }
     public UserPictureRow? Picture { get; set; }
+    /** Case-folded sign-in name fixed at registration; null for accounts that cannot sign in with a password. */
+    public string? NormalizedLogin { get; set; }
+    public string? PasswordHash { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
     public Guid ConcurrencyToken { get; set; }
