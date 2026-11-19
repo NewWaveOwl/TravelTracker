@@ -21,6 +21,7 @@ using Microsoft.IdentityModel.Tokens;
 using TravelTracker.Users.Api;
 using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Data.Repositories;
+using TravelTracker.Users.Data.Repositories.Credentials;
 using TravelTracker.Users.Domain.Models;
 
 namespace TravelTracker.Users.Tests.Support;
@@ -35,12 +36,22 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
     public const string ServiceSubject = "attractions-service";
     public const string Email = "initial-admin@example.test";
     readonly RSA key = RSA.Create(2048);
+    // only needs to be a well-formed key: tests replace signature validation with the RSA key above
+    readonly ECDsa signingKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
     public MemoryUserRepository Repository { get; } = new();
-    public UserInfoHandler Identity { get; } = new();
+    /** Holds the registered account the default token belongs to, which is the one the bootstrap setup targets. */
+    public MemoryCredentialRepository Credentials { get; } = WithAdministratorLogin();
     public UsersLogCapture Logs { get; } = new();
     public string ConfiguredSecret { get; set; } = Secret;
     public string? ProfileDatabaseConnection { get; init; }
     public IInterceptor? ProfileSaveInterceptor { get; init; }
+
+    static MemoryCredentialRepository WithAdministratorLogin()
+    {
+        var credentials = new MemoryCredentialRepository();
+        credentials.Seed(Email, Issuer, "admin-subject");
+        return credentials;
+    }
 
     /**
      * Starts the actual middleware with an isolated signing key and HTTP dependencies.
@@ -53,7 +64,8 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:Users"] = ProfileDatabaseConnection ?? "Host=unused.test;Database=unused",
-            ["Authentication:Bearer:Authority"] = Issuer,
+            ["Authentication:Bearer:PublicKey"] = signingKey.ExportSubjectPublicKeyInfoPem(),
+            ["Authentication:Bearer:ValidAlgorithms:0"] = "RS256",
             ["Authentication:Bearer:Issuer"] = Issuer,
             ["Authentication:Bearer:Audience"] = Audience,
             ["Authentication:Bearer:ClockSkewSeconds"] = "0",
@@ -81,7 +93,8 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
             {
                 services.ConfigureDbContext<UsersDbContext>(options => options.AddInterceptors(interceptor));
             }
-            services.AddHttpClient<VerifiedIdentityClient>().ConfigurePrimaryHttpMessageHandler(() => Identity);
+            services.RemoveAll<ICredentialRepository>();
+            services.AddSingleton<ICredentialRepository>(Credentials);
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
                 var metadata = new OpenIdConnectConfiguration { Issuer = Issuer };
@@ -126,6 +139,8 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        if (disposing) key.Dispose();
+        if (!disposing) return;
+        key.Dispose();
+        signingKey.Dispose();
     }
 }

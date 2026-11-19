@@ -59,6 +59,9 @@ public sealed partial class UserRepositoryPostgreSqlTests
         Assert.Equal("P0001", failure.SqlState);
         Assert.Contains("no provider-verified email", failure.MessageText);
 
+        // later migrations roll back before the refusing one, so move forward again before reading through the current model
+        await MigrateAsync(factory);
+
         // the failed rollback must leave the account exactly as it was: still upgraded, contact email not promoted to verified
         var saved = await new UserRepository(factory).FindByProviderIdentityAsync(identity, CancellationToken.None);
         Assert.NotNull(saved);

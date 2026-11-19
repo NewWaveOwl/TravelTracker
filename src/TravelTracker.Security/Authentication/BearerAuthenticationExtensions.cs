@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,8 +7,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Microsoft.IdentityModel.Protocols;
 
 namespace TravelTracker.Security.Authentication;
 
@@ -17,7 +16,7 @@ namespace TravelTracker.Security.Authentication;
 public static class BearerAuthenticationExtensions
 {
     /**
-     * Configures the resource server without choosing or hosting an identity provider.
+     * Configures the resource server to verify tokens against one configured public key.
      * @param services The API service registrations.
      * @param configuration Environment-specific deployment configuration.
      * @return The services for further composition.
@@ -25,12 +24,16 @@ public static class BearerAuthenticationExtensions
     public static IServiceCollection AddApiBearerAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<BearerSettings>().Bind(configuration.GetSection(BearerSettings.SectionName))
-            .Validate(settings => settings.Provider is "Oidc" or "Supabase", "Bearer Provider must be Oidc or Supabase.")
-            .Validate(settings => IsHttps(settings.Authority), "Bearer Authority must be an absolute HTTPS URL.")
-            .Validate(settings => IsHttps(settings.Issuer), "Bearer Issuer must be an absolute HTTPS URL.")
-            .Validate(settings => settings.Provider != "Supabase" || IsSupabaseIssuer(settings),
-                "Supabase Authority and Issuer must identify the same HTTPS /auth/v1 issuer, without a trailing slash on Issuer.")
+            .PostConfigure(settings =>
+            {
+                // the Users API signs with the private key, so it can verify with the matching public half
+                if (string.IsNullOrWhiteSpace(settings.PublicKey) && configuration["Authentication:Issuer:PrivateKey"] is { Length: > 0 } privateKey)
+                    settings.PublicKey = PublicPemFromPrivate(privateKey);
+            })
+            .Validate(settings => !string.IsNullOrWhiteSpace(settings.Issuer), "Bearer Issuer is required.")
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Audience), "Bearer Audience is required.")
+            .Validate(settings => ParsePublicKey(settings.PublicKey) is not null,
+                "Bearer PublicKey must be a PEM-encoded ECDSA public key. Set Authentication:Bearer:PublicKey.")
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.ScopeClaimType), "Bearer ScopeClaimType is required.")
             .Validate(settings => settings.ClockSkewSeconds is >= 0 and <= 120,
                 "Bearer ClockSkewSeconds must be between 0 and 120.")
@@ -44,30 +47,15 @@ public static class BearerAuthenticationExtensions
             .Configure<IOptions<BearerSettings>>((options, settings) =>
             {
                 var bearer = settings.Value;
-                options.Authority = bearer.Authority;
-                options.Audience = bearer.Audience;
-                options.RequireHttpsMetadata = true;
                 options.MapInboundClaims = false;
                 options.IncludeErrorDetails = false;
-                if (bearer.Provider == "Supabase")
-                {
-                    // Supabase publishes JWKS directly; it is not an OIDC discovery document.
-                    options.MetadataAddress = bearer.Issuer + "/.well-known/jwks.json";
-                    options.Backchannel ??= new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-                    {
-                        Timeout = TimeSpan.FromSeconds(10)
-                    };
-                    options.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(options.MetadataAddress,
-                        new SupabaseSigningConfigurationRetriever(bearer.Issuer), new HttpDocumentRetriever(options.Backchannel) { RequireHttps = true });
-                }
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
+                    IssuerSigningKeys = [new ECDsaSecurityKey(ParsePublicKey(bearer.PublicKey))],
                     ValidateIssuerSigningKey = true,
                     RequireSignedTokens = true,
                     ValidateIssuer = true,
                     ValidIssuer = bearer.Issuer,
-                    IssuerValidator = (issuer, _, _) => string.Equals(issuer, bearer.Issuer, StringComparison.Ordinal)
-                        ? issuer : throw new SecurityTokenInvalidIssuerException("Unexpected issuer."),
                     ValidateAudience = true,
                     ValidAudience = bearer.Audience,
                     ValidateLifetime = true,
@@ -78,32 +66,8 @@ public static class BearerAuthenticationExtensions
                 };
                 options.Events = new JwtBearerEvents
                 {
-                    OnTokenValidated = async context =>
+                    OnTokenValidated = context =>
                     {
-                        OpenIdConnectConfiguration? metadata;
-                        try
-                        {
-                            metadata = context.Options.ConfigurationManager is null ? null :
-                                await context.Options.ConfigurationManager.GetConfigurationAsync(context.HttpContext.RequestAborted);
-                        }
-                        catch (Exception exception) when (exception is not OperationCanceledException ||
-                            !context.HttpContext.RequestAborted.IsCancellationRequested)
-                        {
-                            context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
-                                .CreateLogger("TravelTracker.Authentication").LogWarning(
-                                    "Bearer discovery metadata retrieval failed ({FailureType}). Check authority availability and configuration.",
-                                    exception.GetType().Name);
-                            context.Fail("Discovery metadata unavailable.");
-                            return;
-                        }
-                        if (!string.Equals(metadata?.Issuer, bearer.Issuer, StringComparison.Ordinal))
-                        {
-                            context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
-                                .CreateLogger("TravelTracker.Authentication").LogWarning(
-                                    "Bearer discovery issuer does not match configured Issuer. Check Authentication:Bearer settings.");
-                            context.Fail("Discovery issuer mismatch.");
-                            return;
-                        }
                         // Never substitute a request header or body value for the validated subject.
                         var subjects = context.Principal?.FindAll("sub").ToArray();
                         if (subjects is not { Length: 1 } || string.IsNullOrWhiteSpace(subjects[0].Value))
@@ -113,19 +77,8 @@ public static class BearerAuthenticationExtensions
                                 .CreateLogger("TravelTracker.Authentication").LogWarning(
                                     "Bearer token rejected: the subject claim is missing, blank or ambiguous.");
                             context.Fail("A single subject is required.");
-                            return;
                         }
-                        if (bearer.Provider == "Supabase" &&
-                            (!Guid.TryParse(subjects[0].Value, out var subject) || subject == Guid.Empty ||
-                             context.Principal!.FindAll("role").Select(claim => claim.Value).ToArray() is not ["authenticated"] ||
-                             context.Principal.FindAll("is_anonymous").Any(claim =>
-                                 string.Equals(claim.Value, "true", StringComparison.OrdinalIgnoreCase))))
-                        {
-                            context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
-                                .CreateLogger("TravelTracker.Authentication").LogWarning(
-                                    "Bearer token rejected: not a non-anonymous authenticated Supabase user.");
-                            context.Fail("A non-anonymous authenticated Supabase user is required.");
-                        }
+                        return Task.CompletedTask;
                     },
                     OnAuthenticationFailed = context =>
                     {
@@ -157,21 +110,41 @@ public static class BearerAuthenticationExtensions
     }
 
     /**
-     * Checks a metadata or issuer address without allowing insecure discovery.
-     * @param value The configured address.
-     * @return Whether it is an absolute HTTPS URL.
+     * Reads a PEM public key.
+     * @param pem The configured key.
+     * @return The key, or null when it is blank or not an ECDSA public key.
      */
-    private static bool IsHttps(string value) =>
-        Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps &&
-        uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0;
+    private static ECDsa? ParsePublicKey(string pem)
+    {
+        if (string.IsNullOrWhiteSpace(pem)) return null;
+        try
+        {
+            var key = ECDsa.Create();
+            key.ImportFromPem(pem);
+            return key;
+        }
+        catch (Exception exception) when (exception is CryptographicException or ArgumentException)
+        {
+            return null;
+        }
+    }
 
     /**
-     * Pins the Supabase key endpoint to a credential-free HTTPS Auth issuer.
-     * @param settings Resource-server provider configuration.
-     * @return Whether the authority and exact issuer describe the same Auth service.
+     * Derives the public half of a PEM private key.
+     * @param pem The configured private key.
+     * @return The public key PEM, or blank when the private key is not an ECDSA key, which validation then reports.
      */
-    private static bool IsSupabaseIssuer(BearerSettings settings) =>
-        Uri.TryCreate(settings.Issuer, UriKind.Absolute, out var issuer) && issuer.Scheme == Uri.UriSchemeHttps &&
-        issuer.UserInfo.Length == 0 && issuer.Query.Length == 0 && issuer.Fragment.Length == 0 &&
-        issuer.AbsolutePath == "/auth/v1" && settings.Authority.TrimEnd('/') == settings.Issuer;
+    private static string PublicPemFromPrivate(string pem)
+    {
+        try
+        {
+            using var key = ECDsa.Create();
+            key.ImportFromPem(pem);
+            return key.ExportSubjectPublicKeyInfoPem();
+        }
+        catch (Exception exception) when (exception is CryptographicException or ArgumentException)
+        {
+            return "";
+        }
+    }
 }

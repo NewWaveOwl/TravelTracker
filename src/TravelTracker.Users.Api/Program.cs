@@ -48,9 +48,6 @@ public class UsersProgram
         builder.Services.AddSingleton<TokenIssuer>();
         builder.Services.AddScoped<UserProfileService>();
         builder.Services.AddScoped<BootstrapService>();
-        builder.Services.AddHttpClient<VerifiedIdentityClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
-            .RemoveAllLoggers()
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         var app = builder.Build();
         if (app.Environment.IsProduction())
             builder.RequireDatabaseConnection("Users");

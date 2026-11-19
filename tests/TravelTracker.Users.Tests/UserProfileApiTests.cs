@@ -30,7 +30,7 @@ public sealed class UserProfileApiTests
         Assert.Null(first.UpdatedAt);
         Assert.Equal("new-subject", app.Repository.Account!.ProviderIdentity.Subject);
         Assert.Equal(first, await client.GetFromJsonAsync<SelfProfileResponse>(Me));
-        Assert.Equal(0, app.Identity.Calls);
+        Assert.Equal(0, app.Credentials.Calls);
     }
 
     [Theory]

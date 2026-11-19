@@ -36,10 +36,10 @@ internal sealed class JourneyEnvironment : IDisposable
             router.Route("issuer.journey.test", () => Identity);
             router.Route("users.journey.test", () => users);
 
-            Settings = Add(new JourneyHost<SettingsProgram>(Own("Settings", UsersAccess()), router));
-            Accommodations = Add(new JourneyHost<AccommodationsProgram>(Own("Accommodations", UsersAccess()), router));
-            Attractions = Add(new JourneyHost<AttractionsProgram>(Own("Attractions", UsersAccess()), router));
-            Transport = Add(new JourneyHost<TransportProgram>(Own("Transport", UsersAccess()), router));
+            Settings = Add(new JourneyHost<SettingsProgram>(Own("Settings", UsersAccess()), router, Identity));
+            Accommodations = Add(new JourneyHost<AccommodationsProgram>(Own("Accommodations", UsersAccess()), router, Identity));
+            Attractions = Add(new JourneyHost<AttractionsProgram>(Own("Attractions", UsersAccess()), router, Identity));
+            Transport = Add(new JourneyHost<TransportProgram>(Own("Transport", UsersAccess()), router, Identity));
             Trips = Add(new JourneyHost<TripsProgram>(Own("Trips", new()
             {
                 ["TripReferences:AccommodationsBaseUrl"] = "https://accommodations.journey.test/",
@@ -48,7 +48,7 @@ internal sealed class JourneyEnvironment : IDisposable
                 ["TripReferences:UsersBaseUrl"] = UsersBase,
                 ["TripReferences:UsersServiceAccessToken"] = UsersService.ServiceToken,
                 ["TripReferences:Timeout"] = "00:00:10"
-            }), router));
+            }), router, Identity));
 
             router.Route("accommodations.journey.test", () => Accommodations.Server.CreateHandler());
             router.Route("attractions.journey.test", () => Attractions.Server.CreateHandler());

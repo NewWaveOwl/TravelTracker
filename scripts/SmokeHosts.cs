@@ -1,6 +1,7 @@
 #:property PublishAot=false
 
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 // starts each service host on its own, with every other host stopped, and checks that /health answers.
@@ -14,6 +15,9 @@ Directory.CreateDirectory(logs);
 var hosts = new (string Name, int Port)[] { ("Attractions", 5104), ("Transport", 5105), ("Accommodations", 5106), ("Settings", 5107), ("Trips", 5108), ("Users", 5101) };
 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
 var failed = false;
+// a throwaway key so bearer validation starts; no token is ever signed with it
+using var smokeKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+var smokePublicKey = smokeKey.ExportSubjectPublicKeyInfoPem();
 
 foreach (var (name, port) in hosts)
 {
@@ -36,7 +40,7 @@ foreach (var (name, port) in hosts)
         ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}",
         [$"ConnectionStrings__{name}"] = postgres is { Length: > 0 } ? $"{postgres};Database=traveltracker_{name.ToLowerInvariant()}" : "Host=127.0.0.1;Port=1;Database=unused",
         ["Database__ApplyMigrations"] = (postgres is { Length: > 0 }).ToString().ToLowerInvariant(),
-        ["Authentication__Bearer__Authority"] = "https://identity.example.invalid",
+        ["Authentication__Bearer__PublicKey"] = smokePublicKey,
         ["Authentication__Bearer__Issuer"] = "https://identity.example.invalid",
         ["Authentication__Bearer__Audience"] = "traveltracker-api",
         ["TripReferences__AccommodationsBaseUrl"] = "http://127.0.0.1:1",

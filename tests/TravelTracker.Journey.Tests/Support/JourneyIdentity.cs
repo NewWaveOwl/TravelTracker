@@ -20,6 +20,9 @@ internal sealed class JourneyIdentity : HttpMessageHandler
 
     private readonly RSA signingKey = RSA.Create(2048);
 
+    /** the key hosts verify tokens against, standing in for the configured public key. */
+    internal RsaSecurityKey VerificationKey => new(signingKey) { KeyId = KeyId };
+
     /**
      * signs a token for a subject with the given scopes.
      * @param subject the validated user subject; "banned" and "deactivated" name those account standings.

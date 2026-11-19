@@ -4,15 +4,10 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
-using TravelTracker.Users.Data.Repositories.Credentials;
 using TravelTracker.Users.Domain.Models;
-using TravelTracker.Users.Domain.Types;
 using TravelTracker.Users.Tests.Support;
 
 namespace TravelTracker.Users.Tests;
@@ -22,18 +17,13 @@ public sealed class PasswordAuthTests : IDisposable
 {
     readonly ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
     readonly UsersApiFactory factory = new();
-    readonly MemoryCredentials store = new();
+    MemoryCredentialRepository store => factory.Credentials;
 
     HttpClient Client(bool keyConfigured = true) => factory.WithWebHostBuilder(builder =>
     {
         if (keyConfigured)
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                 new Dictionary<string, string?> { ["Authentication:Issuer:PrivateKey"] = key.ExportPkcs8PrivateKeyPem() }));
-        builder.ConfigureTestServices(services =>
-        {
-            services.RemoveAll<ICredentialRepository>();
-            services.AddSingleton<ICredentialRepository>(store);
-        });
     }).CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false });
 
     static async Task<JsonElement> Body(HttpResponseMessage response) => (await response.Content.ReadFromJsonAsync<JsonElement>())!;
@@ -54,9 +44,9 @@ public sealed class PasswordAuthTests : IDisposable
                 IssuerSigningKey = new ECDsaSecurityKey(key), ValidAlgorithms = [SecurityAlgorithms.EcdsaSha256],
             });
         Assert.True(result.IsValid, result.Exception?.Message);
-        Assert.Equal(store.Only.Account.ProviderIdentity.Subject, result.Claims["sub"]);
+        Assert.Equal(store.For("ada@example.test").Account.ProviderIdentity.Subject, result.Claims["sub"]);
         Assert.Contains("trips.write", result.Claims["scope"].ToString());
-        Assert.DoesNotContain("correct horse", store.Only.PasswordHash);
+        Assert.DoesNotContain("correct horse", store.For("ada@example.test").PasswordHash);
     }
 
     [Theory]
@@ -86,7 +76,7 @@ public sealed class PasswordAuthTests : IDisposable
     {
         using var client = Client();
         await client.PostAsJsonAsync("/api/v1/auth/register", new { email = "ada@example.test", password = "correct horse" });
-        store.Only = store.Only with { Account = store.Only.Account with { Status = UserStatus.Banned } };
+        store.SetStatus("ada@example.test", UserStatus.Banned);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "ada@example.test", password = "correct horse" })).StatusCode);
     }
 
@@ -114,24 +104,5 @@ public sealed class PasswordAuthTests : IDisposable
     {
         factory.Dispose();
         key.Dispose();
-    }
-
-    sealed class MemoryCredentials : ICredentialRepository
-    {
-        public StoredCredential Only { get; set; } = null!;
-
-        public Task<UserAccount?> RegisterAsync(string issuer, string login, string passwordHash, DateTimeOffset createdAt, CancellationToken cancellationToken)
-        {
-            if (Only is not null && Only.Account.Email!.Equals(login, StringComparison.OrdinalIgnoreCase)) return Task.FromResult<UserAccount?>(null);
-            var id = Guid.CreateVersion7();
-            var account = new UserAccount(id, new ProviderIdentity(issuer, id.ToString("D")), UserRole.User, UserStatus.Active, createdAt, email: login);
-            Only = new StoredCredential(account, passwordHash);
-            return Task.FromResult<UserAccount?>(account);
-        }
-
-        public Task<StoredCredential?> FindAsync(string login, CancellationToken cancellationToken) =>
-            Task.FromResult(Only is not null && Only.Account.Email!.Equals(login, StringComparison.OrdinalIgnoreCase) ? Only : null);
-
-        public Task UpdateHashAsync(Guid publicId, string passwordHash, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

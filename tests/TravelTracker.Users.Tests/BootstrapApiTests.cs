@@ -55,12 +55,12 @@ public sealed class BootstrapApiTests
     [InlineData("issuer")]
     [InlineData("audience")]
     [InlineData("expired")]
-    public async Task InvalidBearerIsRejectedBeforeProviderOrPersistence(string failure)
+    public async Task InvalidBearerIsRejectedBeforeCredentialLookupOrPersistence(string failure)
     {
         using var app = new UsersApiFactory();
         using var client = app.Browser(app.Token(failure));
         Assert.Equal(HttpStatusCode.Unauthorized, (await Provision(client)).StatusCode);
-        Assert.Equal(0, app.Identity.Calls);
+        Assert.Equal(0, app.Credentials.Calls);
         Assert.Equal(0, app.Repository.BootstrapCalls);
     }
 
@@ -76,12 +76,12 @@ public sealed class BootstrapApiTests
     [Theory]
     [InlineData(null)]
     [InlineData("wrong-secret")]
-    public async Task InvalidOperatorCredentialNeverCallsProviderOrDatabase(string? secret)
+    public async Task InvalidOperatorCredentialNeverReadsCredentialsOrDatabase(string? secret)
     {
         using var app = new UsersApiFactory();
         using var client = app.Browser(app.Token());
         Assert.Equal(HttpStatusCode.Forbidden, (await Provision(client, secret)).StatusCode);
-        Assert.Equal(0, app.Identity.Calls);
+        Assert.Equal(0, app.Credentials.Calls);
         Assert.Equal(0, app.Repository.BootstrapCalls);
     }
 
@@ -94,59 +94,47 @@ public sealed class BootstrapApiTests
         Assert.Equal(0, app.Repository.BootstrapCalls);
     }
 
-    [Theory]
-    [InlineData("different-subject", UsersApiFactory.Email, true)]
-    [InlineData("admin-subject", "different@example.test", true)]
-    [InlineData("admin-subject", UsersApiFactory.Email, false)]
-    public async Task BootstrapRequiresMatchingVerifiedProviderIdentity(string subject, string email, bool verified)
+    [Fact]
+    public async Task BootstrapRequiresTheConfiguredLoginToBelongToTheTokenSubject()
     {
         using var app = new UsersApiFactory();
-        app.Identity.Subject = subject;
-        app.Identity.Email = email;
-        app.Identity.Verified = verified;
-        using var client = app.Browser(app.Token());
+        using var client = app.Browser(app.Token(subject: "different-subject"));
         Assert.Equal(HttpStatusCode.Forbidden, (await Provision(client)).StatusCode);
         Assert.Null(app.Repository.Account);
     }
 
-    [Theory]
-    [InlineData("[]")]
-    [InlineData("null")]
-    [InlineData("{\"sub\":\"admin-subject\",\"email\":\"initial-admin@example.test\",\"email_verified\":\"true\"}")]
-    public async Task MalformedProviderIdentityFailsClosed(string response)
+    [Fact]
+    public async Task BootstrapRefusesWhenNoAccountIsRegisteredUnderTheConfiguredEmail()
     {
         using var app = new UsersApiFactory();
-        app.Identity.RawResponse = response;
+        app.Credentials.Unregister();
         using var client = app.Browser(app.Token());
         Assert.Equal(HttpStatusCode.Forbidden, (await Provision(client)).StatusCode);
         Assert.Null(app.Repository.Account);
     }
 
     [Fact]
-    public async Task UnavailableIdentityProviderNeverCreatesAdministratorOrLeaksDiagnostics()
+    public async Task UnavailableCredentialStoreNeverCreatesAdministratorOrLeaksDiagnostics()
     {
         using var app = new UsersApiFactory();
-        app.Identity.Unavailable = true;
+        app.Credentials.Unavailable = true;
         using var client = app.Browser(app.Token());
         var response = await Provision(client);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.DoesNotContain("provider-secret", await response.Content.ReadAsStringAsync());
+        Assert.DoesNotContain("credential-store-secret", await response.Content.ReadAsStringAsync());
         Assert.Null(app.Repository.Account);
     }
 
     [Fact]
-    public async Task VerifiedTargetBootstrapsAndReadsRoleWithoutExposingProviderIdentifiers()
+    public async Task RegisteredTargetBootstrapsAndReadsRoleWithoutExposingProviderIdentifiers()
     {
         using var app = new UsersApiFactory();
-        var token = app.Token(scope: DefaultTravellerScopes());
-        using var client = app.Browser(token);
+        using var client = app.Browser(app.Token());
         var response = await Provision(client);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var profile = await response.Content.ReadFromJsonAsync<UserProfileResponse>();
         Assert.Equal("administrator", profile!.Role);
         Assert.Equal("active", profile.Status);
-        Assert.Equal(new Uri(UsersApiFactory.Issuer + "userinfo"), app.Identity.Destination);
-        Assert.Equal("Bearer " + token, app.Identity.Authorization);
         var read = await client.GetFromJsonAsync<SelfProfileResponse>("/api/v1/users/me");
         Assert.Equal(profile.UserId, read!.PublicId);
         Assert.Equal(profile.Role, read.Role);
@@ -159,14 +147,14 @@ public sealed class BootstrapApiTests
     }
 
     [Fact]
-    public async Task OtherIdentityCannotClaimCompletedBootstrapEvenWithTheSameVerifiedEmail()
+    public async Task OtherIdentityCannotClaimCompletedBootstrap()
     {
         using var app = new UsersApiFactory();
         using var first = app.Browser(app.Token());
         await Provision(first);
-        app.Identity.Subject = "other-subject";
         using var other = app.Browser(app.Token(subject: "other-subject"));
-        Assert.Equal(HttpStatusCode.Conflict, (await Provision(other)).StatusCode);
+        // the configured login belongs to the first identity, so the second never reaches the consumed marker
+        Assert.Equal(HttpStatusCode.Forbidden, (await Provision(other)).StatusCode);
         Assert.Equal("admin-subject", app.Repository.Account!.ProviderIdentity.Subject);
     }
 

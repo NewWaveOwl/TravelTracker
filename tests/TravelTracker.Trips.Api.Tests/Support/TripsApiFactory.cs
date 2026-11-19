@@ -27,16 +27,12 @@ internal sealed class TripsApiFactory : WebApplicationFactory<TripsProgram>
     internal const string BackendCredential = "users-service-token";
 
     private readonly RSA signingKey = RSA.Create(2048);
-    private HttpClient? discoveryClient;
 
     /** Scripted Users and catalogue behavior. */
     internal TripUpstream Upstream { get; } = new();
 
     /** Owner-aware store that the host writes to in tests. */
     internal InMemoryTripRepository Repository { get; } = new();
-
-    /** Discovery backchannel that serves the test signing key. */
-    internal DiscoveryBackchannelHandler? Discovery { get; private set; }
 
     /**
      * Creates a JWT signed by the isolated test key, or a deliberately invalid one for failure cases.
@@ -90,7 +86,8 @@ internal sealed class TripsApiFactory : WebApplicationFactory<TripsProgram>
         builder.UseEnvironment("Testing");
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Authentication:Bearer:Authority"] = Issuer,
+            ["Authentication:Bearer:PublicKey"] = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).ExportSubjectPublicKeyInfoPem(),
+            ["Authentication:Bearer:ValidAlgorithms:0"] = "RS256",
             ["Authentication:Bearer:Issuer"] = Issuer,
             ["Authentication:Bearer:Audience"] = Audience,
             ["Authentication:Bearer:ScopeClaimType"] = "scope",
@@ -110,12 +107,8 @@ internal sealed class TripsApiFactory : WebApplicationFactory<TripsProgram>
             services.RemoveAll<ITripRepository>();
             services.AddSingleton<ITripRepository>(Repository);
             services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => Upstream));
-            services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
-            {
-                Discovery = new DiscoveryBackchannelHandler(signingKey.ExportParameters(false), Issuer);
-                discoveryClient = new HttpClient(Discovery);
-                options.Backchannel = discoveryClient;
-            });
+            services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+                options.TokenValidationParameters.IssuerSigningKeys = [.. options.TokenValidationParameters.IssuerSigningKeys, new RsaSecurityKey(signingKey)]);
         });
         builder.ConfigureLogging(logging => logging.ClearProviders());
     }
@@ -129,7 +122,6 @@ internal sealed class TripsApiFactory : WebApplicationFactory<TripsProgram>
     {
         base.Dispose(disposing);
         if (!disposing) return;
-        discoveryClient?.Dispose();
         signingKey.Dispose();
     }
 }
