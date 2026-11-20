@@ -37,7 +37,7 @@ public sealed class UserAdministrationApiTests
     {
         using var app = new UsersApiFactory();
         app.Repository.AdministratorListResult = null;
-        using var client = app.Browser(app.Token(subject: "actor", role: "administrator"));
+        using var client = app.Browser(app.Token(subject: "actor", scope: "users.admin", role: "administrator"));
         var list = await client.GetAsync("/api/v1/users");
         Assert.Equal(HttpStatusCode.Forbidden, list.StatusCode);
         Assert.DoesNotContain("target@example.test", await list.Content.ReadAsStringAsync());
@@ -50,7 +50,7 @@ public sealed class UserAdministrationApiTests
         using var app = new UsersApiFactory();
         // deliberately retain the repository's order rather than introducing controller-side sorting.
         app.Repository.AdministratorListResult = [Account(), Account() with { PublicId = Guid.Parse("019ac550-1000-7000-8000-000000000003"), VerifiedEmail = "another@example.test" }];
-        using var client = app.Browser(app.Token(subject: "actor"));
+        using var client = app.Browser(app.Token(subject: "actor", scope: "users.admin"));
         var response = await client.GetAsync("/api/v1/users");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal((UsersApiFactory.Issuer, "actor"), app.Repository.AdministratorListRequest!.Value);
@@ -64,7 +64,7 @@ public sealed class UserAdministrationApiTests
     [Theory]
     [InlineData("administrator", "traveller")]
     [InlineData("traveller", "administrator")]
-    public async Task SuccessfulChangeForwardsIdentityAndWhitelistedRequestWithoutRequiringCatalogueWrite(string role, string expectedRole)
+    public async Task SuccessfulChangeForwardsIdentityAndWhitelistedRequestWithoutRequiringCatalogueReadOrWrite(string role, string expectedRole)
     {
         using var app = new UsersApiFactory();
         var saved = Account(role);
@@ -104,7 +104,7 @@ public sealed class UserAdministrationApiTests
     {
         using var app = new UsersApiFactory();
         app.Repository.RoleChangeResult = new UserRoleChangeResult(code, null);
-        using var client = app.Browser(app.Token(subject: "actor"));
+        using var client = app.Browser(app.Token(subject: "actor", scope: "users.admin"));
         var response = await Change(client, TargetId);
         Assert.Equal(expectedStatus, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
@@ -120,8 +120,7 @@ public sealed class UserAdministrationApiTests
     [InlineData("administrator", "traveller", "   ")]
     public async Task InvalidRoleOrMissingReasonIsRejectedBeforeCallingRepository(string role, string expectedRole, string reason)
     {
-        using var app = new UsersApiFactory();
-        using var client = app.Browser(app.Token(subject: "actor"));
+        using var app = new UsersApiFactory(); using var client = app.Browser(app.Token(subject: "actor", scope: "users.admin"));
         Assert.Equal(HttpStatusCode.BadRequest, (await Change(client, TargetId, role, expectedRole, reason)).StatusCode);
         Assert.Null(app.Repository.RoleChangeRequest);
     }
@@ -129,8 +128,7 @@ public sealed class UserAdministrationApiTests
     [Fact]
     public async Task OverlongReasonAndUnknownFieldsAreRejectedBeforeCallingRepository()
     {
-        using var app = new UsersApiFactory();
-        using var client = app.Browser(app.Token(subject: "actor"));
+        using var app = new UsersApiFactory(); using var client = app.Browser(app.Token(subject: "actor", scope: "users.admin"));
         Assert.Equal(HttpStatusCode.BadRequest, (await Change(client, TargetId, reason: new string('x', 501))).StatusCode);
         var body = JsonContent.Create(new { role = "administrator", expectedRole = "traveller", reason = "Reason", status = "active", issuer = UsersApiFactory.Issuer });
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PatchAsync($"/api/v1/users/{TargetId}/role", body)).StatusCode);
@@ -138,15 +136,14 @@ public sealed class UserAdministrationApiTests
     }
 
     [Fact]
-    public async Task AdministrationRequiresHttpsAndAValidReadGrantBeforeCallingRepository()
+    public async Task AdministrationRequiresHttpsAndUsersAdminScopeBeforeCallingRepository()
     {
-        using var app = new UsersApiFactory();
-        using var http = app.Browser(app.Token(subject: "actor"), false);
+        using var app = new UsersApiFactory(); using var http = app.Browser(app.Token(subject: "actor", scope: "users.admin"), false);
         Assert.Equal(HttpStatusCode.BadRequest, (await http.GetAsync("/api/v1/users")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Change(http, TargetId)).StatusCode);
-        using var noScope = app.Browser(app.Token(subject: "actor", scope: "openid"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await noScope.GetAsync("/api/v1/users")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await Change(noScope, TargetId)).StatusCode);
+        using var catalogueReader = app.Browser(app.Token(subject: "actor", scope: "catalogue.read users.read users.write"));
+        Assert.Equal(HttpStatusCode.Forbidden, (await catalogueReader.GetAsync("/api/v1/users")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Change(catalogueReader, TargetId)).StatusCode);
         Assert.Null(app.Repository.AdministratorListRequest);
         Assert.Null(app.Repository.RoleChangeRequest);
     }

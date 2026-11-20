@@ -161,7 +161,7 @@ try
                 settings["TripReferences__UsersBaseUrl"] = usersUrl;
                 settings["TripReferences__UsersServiceAccessToken"] = token;
                 break;
-            case "Attractions" or "Accommodations" or "Settings":
+            case "Attractions" or "Accommodations" or "Settings" or "Transport":
                 settings["Users__InternalBaseUrl"] = usersUrl;
                 settings["Users__ServiceAccessToken"] = token;
                 break;

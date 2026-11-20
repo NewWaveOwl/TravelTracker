@@ -28,7 +28,7 @@ public class UsersProgram
             .GetChildren().Select(entry => entry.Value).Where(value => !string.IsNullOrWhiteSpace(value)).ToHashSet(StringComparer.Ordinal));
         builder.Services.AddOptions<AuthorizationOptions>().Configure<IOptions<BearerSettings>>((options, settings) =>
         {
-            foreach (var scope in new[] { ScopePolicies.UsersRead, ScopePolicies.UsersWrite, ScopePolicies.UsersAccess, ScopePolicies.UsersAdministration })
+            foreach (var scope in new[] { "users.read", "users.write", "users.access", "users.admin" })
                 options.AddPolicy(scope, policy => policy.RequireAuthenticatedUser().RequireAssertion(context =>
                     ScopePolicies.HasScope(context.User, settings.Value.ScopeClaimType, scope) &&
                     (scope != ScopePolicies.UsersAccess ||

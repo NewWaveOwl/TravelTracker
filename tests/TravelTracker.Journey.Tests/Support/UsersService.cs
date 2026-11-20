@@ -6,7 +6,8 @@ namespace TravelTracker.Journey.Tests.Support;
 
 /**
  * plays the Users service's internal identity and standing lookups that the other hosts call.
- * the subject decides standing: "banned" and "deactivated" map to those states, everything else is an active traveller.
+ * the subject decides standing and role: "catalogue-admin" is an active administrator, while "banned" and "deactivated"
+ * map to those states and every other subject is an active traveller.
  * this is a stand-in, not the real Users host; the Users service has its own tests.
  */
 internal sealed class UsersService : HttpMessageHandler
@@ -43,7 +44,8 @@ internal sealed class UsersService : HttpMessageHandler
             }
             if (subject is null) return new HttpResponseMessage(HttpStatusCode.NotFound);
             var status = subject is "banned" or "deactivated" ? subject : "active";
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { userId, status, role = "traveller" }) };
+            var role = subject == "catalogue-admin" ? "administrator" : "traveller";
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { userId, status, role }) };
         }
 
         return new HttpResponseMessage(HttpStatusCode.NotFound);

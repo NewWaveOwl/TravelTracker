@@ -24,6 +24,7 @@ public static class ScopePolicies
 
     /** Creates and replaces the caller's own trips. */
     public const string TripsWrite = "trips.write";
+    public const string UsersAdmin = "users.admin";
 
     /** Reads Users account profiles through the public Users contract. */
     public const string UsersRead = "users.read";

@@ -50,7 +50,7 @@ public sealed class CriticalJourneyTests : IDisposable
             "/api/v1/accommodations", new { name = "Hotel Lumiere", lat = 48.85m, lon = 2.35m }, "accommodationId");
         var museum = await CreateAsync(environment.ClientFor(environment.Attractions, "alice", TravellerScopes),
             "/api/v1/attractions", new { name = "Louvre", lat = 48.86m, lon = 2.34m, estimatedVisitMinutes = 120 }, "attractionId");
-        var train = await CreateAsync(environment.ClientFor(environment.Transport, "alice", TravellerScopes),
+        var train = await CreateAsync(environment.ClientFor(environment.Transport, "catalogue-admin", TravellerScopes),
             "/api/v1/transport-modes", new { code = "train", name = "Train" }, "transportModeId");
 
         var start = new DateTimeOffset(2026, 6, 1, 8, 0, 0, TimeSpan.FromHours(2));

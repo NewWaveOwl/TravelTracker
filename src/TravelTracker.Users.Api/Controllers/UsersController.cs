@@ -151,7 +151,7 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
      * @return Public account profiles, or 403 without account data for an inactive/non-administrator caller.
      */
     [HttpGet]
-    [Authorize(Policy = ScopePolicies.UsersAdministration)]
+    [Authorize(Policy = ScopePolicies.UsersAdmin)]
     public async Task<IResult> List()
     {
         if (!Request.IsHttps) return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Account administration requires HTTPS.");
@@ -168,7 +168,7 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
      * @return Updated public profile, or safe validation, permission, absence or conflict feedback.
      */
     [HttpPatch("{id:guid}/role")]
-    [Authorize(Policy = ScopePolicies.UsersAdministration)]
+    [Authorize(Policy = ScopePolicies.UsersAdmin)]
     public async Task<IResult> ChangeRole(Guid id, ChangeUserRoleRequest request)
     {
         if (!Request.IsHttps) return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Account administration requires HTTPS.");

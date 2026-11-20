@@ -10,8 +10,11 @@ DECLARE
     metadata jsonb;
     claims jsonb := event->'claims';
     granted text;
-    traveller_scopes text[] := ARRAY[
+    supported_scopes text[] := ARRAY[
         'catalogue.read', 'catalogue.write', 'users.read', 'users.write', 'users.admin',
+        'settings.read', 'settings.write', 'trips.read', 'trips.write'];
+    traveller_scopes text[] := ARRAY[
+        'catalogue.read', 'catalogue.write', 'users.read', 'users.write',
         'settings.read', 'settings.write', 'trips.read', 'trips.write'];
 BEGIN
     SELECT raw_app_meta_data INTO metadata FROM auth.users
@@ -30,7 +33,7 @@ BEGIN
             FROM (SELECT DISTINCT value #>> '{}' AS scope
                   FROM jsonb_array_elements(metadata->'traveltracker_scopes')
                   WHERE jsonb_typeof(value) = 'string') allowed
-            WHERE scope = ANY(traveller_scopes);
+            WHERE scope = ANY(supported_scopes);
         ELSE
             granted := '';
         END IF;

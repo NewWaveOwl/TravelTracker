@@ -34,13 +34,20 @@ The other services continue to own their databases and enforce private ownership
    needs a Supabase secret key or `service_role` key.
 
 Ordinary confirmed travellers receive `catalogue.read`, `catalogue.write`,
-`users.read`, `users.write`, `users.admin`, `settings.read`, `settings.write`, `trips.read` and
-`trips.write`. These permissions enable features, not administrator authority; `users.admin`
-only reaches the administrator endpoints, where Users still checks live role and
-standing (and the setup secret for bootstrap). An operator can restrict an account by
-setting `app_metadata.traveltracker_scopes` to an array of these exact strings.
-An empty array grants none. Unknown strings and `users.access` are excluded from
-the traveller list. User-editable `user_metadata` never grants permissions.
+`users.read`, `users.write`, `settings.read`, `settings.write`, `trips.read` and
+`trips.write`. These permissions enable features, not administrator authority;
+Users checks live role and standing. `users.admin` is supported for account
+administration but is never part of ordinary traveller defaults. Grant it only
+through administrator-managed `app_metadata.traveltracker_scopes` to an account
+that is also an active administrator in the Users database. The API checks both
+scope and live role, so the token grant alone cannot administer accounts.
+Promoting an account in Users does not update Supabase metadata automatically;
+the trusted scope grant must be synchronized before that administrator receives
+a token containing `users.admin`. Operators can restrict an account by setting
+`app_metadata.traveltracker_scopes` to an array of exact supported strings. An
+empty array grants none. Unknown strings and `users.access` are excluded from
+traveller grants; the service identity receives only `users.access`.
+User-editable `user_metadata` never grants permissions.
 Anonymous users receive no TravelTracker scopes. Sign in again after permission
 changes; an already issued access token retains its claims until expiry.
 
