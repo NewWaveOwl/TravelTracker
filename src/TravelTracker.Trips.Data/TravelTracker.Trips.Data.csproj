@@ -9,6 +9,5 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14" PrivateAssets="all" />
     <ProjectReference Include="../TravelTracker.Trips.Domain/TravelTracker.Trips.Domain.csproj" />
-    <ProjectReference Include="../TravelTracker.Data/TravelTracker.Data.csproj" />
   </ItemGroup>
 </Project>

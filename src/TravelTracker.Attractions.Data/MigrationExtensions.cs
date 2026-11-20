@@ -1,12 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 
-namespace TravelTracker.Data;
+namespace TravelTracker.Attractions.Data;
 
 /**
  * Shared migration entry point for the service databases.
  */
-public static class MigrationExtensions
+internal static class MigrationExtensions
 {
     /**
      * Applies pending migrations after creating an empty history table when it is missing.

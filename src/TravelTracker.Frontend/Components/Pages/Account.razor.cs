@@ -315,7 +315,7 @@ public partial class Account : IDisposable
         editContext?.NotifyValidationStateChanged();
         try
         {
-            var update = new UpdateSelfProfileRequest(editModel.Username, editModel.Email, editModel.Address);
+            var update = new UpdateSelfProfileRequest(editModel.Address);
             var confirmed = await Users.UpdateMeAsync(profile, update, current.Token);
             if (!Current(version) || current.IsCancellationRequested) return;
             profile = confirmed;
@@ -355,8 +355,6 @@ public partial class Account : IDisposable
                 {
                     var identifier = field.ToLowerInvariant() switch
                     {
-                        "username" => editContext?.Field(nameof(ProfileEditModel.Username)),
-                        "email" => editContext?.Field(nameof(ProfileEditModel.Email)),
                         "address" => editContext?.Field(nameof(ProfileEditModel.Address)),
                         _ => null
                     };
@@ -371,7 +369,7 @@ public partial class Account : IDisposable
             }
 
             saveError = failure.Status == 409
-                ? "The username may already be in use, or your profile changed. Review the fields and try again."
+                ? "Your profile changed. Review the fields and try again."
                 : failure.Message;
         }
         catch (Exception exception)

@@ -22,12 +22,11 @@ public sealed partial class UserRepositoryPostgreSqlTests
         // a writer that changes standing without advancing ConcurrencyToken, the case the token alone would miss
         var repository = new UserRepository(CreateFactory(database.ConnectionString, new BanBeforeSave(database.ConnectionString)));
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repository.UpdateProfileAsync(
-            identity, "Should.Not.Save", null, "1 Main Street", true, CreatedAt.AddMinutes(1), CancellationToken.None));
+            identity, "1 Main Street", true, CreatedAt.AddMinutes(1), CancellationToken.None));
 
         var saved = await new UserRepository(CreateFactory(database.ConnectionString)).FindByProviderIdentityAsync(identity, CancellationToken.None);
         Assert.NotNull(saved);
         Assert.Equal(UserStatus.Banned, saved.Status);
-        Assert.Null(saved.Username);
         Assert.Null(saved.Address);
         Assert.Null(saved.UpdatedAt);
     }
@@ -41,9 +40,9 @@ public sealed partial class UserRepositoryPostgreSqlTests
         var repository = new UserRepository(CreateFactory(database.ConnectionString));
         await repository.GetOrCreateAsync(identity, CreatedAt, CancellationToken.None);
 
-        var updated = await repository.UpdateProfileAsync(identity, "Still.Active", null, null, false, CreatedAt.AddMinutes(1), CancellationToken.None);
+        var updated = await repository.UpdateProfileAsync(identity, "1 Main Street", true, CreatedAt.AddMinutes(1), CancellationToken.None);
 
-        Assert.Equal("Still.Active", updated?.Username);
+        Assert.Equal("1 Main Street", updated?.Address);
     }
 
     /**

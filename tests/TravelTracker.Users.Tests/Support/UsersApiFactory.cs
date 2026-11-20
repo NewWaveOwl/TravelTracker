@@ -34,7 +34,7 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
     public const string Secret = "test-bootstrap-credential-at-least-32-characters";
     public const string ServiceToken = "test-independent-service-credential-at-least-32";
     public const string ServiceSubject = "attractions-service";
-    public const string Email = "initial-admin@example.test";
+    public const string Username = "initial-admin";
     readonly RSA key = RSA.Create(2048);
     // only needs to be a well-formed key: tests replace signature validation with the RSA key above
     readonly ECDsa signingKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -49,7 +49,7 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
     static MemoryCredentialRepository WithAdministratorLogin()
     {
         var credentials = new MemoryCredentialRepository();
-        credentials.Seed(Email, Issuer, "admin-subject");
+        credentials.Seed(Username, Issuer, "admin-subject");
         return credentials;
     }
 
@@ -69,7 +69,7 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
             ["Authentication:Bearer:Issuer"] = Issuer,
             ["Authentication:Bearer:Audience"] = Audience,
             ["Authentication:Bearer:ClockSkewSeconds"] = "0",
-            ["Bootstrap:Email"] = Email,
+            ["Bootstrap:Username"] = Username,
             ["Bootstrap:Issuer"] = Issuer,
             ["Bootstrap:Secret"] = ConfiguredSecret,
             ["UsersAccess:ServiceToken"] = ServiceToken,

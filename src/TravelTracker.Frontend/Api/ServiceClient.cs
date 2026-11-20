@@ -14,7 +14,7 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
 {
     static readonly TimeSpan Timeout = TimeSpan.FromSeconds(8);
     static readonly HashSet<string> WritableFields = new(StringComparer.OrdinalIgnoreCase)
-    { "name", "address", "lat", "lon", "estimatedVisitMinutes", "rating", "description", "visibility", "code", "type", "sourceId", "username", "email", "theme", "defaultMapLatitude", "defaultMapLongitude", "defaultMapZoom", "preferredTransportMode", "timeZone" };
+    { "name", "address", "lat", "lon", "estimatedVisitMinutes", "rating", "description", "visibility", "code", "type", "sourceId", "username", "theme", "defaultMapLatitude", "defaultMapLongitude", "defaultMapZoom", "preferredTransportMode", "timeZone" };
 
     /**
      * Reads a public JSON contract.

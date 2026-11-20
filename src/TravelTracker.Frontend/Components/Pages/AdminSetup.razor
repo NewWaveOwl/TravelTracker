@@ -40,7 +40,7 @@ else
     {
         <section class="form-panel">
             <h2>Set up the first administrator</h2>
-            <p>The Users service verifies your account’s email before assigning the role. This works only once, before an administrator has been initialized.</p>
+            <p>The Users service checks that you are the configured administrator account before assigning the role. This works only once, before an administrator has been initialized.</p>
             <button disabled="@(busy || lookupFailed)" @onclick="CompleteAsync">@(busy ? "Verifying account…" : "Make this account administrator")</button>
         </section>
     }

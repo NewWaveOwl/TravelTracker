@@ -104,7 +104,7 @@ public sealed class BootstrapApiTests
     }
 
     [Fact]
-    public async Task BootstrapRefusesWhenNoAccountIsRegisteredUnderTheConfiguredEmail()
+    public async Task BootstrapRefusesWhenNoAccountIsRegisteredUnderTheConfiguredUsername()
     {
         using var app = new UsersApiFactory();
         app.Credentials.Unregister();
@@ -138,7 +138,6 @@ public sealed class BootstrapApiTests
         var read = await client.GetFromJsonAsync<SelfProfileResponse>("/api/v1/users/me");
         Assert.Equal(profile.UserId, read!.PublicId);
         Assert.Equal(profile.Role, read.Role);
-        Assert.Null(read.Email);
         var json = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("subject", json);
         Assert.DoesNotContain("issuer", json);
@@ -167,7 +166,7 @@ public sealed class BootstrapApiTests
         app.Repository.Deactivate();
         var response = await client.GetAsync("/api/v1/users/me");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.DoesNotContain(UsersApiFactory.Email, await response.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(UsersApiFactory.Username, await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

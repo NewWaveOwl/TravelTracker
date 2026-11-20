@@ -25,13 +25,13 @@ else
         }
         else if (Error is not null)
         {
-            <p role="alert">@(Register ? "Registration could not be completed. Check your email and matching passwords (at least 8 characters), or try signing in if you already have an account." : "Sign-in failed. Check your email and password.")</p>
+            <p role="alert">@(Register ? "Registration could not be completed. Check your username (3 to 32 letters, numbers, periods, underscores or hyphens) and matching passwords (at least 8 characters), or try signing in if you already have an account." : "Sign-in failed. Check your username and password.")</p>
         }
         <form method="post" action="@(Register ? "/auth/register" : "/auth/login")">
             <AntiforgeryToken />
             <div class="profile-field">
-                <label for="sign-in-email">Email</label>
-                <input id="sign-in-email" name="email" type="email" autocomplete="email" maxlength="254" required />
+                <label for="sign-in-username">Username</label>
+                <input id="sign-in-username" name="username" type="text" autocomplete="username" minlength="@(Register ? "3" : null)" maxlength="32" required />
             </div>
             <div class="profile-field">
                 <label for="sign-in-password">Password</label>

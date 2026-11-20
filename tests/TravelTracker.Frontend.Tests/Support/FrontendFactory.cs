@@ -25,7 +25,7 @@ namespace TravelTracker.Frontend.Tests.Support;
 public sealed partial class FrontendFactory(string? keyDirectory = null, SessionRegistry? sessionRegistry = null) : WebApplicationFactory<Program>
 {
     public const string ProtectedReadPath = "/test/protected-read";
-    public const string SelfProfileJson = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller_1","email":"traveller@example.test","address":"1 Main St"}""";
+    public const string SelfProfileJson = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller_1","address":"1 Main St"}""";
 
     FakeUsersAuth? users;
 
@@ -84,7 +84,7 @@ public sealed partial class FrontendFactory(string? keyDirectory = null, Session
         var page = await browser.GetStringAsync("/sign-in");
         return await browser.PostAsync("/auth/login", new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            ["email"] = "traveller@example.test", ["password"] = "fixture-password", ["__RequestVerificationToken"] = AntiforgeryTokenFrom(page)
+            ["username"] = "traveller_1", ["password"] = "fixture-password", ["__RequestVerificationToken"] = AntiforgeryTokenFrom(page)
         }));
     }
 

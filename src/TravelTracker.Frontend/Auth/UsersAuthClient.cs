@@ -17,27 +17,27 @@ public sealed class UsersAuthClient(HttpClient http, ServiceDirectory services, 
 {
     /**
      * Checks a password.
-     * @param email The submitted sign-in email.
+     * @param username The submitted sign-in username.
      * @param password The submitted password, never logged or persisted.
      * @param cancellationToken Cancels the request.
      * @return A session, or null when the credentials or the account standing were refused. Transport and server failures throw.
      */
-    public Task<PasswordSession?> SignInAsync(string email, string password, CancellationToken cancellationToken) =>
-        PostAsync("login", email, password, cancellationToken);
+    public Task<PasswordSession?> SignInAsync(string username, string password, CancellationToken cancellationToken) =>
+        PostAsync("login", username, password, cancellationToken);
 
     /**
      * Creates an account and signs it in.
-     * @param email The new account email.
+     * @param username The new account username.
      * @param password The new account password.
      * @param cancellationToken Cancels the request.
-     * @return A session, or null when the email is taken or the input was refused. Transport and server failures throw.
+     * @return A session, or null when the username is taken or the input was refused. Transport and server failures throw.
      */
-    public Task<PasswordSession?> RegisterAsync(string email, string password, CancellationToken cancellationToken) =>
-        PostAsync("register", email, password, cancellationToken);
+    public Task<PasswordSession?> RegisterAsync(string username, string password, CancellationToken cancellationToken) =>
+        PostAsync("register", username, password, cancellationToken);
 
-    private async Task<PasswordSession?> PostAsync(string action, string email, string password, CancellationToken cancellationToken)
+    private async Task<PasswordSession?> PostAsync(string action, string username, string password, CancellationToken cancellationToken)
     {
-        using var response = await http.PostAsJsonAsync(services.ProtectedUrlFor("Users", $"/api/v1/auth/{action}"), new { email, password }, cancellationToken);
+        using var response = await http.PostAsJsonAsync(services.ProtectedUrlFor("Users", $"/api/v1/auth/{action}"), new { username, password }, cancellationToken);
         if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.Conflict) return null;
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<TokenBody>(cancellationToken);
@@ -46,7 +46,7 @@ public sealed class UsersAuthClient(HttpClient http, ServiceDirectory services, 
         var token = new JsonWebTokenHandler().ReadJsonWebToken(body.AccessToken);
         var expiresAt = new DateTimeOffset(token.ValidTo, TimeSpan.Zero);
         if (string.IsNullOrWhiteSpace(token.Subject) || expiresAt <= clock.GetUtcNow()) return null;
-        var identity = new ClaimsIdentity([new("sub", token.Subject), new("email", email), new("scope", body.Scope ?? "")], "password", "email", null);
+        var identity = new ClaimsIdentity([new("sub", token.Subject), new("name", username), new("scope", body.Scope ?? "")], "password", "name", null);
         return new(new ClaimsPrincipal(identity), body.AccessToken, expiresAt);
     }
 

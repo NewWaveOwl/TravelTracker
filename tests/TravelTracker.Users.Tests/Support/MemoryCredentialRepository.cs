@@ -16,7 +16,7 @@ public sealed class MemoryCredentialRepository : ICredentialRepository
 
     /** Adds a credential the way registration would, without hashing, for tests that only need a login to exist. */
     public void Seed(string login, string issuer, string subject, string passwordHash = "unused") => entries.Add((login, new StoredCredential(
-        new UserAccount(Guid.CreateVersion7(), new ProviderIdentity(issuer, subject), UserRole.User, UserStatus.Active, DateTimeOffset.UtcNow, email: login), passwordHash)));
+        new UserAccount(Guid.CreateVersion7(), new ProviderIdentity(issuer, subject), UserRole.User, UserStatus.Active, DateTimeOffset.UtcNow, username: login), passwordHash)));
 
     /** Removes every credential. */
     public void Unregister() => entries.Clear();
@@ -33,7 +33,7 @@ public sealed class MemoryCredentialRepository : ICredentialRepository
         Calls++;
         if (Find(login) is not null) return Task.FromResult<UserAccount?>(null);
         var id = Guid.CreateVersion7();
-        var account = new UserAccount(id, new ProviderIdentity(issuer, id.ToString("D")), UserRole.User, UserStatus.Active, createdAt, email: login);
+        var account = new UserAccount(id, new ProviderIdentity(issuer, id.ToString("D")), UserRole.User, UserStatus.Active, createdAt, username: login);
         entries.Add((login, new StoredCredential(account, passwordHash)));
         return Task.FromResult<UserAccount?>(account);
     }

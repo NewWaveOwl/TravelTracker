@@ -21,7 +21,7 @@ public sealed class PasswordSignInTests
         Assert.Contains("samesite=lax", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(host.Users.LastToken!, cookie);
         Assert.Contains("traveller_1", await browser.GetStringAsync("/account"));
-        Assert.Equal("traveller@example.test", host.Users.LastEmail);
+        Assert.Equal("traveller_1", host.Users.LastUsername);
     }
 
     [Theory]
@@ -36,7 +36,7 @@ public sealed class PasswordSignInTests
         Assert.Equal("/sign-in?error=credentials", result.Headers.Location?.OriginalString);
         var page = await browser.GetStringAsync(result.Headers.Location);
         Assert.DoesNotContain("private-provider-diagnostic", page);
-        Assert.Contains("Check your email and password", page);
+        Assert.Contains("Check your username and password", page);
         Assert.Contains("Sign in to view your profile", await browser.GetStringAsync("/account"));
     }
 
@@ -62,7 +62,7 @@ public sealed class PasswordSignInTests
         using var host = new FrontendFactory();
         var browser = host.CreateBrowser();
         var result = await browser.PostAsync(path, new FormUrlEncodedContent(new Dictionary<string, string>
-        { ["email"] = "traveller@example.test", ["password"] = "fixture-password" }));
+        { ["username"] = "traveller_1", ["password"] = "fixture-password" }));
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
         Assert.Equal(0, host.Users.LoginRequests + host.Users.RegisterRequests);
     }
@@ -73,7 +73,7 @@ public sealed class PasswordSignInTests
         using var host = new FrontendFactory();
         var browser = host.CreateBrowser();
         var token = FrontendFactory.AntiforgeryTokenFrom(await browser.GetStringAsync("/sign-in?mode=register"));
-        var result = await browser.PostAsync("/auth/register", Form(token, ("email", "new@example.test"), ("password", "fixture-password"), ("passwordConfirmation", "fixture-password")));
+        var result = await browser.PostAsync("/auth/register", Form(token, ("username", "new_user"), ("password", "fixture-password"), ("passwordConfirmation", "fixture-password")));
         Assert.Equal("/account", result.Headers.Location?.OriginalString);
         Assert.Equal(1, host.Users.RegisterRequests);
         Assert.Contains("traveller_1", await browser.GetStringAsync("/account"));
@@ -87,19 +87,19 @@ public sealed class PasswordSignInTests
         using var host = new FrontendFactory();
         var browser = host.CreateBrowser();
         var token = FrontendFactory.AntiforgeryTokenFrom(await browser.GetStringAsync("/sign-in?mode=register"));
-        var result = await browser.PostAsync("/auth/register", Form(token, ("email", "new@example.test"), ("password", password), ("passwordConfirmation", confirmation)));
+        var result = await browser.PostAsync("/auth/register", Form(token, ("username", "new_user"), ("password", password), ("passwordConfirmation", confirmation)));
         Assert.Equal("/sign-in?mode=register&error=registration", result.Headers.Location?.OriginalString);
         Assert.Equal(0, host.Users.RegisterRequests);
     }
 
     [Fact]
-    public async Task ATakenEmailIsRefusedWithoutStartingASession()
+    public async Task ATakenUsernameIsRefusedWithoutStartingASession()
     {
         using var host = new FrontendFactory();
         host.Users.Reject = HttpStatusCode.Conflict;
         var browser = host.CreateBrowser();
         var token = FrontendFactory.AntiforgeryTokenFrom(await browser.GetStringAsync("/sign-in?mode=register"));
-        var result = await browser.PostAsync("/auth/register", Form(token, ("email", "taken@example.test"), ("password", "fixture-password"), ("passwordConfirmation", "fixture-password")));
+        var result = await browser.PostAsync("/auth/register", Form(token, ("username", "taken"), ("password", "fixture-password"), ("passwordConfirmation", "fixture-password")));
         Assert.Equal("/sign-in?mode=register&error=registration", result.Headers.Location?.OriginalString);
         Assert.Contains("Sign in to view your profile", await browser.GetStringAsync("/account"));
     }

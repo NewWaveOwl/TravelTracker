@@ -48,7 +48,7 @@ The planned backend has six logical services. Each is intended to own its data a
 
 ## 3. Accounts and access
 
-TravelTracker has built-in email and password accounts. The Users service checks passwords against its own PostgreSQL database and issues short-lived signed access tokens; the Blazor server signs travellers in through it and forwards the token to the APIs, which verify it with a shared public key. There is no email confirmation or password reset. The Users service also keeps profiles, roles, account standing and audit history. See [API authentication](authentication.md).
+TravelTracker has built-in username and password accounts. The Users service checks passwords against its own PostgreSQL database and issues short-lived signed access tokens; the Blazor server signs travellers in through it and forwards the token to the APIs, which verify it with a shared public key. There is no email, confirmation or password reset. The Users service also keeps profiles, roles, account standing and audit history. See [API authentication](authentication.md).
 
 Every account is a traveller or an administrator, and is active, banned or deactivated.
 

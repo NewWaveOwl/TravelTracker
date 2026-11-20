@@ -10,7 +10,7 @@ namespace TravelTracker.Users.Api.Services;
 /**
  * Coordinates authenticated self-profile reads and updates.
  * @param profiles Resolves and persists the caller's account profile.
- * @param logger Records client-facing conflict outcomes without usernames or identity values.
+ * @param logger Records client-facing conflict outcomes without identity values.
  * @param timeProvider Supplies the UTC time for provisioning and updates; defaults to the system clock.
  */
 public sealed class UserProfileService(IUserRepository profiles, ILogger<UserProfileService> logger, TimeProvider? timeProvider = null)
@@ -51,27 +51,12 @@ public sealed class UserProfileService(IUserRepository profiles, ILogger<UserPro
             return new UserProfileResult(UserProfileResultKind.Forbidden);
         }
 
-        var username = request.Username?.Trim();
-        var email = request.Email?.Trim();
         var address = request.Address?.Trim();
-        var candidate = account with
-        {
-            Username = request.HasUsername ? username : account.Username,
-            Email = request.HasEmail ? email : account.Email,
-            Address = request.HasAddress ? address : account.Address
-        };
+        var candidate = account with { Address = request.HasAddress ? address : account.Address };
         var errors = candidate.Validate();
-        if (!request.HasUsername && !request.HasEmail && !request.HasAddress)
+        if (!request.HasAddress)
         {
             errors["profile"] = ["Supply at least one editable field."];
-        }
-        if (request.HasUsername && username is null)
-        {
-            errors["username"] = ["Username cannot be null."];
-        }
-        if (request.HasEmail && email is null)
-        {
-            errors["email"] = ["Email cannot be null."];
         }
         if (errors.Count != 0)
         {
@@ -80,16 +65,11 @@ public sealed class UserProfileService(IUserRepository profiles, ILogger<UserPro
 
         try
         {
-            var updated = await profiles.UpdateProfileAsync(identity, username, email, address,
+            var updated = await profiles.UpdateProfileAsync(identity, address,
                 request.HasAddress, clock.GetUtcNow(), cancellationToken);
             return updated?.Status == UserStatus.Active
                 ? new UserProfileResult(UserProfileResultKind.Success, updated)
                 : new UserProfileResult(UserProfileResultKind.Forbidden);
-        }
-        catch (UserProfileUsernameConflictException)
-        {
-            logger.LogInformation("Profile update refused: the requested username is already in use.");
-            return new UserProfileResult(UserProfileResultKind.UsernameConflict);
         }
         catch (DbUpdateConcurrencyException)
         {

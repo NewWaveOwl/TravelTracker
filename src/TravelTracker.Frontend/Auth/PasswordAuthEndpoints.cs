@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net.Mail;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
@@ -77,12 +76,12 @@ public static class PasswordAuthEndpoints
     {
         if (!await ValidFormAsync(context, antiforgery)) return Results.BadRequest("The sign-in request could not be verified.");
         var form = await context.Request.ReadFormAsync(context.RequestAborted);
-        var email = form["email"].ToString().Trim();
+        var username = form["username"].ToString().Trim();
         var password = form["password"].ToString();
-        if (!ValidCredentials(email, password)) return Results.Redirect("/sign-in?error=credentials");
+        if (!ValidCredentials(username, password)) return Results.Redirect("/sign-in?error=credentials");
         try
         {
-            var session = await auth.SignInAsync(email, password, context.RequestAborted);
+            var session = await auth.SignInAsync(username, password, context.RequestAborted);
             if (session is null) return Results.Redirect("/sign-in?error=credentials");
             await StartSessionAsync(context, session, sessions);
             return Results.Redirect("/account");
@@ -108,13 +107,13 @@ public static class PasswordAuthEndpoints
     {
         if (!await ValidFormAsync(context, antiforgery)) return Results.BadRequest("The registration request could not be verified.");
         var form = await context.Request.ReadFormAsync(context.RequestAborted);
-        var email = form["email"].ToString().Trim();
+        var username = form["username"].ToString().Trim();
         var password = form["password"].ToString();
-        if (!ValidCredentials(email, password) || password.Length < 8 || password != form["passwordConfirmation"].ToString())
+        if (!ValidCredentials(username, password) || password.Length < 8 || password != form["passwordConfirmation"].ToString())
             return Results.Redirect("/sign-in?mode=register&error=registration");
         try
         {
-            var session = await auth.RegisterAsync(email, password, context.RequestAborted);
+            var session = await auth.RegisterAsync(username, password, context.RequestAborted);
             if (session is null) return Results.Redirect("/sign-in?mode=register&error=registration");
             await StartSessionAsync(context, session, sessions);
             return Results.Redirect("/account");
@@ -181,10 +180,9 @@ public static class PasswordAuthEndpoints
 
     /**
      * Applies bounded local syntax checks without changing password bytes.
-     * @param email Submitted email.
+     * @param username Submitted username.
      * @param password Submitted password.
      * @return Whether both fields can be sent to the Users API.
      */
-    static bool ValidCredentials(string email, string password) => email.Length is > 0 and <= 254 &&
-        MailAddress.TryCreate(email, out var parsed) && parsed.Address == email && password.Length is > 0 and <= 128;
+    static bool ValidCredentials(string username, string password) => username.Length is > 0 and <= 32 && password.Length is > 0 and <= 128;
 }

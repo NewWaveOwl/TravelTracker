@@ -20,7 +20,6 @@ public sealed class UserAccountTests
         Assert.Equal(UserStatus.Active, account.Status);
         Assert.Equal(Identity, account.ProviderIdentity);
         Assert.Null(account.Username);
-        Assert.Null(account.Email);
         Assert.Null(account.Address);
         Assert.Equal(CreatedAt, account.CreatedAt);
         Assert.Null(account.UpdatedAt);
@@ -67,7 +66,7 @@ public sealed class UserAccountTests
     public void ValidateAcceptsNullProfileFieldsAndAValidCompleteProfile()
     {
         var incomplete = UserAccount.CreateTraveller(Identity, CreatedAt);
-        var complete = CreateAccount(username: "traveller_1", email: "traveller@example.test", address: "123 Main Street");
+        var complete = CreateAccount(username: "traveller_1", address: "123 Main Street");
 
         Assert.Empty(incomplete.Validate());
         Assert.Empty(complete.Validate());
@@ -96,37 +95,6 @@ public sealed class UserAccountTests
         var errors = CreateAccount(username: username).Validate();
 
         Assert.DoesNotContain("username", errors.Keys);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData(" ")]
-    [InlineData("not-an-email")]
-    [InlineData(" traveller@example.test")]
-    public void ValidateRejectsInvalidEmailValues(string email)
-    {
-        var errors = CreateAccount(email: email).Validate();
-
-        Assert.Contains("email", errors.Keys);
-    }
-
-    [Fact]
-    public void ValidateRejectsEmailLongerThanContractLimit()
-    {
-        var email = $"{new string('a', 243)}@example.test";
-
-        var errors = CreateAccount(email: email).Validate();
-
-        Assert.Contains("email", errors.Keys);
-    }
-
-    [Fact]
-    public void ValidateAcceptsEmailAtMaximumContractLength()
-    {
-        var email = $"{new string('a', 64)}@{new string('b', 63)}.{new string('c', 63)}.{new string('d', 61)}";
-
-        Assert.Equal(254, email.Length);
-        Assert.DoesNotContain("email", CreateAccount(email: email).Validate().Keys);
     }
 
     [Fact]
@@ -181,7 +149,6 @@ public sealed class UserAccountTests
 
     private static UserAccount CreateAccount(
         string? username = null,
-        string? email = null,
         string? address = null) =>
-        new(Guid.CreateVersion7(), Identity, UserRole.User, UserStatus.Active, CreatedAt, username, email, address);
+        new(Guid.CreateVersion7(), Identity, UserRole.User, UserStatus.Active, CreatedAt, username, address);
 }

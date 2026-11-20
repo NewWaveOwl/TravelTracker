@@ -4,10 +4,10 @@
 
 ## How a token is made
 
-- `POST /api/v1/auth/register` and `POST /api/v1/auth/login` (anonymous, HTTPS only) take `{ "email", "password" }`. Passwords are at least 8 and at most 128 characters and are hashed with ASP.NET Core's `PasswordHasher` (PBKDF2); only the hash is stored (`UserAccounts.PasswordHash`). Login compares against a dummy hash when the email is unknown, so a miss costs the same as a wrong password and both answer `401`. A banned or deactivated account answers `403`.
+- `POST /api/v1/auth/register` and `POST /api/v1/auth/login` (anonymous, HTTPS only) take `{ "username", "password" }`. A username is 3 to 32 ASCII letters, digits, `.`, `_` or `-`, is compared case-insensitively, and is fixed at registration. Passwords are at least 8 and at most 128 characters and are hashed with ASP.NET Core's `PasswordHasher` (PBKDF2); only the hash is stored (`UserAccounts.PasswordHash`). Login compares against a dummy hash when the username is unknown, so a miss costs the same as a wrong password and both answer `401`. A banned or deactivated account answers `403`.
 - A token is an ES256 JWT with `iss` = the configured issuer, `aud` = the configured audience, `sub` = the account's public ID, `scope` = the traveller scopes (`catalogue.read catalogue.write users.read users.write users.admin settings.read settings.write trips.read trips.write`) and a lifetime of `Authentication:Issuer:LifetimeMinutes` (default 60). `users.admin` is only a gate to the Users routes, which recheck live administrator standing in the database.
 - `POST /api/v1/auth/service-token` takes the operator secret `UsersAccess:ServiceToken` (at least 32 characters) as its bearer and returns a token whose subject is `traveltracker-service` and whose only scope is `users.access`, valid for `Authentication:Issuer:ServiceLifetimeMinutes` (default 60). The other backends send it to the Users internal routes for account-standing lookups.
-- There is no email confirmation, password reset or refresh token. A session ends when its token does.
+- The system holds no email addresses. There is no confirmation, password reset or refresh token. A session ends when its token does.
 
 ## Nothing is stored in application code
 

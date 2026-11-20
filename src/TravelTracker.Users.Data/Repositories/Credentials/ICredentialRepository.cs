@@ -8,23 +8,23 @@ namespace TravelTracker.Users.Data.Repositories.Credentials;
 public interface ICredentialRepository
 {
     /**
-     * Creates an active traveller that can sign in with the given login.
+     * Creates an active traveller that can sign in with the given username.
      * @param issuer Issuer recorded on the new account.
-     * @param login Sign-in name, compared case-insensitively.
+     * @param username Sign-in name, compared case-insensitively.
      * @param passwordHash Already-hashed password.
      * @param createdAt The application time for the new account.
      * @param cancellationToken Cancels the save.
-     * @return The new account, or null when the login is already registered.
+     * @return The new account, or null when the username is already registered.
      */
-    Task<UserAccount?> RegisterAsync(string issuer, string login, string passwordHash, DateTimeOffset createdAt, CancellationToken cancellationToken);
+    Task<UserAccount?> RegisterAsync(string issuer, string username, string passwordHash, DateTimeOffset createdAt, CancellationToken cancellationToken);
 
     /**
-     * Finds the account and stored password hash for a login.
-     * @param login Sign-in name, compared case-insensitively.
+     * Finds the account and stored password hash for a username.
+     * @param username Sign-in name, compared case-insensitively.
      * @param cancellationToken Cancels the lookup.
-     * @return The account and hash, or null when no password account has that login.
+     * @return The account and hash, or null when no password account has that username.
      */
-    Task<StoredCredential?> FindAsync(string login, CancellationToken cancellationToken);
+    Task<StoredCredential?> FindAsync(string username, CancellationToken cancellationToken);
 
     /**
      * Replaces the hash when the hasher asks for a stronger one.

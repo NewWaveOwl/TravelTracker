@@ -21,9 +21,9 @@ namespace TravelTracker.Frontend.Tests;
 /** fake validated identities test live Users authorization responses and UI behavior, not bearer validation. */
 public sealed class UserAdministrationTests : BunitContext
 {
-    const string TravellerEmail = "traveller@example.test";
+    const string TravellerName = "target_user";
     static readonly UserProfile Administrator = new(Guid.Parse("00000000-0000-0000-0000-000000000001"), "admin@example.test", "administrator", "active");
-    static readonly UserProfile Traveller = new(Guid.Parse("00000000-0000-0000-0000-000000000002"), TravellerEmail, "traveller", "active");
+    static readonly UserProfile Traveller = new(Guid.Parse("00000000-0000-0000-0000-000000000002"), TravellerName, "traveller", "active");
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
     PublishingAuthentication notifier = default!;
 
@@ -66,7 +66,7 @@ public sealed class UserAdministrationTests : BunitContext
         var panel = Render<AdministratorPanel>();
         panel.WaitForAssertion(() => Assert.Contains("Administrator access required", panel.Markup));
         Assert.Equal(0, listCalls);
-        Assert.DoesNotContain(TravellerEmail, panel.Markup);
+        Assert.DoesNotContain(TravellerName, panel.Markup);
         Assert.Empty(panel.FindAll("table"));
         Assert.Empty(panel.FindAll("form"));
     }
@@ -74,7 +74,7 @@ public sealed class UserAdministrationTests : BunitContext
     [Fact]
     public void UsesTheServiceListAndDisablesDemotionOfTheLastActiveAdministrator()
     {
-        Configure(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(Administrator) : Json(new[] { Administrator, Traveller with { Email = null } }))));
+        Configure(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(Administrator) : Json(new[] { Administrator, Traveller with { Username = null } }))));
         var panel = Render<AdministratorPanel>();
         panel.WaitForAssertion(() => Assert.Equal(2, panel.FindAll("tbody tr").Count));
         Assert.Equal("All users", panel.Find(".admin-tabs a").TextContent);
@@ -185,7 +185,7 @@ public sealed class UserAdministrationTests : BunitContext
         await panel.Find(".admin-confirmation").SubmitAsync();
         panel.WaitForAssertion(() => Assert.Contains("no longer has access", panel.Markup));
         Assert.Empty(panel.FindAll("table"));
-        Assert.DoesNotContain(TravellerEmail, panel.Markup);
+        Assert.DoesNotContain(TravellerName, panel.Markup);
         navigation.WaitForAssertion(() => Assert.Empty(navigation.FindAll("a")));
     }
 
@@ -215,7 +215,7 @@ public sealed class UserAdministrationTests : BunitContext
         await panel.InvokeAsync(auth.SignOut);
         panel.WaitForAssertion(() => Assert.Empty(panel.FindAll("table")));
         Assert.Empty(panel.FindAll("form"));
-        Assert.DoesNotContain(TravellerEmail, panel.Markup);
+        Assert.DoesNotContain(TravellerName, panel.Markup);
         Assert.DoesNotContain("A private reason", panel.Markup);
     }
 
@@ -240,7 +240,7 @@ public sealed class UserAdministrationTests : BunitContext
         Assert.False(pendingProfile.Task.IsCompleted);
         Assert.Empty(panel.FindAll("table"));
         Assert.Empty(panel.FindAll("form"));
-        Assert.DoesNotContain(TravellerEmail, panel.Markup);
+        Assert.DoesNotContain(TravellerName, panel.Markup);
         pendingProfile.SetResult(Self(Traveller));
         panel.WaitForAssertion(() => Assert.Contains("Administrator access required", panel.Markup));
     }
@@ -313,7 +313,7 @@ public sealed class UserAdministrationTests : BunitContext
         panel.WaitForAssertion(() => Assert.Contains("Administrator access required", panel.Markup));
         Assert.Empty(panel.FindAll("table"));
         Assert.Empty(panel.FindAll("form"));
-        Assert.DoesNotContain(TravellerEmail, panel.Markup);
+        Assert.DoesNotContain(TravellerName, panel.Markup);
         Assert.False(Services.GetRequiredService<AdminAccessState>().IsAdministrator);
     }
 

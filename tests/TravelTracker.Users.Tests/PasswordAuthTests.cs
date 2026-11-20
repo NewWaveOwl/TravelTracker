@@ -33,9 +33,9 @@ public sealed class PasswordAuthTests : IDisposable
     public async Task RegisterThenLogin_IssuesVerifiableTokenForTheSameAccount()
     {
         using var client = Client();
-        var registered = await client.PostAsJsonAsync("/api/v1/auth/register", new { email = "Ada@Example.test", password = "correct horse" });
+        var registered = await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "Ada", password = "correct horse" });
         Assert.Equal(HttpStatusCode.Created, registered.StatusCode);
-        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "ada@example.test", password = "correct horse" });
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { username = "ada", password = "correct horse" });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
 
         var result = await new JsonWebTokenHandler().ValidateTokenAsync((await Body(login)).GetProperty("accessToken").GetString(),
@@ -45,9 +45,10 @@ public sealed class PasswordAuthTests : IDisposable
                 IssuerSigningKey = new ECDsaSecurityKey(key), ValidAlgorithms = [SecurityAlgorithms.EcdsaSha256],
             });
         Assert.True(result.IsValid, result.Exception?.Message);
-        Assert.Equal(store.For("ada@example.test").Account.ProviderIdentity.Subject, result.Claims["sub"]);
+        Assert.Equal(store.For("ada").Account.ProviderIdentity.Subject, result.Claims["sub"]);
         Assert.Contains("trips.write", result.Claims["scope"].ToString());
-        Assert.DoesNotContain("correct horse", store.For("ada@example.test").PasswordHash);
+        Assert.DoesNotContain("correct horse", store.For("ada").PasswordHash);
+        Assert.Equal("Ada", store.For("ada").Account.Username);
     }
 
     static uint Iterations(string hash) => System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(Convert.FromBase64String(hash).AsSpan(5));
@@ -56,25 +57,25 @@ public sealed class PasswordAuthTests : IDisposable
     public async Task Hashes_UseTheConfiguredIterationCount_AndLoginUpgradesOlderHashes()
     {
         using var client = Client();
-        await client.PostAsJsonAsync("/api/v1/auth/register", new { email = "ada@example.test", password = "correct horse" });
-        Assert.Equal(1u << 18, Iterations(store.For("ada@example.test").PasswordHash));
+        await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "ada", password = "correct horse" });
+        Assert.Equal(1u << 18, Iterations(store.For("ada").PasswordHash));
 
         // the framework default is 100,000, which is what hashes made before the count was raised carry
-        store.Seed("old@example.test", UsersApiFactory.Issuer, "old", new PasswordHasher<object>().HashPassword(new object(), "correct horse"));
-        Assert.Equal(100_000u, Iterations(store.For("old@example.test").PasswordHash));
-        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "old@example.test", password = "correct horse" });
+        store.Seed("old", UsersApiFactory.Issuer, "old", new PasswordHasher<object>().HashPassword(new object(), "correct horse"));
+        Assert.Equal(100_000u, Iterations(store.For("old").PasswordHash));
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { username = "old", password = "correct horse" });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
-        Assert.Equal(1u << 18, Iterations(store.For("old@example.test").PasswordHash));
+        Assert.Equal(1u << 18, Iterations(store.For("old").PasswordHash));
     }
 
     [Theory]
-    [InlineData("ada@example.test", "wrong password")]
-    [InlineData("nobody@example.test", "correct horse")]
-    public async Task Login_RefusesWrongPasswordAndUnknownLoginIdentically(string email, string password)
+    [InlineData("ada", "wrong password")]
+    [InlineData("nobody", "correct horse")]
+    public async Task Login_RefusesWrongPasswordAndUnknownUsernameIdentically(string username, string password)
     {
         using var client = Client();
-        await client.PostAsJsonAsync("/api/v1/auth/register", new { email = "ada@example.test", password = "correct horse" });
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password });
+        await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "ada", password = "correct horse" });
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { username, password });
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -82,20 +83,20 @@ public sealed class PasswordAuthTests : IDisposable
     public async Task Register_RefusesDuplicateAndWeakInput()
     {
         using var client = Client();
-        var first = new { email = "ada@example.test", password = "correct horse" };
+        var first = new { username = "ada", password = "correct horse" };
         await client.PostAsJsonAsync("/api/v1/auth/register", first);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/v1/auth/register", first)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/register", new { email = "not-an-email", password = "correct horse" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/register", new { email = "b@example.test", password = "short" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "not a valid name", password = "correct horse" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "bob", password = "short" })).StatusCode);
     }
 
     [Fact]
     public async Task Login_RefusesAccountsThatAreNotActive()
     {
         using var client = Client();
-        await client.PostAsJsonAsync("/api/v1/auth/register", new { email = "ada@example.test", password = "correct horse" });
-        store.SetStatus("ada@example.test", UserStatus.Banned);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "ada@example.test", password = "correct horse" })).StatusCode);
+        await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "ada", password = "correct horse" });
+        store.SetStatus("ada", UserStatus.Banned);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/auth/login", new { username = "ada", password = "correct horse" })).StatusCode);
     }
 
     [Fact]
@@ -116,7 +117,7 @@ public sealed class PasswordAuthTests : IDisposable
     public async Task WithoutASigningKey_AnswersUnavailableInsteadOfThrowing()
     {
         using var client = Client(keyConfigured: false);
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "ada@example.test", password = "correct horse" });
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { username = "ada", password = "correct horse" });
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 

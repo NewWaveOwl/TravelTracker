@@ -162,7 +162,7 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
      * @return Editable fields and public account metadata.
      */
     private static SelfProfileResponse SelfProfile(UserAccount account) =>
-        new(account.PublicId, account.Username, account.Email, account.Address,
+        new(account.PublicId, account.Username, account.Address,
             RoleCode(account), account.Status.ToString().ToLowerInvariant(), account.CreatedAt, account.UpdatedAt);
 
     /**
@@ -175,8 +175,6 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
         UserProfileResultKind.Success when result.Account is { } account => Results.Ok(SelfProfile(account)),
         UserProfileResultKind.Forbidden => Results.Forbid(),
         UserProfileResultKind.ValidationFailure when result.ValidationErrors is { } errors => Results.ValidationProblem(errors),
-        UserProfileResultKind.UsernameConflict => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "That username is already in use.",
-            extensions: new Dictionary<string, object?> { ["code"] = "username_conflict" }),
         UserProfileResultKind.ConcurrencyConflict => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "The profile changed. Reload it before trying again.",
             extensions: new Dictionary<string, object?> { ["code"] = "profile_concurrency_conflict" }),
         _ => Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Account profile operation could not be confirmed.")

@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using TravelTracker.Data;
 
 namespace TravelTracker.Settings.Data;
 

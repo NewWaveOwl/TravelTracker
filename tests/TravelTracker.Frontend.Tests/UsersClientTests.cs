@@ -12,7 +12,7 @@ namespace TravelTracker.Frontend.Tests;
 
 public sealed class UsersClientTests
 {
-    static readonly string Profile = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller","email":"traveller@example.test","address":"1 Main St"}""";
+    static readonly string Profile = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller","address":"1 Main St"}""";
 
     static (UsersClient Client, StubHandler Handler) Create(int status = 200, string? body = null)
     {
@@ -43,22 +43,20 @@ public sealed class UsersClientTests
     }
 
     [Fact]
-    public async Task PatchUsesOnlyChangedFieldsAndCanClearAddressWithNull()
+    public async Task PatchUsesOnlyTheAddressAndCanClearItWithNull()
     {
         var (client, handler) = Create();
         var profile = JsonSerializer.Deserialize<SelfUserProfile>(Profile, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
 
-        var updated = await client.UpdateMeAsync(profile, new UpdateSelfProfileRequest("new_name", "traveller@example.test", " "));
+        var updated = await client.UpdateMeAsync(profile, new UpdateSelfProfileRequest(" "));
 
         Assert.Equal("traveller", updated.Username);
         Assert.Equal("PATCH", handler.LastRequest!.Method.Method);
         Assert.Equal("/api/v1/users/me", handler.LastRequest.RequestUri!.AbsolutePath);
         Assert.Equal("Bearer test-access-token", handler.LastRequest.Headers.Authorization!.ToString());
         using var json = JsonDocument.Parse(handler.LastRequestBody!);
-        Assert.Equal(2, json.RootElement.EnumerateObject().Count());
-        Assert.Equal("new_name", json.RootElement.GetProperty("username").GetString());
+        Assert.Single(json.RootElement.EnumerateObject());
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("address").ValueKind);
-        Assert.False(json.RootElement.TryGetProperty("email", out _));
     }
 
     [Theory]
@@ -70,7 +68,7 @@ public sealed class UsersClientTests
         var (client, _) = Create(status, """{"errors":{"username":["Already used"]}}""");
         var profile = JsonSerializer.Deserialize<SelfUserProfile>(Profile, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
 
-        var error = await Assert.ThrowsAsync<ApiError>(() => client.UpdateMeAsync(profile, new UpdateSelfProfileRequest("new_name", profile.Email, profile.Address)));
+        var error = await Assert.ThrowsAsync<ApiError>(() => client.UpdateMeAsync(profile, new UpdateSelfProfileRequest("1 New Street")));
 
         Assert.Equal(status, error.Status);
         Assert.Equal(kind, error.Kind);

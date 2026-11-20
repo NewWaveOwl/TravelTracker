@@ -1,6 +1,5 @@
 using TravelTracker.Security.Hosting;
 using Microsoft.EntityFrameworkCore;
-using TravelTracker.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
@@ -54,7 +53,7 @@ public class UsersProgram
             builder.RequireDatabaseConnection("Users");
         app.Logger.LogInformation("Users host starting; ApplyMigrations={ApplyMigrations}, AllowedServiceSubjects={ServiceSubjectCount}, Bootstrap configured={BootstrapConfigured}, ServiceToken configured={ServiceTokenConfigured}.",
             app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"), allowedServiceSubjects.Value.Count,
-            !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Email"]) && !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Issuer"]) && app.Configuration["Bootstrap:Secret"] is { Length: >= 32 },
+            !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Username"]) && !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Issuer"]) && app.Configuration["Bootstrap:Secret"] is { Length: >= 32 },
             app.Configuration["UsersAccess:ServiceToken"] is { Length: >= 32 });
         if (app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"))
         {

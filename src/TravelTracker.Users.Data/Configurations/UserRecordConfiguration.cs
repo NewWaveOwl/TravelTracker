@@ -19,7 +19,6 @@ internal sealed class UserRecordConfiguration : IEntityTypeConfiguration<UserRec
         builder.ToTable("UserAccounts", table =>
         {
             table.HasCheckConstraint("CK_UserAccounts_Identity", "length(btrim(\"Issuer\")) > 0 AND length(btrim(\"Subject\")) > 0");
-            table.HasCheckConstraint("CK_UserAccounts_Email", "\"Email\" IS NULL OR length(btrim(\"Email\")) > 0");
             table.HasCheckConstraint("CK_UserAccounts_Role", "\"Role\" IN ('traveller', 'administrator')");
             table.HasCheckConstraint("CK_UserAccounts_Status", "\"Status\" IN ('active', 'banned', 'deactivated')");
         });
@@ -42,10 +41,6 @@ internal sealed class UserRecordConfiguration : IEntityTypeConfiguration<UserRec
             .IsUnique()
             .HasFilter("\"NormalizedUsername\" IS NOT NULL")
             .HasDatabaseName("IX_UserAccounts_NormalizedUsername");
-        builder.HasIndex(record => record.NormalizedLogin)
-            .IsUnique()
-            .HasFilter("\"NormalizedLogin\" IS NOT NULL")
-            .HasDatabaseName("IX_UserAccounts_NormalizedLogin");
         builder.HasIndex(record => new { record.Issuer, record.Subject })
             .IsUnique()
             .HasDatabaseName("IX_UserAccounts_Issuer_Subject");

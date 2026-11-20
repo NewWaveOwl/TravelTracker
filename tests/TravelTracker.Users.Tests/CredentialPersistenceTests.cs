@@ -21,11 +21,11 @@ public sealed class CredentialPersistenceTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = Repository(database);
-        var account = await repository.RegisterAsync(Issuer, "Ada@Example.test", "hash-1", DateTimeOffset.UtcNow, default);
+        var account = await repository.RegisterAsync(Issuer, "Ada", "hash-1", DateTimeOffset.UtcNow, default);
         Assert.NotNull(account);
         Assert.Equal(account.PublicId.ToString("D"), account.ProviderIdentity.Subject);
         Assert.Equal(UserRole.User, account.Role);
-        var stored = await repository.FindAsync("ada@example.TEST", default);
+        var stored = await repository.FindAsync("ADA", default);
         Assert.Equal("hash-1", stored!.PasswordHash);
         Assert.Equal(account.PublicId, stored.Account.PublicId);
     }
@@ -36,7 +36,7 @@ public sealed class CredentialPersistenceTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = Repository(database);
         var attempts = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ =>
-            repository.RegisterAsync(Issuer, "ada@example.test", "hash", DateTimeOffset.UtcNow, default)));
+            repository.RegisterAsync(Issuer, "ada", "hash", DateTimeOffset.UtcNow, default)));
         Assert.Single(attempts, account => account is not null);
     }
 
@@ -45,9 +45,9 @@ public sealed class CredentialPersistenceTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = Repository(database);
-        var account = await repository.RegisterAsync(Issuer, "ada@example.test", "old", DateTimeOffset.UtcNow, default);
+        var account = await repository.RegisterAsync(Issuer, "ada", "old", DateTimeOffset.UtcNow, default);
         await repository.UpdateHashAsync(account!.PublicId, "new", default);
-        Assert.Equal("new", (await repository.FindAsync("ada@example.test", default))!.PasswordHash);
-        Assert.Null(await repository.FindAsync("nobody@example.test", default));
+        Assert.Equal("new", (await repository.FindAsync("ada", default))!.PasswordHash);
+        Assert.Null(await repository.FindAsync("nobody", default));
     }
 }

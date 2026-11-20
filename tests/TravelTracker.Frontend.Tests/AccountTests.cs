@@ -14,7 +14,7 @@ namespace TravelTracker.Frontend.Tests;
 
 public sealed class AccountTests : BunitContext
 {
-    static readonly string Profile = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller_1","email":"traveller@example.test","address":"1 Main St"}""";
+    static readonly string Profile = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller_1","address":"1 Main St"}""";
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
     readonly SwitchableAuthentication authentication;
 
@@ -217,13 +217,12 @@ public sealed class AccountTests : BunitContext
         var page = Render<Account>();
         page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
         page.Find("button").Click();
-        page.Find("#profile-username").Change("unsaved_draft");
+        page.Find("#profile-address").Change("unsaved_draft");
 
         clock.Advance(TimeSpan.FromMinutes(5));
 
         page.WaitForAssertion(() => Assert.Contains("Sign in to view your profile", page.Markup));
         Assert.DoesNotContain("traveller_1", page.Markup);
-        Assert.DoesNotContain("traveller@example.test", page.Markup);
         Assert.DoesNotContain("1 Main St", page.Markup);
         Assert.DoesNotContain("unsaved_draft", page.Markup);
     }
@@ -235,11 +234,12 @@ public sealed class AccountTests : BunitContext
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         Assert.Contains("traveller_1", page.Markup);
-        Assert.Contains("Contact email", page.Markup);
+        Assert.DoesNotContain("email", page.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Traveller", page.Markup);
         Assert.Contains("Active", page.Markup);
         page.Find("button").Click();
-        Assert.NotNull(page.Find("#profile-username"));
+        Assert.NotNull(page.Find("#profile-address"));
+        Assert.Empty(page.FindAll("#profile-username"));
         Assert.Empty(page.FindAll("input[name='role'], input[name='status']"));
     }
 
@@ -289,7 +289,7 @@ public sealed class AccountTests : BunitContext
             if (request.Method == HttpMethod.Patch)
             {
                 patched = request;
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"new_name","email":"Traveller@example.test","address":null}""") });
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"new_name","address":null}""") });
             }
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) });
         });
@@ -297,16 +297,12 @@ public sealed class AccountTests : BunitContext
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         page.Find("button").Click();
-        page.Find("#profile-username").Change("new_name");
-        page.Find("#profile-email").Change("Traveller@example.test");
         page.Find("#profile-address").Change("");
         page.Find("button[type='submit']").Click();
         page.WaitForAssertion(() => Assert.Contains("Your profile has been updated", page.Markup));
         Assert.Equal("PATCH", patched!.Method.Method);
         Assert.Equal("/api/v1/users/me", patched.RequestUri!.AbsolutePath);
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
-        Assert.Equal("new_name", body.RootElement.GetProperty("username").GetString());
-        Assert.Equal("Traveller@example.test", body.RootElement.GetProperty("email").GetString());
         Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("address").ValueKind);
         Assert.DoesNotContain("role", body.RootElement.GetRawText());
         Assert.DoesNotContain("status", body.RootElement.GetRawText());
@@ -322,12 +318,12 @@ public sealed class AccountTests : BunitContext
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         page.Find("button").Click();
-        page.Find("#profile-username").Change("draft_username");
+        page.Find("#profile-address").Change("draft_username");
 
         page.Find("button[type='submit']").Click();
 
         page.WaitForAssertion(() => Assert.Contains("no longer permits profile changes", page.Markup));
-        Assert.Equal("draft_username", page.Find("#profile-username").GetAttribute("value"));
+        Assert.Equal("draft_username", page.Find("#profile-address").GetAttribute("value"));
         Assert.DoesNotContain("Your profile has been updated", page.Markup);
     }
 
@@ -345,29 +341,28 @@ public sealed class AccountTests : BunitContext
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         page.Find("button").Click();
-        page.Find("#profile-username").Change("draft_username");
+        page.Find("#profile-address").Change("draft_username");
 
         page.Find("button[type='submit']").Click();
 
         page.WaitForAssertion(() => Assert.Contains("Profile access denied", page.Markup));
         Assert.DoesNotContain("traveller_1", page.Markup);
-        Assert.DoesNotContain("traveller@example.test", page.Markup);
         Assert.DoesNotContain("1 Main St", page.Markup);
         Assert.DoesNotContain("draft_username", page.Markup);
         Assert.DoesNotContain("Edit profile", page.Markup);
     }
 
     [Fact]
-    public void ValidationKeepsFormAndDoesNotSendInvalidUsername()
+    public void ValidationKeepsFormAndDoesNotSendAnOverlongAddress()
     {
         var handler = StubHandler.Status(200, Profile);
         Configure(handler: handler);
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         page.Find("button").Click();
-        page.Find("#profile-username").Change("abc!");
+        page.Find("#profile-address").Change(new string('x', 501));
         page.Find("button[type='submit']").Click();
-        Assert.Contains("Use only letters", page.Markup);
+        Assert.Contains("500 characters or fewer", page.Markup);
         Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
     }
 

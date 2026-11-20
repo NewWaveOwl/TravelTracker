@@ -16,10 +16,10 @@ API bearer authentication adds no token storage or signing keys to Data. The ind
 
 ## Users persistence
 
-Sign-in is built in: the Users database stores a password hash and a case-folded login
-per account (`UserAccounts.PasswordHash`, `NormalizedLogin`), and new accounts use
+Sign-in is built in: the Users database stores a password hash and a unique case-folded username
+per account (`UserAccounts.PasswordHash`, `NormalizedUsername`), and new accounts use
 their public ID as the subject. Identity pairs recorded under an earlier provider
-stay as they are and never merge with a new account because of a matching email.
+stay as they are and never merge with a new account because of a matching username.
 See [API authentication](authentication.md).
 
 `TravelTracker.Users.Data` references its own Domain and EF Core/Npgsql only. Its committed migrations create account, permanent bootstrap-consumption and administrator-audit records. Public IDs are application-issued UUIDv7 values. Role changes and bootstrap share a transaction advisory lock, recheck live actor/target standing and roles, protect the last active administrator, and save the role plus actor/target/before/after/reason audit atomically. Listing also checks live administrator authority within the database transaction. First-use provisioning creates an active traveller and preserves existing standing and roles. The account row stores editable profile fields separately from verified provider email. A filtered unique index enforces case-insensitive username uniqueness. Profile writes check active standing and use an optimistic concurrency token.

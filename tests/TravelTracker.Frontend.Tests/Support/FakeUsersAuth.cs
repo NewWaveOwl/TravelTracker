@@ -19,7 +19,7 @@ public sealed class FakeUsersAuth(TimeProvider clock) : HttpMessageHandler
     public bool Unreachable { get; set; }
     public int LoginRequests { get; private set; }
     public int RegisterRequests { get; private set; }
-    public string? LastEmail { get; private set; }
+    public string? LastUsername { get; private set; }
     public string? LastToken { get; private set; }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -31,7 +31,7 @@ public sealed class FakeUsersAuth(TimeProvider clock) : HttpMessageHandler
         else if (path == "/api/v1/auth/register") RegisterRequests++;
         else return new HttpResponseMessage(HttpStatusCode.NotFound);
         var submitted = await request.Content!.ReadFromJsonAsync<Dictionary<string, string>>(cancellationToken);
-        LastEmail = submitted!["email"];
+        LastUsername = submitted!["username"];
         if (Reject is { } status) return new HttpResponseMessage(status) { Content = new StringContent("private-provider-diagnostic") };
 
         var now = clock.GetUtcNow().UtcDateTime;

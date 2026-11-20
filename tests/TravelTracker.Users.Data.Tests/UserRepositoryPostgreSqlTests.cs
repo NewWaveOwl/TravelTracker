@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using TravelTracker.Users.Data;
+using TravelTracker.Users.Data.Repositories.Credentials;
 using TravelTracker.Users.Data.Repositories.Profile;
 using TravelTracker.Users.Data.Tests.Support;
 using TravelTracker.Users.Domain.Types;
@@ -44,19 +45,15 @@ public sealed partial class UserRepositoryPostgreSqlTests
             var existing = await repository.FindByProviderIdentityAsync(identity, CancellationToken.None);
             Assert.NotNull(existing);
             savedPublicId = existing.PublicId;
-            Assert.Equal("legacy@example.test", existing.VerifiedEmail);
-            Assert.Null(existing.Email);
 
             var updated = await repository.UpdateProfileAsync(
                 identity,
-                "Legacy.User",
-                "legacy@example.test",
                 "1 Main Street",
                 true,
                 CreatedAt.AddHours(1),
                 CancellationToken.None);
             Assert.NotNull(updated);
-            Assert.Equal("Legacy.User", updated.Username);
+            Assert.Equal("1 Main Street", updated.Address);
         }
 
         var restartedFactory = CreateFactory(database.ConnectionString);
@@ -64,9 +61,6 @@ public sealed partial class UserRepositoryPostgreSqlTests
         var persisted = await restartedRepository.FindByPublicIdAsync(savedPublicId, CancellationToken.None);
 
         Assert.NotNull(persisted);
-        Assert.Equal("Legacy.User", persisted.Username);
-        Assert.Equal("legacy@example.test", persisted.Email);
-        Assert.Equal("legacy@example.test", persisted.VerifiedEmail);
         Assert.Equal("1 Main Street", persisted.Address);
         Assert.Equal(CreatedAt.AddHours(1), persisted.UpdatedAt);
 
@@ -96,12 +90,12 @@ public sealed partial class UserRepositoryPostgreSqlTests
             CancellationToken.None);
 
         Assert.Null(first.Username);
-        Assert.Null(first.Email);
         Assert.Null(third.Username);
 
-        await repository.UpdateProfileAsync(firstIdentity, "Alice", null, null, false, CreatedAt.AddMinutes(1), CancellationToken.None);
-        await Assert.ThrowsAsync<UserProfileUsernameConflictException>(() =>
-            repository.UpdateProfileAsync(secondIdentity, "alice", null, null, false, CreatedAt.AddMinutes(2), CancellationToken.None));
+        // usernames are set at registration and compared case-insensitively
+        var credentials = new CredentialRepository(factory);
+        Assert.NotNull(await credentials.RegisterAsync("https://issuer.example/", "Alice", "hash", CreatedAt, CancellationToken.None));
+        Assert.Null(await credentials.RegisterAsync("https://issuer.example/", "alice", "hash", CreatedAt, CancellationToken.None));
 
         await using var context = await factory.CreateDbContextAsync();
         var indexes = context.Model.FindEntityType("TravelTracker.Users.Data.Entities.UserRecord")!.GetIndexes();
@@ -131,7 +125,7 @@ public sealed partial class UserRepositoryPostgreSqlTests
     }
 
     [Fact]
-    public async Task CheckConstraints_RejectInvalidIdentityEmailRoleAndStatus()
+    public async Task CheckConstraints_RejectInvalidIdentityRoleAndStatus()
     {
         await using var database = new PostgresTestDatabase();
         var factory = CreateFactory(database.ConnectionString);
@@ -140,7 +134,6 @@ public sealed partial class UserRepositoryPostgreSqlTests
 
         await AssertCheckViolationAsync("CK_UserAccounts_Identity", InsertAccountAsync(context, 1, Guid.CreateVersion7(), "", "subject"));
         await AssertCheckViolationAsync("CK_UserAccounts_Identity", InsertAccountAsync(context, 2, Guid.CreateVersion7(), "https://issuer.example/", ""));
-        await AssertCheckViolationAsync("CK_UserAccounts_Email", InsertAccountAsync(context, 3, Guid.CreateVersion7(), "https://issuer.example/", "email", ""));
         await AssertCheckViolationAsync("CK_UserAccounts_Role", InsertAccountAsync(context, 4, Guid.CreateVersion7(), "https://issuer.example/", "role", role: "unsupported"));
         await AssertCheckViolationAsync("CK_UserAccounts_Status", InsertAccountAsync(context, 5, Guid.CreateVersion7(), "https://issuer.example/", "status", status: "unsupported"));
     }
@@ -193,16 +186,12 @@ public sealed partial class UserRepositoryPostgreSqlTests
         var attempts = await Task.WhenAll(
             CaptureConcurrencyAsync(() => concurrentRepository.UpdateProfileAsync(
                 account.ProviderIdentity,
-                null,
-                "winner@example.test",
-                null,
-                false,
+                "1 Main Street",
+                true,
                 CreatedAt.AddMinutes(1),
                 CancellationToken.None)),
             CaptureConcurrencyAsync(() => concurrentRepository.UpdateProfileAsync(
                 account.ProviderIdentity,
-                null,
-                null,
                 "2 Main Street",
                 true,
                 CreatedAt.AddMinutes(1),
@@ -213,9 +202,7 @@ public sealed partial class UserRepositoryPostgreSqlTests
         var verifyFactory = CreateFactory(database.ConnectionString);
         var saved = await new UserRepository(verifyFactory).FindByPublicIdAsync(account.PublicId, CancellationToken.None);
         Assert.NotNull(saved);
-        Assert.True(
-            (saved.Email == "winner@example.test" && saved.Address is null) ||
-            (saved.Email is null && saved.Address == "2 Main Street"));
+        Assert.Contains(saved.Address, new[] { "1 Main Street", "2 Main Street" });
     }
 
     static IDbContextFactory<UsersDbContext> CreateFactory(
@@ -240,16 +227,15 @@ public sealed partial class UserRepositoryPostgreSqlTests
         Guid publicId,
         string issuer,
         string subject,
-        string? email = null,
         string role = "traveller",
         string status = "active") =>
         context.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO "UserAccounts"
-                ("Id", "UserId", "Issuer", "Subject", "Email", "Role", "Status", "CreatedAt",
+                ("Id", "UserId", "Issuer", "Subject", "Role", "Status", "CreatedAt",
                  "Username", "NormalizedUsername", "Address", "UpdatedAt", "ConcurrencyToken")
             VALUES
-                ({id}, {publicId}, {issuer}, {subject}, {email}, {role}, {status}, {CreatedAt},
+                ({id}, {publicId}, {issuer}, {subject}, {role}, {status}, {CreatedAt},
                  NULL, NULL, NULL, NULL, {Guid.CreateVersion7()})
             """);
 

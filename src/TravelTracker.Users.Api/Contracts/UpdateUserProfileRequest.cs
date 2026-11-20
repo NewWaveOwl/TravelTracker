@@ -2,30 +2,10 @@ using System.Text.Json.Serialization;
 
 namespace TravelTracker.Users.Api.Contracts;
 
-/** Whitelists editable profile fields and distinguishes omitted values from explicit null. */
+/** Whitelists editable profile fields (the username is fixed at registration) and distinguishes omitted values from explicit null. */
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class UpdateUserProfileRequest
 {
-    public string? Username
-    {
-        get;
-        init
-        {
-            field = value;
-            HasUsername = true;
-        }
-    }
-
-    public string? Email
-    {
-        get;
-        init
-        {
-            field = value;
-            HasEmail = true;
-        }
-    }
-
     public string? Address
     {
         get;
@@ -36,7 +16,5 @@ public sealed class UpdateUserProfileRequest
         }
     }
 
-    internal bool HasUsername { get; private set; }
-    internal bool HasEmail { get; private set; }
     internal bool HasAddress { get; private set; }
 }

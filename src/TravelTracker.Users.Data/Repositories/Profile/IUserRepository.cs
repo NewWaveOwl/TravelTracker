@@ -52,20 +52,15 @@ public interface IUserRepository
     /**
      * Updates supplied profile fields on an active account without changing server-owned state.
      * @param identity The validated owner identity.
-     * @param username The replacement username, or null to preserve it.
-     * @param email The replacement email, or null to preserve it.
      * @param address The replacement address, or null to clear it when supplied.
      * @param addressSpecified Whether the address field was supplied.
      * @param updatedAt The application time for this update.
      * @param cancellationToken Cancels the read or save.
      * @return Saved profile, unchanged inactive account, or null when absent.
      * @throws DbUpdateConcurrencyException when a concurrent update changed the loaded record.
-     * @throws UserProfileUsernameConflictException when the normalized username belongs to another account.
      */
     Task<UserAccount?> UpdateProfileAsync(
         ProviderIdentity identity,
-        string? username,
-        string? email,
         string? address,
         bool addressSpecified,
         DateTimeOffset updatedAt,

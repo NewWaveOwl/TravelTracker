@@ -32,13 +32,12 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
      * Locks first-admin initialization, commits its account, completion marker and audit together, and never re-elevates a replay.
      * @param issuer Validated approved issuer.
      * @param subject Validated approved subject.
-     * @param email Verified allowed email.
      * @param cancellationToken Request cancellation.
      * @return First account or exact-identity replay, otherwise null.
      */
-    public async Task<UserAccount?> BootstrapAsync(string issuer, string subject, string email, CancellationToken cancellationToken)
+    public async Task<UserAccount?> BootstrapAsync(string issuer, string subject, CancellationToken cancellationToken)
     {
-        var candidate = UserAccount.CreateAdministrator(new ProviderIdentity(issuer, subject), PersistedNow()) with { VerifiedEmail = email };
+        var candidate = UserAccount.CreateAdministrator(new ProviderIdentity(issuer, subject), PersistedNow());
         await using var database = await factory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         await database.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
@@ -60,7 +59,6 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
         else
         {
             row.Role = "administrator";
-            row.VerifiedEmail = candidate.VerifiedEmail;
             row.ConcurrencyToken = Guid.NewGuid();
         }
         database.Bootstrap.Add(new BootstrapRow { Id = 1, UserId = row.PublicId, Issuer = issuer, Subject = subject, CompletedAt = candidate.CreatedAt });
@@ -75,7 +73,7 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
      * @param issuer Validated actor issuer.
      * @param subject Validated actor subject.
      * @param cancellationToken Request cancellation.
-     * @return Accounts ordered by verified email and public ID, or null for an unauthorized actor.
+     * @return Accounts ordered by username and public ID, or null for an unauthorized actor.
      */
     public async Task<IReadOnlyList<UserAccount>?> ListForAdministratorAsync(string issuer, string subject, CancellationToken cancellationToken)
     {
@@ -83,7 +81,7 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         await database.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({EntityIdGenerator.ProvisioningLock})", cancellationToken);
         if (!await database.Accounts.AnyAsync(entry => entry.Issuer == issuer && entry.Subject == subject && entry.Role == "administrator" && entry.Status == "active", cancellationToken)) return null;
-        var rows = await database.Accounts.AsNoTracking().OrderBy(entry => entry.VerifiedEmail).ThenBy(entry => entry.PublicId).ToListAsync(cancellationToken);
+        var rows = await database.Accounts.AsNoTracking().OrderBy(entry => entry.NormalizedUsername).ThenBy(entry => entry.PublicId).ToListAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return rows.Select(Account).ToArray();
     }
@@ -176,8 +174,6 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
         },
         Username = account.Username,
         NormalizedUsername = account.Username?.ToUpperInvariant(),
-        Email = account.Email,
-        VerifiedEmail = account.VerifiedEmail,
         Address = account.Address,
         CreatedAt = account.CreatedAt,
         UpdatedAt = account.UpdatedAt,
@@ -208,7 +204,6 @@ public sealed class EfUserRepository(IDbContextFactory<UsersDbContext> factory, 
             },
             row.CreatedAt,
             row.Username,
-            row.Email,
             row.Address,
-            row.UpdatedAt) { VerifiedEmail = row.VerifiedEmail };
+            row.UpdatedAt);
 }

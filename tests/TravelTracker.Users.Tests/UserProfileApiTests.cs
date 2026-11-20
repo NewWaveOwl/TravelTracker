@@ -25,7 +25,6 @@ public sealed class UserProfileApiTests
         Assert.Equal("traveller", first.Role);
         Assert.Equal("active", first.Status);
         Assert.Null(first.Username);
-        Assert.Null(first.Email);
         Assert.Null(first.Address);
         Assert.Null(first.UpdatedAt);
         Assert.Equal("new-subject", app.Repository.Account!.ProviderIdentity.Subject);
@@ -53,7 +52,7 @@ public sealed class UserProfileApiTests
         using var other = app.Browser(app.Token(subject: "other-subject", scope: "users.read users.write"));
         var otherProfile = (await other.GetFromJsonAsync<SelfProfileResponse>(Me))!;
         Assert.Equal(HttpStatusCode.OK,
-            (await other.PatchAsJsonAsync(Me, new { username = "other-name" })).StatusCode);
+            (await other.PatchAsJsonAsync(Me, new { address = "1 Other Street" })).StatusCode);
 
         using var caller = app.Browser(app.Token(subject: "caller-subject", scope: "users.read users.write"));
         caller.DefaultRequestHeaders.Add("X-User-Id", otherProfile.PublicId.ToString());
@@ -61,11 +60,11 @@ public sealed class UserProfileApiTests
         var spoofedPath = $"{Me}?userId={otherProfile.PublicId:D}";
         var callerProfile = (await caller.GetFromJsonAsync<SelfProfileResponse>(spoofedPath))!;
         Assert.NotEqual(otherProfile.PublicId, callerProfile.PublicId);
-        Assert.Null(callerProfile.Username);
+        Assert.Null(callerProfile.Address);
         Assert.Equal(HttpStatusCode.OK,
-            (await caller.PatchAsJsonAsync(spoofedPath, new { username = "caller-name" })).StatusCode);
-        Assert.Equal("caller-name", (await caller.GetFromJsonAsync<SelfProfileResponse>(Me))!.Username);
-        Assert.Equal("other-name", (await other.GetFromJsonAsync<SelfProfileResponse>(Me))!.Username);
+            (await caller.PatchAsJsonAsync(spoofedPath, new { address = "2 Caller Street" })).StatusCode);
+        Assert.Equal("2 Caller Street", (await caller.GetFromJsonAsync<SelfProfileResponse>(Me))!.Address);
+        Assert.Equal("1 Other Street", (await other.GetFromJsonAsync<SelfProfileResponse>(Me))!.Address);
     }
 
     [Fact]
@@ -75,9 +74,9 @@ public sealed class UserProfileApiTests
         using var anonymous = app.Browser();
         using var blankSubject = app.Browser(app.Token(subject: " ", scope: "users.read users.write"));
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(Me)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PatchAsJsonAsync(Me, new { username = "test-name" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PatchAsJsonAsync(Me, new { address = "1 Test Street" })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await blankSubject.GetAsync(Me)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await blankSubject.PatchAsJsonAsync(Me, new { username = "test-name" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await blankSubject.PatchAsJsonAsync(Me, new { address = "1 Test Street" })).StatusCode);
         Assert.Null(app.Repository.Account);
     }
 
@@ -90,8 +89,8 @@ public sealed class UserProfileApiTests
         Assert.Null(app.Repository.Account);
         using var reader = app.Browser(app.Token(scope: "users.read"));
         Assert.Equal(HttpStatusCode.OK, (await reader.GetAsync(Me)).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await reader.PatchAsJsonAsync(Me, new { username = "new-name" })).StatusCode);
-        Assert.Null(app.Repository.Account!.Username);
+        Assert.Equal(HttpStatusCode.Forbidden, (await reader.PatchAsJsonAsync(Me, new { address = "1 New Street" })).StatusCode);
+        Assert.Null(app.Repository.Account!.Address);
     }
 
     [Fact]
@@ -100,39 +99,30 @@ public sealed class UserProfileApiTests
         using var app = new UsersApiFactory();
         using var client = app.Browser(app.Token(scope: "users.read users.write"));
         var before = (await client.GetFromJsonAsync<SelfProfileResponse>(Me))!;
-        var patch = await client.PatchAsJsonAsync(Me, new { username = "  Map.Editor ", email = " editor@example.test ", address = " 1 Map Street " });
+        var patch = await client.PatchAsJsonAsync(Me, new { address = " 1 Map Street " });
         Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
         var changed = (await patch.Content.ReadFromJsonAsync<SelfProfileResponse>())!;
         Assert.Equal(before.PublicId, changed.PublicId);
         Assert.Equal(before.CreatedAt, changed.CreatedAt);
-        Assert.Equal("Map.Editor", changed.Username);
-        Assert.Equal("editor@example.test", changed.Email);
         Assert.Equal("1 Map Street", changed.Address);
         Assert.NotNull(changed.UpdatedAt);
 
         var clear = await client.PatchAsJsonAsync(Me, new { address = (string?)null });
         Assert.Equal(HttpStatusCode.OK, clear.StatusCode);
         var after = (await clear.Content.ReadFromJsonAsync<SelfProfileResponse>())!;
-        Assert.Equal(changed.Username, after.Username);
-        Assert.Equal(changed.Email, after.Email);
         Assert.Null(after.Address);
         Assert.Equal(after, await client.GetFromJsonAsync<SelfProfileResponse>(Me));
     }
 
     [Theory]
     [InlineData("{}")]
-    [InlineData("{\"username\":null}")]
-    [InlineData("{\"username\":4}")]
-    [InlineData("{\"username\":\"bad name\"}")]
-    [InlineData("{\"email\":null}")]
-    [InlineData("{\"email\":\"invalid-email\"}")]
-    [InlineData("{\"email\":\"Display Name <editor@example.test>\"}")]
+    // the username is fixed at registration and there is no email, so neither is an editable member
+    [InlineData("{\"username\":\"valid-name\"}")]
+    [InlineData("{\"email\":\"editor@example.test\"}")]
     [InlineData("{\"address\":\"1 Test\\u0000 Avenue\"}")]
     [InlineData("{\"address\":\" \"}")]
-    [InlineData("{\"username\":\"valid-name\",\"role\":\"administrator\"}")]
-    [InlineData("{\"username\":\"valid-name\",\"password\":\"fixture-password\"}")]
-    [InlineData("{\"email\":\"contact@example.test\",\"loginEmail\":\"signin@example.test\"}")]
-    [InlineData("{\"username\":\"valid-name\",\"publicId\":\"f8ac6c5f-cda8-4986-a6d0-056cd55f88cf\"}")]
+    [InlineData("{\"address\":\"1 Test Street\",\"role\":\"administrator\"}")]
+    [InlineData("{\"address\":\"1 Test Street\",\"publicId\":\"f8ac6c5f-cda8-4986-a6d0-056cd55f88cf\"}")]
     public async Task InvalidPatchLeavesProfileAndTimestampUnchanged(string body)
     {
         using var app = new UsersApiFactory();
@@ -153,8 +143,8 @@ public sealed class UserProfileApiTests
         var profile = (await client.GetFromJsonAsync<SelfProfileResponse>(Me))!;
         app.Repository.SetStatus(profile.PublicId, status);
         Assert.Equal(readStatus, (await client.GetAsync(Me)).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PatchAsJsonAsync(Me, new { username = "blocked-edit" })).StatusCode);
-        Assert.Null(app.Repository.Account!.Username);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PatchAsJsonAsync(Me, new { address = "1 Blocked Street" })).StatusCode);
+        Assert.Null(app.Repository.Account!.Address);
         Assert.Null(app.Repository.Account.UpdatedAt);
     }
 
@@ -249,40 +239,34 @@ public sealed class UserProfileApiTests
     {
         using var app = new UsersApiFactory();
         const string subject = "opaque-distinctive-subject";
-        const string username = "DistinctiveEditor";
-        const string email = "distinctive-editor@example.test";
         const string address = "118 Distinctive Lane";
         var token = app.Token(subject: subject, scope: "users.read users.write");
         using var client = app.Browser(token);
         var profile = (await client.GetFromJsonAsync<SelfProfileResponse>(Me))!;
-        Assert.Equal(HttpStatusCode.OK, (await client.PatchAsJsonAsync(Me, new { username, email, address })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PatchAsJsonAsync(Me, new { address })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
-            (await client.PatchAsJsonAsync(Me, new { username, email, address, subject })).StatusCode);
+            (await client.PatchAsJsonAsync(Me, new { address, subject })).StatusCode);
         app.Repository.StorageUnavailable = true;
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.GetAsync(Me)).StatusCode);
 
         var output = string.Join(Environment.NewLine, app.Logs.Entries);
         Assert.Contains("Users request failed", output);
-        foreach (var sensitive in new[] { subject, username, email, address, token, UsersApiFactory.Issuer, profile.PublicId.ToString() })
+        foreach (var sensitive in new[] { subject, address, token, UsersApiFactory.Issuer, profile.PublicId.ToString() })
             Assert.DoesNotContain(sensitive, output, StringComparison.OrdinalIgnoreCase);
     }
 
 
-    [Theory]
-    [InlineData("username_conflict")]
-    [InlineData("profile_concurrency_conflict")]
-    public async Task ProfileWriteConflictsReturnDistinctCodesAndLeaveSavedProfileUnchanged(string code)
+    [Fact]
+    public async Task ProfileWriteConflictReturnsItsCodeAndLeavesSavedProfileUnchanged()
     {
         using var app = new UsersApiFactory();
         using var client = app.Browser(app.Token(scope: "users.read users.write"));
         var before = await client.GetFromJsonAsync<SelfProfileResponse>(Me);
-        app.Repository.ProfileUpdateFailure = code == "username_conflict"
-            ? new UserProfileUsernameConflictException()
-            : new DbUpdateConcurrencyException();
-        var response = await client.PatchAsJsonAsync(Me, new { username = "attempted-change" });
+        app.Repository.ProfileUpdateFailure = new DbUpdateConcurrencyException();
+        var response = await client.PatchAsJsonAsync(Me, new { address = "1 Attempted Street" });
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         using var problem = await response.Content.ReadFromJsonAsync<JsonDocument>();
-        Assert.Equal(code, problem!.RootElement.GetProperty("code").GetString());
+        Assert.Equal("profile_concurrency_conflict", problem!.RootElement.GetProperty("code").GetString());
         Assert.Equal(before, await client.GetFromJsonAsync<SelfProfileResponse>(Me));
     }
 

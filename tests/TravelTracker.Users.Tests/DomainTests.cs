@@ -19,7 +19,6 @@ public sealed class DomainTests
         Assert.Equal(UserStatus.Active, account.Status);
         Assert.Equal(Created, account.CreatedAt);
         Assert.Equal(Identity, account.ProviderIdentity);
-        Assert.Null(account.Email);
     }
 
     [Fact]

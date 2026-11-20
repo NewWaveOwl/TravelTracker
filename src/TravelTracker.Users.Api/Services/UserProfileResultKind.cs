@@ -6,6 +6,5 @@ public enum UserProfileResultKind
     Success,
     Forbidden,
     ValidationFailure,
-    UsernameConflict,
     ConcurrencyConflict
 }

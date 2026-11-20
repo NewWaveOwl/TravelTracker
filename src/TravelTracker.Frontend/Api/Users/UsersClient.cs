@@ -81,7 +81,7 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
     /**
      * Updates only changed own-profile fields and returns the server-confirmed representation.
      * @param current The latest server-confirmed profile used to omit unchanged values.
-     * @param update The caller-editable username, contact email and address values.
+     * @param update The caller-editable address value.
      * @param cancellationToken Cancels the pending request.
      * @return The updated profile returned by the Users API.
      */
@@ -131,7 +131,7 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
     }
 
     /**
-     * Applies bootstrap only after the API independently verifies identity, allowed email and one-time state.
+     * Applies bootstrap only after the API independently verifies identity, allowed username and one-time state.
      * @param cancellationToken Cancels the view.
      * @return The confirmed profile, never an optimistic client-side role.
      */

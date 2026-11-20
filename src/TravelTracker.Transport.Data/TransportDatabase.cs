@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using TravelTracker.Data;
 using TravelTracker.Transport.Data.Repositories;
 using TravelTracker.Transport.Data.SeedData;
 

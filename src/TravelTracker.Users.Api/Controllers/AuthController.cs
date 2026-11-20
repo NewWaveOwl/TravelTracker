@@ -1,4 +1,3 @@
-using System.Net.Mail;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -6,6 +5,8 @@ using Microsoft.Extensions.Options;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Data.Repositories.Credentials;
+using TravelTracker.Users.Domain.Models;
+using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Api.Controllers;
 
@@ -15,7 +16,7 @@ namespace TravelTracker.Users.Api.Controllers;
  * @param tokens Signs the access tokens.
  * @param configuration Supplies the issuer and the service credential.
  * @param timeProvider Supplies the registration time.
- * @param logger Records outcomes without emails, passwords or tokens.
+ * @param logger Records outcomes without usernames, passwords or tokens.
  */
 [ApiController]
 [Route("api/v1/auth")]
@@ -35,26 +36,29 @@ public sealed class AuthController(ICredentialRepository credentials, TokenIssue
 
     /**
      * Creates a traveller account and signs it in.
-     * @param request The email and password.
+     * @param request The username and password.
      * @return The token on success, or a validation, conflict or availability failure.
      */
     [HttpPost("register")]
     public async Task<IResult> Register(CredentialsRequest request)
     {
         if (Unavailable() is { } unavailable) return unavailable;
-        var email = request.Email.Trim();
+        var username = request.Username.Trim();
         var errors = new Dictionary<string, string[]>();
-        if (!MailAddress.TryCreate(email, out var parsed) || parsed.Address != email) errors["email"] = ["Enter a valid email address."];
+        // the domain owns the username rules, so ask it rather than repeating them
+        var probe = new UserAccount(Guid.CreateVersion7(), new ProviderIdentity("registration", "probe"), UserRole.User, UserStatus.Active, timeProvider.GetUtcNow(), username);
+        if (username.Length == 0) errors["username"] = ["Enter a username."];
+        else if (probe.Validate().TryGetValue("username", out var usernameErrors)) errors["username"] = usernameErrors;
         if (request.Password.Length < MinimumPasswordLength) errors["password"] = [$"Use at least {MinimumPasswordLength} characters."];
         if (errors.Count != 0) return Results.ValidationProblem(errors);
 
         var issuer = configuration["Authentication:Bearer:Issuer"]!;
-        var account = await credentials.RegisterAsync(issuer, email, Hasher.HashPassword(new object(), request.Password),
+        var account = await credentials.RegisterAsync(issuer, username, Hasher.HashPassword(new object(), request.Password),
             timeProvider.GetUtcNow(), HttpContext.RequestAborted);
         if (account is null)
         {
-            logger.LogInformation("Registration refused: the login is already registered.");
-            return Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "That email is already registered.");
+            logger.LogInformation("Registration refused: the username is already registered.");
+            return Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "That username is already taken.");
         }
         logger.LogInformation("Registered a new traveller account.");
         return Results.Json(tokens.ForAccount(account), statusCode: StatusCodes.Status201Created);
@@ -62,18 +66,18 @@ public sealed class AuthController(ICredentialRepository credentials, TokenIssue
 
     /**
      * Checks a password and issues a token.
-     * @param request The email and password.
+     * @param request The username and password.
      * @return The token, 401 for any wrong credential, or 403 for an account that is not active.
      */
     [HttpPost("login")]
     public async Task<IResult> Login(CredentialsRequest request)
     {
         if (Unavailable() is { } unavailable) return unavailable;
-        var stored = await credentials.FindAsync(request.Email, HttpContext.RequestAborted);
+        var stored = await credentials.FindAsync(request.Username, HttpContext.RequestAborted);
         var result = Hasher.VerifyHashedPassword(new object(), stored?.PasswordHash ?? DummyHash, request.Password);
         if (stored is null || result == PasswordVerificationResult.Failed)
         {
-            logger.LogWarning("Sign-in refused: unknown login or wrong password.");
+            logger.LogWarning("Sign-in refused: unknown username or wrong password.");
             return Results.Unauthorized();
         }
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
