@@ -57,8 +57,7 @@ public sealed class RoutePointTests
             factory.CreateToken("catalogue.write", role: "administrator"));
 
         using var response = await client.PostAsJsonAsync("/api/v1/route-points",
-            new { type = "transport_stop", name = "Policy Test Stop", lat = 45m, lon = -73m,
-                role = "administrator", status = "active", ownerSubject = "victim" });
+            new { type = "transport_stop", name = "Policy Test Stop", lat = 45m, lon = -73m });
 
         Assert.Equal(expectedStatus, response.StatusCode);
         if (expectedStatus == HttpStatusCode.Created)

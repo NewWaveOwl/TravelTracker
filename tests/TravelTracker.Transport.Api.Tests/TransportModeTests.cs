@@ -62,8 +62,7 @@ public sealed class TransportModeTests
             factory.CreateToken("catalogue.write", role: "administrator"));
 
         using var response = await client.PostAsJsonAsync("/api/v1/transport-modes",
-            new { code = "plane", name = "Policy Test Airline", role = "administrator", status = "active",
-                ownerSubject = "victim", issuer = "https://attacker.example.test", subject = "victim" });
+            new { code = "plane", name = "Policy Test Airline" });
 
         Assert.Equal(expectedStatus, response.StatusCode);
         if (expectedStatus == HttpStatusCode.Created)

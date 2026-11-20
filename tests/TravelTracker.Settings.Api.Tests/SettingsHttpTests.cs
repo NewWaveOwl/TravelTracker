@@ -285,7 +285,7 @@ public sealed class SettingsHttpTests
         factory.Users!.MalformedStandingResponse = true;
 
         using var read = await client.GetAsync("/api/v1/settings");
-        using var write = await client.PutSettingsAsync(SettingsTestData.ValidPreferences());
+        using var write = await client.PutSettingsAsync(SettingsTestData.ValidPreferences(), "\"0\"");
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, read.StatusCode);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, write.StatusCode);
