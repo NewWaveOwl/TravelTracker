@@ -61,7 +61,7 @@ Check mode validates configuration shape only; it does not test database access.
 ### Sign in and save a trip
 
 1. Create the first administrator by following [First administrator setup](docs/first-administrator-setup.md), or just register as a traveller.
-2. When startup completes, open [TravelTracker](http://localhost:5100/), choose **Create an account** and register with a username (3 to 32 letters, numbers, periods, underscores or hyphens) and a password of at least 8 characters. Usernames cannot be changed later. There is no email, confirmation or password reset; ask an administrator for account recovery.
+2. When startup completes, open [TravelTracker](http://localhost:5100/), choose **Create an account** and register with a username (3 to 32 letters, numbers, periods, underscores or hyphens) and a password of at least 6 characters. Usernames cannot be changed later. There is no email, confirmation or password reset; ask an administrator for account recovery.
 3. Build a plan in [Map View](http://localhost:5100/map), then use the workspace **Save trip** button or **Ctrl+S** (**Cmd+S** on macOS). Save any new catalogue entries explicitly in review first. Save errors keep your draft available for correction or retry. Empty and single-stop plans are supported; any supported place category may start or end the trip.
 4. Copy the saved trip URL, stop the stack with **Ctrl+C**, restart and sign in again (a restart invalidates sessions), then reopen that URL or find the trip in **History**.
 

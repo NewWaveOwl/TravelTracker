@@ -24,7 +24,7 @@ namespace TravelTracker.Users.Api.Controllers;
 public sealed class AuthController(ICredentialRepository credentials, TokenIssuer tokens, IConfiguration configuration,
     TimeProvider timeProvider, ILogger<AuthController> logger) : ControllerBase
 {
-    private const int MinimumPasswordLength = 8;
+    private const int MinimumPasswordLength = 6;
 
     /** Stored hashes from a lower count are re-hashed at the next successful login. */
     public const int PasswordIterations = 1 << 18;

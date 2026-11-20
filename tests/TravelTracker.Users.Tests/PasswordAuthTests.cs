@@ -51,6 +51,15 @@ public sealed class PasswordAuthTests : IDisposable
         Assert.Equal("Ada", store.For("ada").Account.Username);
     }
 
+    [Theory]
+    [InlineData("abcde", HttpStatusCode.BadRequest)]
+    [InlineData("abcdef", HttpStatusCode.Created)]
+    public async Task Register_RequiresOnlyAMinimumPasswordLengthOfSix(string password, HttpStatusCode expected)
+    {
+        using var client = Client();
+        Assert.Equal(expected, (await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "bob", password })).StatusCode);
+    }
+
     static uint Iterations(string hash) => System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(Convert.FromBase64String(hash).AsSpan(5));
 
     [Fact]

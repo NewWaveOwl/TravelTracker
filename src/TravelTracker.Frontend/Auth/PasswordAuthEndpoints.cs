@@ -109,7 +109,7 @@ public static class PasswordAuthEndpoints
         var form = await context.Request.ReadFormAsync(context.RequestAborted);
         var username = form["username"].ToString().Trim();
         var password = form["password"].ToString();
-        if (!ValidCredentials(username, password) || password.Length < 8 || password != form["passwordConfirmation"].ToString())
+        if (!ValidCredentials(username, password) || password.Length < 6 || password != form["passwordConfirmation"].ToString())
             return Results.Redirect("/sign-in?mode=register&error=registration");
         try
         {
