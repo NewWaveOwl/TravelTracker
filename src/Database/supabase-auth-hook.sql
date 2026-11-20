@@ -14,7 +14,7 @@ DECLARE
         'catalogue.read', 'catalogue.write', 'users.read', 'users.write', 'users.admin',
         'settings.read', 'settings.write', 'trips.read', 'trips.write'];
     traveller_scopes text[] := ARRAY[
-        'catalogue.read', 'catalogue.write', 'users.read', 'users.write', 'users.admin',
+        'catalogue.read', 'catalogue.write', 'users.read', 'users.write',
         'settings.read', 'settings.write', 'trips.read', 'trips.write'];
 BEGIN
     SELECT raw_app_meta_data INTO metadata FROM auth.users
