@@ -43,6 +43,7 @@ var services = new (string Name, int Port)[]
 var repo = Directory.GetCurrentDirectory();
 var processes = new List<Process>();
 Process? localDatabase = null;
+DirectoryInfo? trustFolder = null;
 using var shutdown = new CancellationTokenSource();
 ConsoleCancelEventHandler stop = (_, signal) =>
 {
@@ -123,8 +124,20 @@ try
     if (listeners.Any(listener => services.Any(service => service.Port == listener.Port)))
         throw new InvalidOperationException("A TravelTracker port is already in use. Stop the existing stack first.");
 
-    await RunDotnetAsync(repo, ["dev-certs", "https", "--check", "--trust"],
-        "Trust the Users development certificate with dotnet dev-certs https --trust.", shutdown.Token);
+    if (OperatingSystem.IsLinux())
+    {
+        // dev-certs cannot mark the certificate trusted on most distributions, and only the hosts calling Users over https need
+        // it, so export the public certificate and point OpenSSL (and so every child process) at it for this launch only
+        await RunDotnetAsync(repo, ["dev-certs", "https"], "Could not create the Users development certificate.", shutdown.Token);
+        trustFolder = Directory.CreateTempSubdirectory("traveltracker-trust-");
+        await RunDotnetAsync(repo, ["dev-certs", "https", "--export-path", Path.Combine(trustFolder.FullName, "users-dev.pem"), "--format", "Pem"],
+            "Could not export the Users development certificate.", shutdown.Token);
+        Environment.SetEnvironmentVariable("SSL_CERT_DIR", trustFolder.FullName + Path.PathSeparator
+            + (Environment.GetEnvironmentVariable("SSL_CERT_DIR") is { Length: > 0 } existing ? existing : "/etc/ssl/certs"));
+    }
+    else
+        await RunDotnetAsync(repo, ["dev-certs", "https", "--check", "--trust"],
+            "Trust the Users development certificate with dotnet dev-certs https --trust.", shutdown.Token);
     await RunDotnetAsync(repo, ["build", solution, "--configuration", "Debug"], "TravelTracker build failed.", shutdown.Token);
 
     // the container script is a child that removes its container once its stdin closes, so the database ends with this launch
@@ -223,6 +236,7 @@ catch (Exception error)
 finally
 {
     Console.CancelKeyPress -= stop;
+    trustFolder?.Delete(recursive: true);
     if (localDatabase is not null)
     {
         localDatabase.StandardInput.Close();

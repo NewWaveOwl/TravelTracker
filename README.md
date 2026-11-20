@@ -46,19 +46,7 @@ The database container stops when you press Ctrl+C, and its data is kept for the
 
 The launcher builds the solution and starts the frontend plus Users, Attractions, Transport, Accommodations, Settings and Trips APIs. Each launch generates a fresh signing key pair in memory and gives the private half only to the Users API and the public half to every API, so nothing about sign-in is saved to disk and every restart signs everyone out. Passwords and tokens are never saved in the launch settings.
 
-Trust the local Users API HTTPS certificate once:
-
-```sh
-dotnet dev-certs https --trust
-```
-
-On Ubuntu, .NET HTTP clients may also need the OpenSSL trust directory set in the launching terminal:
-
-```bash
-export SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:${SSL_CERT_DIR:-/usr/lib/ssl/certs}"
-```
-
-For other distributions, use the trust path reported by `dotnet dev-certs https --trust --verbose`. Do not disable certificate validation.
+On Windows and macOS, trust the local Users API HTTPS certificate once with `dotnet dev-certs https --trust`. On Linux the launcher needs nothing: it exports the public development certificate to a temporary folder and points OpenSSL at it for that launch only. Do not disable certificate validation.
 
 ### Check settings
 
