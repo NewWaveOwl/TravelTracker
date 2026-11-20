@@ -2,6 +2,7 @@ using System.Net.Mail;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Data.Repositories.Credentials;
@@ -24,7 +25,10 @@ public sealed class AuthController(ICredentialRepository credentials, TokenIssue
 {
     private const int MinimumPasswordLength = 8;
 
-    private static readonly PasswordHasher<object> Hasher = new();
+    /** Stored hashes from a lower count are re-hashed at the next successful login. */
+    public const int PasswordIterations = 1 << 18;
+
+    private static readonly PasswordHasher<object> Hasher = new(Options.Create(new PasswordHasherOptions { IterationCount = PasswordIterations }));
 
     /** Hash checked when the login is unknown, so a miss costs the same as a wrong password. */
     private static readonly string DummyHash = Hasher.HashPassword(new object(), "not-a-real-password");

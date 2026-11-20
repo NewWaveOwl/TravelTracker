@@ -46,7 +46,12 @@ public sealed class MemoryCredentialRepository : ICredentialRepository
         return Task.FromResult(Find(login));
     }
 
-    public Task UpdateHashAsync(Guid publicId, string passwordHash, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task UpdateHashAsync(Guid publicId, string passwordHash, CancellationToken cancellationToken)
+    {
+        var index = entries.FindIndex(entry => entry.Credential.Account.PublicId == publicId);
+        entries[index] = (entries[index].Login, entries[index].Credential with { PasswordHash = passwordHash });
+        return Task.CompletedTask;
+    }
 
     StoredCredential? Find(string login) => entries.FirstOrDefault(entry => entry.Login.Equals(login.Trim(), StringComparison.OrdinalIgnoreCase)).Credential;
 }

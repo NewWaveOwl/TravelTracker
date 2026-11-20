@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -47,6 +48,23 @@ public sealed class PasswordAuthTests : IDisposable
         Assert.Equal(store.For("ada@example.test").Account.ProviderIdentity.Subject, result.Claims["sub"]);
         Assert.Contains("trips.write", result.Claims["scope"].ToString());
         Assert.DoesNotContain("correct horse", store.For("ada@example.test").PasswordHash);
+    }
+
+    static uint Iterations(string hash) => System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(Convert.FromBase64String(hash).AsSpan(5));
+
+    [Fact]
+    public async Task Hashes_UseTheConfiguredIterationCount_AndLoginUpgradesOlderHashes()
+    {
+        using var client = Client();
+        await client.PostAsJsonAsync("/api/v1/auth/register", new { email = "ada@example.test", password = "correct horse" });
+        Assert.Equal(1u << 18, Iterations(store.For("ada@example.test").PasswordHash));
+
+        // the framework default is 100,000, which is what hashes made before the count was raised carry
+        store.Seed("old@example.test", UsersApiFactory.Issuer, "old", new PasswordHasher<object>().HashPassword(new object(), "correct horse"));
+        Assert.Equal(100_000u, Iterations(store.For("old@example.test").PasswordHash));
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "old@example.test", password = "correct horse" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        Assert.Equal(1u << 18, Iterations(store.For("old@example.test").PasswordHash));
     }
 
     [Theory]
