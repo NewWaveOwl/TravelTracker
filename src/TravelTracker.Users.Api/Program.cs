@@ -1,5 +1,6 @@
 using TravelTracker.Security.Hosting;
 using Microsoft.EntityFrameworkCore;
+using TravelTracker.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
@@ -58,7 +59,7 @@ public class UsersProgram
         if (app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"))
         {
             await using var scope = app.Services.CreateAsyncScope();
-            await DatabaseConfiguration.RunMigrationAsync(() => scope.ServiceProvider.GetRequiredService<UsersDbContext>().Database.MigrateAsync());
+            await DatabaseConfiguration.RunMigrationAsync(() => scope.ServiceProvider.GetRequiredService<UsersDbContext>().Database.MigrateWithoutFirstRunNoiseAsync());
             app.Logger.LogInformation("Users database migrations applied.");
         }
         app.Use(async (context, next) =>

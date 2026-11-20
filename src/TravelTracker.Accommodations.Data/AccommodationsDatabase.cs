@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TravelTracker.Data;
 
 namespace TravelTracker.Accommodations.Data;
 
@@ -12,5 +13,5 @@ public static class AccommodationsDatabase
      * @return Completion after migrations are applied.
      */
     public static Task InitializeAsync(AccommodationsDbContext database, CancellationToken cancellationToken = default) =>
-        database.Database.MigrateAsync(cancellationToken);
+        database.Database.MigrateWithoutFirstRunNoiseAsync(cancellationToken);
 }
