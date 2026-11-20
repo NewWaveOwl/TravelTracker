@@ -36,8 +36,13 @@ Open [TravelTracker](http://localhost:5100/) or [Map View](http://localhost:5100
 Use the same launcher command in PowerShell, Bash, or a macOS terminal; PowerShell 7 is not required. Choose a PostgreSQL server first. For a disposable local one:
 
 ```sh
-dotnet run --file scripts/StartLocalDb.cs -- up
-export TRAVELTRACKER_DATABASE="$(dotnet run --file scripts/StartLocalDb.cs -- env)"
+dotnet run --file scripts/StartLocalDb.cs   # leave running; Ctrl+C stops it, data is kept (add -- --reset to wipe)
+```
+
+In a second terminal:
+
+```sh
+export TRAVELTRACKER_DATABASE="Host=localhost;Port=54330;Username=postgres;Password=dev;Maximum Pool Size=5"
 dotnet run --file scripts/StartDev.cs -- --apply-migrations   # first run only
 dotnet run --file scripts/StartDev.cs
 ```
