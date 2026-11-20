@@ -5,6 +5,7 @@ using System.Diagnostics;
 // runs a local PostgreSQL container for development and creates the six service databases. any raw postgres works; this is just the easy one.
 // it stays in the foreground: the database is up while this runs, and Ctrl+C removes the container (the data volume is kept).
 // usage: dotnet run --file scripts/StartLocalDb.cs [-- --reset]   (--reset wipes the saved data first)
+// scripts/StartDev.cs --local-db runs this as a child with --follow-parent so the database stops with the stack.
 // runtime: TRAVELTRACKER_CONTAINER_RUNTIME=podman|docker, otherwise podman if installed, else docker.
 // image: postgres:alpine because only the database runs in the container. switch to postgres:latest if the whole stack ever does.
 const string usage = """
@@ -12,7 +13,8 @@ const string usage = """
 
     usage: dotnet run --file scripts/StartLocalDb.cs [-- --reset]
 
-      --reset   delete the saved database data first, so you start empty
+      --reset          delete the saved database data first, so you start empty
+      --follow-parent  also stop when stdin closes (how StartDev.cs --local-db owns this script)
     """;
 const string containerName = "traveltracker-dev-pg";
 const string volumeName = "traveltracker-dev-pgdata";
@@ -21,13 +23,14 @@ const int port = 54330;
 var connectionString = $"Host=localhost;Port={port};Username=postgres;Password=dev;Maximum Pool Size=5";
 var bootstrapPath = Path.Combine(Directory.GetCurrentDirectory(), "src", "Database", "bootstrap.sql");
 
-if (args.Length > 1 || args.Length == 1 && args[0] != "--reset")
+if (args.Any(argument => argument is not ("--reset" or "--follow-parent")) || args.Distinct().Count() != args.Length)
 {
     Console.Error.WriteLine(usage);
     return 2;
 }
 
-var reset = args.Length == 1;
+var reset = args.Contains("--reset");
+var followParent = args.Contains("--follow-parent");
 
 var runtime = ResolveRuntime();
 if (runtime is null)
@@ -98,6 +101,12 @@ Console.CancelKeyPress += (_, eventArguments) =>
     eventArguments.Cancel = true;
     stop.Set();
 };
+if (followParent)
+    _ = Task.Run(() =>
+    {
+        while (Console.In.Read() != -1) { }
+        stop.Set();
+    });
 stop.Wait();
 
 var stopped = Run(runtime, "rm", "-f", containerName);

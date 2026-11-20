@@ -33,19 +33,14 @@ Open [TravelTracker](http://localhost:5100/) or [Map View](http://localhost:5100
 
 ## Run the full app
 
-Use the same launcher command in PowerShell, Bash, or a macOS terminal; PowerShell 7 is not required. Choose a PostgreSQL server first. For a disposable local one:
+Use the same launcher command in PowerShell, Bash, or a macOS terminal; PowerShell 7 is not required. The quickest start needs podman or docker and starts a disposable PostgreSQL together with the whole stack:
 
 ```sh
-dotnet run --file scripts/StartLocalDb.cs   # leave running; Ctrl+C stops it, data is kept (add -- --reset to wipe)
+dotnet run --file scripts/StartDev.cs -- --local-db --apply-migrations   # first run only
+dotnet run --file scripts/StartDev.cs -- --local-db
 ```
 
-In a second terminal:
-
-```sh
-export TRAVELTRACKER_DATABASE="Host=localhost;Port=54330;Username=postgres;Password=dev;Maximum Pool Size=5"
-dotnet run --file scripts/StartDev.cs -- --apply-migrations   # first run only
-dotnet run --file scripts/StartDev.cs
-```
+The database container stops when you press Ctrl+C, and its data is kept for the next launch. To run the database on its own, or to wipe its data, use `dotnet run --file scripts/StartLocalDb.cs [-- --reset]` in one terminal and set `TRAVELTRACKER_DATABASE="Host=localhost;Port=54330;Username=postgres;Password=dev;Maximum Pool Size=5"` for the launcher in another.
 
 `TRAVELTRACKER_DATABASE` is any Npgsql connection string. Without it the launcher asks for one at a hidden prompt. To use Supabase instead, pass `--supabase` (see [Supabase as the database](docs/supabase.md)).
 

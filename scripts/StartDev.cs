@@ -12,7 +12,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-const string usage = "dotnet run --file scripts/StartDev.cs [-- [--supabase] [--setup | --check-config] [--apply-migrations]]";
+const string usage = "dotnet run --file scripts/StartDev.cs [-- [--local-db | --supabase] [--setup | --check-config] [--apply-migrations]]";
 const string usersUrl = "https://localhost:5101";
 const string frontendUrl = "http://localhost:5100";
 const string audience = "traveltracker-api";
@@ -23,12 +23,13 @@ if (args is ["--help"])
     return 0;
 }
 
-string[] knownFlags = ["--supabase", "--setup", "--check-config", "--apply-migrations"];
+string[] knownFlags = ["--local-db", "--supabase", "--setup", "--check-config", "--apply-migrations"];
+var localDb = args.Contains("--local-db");
 var supabase = args.Contains("--supabase");
 var applyMigrations = args.Contains("--apply-migrations");
 var setupOnly = args.Contains("--setup");
 var checkOnly = args.Contains("--check-config");
-if (args.Any(argument => !knownFlags.Contains(argument)) || args.Distinct().Count() != args.Length || setupOnly && checkOnly)
+if (args.Any(argument => !knownFlags.Contains(argument)) || args.Distinct().Count() != args.Length || setupOnly && checkOnly || localDb && (supabase || setupOnly || checkOnly))
 {
     Console.Error.WriteLine(usage);
     return 2;
@@ -41,6 +42,7 @@ var services = new (string Name, int Port)[]
 };
 var repo = Directory.GetCurrentDirectory();
 var processes = new List<Process>();
+Process? localDatabase = null;
 using var shutdown = new CancellationTokenSource();
 ConsoleCancelEventHandler stop = (_, signal) =>
 {
@@ -68,8 +70,8 @@ try
     // or pass --supabase to build one from a Supabase session pooler. Supabase is only a preset for the connection, nothing else.
     var rawDatabase = Environment.GetEnvironmentVariable("TRAVELTRACKER_DATABASE");
     string? poolerHost = null, databaseUser = null, rootCertificate = null;
-    if (supabase && rawDatabase is not null)
-        throw new InvalidOperationException("TRAVELTRACKER_DATABASE and --supabase both choose the database. Unset one of them.");
+    if ((supabase || localDb) && rawDatabase is not null)
+        throw new InvalidOperationException("TRAVELTRACKER_DATABASE and --supabase or --local-db both choose the database. Unset one of them.");
     if (supabase)
     {
         (poolerHost, var connectionUser) = ParseConnection(Setting(config, "PoolerHost", null,
@@ -100,7 +102,7 @@ try
             throw new InvalidOperationException("No database is chosen. Set TRAVELTRACKER_DATABASE to an Npgsql connection string, or pass --supabase.");
         if (rawDatabase is not null)
             Console.WriteLine("Using the PostgreSQL server from TRAVELTRACKER_DATABASE.");
-        else if (!setupOnly && !checkOnly)
+        else if (!setupOnly && !checkOnly && !localDb)
             rawDatabase = ReadSecret("PostgreSQL connection string (Npgsql format, input hidden; or set TRAVELTRACKER_DATABASE)", shutdown.Token);
         try
         {
@@ -124,6 +126,10 @@ try
     await RunDotnetAsync(repo, ["dev-certs", "https", "--check", "--trust"],
         "Trust the Users development certificate with dotnet dev-certs https --trust.", shutdown.Token);
     await RunDotnetAsync(repo, ["build", solution, "--configuration", "Debug"], "TravelTracker build failed.", shutdown.Token);
+
+    // the container script is a child that removes its container once its stdin closes, so the database ends with this launch
+    if (localDb)
+        (localDatabase, rawDatabase) = await StartLocalDatabaseAsync(repo, shutdown.Token);
 
     // nothing here is saved: the signing key and service credential live only as long as this launch
     using var signingKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -217,6 +223,14 @@ catch (Exception error)
 finally
 {
     Console.CancelKeyPress -= stop;
+    if (localDatabase is not null)
+    {
+        localDatabase.StandardInput.Close();
+        if (!localDatabase.WaitForExit(20000))
+            Console.Error.WriteLine("The local database did not stop in 20 seconds; remove traveltracker-dev-pg by hand.");
+        StopProcess(localDatabase);
+        localDatabase.Dispose();
+    }
     foreach (var process in processes.AsEnumerable().Reverse())
     {
         StopProcess(process);
@@ -333,6 +347,42 @@ static async Task SaveConfigurationAsync(string path, Dictionary<string, string>
     var temporary = path + ".tmp";
     await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
     File.Move(temporary, path, overwrite: true);
+}
+
+/**
+ * Runs scripts/StartLocalDb.cs as a child and waits until its database is ready.
+ * @param repo Repository root.
+ * @param cancellationToken Cancels startup.
+ * @return The child, which stops the database when its stdin closes, and the connection string it printed.
+ */
+static async Task<(Process Child, string Connection)> StartLocalDatabaseAsync(string repo, CancellationToken cancellationToken)
+{
+    var start = Dotnet(repo, "run", "--file", Path.Combine("scripts", "StartLocalDb.cs"), "--", "--follow-parent");
+    start.RedirectStandardInput = true;
+    start.RedirectStandardOutput = true;
+    var child = Process.Start(start) ?? throw new InvalidOperationException("Could not start the local database script.");
+    const string marker = "TRAVELTRACKER_DATABASE=";
+    try
+    {
+        while (await child.StandardOutput.ReadLineAsync(cancellationToken) is { } line)
+        {
+            Console.WriteLine("[db] " + line);
+            if (line.StartsWith(marker))
+            {
+                // keep draining so the child never blocks on a full pipe
+                _ = child.StandardOutput.ReadToEndAsync(CancellationToken.None);
+                return (child, line[marker.Length..].Trim('"'));
+            }
+        }
+        throw new InvalidOperationException("The local database script stopped before the database was ready. See its output above.");
+    }
+    catch
+    {
+        child.StandardInput.Close();
+        child.WaitForExit(20000);
+        StopProcess(child);
+        throw;
+    }
 }
 
 static ProcessStartInfo Dotnet(string folder, params string[] arguments)
