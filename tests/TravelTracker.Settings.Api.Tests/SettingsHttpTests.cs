@@ -253,7 +253,7 @@ public sealed class SettingsHttpTests
         factory.Users!.UnknownSubject = "unknown";
 
         using var read = await unknown.GetAsync("/api/v1/settings");
-        using var write = await unknown.PutAsJsonAsync("/api/v1/settings", ValidPreferences());
+        using var write = await unknown.PutAsJsonAsync("/api/v1/settings", SettingsTestData.ValidPreferences());
 
         Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, write.StatusCode);
@@ -285,7 +285,7 @@ public sealed class SettingsHttpTests
         factory.Users!.MalformedStandingResponse = true;
 
         using var read = await client.GetAsync("/api/v1/settings");
-        using var write = await client.PutSettingsAsync(ValidPreferences());
+        using var write = await client.PutSettingsAsync(SettingsTestData.ValidPreferences());
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, read.StatusCode);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, write.StatusCode);

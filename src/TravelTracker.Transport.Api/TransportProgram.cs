@@ -2,7 +2,7 @@ using TravelTracker.Security.Hosting;
 using Microsoft.EntityFrameworkCore;
 using TravelTracker.Transport.Api.Errors;
 using Microsoft.OpenApi;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 using TravelTracker.Transport.Api.Access;
 using TravelTracker.Transport.Api.Services;
 using TravelTracker.Transport.Data;
