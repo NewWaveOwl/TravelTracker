@@ -163,7 +163,11 @@ slide transition respects reduced-motion preferences. Select a marker to edit
 its name, address and coordinates; confirm applies the draft and Cancel leaves
 the original place intact. Changed saved places are resolved through **Save
 catalogue entries** before saving the trip, so reopening uses the confirmed
-location snapshot. Switching editor views asks before discarding unconfirmed
+location snapshot. Transport stops are selected from the shared catalogue.
+Hand-placed transport pins can be kept in a browser draft. Before saving the
+trip, select each draft pin and choose a saved stop from the search results.
+Replacing a pin preserves its connections. Administrators can add shared
+route points in the Transport workspace. Switching editor views asks before discarding unconfirmed
 marker fields. Selecting or editing a marker preserves the map camera; opening
 a different saved trip fits its stops. **Fit stops** remains an explicit
 navigation action within a trip. Time inputs show minutes,

@@ -116,8 +116,8 @@ else
                 var leg = draft.Legs[position];
                 <section class="trip-leg" aria-labelledby="@($"leg-{position}-heading")">
                     <h3 id="@($"leg-{position}-heading")">Leg @(position + 1)</h3>
-                    <PlaceSelector Label="From" Id="@($"leg-{position}-from")" Types="@(position == 0 ? FirstTypes : AllTypes)" CanCreateTransportStops="@canCreateSharedStops" Value="leg.From" ValueChanged="place => leg.From = place" Error="@Message($"legs[{position}].from")" />
-                    <PlaceSelector Label="To" Id="@($"leg-{position}-to")" CanCreateTransportStops="@canCreateSharedStops" Value="leg.To" ValueChanged="place => leg.To = place" Error="@Message($"legs[{position}].to")" />
+                    <PlaceSelector Label="From" Id="@($"leg-{position}-from")" Types="@(position == 0 ? FirstTypes : AllTypes)" Value="leg.From" ValueChanged="place => leg.From = place" Error="@Message($"legs[{position}].from")" />
+                    <PlaceSelector Label="To" Id="@($"leg-{position}-to")" Value="leg.To" ValueChanged="place => leg.To = place" Error="@Message($"legs[{position}].to")" />
                     <div class="trip-field">
                         <label for="@($"leg-{position}-transport")">Transport mode *</label>
                         <select id="@($"leg-{position}-transport")" aria-invalid="@Invalid($"legs[{position}].transport")" value="@(leg.TransportModeId?.ToString() ?? "")" @onchange="change => ChooseMode(leg, change.Value?.ToString())">

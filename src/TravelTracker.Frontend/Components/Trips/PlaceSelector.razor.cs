@@ -29,7 +29,6 @@ public partial class PlaceSelector : IDisposable
 
     /** Kinds the traveller may pick from: accommodation, attraction and transport_stop. */
     [Parameter] public string[] Types { get; set; } = ["accommodation", "attraction", "transport_stop"];
-    [Parameter] public bool CanCreateTransportStops { get; set; }
 
     /** The current choice. */
     [Parameter] public TripPlaceChoice? Value { get; set; }

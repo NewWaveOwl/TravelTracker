@@ -72,6 +72,68 @@ public sealed class TripPlannerTests : BunitContext
     }
 
     [Fact]
+    public async Task TravellerReplacesDraftTransportStopAndSavesWithoutWritingToCatalogue()
+    {
+        var original = Museum with { Type = "transport_stop", Name = "Original station" };
+        var replacement = original with { PlaceId = Guid.Parse("00000000-0000-0000-0000-000000009014"), Name = "Saved station" };
+        var outbound = Saved.Legs[0] with { To = original };
+        var onward = new TripDto.Leg(2, original, Museum, Train, Start.AddHours(2), Start.AddHours(3));
+        var trip = Saved with { Legs = [outbound, onward] };
+        var updated = trip with { Legs = [outbound with { To = replacement }, onward with { From = replacement }] };
+        SaveTripRequest? saved = null;
+        Configure(async (request, token) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/v1/route-points")
+            {
+                Assert.Equal(HttpMethod.Get, request.Method);
+                Assert.Contains("type=transport_stop", request.RequestUri.Query);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new[] { new RoutePointDto(replacement.PlaceId, replacement.Type,
+                        replacement.Name, replacement.Address, replacement.Lat, replacement.Lon, null) })
+                };
+            }
+
+            Assert.Equal($"/api/v1/trips/{TripId:D}", request.RequestUri.AbsolutePath);
+            if (request.Method == HttpMethod.Get)
+                return Json(trip);
+            Assert.Equal(HttpMethod.Put, request.Method);
+            saved = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
+            return Json(updated, "\"2\"");
+        }, scopes: "catalogue.read catalogue.write users.read users.write settings.read settings.write trips.read trips.write");
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, 45.52m, -73.59m)));
+
+        Click(page, "Review on map");
+        Assert.Contains("replace it with a saved stop", page.Markup);
+        Assert.DoesNotContain("Save catalogue entries", page.Markup);
+        Click(page, "Back to stops");
+        page.FindAll(".trip-stop")[1].Click();
+        Assert.Empty(page.FindAll(".trip-place"));
+        page.Find(".trip-search input").Change("Saved station");
+        page.Find(".trip-search").Submit();
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".trip-search-results button")));
+        page.Find(".trip-search-results button").Click();
+        Assert.Equal(3, page.FindAll(".trip-stop").Count);
+
+        Click(page, "Review on map");
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
+        Assert.Collection(saved!.Legs, first =>
+        {
+            Assert.Equal(replacement.PlaceId, first.To.PlaceId);
+            Assert.Equal(Train.TransportModeId, first.TransportModeId);
+            Assert.Equal(outbound.Departure, first.Departure);
+        }, second =>
+        {
+            Assert.Equal(replacement.PlaceId, second.From.PlaceId);
+            Assert.Equal(Museum.PlaceId, second.To.PlaceId);
+        });
+    }
+
+    [Fact]
     public async Task PastedSavedTripLinkFitsTheNewTripInsteadOfKeepingThePreviousCamera()
     {
         var otherId = Guid.NewGuid();
@@ -1445,14 +1507,14 @@ public sealed class TripPlannerTests : BunitContext
     }
 
     void Configure(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond,
-        bool withAccommodationCatalogue = false)
+        bool withAccommodationCatalogue = false, string? scopes = null)
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         var clock = new FakeTimeProvider(Start);
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
         authentication.SignIn("test-token", Start.AddHours(1),
-            withAccommodationCatalogue ? "catalogue.read" : "users.read users.write");
+            scopes ?? (withAccommodationCatalogue ? "catalogue.read" : "users.read users.write"));
         Services.AddSingleton<TimeProvider>(clock);
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         var directory = new ServiceDirectory(new Dictionary<string, string>

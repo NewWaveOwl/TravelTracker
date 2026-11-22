@@ -45,8 +45,6 @@ public sealed class TripPlacesClient(AttractionsClient attractions, TransportCli
                 return FromAttraction(await attractions.CreateAsync(Fields(place, ("estimatedVisitMinutes", DefaultVisitMinutes)), cancellationToken));
             case "accommodation":
                 return FromAccommodation(await accommodations.CreateAsync(new CreateAccommodationRequest(place.Name, place.Address, place.Lat, place.Lon, "private"), cancellationToken));
-            case "transport_stop":
-                return FromRoutePoint(await transport.CreatePointAsync(Fields(place, ("type", "transport_stop")), cancellationToken));
             default:
                 throw new ArgumentOutOfRangeException(nameof(place), place.Type, "Unsupported trip place type.");
         }

@@ -11,7 +11,17 @@ namespace TravelTracker.Users.Tests;
 public sealed class BootstrapApiTests
 {
     const string Bootstrap = "/api/v1/users/bootstrap-first-administrator";
-    const string DefaultTravellerScopes = "catalogue.read catalogue.write users.read users.write settings.read settings.write trips.read trips.write";
+    static string DefaultTravellerScopes()
+    {
+        var hook = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "supabase-auth-hook.sql"));
+        var declaration = System.Text.RegularExpressions.Regex.Match(hook, @"traveller_scopes text\[\] := ARRAY\[([^\]]+)\]");
+        Assert.True(declaration.Success);
+        var scopes = System.Text.RegularExpressions.Regex.Matches(declaration.Groups[1].Value, @"'([^']+)'")
+            .Select(match => match.Groups[1].Value).ToArray();
+        Assert.Contains("catalogue.read", scopes);
+        Assert.DoesNotContain("users.admin", scopes);
+        return string.Join(" ", scopes);
+    }
 
     static Task<HttpResponseMessage> Provision(HttpClient client, string? secret = UsersApiFactory.Secret)
     {
@@ -128,7 +138,7 @@ public sealed class BootstrapApiTests
     public async Task VerifiedTargetBootstrapsAndReadsRoleWithoutExposingProviderIdentifiers()
     {
         using var app = new UsersApiFactory();
-        var token = app.Token(scope: DefaultTravellerScopes);
+        var token = app.Token(scope: DefaultTravellerScopes());
         using var client = app.Browser(token);
         var response = await Provision(client);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

@@ -35,8 +35,8 @@ public static class ScopePolicies
     /** Reads live account standing through the internal Users access contract. */
     public const string UsersAccess = "users.access";
 
-    /** Lists accounts, changes roles and performs first-administrator bootstrap in the Users service. */
-    public const string UsersAdministration = "users.admin";
+    /** Starts one-time administrator setup using the catalogue read grant. */
+    public const string FirstAdministratorBootstrap = "FirstAdministratorBootstrap";
 
     /**
      * Matches exact, case-sensitive OAuth scopes in space-separated or repeated claims.

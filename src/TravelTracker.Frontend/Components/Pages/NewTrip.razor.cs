@@ -108,6 +108,9 @@ public partial class NewTrip : IAsyncDisposable
     bool HasUnsavedWork => dirty || HasUnconfirmedMarkerChanges;
     bool HasUnconfirmedMarkerChanges => editingMarker is { } marker &&
         (placeName != marker.Place.Name || placeAddress != marker.Place.Address || latitude != marker.Place.Lat || longitude != marker.Place.Lon);
+    bool HasDraftTransportStops => draft.Stops.Any(stop =>
+        stop.Place.Type == "transport_stop" && stop.Place.PlaceId == Guid.Empty);
+
     bool HasPendingCatalogueEntries => draft.Stops.Any(stop => stop.Place.PlaceId == Guid.Empty) ||
         Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(draft.LegTo)
             .Any(leg => leg.Mode?.TransportModeId == Guid.Empty);
@@ -142,7 +145,7 @@ public partial class NewTrip : IAsyncDisposable
     }
 
     ElementReference durationHoursInput;
-    ElementReference stopNameInput;
+    ElementReference stopNameInput, savedStopSearchInput;
     ElementReference toolsToggle;
     bool focusDuration;
     bool focusStopDetails;
@@ -160,7 +163,7 @@ public partial class NewTrip : IAsyncDisposable
         if (focusStopDetails)
         {
             focusStopDetails = false;
-            await stopNameInput.FocusAsync();
+            await (markerType == "transport_stop" ? savedStopSearchInput : stopNameInput).FocusAsync();
         }
         if (focusToolsToggle)
         {
@@ -756,7 +759,7 @@ public partial class NewTrip : IAsyncDisposable
         selected = index;
         if (pendingMode is not { } mode)
         {
-            if (showMap && !review)
+            if (!review && (showMap || draft.Stops[index].Place.Type == "transport_stop"))
                 EditSelectedStop();
             return;
         }
@@ -873,6 +876,8 @@ public partial class NewTrip : IAsyncDisposable
     {
         if (showMap && (editingStopDetails || !placing || type != markerType))
             BeginPlacement();
+        else if (editingStopDetails)
+            CancelMarkerDetails();
         if (type == markerType)
             return;
         markerType = type;
@@ -949,6 +954,12 @@ public partial class NewTrip : IAsyncDisposable
         stopsStep = true;
         mapTool = MapTool.Markers;
         markerType = marker.Place.Type;
+        if (markerType == "transport_stop")
+        {
+            places = [];
+            searched = false;
+            searchValue = marker.Place.PlaceId == Guid.Empty ? "" : marker.Place.Name;
+        }
         (placeName, placeAddress, latitude, longitude) =
             (marker.Place.Name, marker.Place.Address, marker.Place.Lat, marker.Place.Lon);
     }
@@ -988,6 +999,24 @@ public partial class NewTrip : IAsyncDisposable
         placeName = name;
         placeAddress = address;
         (latitude, longitude) = position;
+    }
+
+    /**
+     * Uses a saved place, preserving connections when replacing a transport stop.
+     * @param place The selected catalogue result.
+     */
+    void SelectSavedPlace(TripPlaceDto place)
+    {
+        if (editingStopDetails && editingMarker is { } marker && marker.Place.Type == "transport_stop")
+        {
+            EditTripValue(marker.Place, place, value => draft.UpdatePlace(marker, value));
+            CancelMarkerDetails();
+            places = [];
+            searched = false;
+            return;
+        }
+
+        AddStop(place, showMap ? insertAfter : null);
     }
 
     void AddPickedStop()
@@ -1188,7 +1217,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Confirms catalogue references independently of saving the itinerary. */
     async Task SaveCatalogueEntriesAsync()
     {
-        if (busy || savingCatalogue || !HasPendingCatalogueEntries)
+        if (busy || savingCatalogue || HasDraftTransportStops || !HasPendingCatalogueEntries)
             return;
 
         var (request, problems) = draft.Build();
