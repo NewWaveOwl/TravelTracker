@@ -53,7 +53,6 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
      */
     [HttpPut("me/picture")]
     [Authorize(Policy = ScopePolicies.UsersWrite)]
-    [Consumes("image/png", "image/jpeg")]
     public async Task<IResult> ReplacePicture()
     {
         Response.Headers.CacheControl = "private, no-store";

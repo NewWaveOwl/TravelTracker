@@ -65,7 +65,7 @@ public sealed class UserPictureApiTests
 
         var (input, mediaType) = scenario switch
         {
-            "declared-unsupported" => (png, "image/gif"),
+            "declared-unsupported" => (Image(SKEncodedImageFormat.Png, 24), "image/gif"),
             "spoofed" => ("GIF89a"u8.ToArray(), "image/png"),
             "wrong-format" => (png, "image/jpeg"),
             "empty" => (Array.Empty<byte>(), "image/png"),
