@@ -9,6 +9,7 @@ namespace TravelTracker.Users.Tests.Support;
 public sealed class MemoryUserRepository : IUserRepository, ProfileRepository
 {
     readonly Dictionary<Guid, UserAccount> accounts = [];
+    readonly Dictionary<Guid, byte[]> pictures = [];
     Guid? bootstrapAccount;
     public UserAccount? Account => bootstrapAccount is { } id ? accounts.GetValueOrDefault(id) : accounts.Values.FirstOrDefault();
     public int BootstrapCalls { get; private set; }
@@ -64,6 +65,21 @@ public sealed class MemoryUserRepository : IUserRepository, ProfileRepository
     {
         if (StorageUnavailable) throw new InvalidOperationException("test-storage-details");
         return FindAsync(identity.Issuer, identity.Subject, cancellationToken);
+    }
+
+    public async Task<(bool CanRead, byte[]? Picture)> ReadPictureAsync(ProviderIdentity identity, CancellationToken cancellationToken)
+    {
+        var account = await FindByProviderIdentityAsync(identity, cancellationToken);
+        if (account?.Status == UserStatus.Deactivated) return (false, null);
+        return (true, account is null ? null : pictures.GetValueOrDefault(account.PublicId));
+    }
+
+    public async Task<bool> ReplacePictureAsync(ProviderIdentity identity, byte[] picture, CancellationToken cancellationToken)
+    {
+        var account = await FindByProviderIdentityAsync(identity, cancellationToken);
+        if (account?.Status != UserStatus.Active) return false;
+        pictures[account.PublicId] = picture;
+        return true;
     }
 
     public Task<UserAccount?> FindByPublicIdAsync(Guid publicId, CancellationToken cancellationToken)

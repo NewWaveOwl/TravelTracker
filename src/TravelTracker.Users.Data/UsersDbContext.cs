@@ -21,6 +21,14 @@ public sealed class UsersDbContext(DbContextOptions<UsersDbContext> options) : D
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new UserRecordConfiguration());
+        modelBuilder.Entity<UserPictureRow>(row =>
+        {
+            row.ToTable("UserPictures");
+            row.HasKey(picture => picture.AccountId);
+            row.Property(picture => picture.AccountId).ValueGeneratedNever();
+            row.HasOne<UserRecord>().WithOne(account => account.Picture)
+                .HasForeignKey<UserPictureRow>(picture => picture.AccountId);
+        });
         modelBuilder.Entity<BootstrapRow>(row =>
         {
             row.ToTable("AdministratorBootstrap", table => table.HasCheckConstraint("CK_AdministratorBootstrap_Singleton", "\"Id\" = 1"));

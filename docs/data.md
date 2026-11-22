@@ -26,6 +26,12 @@ public account IDs and never merges accounts based on matching email addresses.
 
 Use a separate `ConnectionStrings:Users`; the Attractions service consumes the authenticated HTTPS access contract and never reads Users tables. Production uses PostgreSQL. Users HTTP tests use an isolated test repository; marked PostgreSQL tests exercise migrations, profile persistence, concurrency, permanent bootstrap consumption and audit rollback against disposable databases.
 
+`UserPictures` holds at most one normalized PNG per account. Its foreign key
+references `UserAccounts`, with cascade delete. Picture replacements advance
+the account concurrency token in the same save as the picture write. The
+profile-picture migration creates this table without changing existing
+accounts or identity mappings. Rolling it back drops saved pictures.
+
 ## Accommodations persistence
 
 `TravelTracker.Accommodations.Data` references its service-owned Domain and EF Core/Npgsql. Its initial migration creates the `Accommodations` catalogue table with a UUID primary key, name, address, decimal coordinates, validated owner issuer/subject and `IsShared`. Database checks enforce nonblank names, coordinate ranges and nonblank owner identity. The repository applies private/shared visibility predicates in PostgreSQL before materializing search or detail results. The Accommodations database is separate from the historical shared schema and every other service database. Configure `ConnectionStrings:Accommodations`; migrations are opt-in at startup through `Database:ApplyMigrations`.

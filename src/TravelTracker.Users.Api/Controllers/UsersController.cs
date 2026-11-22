@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TravelTracker.Security.Authentication;
 using TravelTracker.Users.Api.Contracts;
@@ -26,6 +27,61 @@ namespace TravelTracker.Users.Api.Controllers;
 public sealed class UsersController(IUserRepository repository, ProfileRepository profiles, UserProfileService userProfiles,
     BootstrapService bootstrap, IConfiguration configuration, ILogger<UsersController> logger) : ControllerBase
 {
+    private const string PicturePath = "/api/v1/users/me/picture";
+
+    /**
+     * Reads the private image for the validated caller without provisioning an account.
+     * @return The stored PNG, or a missing-picture, authentication or standing failure.
+     */
+    [HttpGet("me/picture")]
+    [Authorize(Policy = ScopePolicies.UsersRead)]
+    public async Task<IResult> ReadPicture()
+    {
+        Response.Headers.CacheControl = "private, no-store";
+        if (!Request.IsHttps) return Results.Problem(statusCode: 400, title: "Account access requires HTTPS.");
+        if (CurrentIdentity() is not { } identity) return Results.Unauthorized();
+        var (canRead, picture) = await profiles.ReadPictureAsync(identity, HttpContext.RequestAborted);
+        if (!canRead) return Results.Forbid();
+        if (picture is null) return Results.NotFound();
+        Response.Headers.XContentTypeOptions = "nosniff";
+        return Results.File(picture, "image/png");
+    }
+
+    /**
+     * Validates a raw image and replaces the active owner's existing picture atomically.
+     * @return A private read reference or a validation, authorization or concurrency failure.
+     */
+    [HttpPut("me/picture")]
+    [Authorize(Policy = ScopePolicies.UsersWrite)]
+    public async Task<IResult> ReplacePicture()
+    {
+        Response.Headers.CacheControl = "private, no-store";
+        if (!Request.IsHttps) return Results.Problem(statusCode: 400, title: "Account access requires HTTPS.");
+        if (CurrentIdentity() is not { } identity) return Results.Unauthorized();
+        var cancellationToken = HttpContext.RequestAborted;
+        var account = await profiles.FindByProviderIdentityAsync(identity, cancellationToken);
+        if (account?.Status != UserStatus.Active) return Results.Forbid();
+
+        var (status, picture) = await ProfilePictureUpload.DecodeAsync(Request, cancellationToken);
+        if (picture is null) return Results.Problem(statusCode: status, title: status switch
+        {
+            StatusCodes.Status413PayloadTooLarge => "The profile picture exceeds the byte or dimension limit.",
+            StatusCodes.Status415UnsupportedMediaType => "Upload a single PNG or JPEG image with its matching media type.",
+            _ => "The profile picture is empty or malformed."
+        });
+
+        try
+        {
+            if (!await profiles.ReplacePictureAsync(identity, picture, cancellationToken)) return Results.Forbid();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Problem(statusCode: 409, title: "The profile changed. Reload it before trying again.");
+        }
+        Response.Headers.Location = PicturePath;
+        return Results.NoContent();
+    }
+
     /**
      * Reads or provisions the account belonging to the validated provider identity.
      * @return The caller's profile or an authentication or standing failure.

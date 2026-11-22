@@ -15,6 +15,45 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
     /** Allocates internal keys for new account rows while the caller holds the provisioning lock. */
     private static readonly EntityIdGenerator IdGenerator = new();
 
+    /** @inheritdoc */
+    public async Task<(bool CanRead, byte[]? Picture)> ReadPictureAsync(ProviderIdentity identity, CancellationToken cancellationToken)
+    {
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        var record = await database.Accounts.AsNoTracking()
+            .Where(item => item.Issuer == identity.Issuer && item.Subject == identity.Subject)
+            .Select(item => new
+            {
+                item.Status,
+                Picture = item.Status == "deactivated" || item.Picture == null ? null : item.Picture.Content
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        return (record?.Status != "deactivated", record?.Picture);
+    }
+
+    /** @inheritdoc */
+    public async Task<bool> ReplacePictureAsync(ProviderIdentity identity, byte[] picture, CancellationToken cancellationToken)
+    {
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        var record = await database.Accounts.Include(item => item.Picture).SingleOrDefaultAsync(
+            item => item.Issuer == identity.Issuer && item.Subject == identity.Subject, cancellationToken);
+        if (record?.Status != "active") return false;
+        if (record.Picture is null)
+            record.Picture = new UserPictureRow { AccountId = record.Id, Content = picture };
+        else
+            record.Picture.Content = picture;
+        record.ConcurrencyToken = Guid.NewGuid();
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException failure) when (failure.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "PK_UserPictures" })
+        {
+            throw new DbUpdateConcurrencyException("The picture was concurrently created.", failure);
+        }
+        return true;
+    }
+
     /**
      * Finds an account by the exact validated issuer and subject pair.
      * @param identity The identity-provider issuer and subject.

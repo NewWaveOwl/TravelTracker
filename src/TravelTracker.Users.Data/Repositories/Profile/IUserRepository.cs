@@ -9,6 +9,22 @@ namespace TravelTracker.Users.Data.Repositories.Profile;
 public interface IUserRepository
 {
     /**
+     * Reads the current caller's picture and access state without provisioning.
+     * @param identity The validated provider identity.
+     * @param cancellationToken Cancels the lookup.
+     * @return Whether access is allowed and, if saved, the normalized PNG.
+     */
+    Task<(bool CanRead, byte[]? Picture)> ReadPictureAsync(ProviderIdentity identity, CancellationToken cancellationToken);
+
+    /**
+     * Replaces the picture only if the owner remains active.
+     * @param identity The validated provider identity.
+     * @param picture The decoded and re-encoded PNG.
+     * @param cancellationToken Cancels the operation.
+     * @return Whether the replacement was saved.
+     */
+    Task<bool> ReplacePictureAsync(ProviderIdentity identity, byte[] picture, CancellationToken cancellationToken);
+    /**
      * Finds an account by its validated provider identity.
      * @param identity The identity-provider issuer and subject.
      * @param cancellationToken Cancels the lookup.
