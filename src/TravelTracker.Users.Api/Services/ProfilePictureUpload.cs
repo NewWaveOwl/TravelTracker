@@ -101,7 +101,7 @@ internal static class ProfilePictureUpload
             SkewY = yx, ScaleY = yy, TransY = y,
             Persp2 = 1
         });
-        canvas.DrawBitmap(source, 0, 0);
+        canvas.DrawBitmap(source, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None), null);
         return result;
     }
 
