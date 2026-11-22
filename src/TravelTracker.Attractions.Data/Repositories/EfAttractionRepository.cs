@@ -16,21 +16,20 @@ public sealed class EfAttractionRepository(AttractionsDbContext database) : IAtt
      * @param issuer The selected owner issuer.
      * @param subject The selected owner subject.
      * @param includeShared Whether to include shared catalogue rows.
-     * @param nameFilter Optional case-insensitive name substring.
+     * @param nameFilter Optional ordinal case-insensitive name substring.
      * @param cancellationToken Cancels database I/O.
-     * @return Detached rows selected for the caller, ordered by name then public identifier.
+     * @return Detached rows selected for the caller, ordered by ordinal case-insensitive name then public identifier.
      */
     public async Task<List<Attraction>> GetVisibleAsync(string issuer, string subject, bool includeShared, string? nameFilter = null, CancellationToken cancellationToken = default)
     {
         var visible = database.Attractions.AsNoTracking().Where(row => row.IsShared && includeShared ||
             !row.IsShared && row.OwnerIssuer == issuer && row.OwnerSubject == subject);
-        if (!string.IsNullOrWhiteSpace(nameFilter))
-        {
-            var needle = nameFilter.Trim().ToLowerInvariant();
-            visible = visible.Where(row => row.Name.ToLower().Contains(needle));
-        }
-        var rows = await visible.OrderBy(row => row.Name.ToLower()).ThenBy(row => row.PublicId).ToListAsync(cancellationToken);
-        return rows.Select(ToDomain).ToList();
+        var rows = await visible.ToListAsync(cancellationToken);
+        var needle = nameFilter?.Trim();
+        // Visibility stays in SQL; .NET ordinal comparison preserves the contract independently of database collation.
+        return rows.Where(row => string.IsNullOrEmpty(needle) || row.Name.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(row => row.Name, StringComparer.OrdinalIgnoreCase).ThenBy(row => row.PublicId)
+            .Select(ToDomain).ToList();
     }
 
     /**
