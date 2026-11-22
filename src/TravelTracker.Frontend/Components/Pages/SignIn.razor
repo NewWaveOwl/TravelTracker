@@ -13,7 +13,11 @@ else
 {
     <section class="profile-panel" aria-labelledby="sign-in-heading">
         <h2 id="sign-in-heading">@(Register ? "Join TravelTracker" : "Welcome back")</h2>
-        @if (Error == "unavailable")
+        @if (Error == "rate-limit")
+        {
+            <p role="alert">Too many authentication attempts. Wait a moment and try again.</p>
+        }
+        else if (Error == "unavailable")
         {
             <p role="alert">Sign-in is temporarily unavailable. Please try again later.</p>
         }
