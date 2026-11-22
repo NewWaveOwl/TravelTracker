@@ -264,6 +264,9 @@ export function watchViewport(svg, container, map, camera) {
     svg.addEventListener("keydown", event => {
         if (event.target === svg && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key))
             event.preventDefault();
+        // SVG buttons activate in Blazor; Space must not also scroll the page.
+        if (event.key === " " && event.target.closest(".trip-marker, .marker-remove"))
+            event.preventDefault();
     }, options);
 
     const markerType = "application/x-traveltracker-marker";
