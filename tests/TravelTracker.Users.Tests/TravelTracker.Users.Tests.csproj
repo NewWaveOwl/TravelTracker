@@ -12,5 +12,6 @@
     <ProjectReference Include="../../src/TravelTracker.Users.Api/TravelTracker.Users.Api.csproj" />
     <ProjectReference Include="../../src/TravelTracker.Users.Data/TravelTracker.Users.Data.csproj" />
     <ProjectReference Include="../../src/TravelTracker.Users.Domain/TravelTracker.Users.Domain.csproj" />
+    <None Include="../../src/Database/supabase-auth-hook.sql" Link="supabase-auth-hook.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

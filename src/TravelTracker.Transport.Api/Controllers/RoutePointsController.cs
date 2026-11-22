@@ -14,6 +14,7 @@ namespace TravelTracker.Transport.Api.Controllers;
  */
 [ApiController]
 [Route("api/v1/route-points")]
+[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
 public sealed class RoutePointsController(IRoutePointService service) : ControllerBase
 {
     /**
@@ -25,8 +26,7 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
      */
     [HttpGet]
     [Authorize(Policy = ScopePolicies.CatalogueRead)]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<RoutePointRecord>>> GetAll(
         [FromQuery, RegularExpression("^(\\s*|accommodation|attraction|transport_stop)\\z")] string? type,
         [FromQuery] string? name, CancellationToken cancellationToken)
@@ -46,6 +46,7 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
      */
     [HttpGet("{id}")]
     [Authorize(Policy = ScopePolicies.CatalogueRead)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<RoutePointRecord>> GetById(Guid id, CancellationToken cancellationToken)
     {
@@ -61,6 +62,7 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
      */
     [HttpPost]
     [Authorize(Policy = ScopePolicies.CatalogueWrite)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(RoutePointRecord), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<RoutePointRecord>> Create(CreateRoutePointRequest request, CancellationToken cancellationToken)

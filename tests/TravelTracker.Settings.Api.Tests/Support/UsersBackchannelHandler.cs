@@ -19,6 +19,8 @@ internal sealed class UsersBackchannelHandler : HttpMessageHandler
 
     internal int Calls { get; private set; }
     internal bool Unavailable { get; set; }
+    internal bool MalformedStandingResponse { get; set; }
+    internal string? UnknownSubject { get; set; }
 
     /**
      * returns the requested account identity or standing for an authorized service request.
@@ -44,6 +46,7 @@ internal sealed class UsersBackchannelHandler : HttpMessageHandler
             var subject = payload.GetProperty("subject").GetString();
             if (issuer != ApiFactory.Issuer || string.IsNullOrWhiteSpace(subject))
                 return new HttpResponseMessage(HttpStatusCode.BadRequest);
+            if (subject == UnknownSubject) return new HttpResponseMessage(HttpStatusCode.NotFound);
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { userId = ResolveIdentity(subject) }) };
         }
 
@@ -52,6 +55,11 @@ internal sealed class UsersBackchannelHandler : HttpMessageHandler
             pathParts[0] == "internal" && pathParts[1] == "users" && pathParts[3] == "access" &&
             Guid.TryParse(pathParts[2], out var userId) && TryGetSubject(userId, out var resolvedSubject))
         {
+            if (MalformedStandingResponse)
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{not-json", System.Text.Encoding.UTF8, "application/json")
+                };
             var status = resolvedSubject switch
             {
                 "banned" => "banned",

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using TravelTracker.Transport.Api.Errors;
 using Microsoft.OpenApi;
 using TravelTracker.Security.Authentication;
+using TravelTracker.Transport.Api.Access;
 using TravelTracker.Transport.Api.Services;
 using TravelTracker.Transport.Data;
 using TravelTracker.Transport.Data.Repositories;
@@ -37,6 +38,9 @@ public class TransportProgram
         builder.Services.AddScoped<IRoutePointRepository, EfRoutePointRepository>();
         builder.Services.AddScoped<ITransportModeService, TransportModeService>();
         builder.Services.AddScoped<IRoutePointService, RoutePointService>();
+        builder.Services.AddHttpClient<UsersAccessClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
+            .RemoveAllLoggers()
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         var app = builder.Build();
         app.UseTransportExceptionHandling();
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<TransportProgram>();
@@ -57,6 +61,7 @@ public class TransportProgram
         }
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseMiddleware<TransportAccessMiddleware>();
         app.MapControllers();
         await app.RunAsync();
     }
