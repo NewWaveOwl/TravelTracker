@@ -34,7 +34,7 @@ public sealed class TripMapCanvasTests : BunitContext
     }
 
     [Fact]
-    public async Task SelectingAndEditingOffscreenMarkersPreservesTheCameraUntilFitStops()
+    public async Task SelectingAndEditingOffscreenMarkersPreservesTheCameraUntilRecentering()
     {
         var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
         var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
@@ -51,9 +51,35 @@ public sealed class TripMapCanvasTests : BunitContext
         Assert.Equal(changes, viewport.Invocations["setCamera"].Count);
         Assert.Empty(map.FindAll(".trip-marker"));
 
-        map.Find("button[aria-label='Fit stops']").Click();
+        map.Find("button[aria-label='Recenter map']").Click();
         Assert.Single(map.FindAll(".trip-marker[aria-label='Stop 1: Edited hotel']"));
         Assert.Equal(changes + 1, viewport.Invocations["setCamera"].Count);
+    }
+
+    [Theory]
+    [InlineData(false, 43.6)]
+    [InlineData(true, 43.6)]
+    [InlineData(true, 70)]
+    public async Task RecenterUsesStartingStopOrInitialCenterAndPreservesZoomWithoutPicking(bool withStops, double latitude)
+    {
+        var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
+        var viewport = module.SetupModule("watchViewport", _ => true);
+        viewport.SetupVoid("setCamera", _ => true).SetVoidResult();
+        var start = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Start", "", (decimal)latitude, -79.3m);
+        var destination = start with { PlaceId = Guid.NewGuid(), Name = "Destination", Lat = 48.8m, Lon = 2.3m };
+        var picks = 0;
+        var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, withStops ? [start, destination] : [])
+            .Add(component => component.SelectedIndex, 1).Add(component => component.CanPick, true)
+            .Add(component => component.LocationPicked, _ => picks++));
+        map.Find("[aria-label='Zoom in']").Click();
+        await map.InvokeAsync(() => map.Instance.PanByDrag(500, 100));
+        var previous = Assert.IsType<double[]>(viewport.Invocations["setCamera"].Last().Arguments[0]);
+        map.Find("[aria-label='Recenter map']").Click();
+        var camera = Assert.IsType<double[]>(viewport.Invocations["setCamera"].Last().Arguments[0]);
+        Assert.Equal(withStops ? -79.3 : -73.5674, camera[0], 6);
+        Assert.Equal(withStops ? latitude : 45.5019, camera[1], 6);
+        Assert.Equal(previous[2], camera[2]);
+        Assert.Equal(0, picks);
     }
 
     [Fact]
@@ -113,13 +139,14 @@ public sealed class TripMapCanvasTests : BunitContext
         (decimal Lat, decimal Lon) selected = default;
         var map = Render<TripMapCanvas>(parameters => parameters
             .Add(component => component.CanPick, true)
+            .Add(component => component.FullScreen, true)
             .Add(component => component.LocationPicked, point => selected = point));
 
         var controls = map.FindAll(".map-controls button");
-        Assert.Equal(3, controls.Count);
-        Assert.Equal(new[] { "zoom-in.svg", "zoom-out.svg", "map-center.svg" },
+        Assert.Equal(4, controls.Count);
+        Assert.Equal(new[] { "zoom-in.svg", "zoom-out.svg", "map-center.svg", "pin-attraction.svg" },
             map.FindAll(".map-controls img").Select(image => Path.GetFileName(image.GetAttribute("src"))));
-        var center = map.Find("button[aria-label='Pick map center']");
+        var center = map.Find(".map-controls button[aria-label='Pick map center']");
         center.Click();
         var initial = selected;
         Assert.Equal((45.5019m, -73.5674m), initial);
@@ -127,6 +154,9 @@ public sealed class TripMapCanvasTests : BunitContext
         center.Click();
         Assert.Equal(initial.Lat, selected.Lat);
         Assert.True(selected.Lon > initial.Lon);
+        map.Render(parameters => parameters.Add(component => component.CanPick, false));
+        Assert.Empty(map.FindAll("[aria-label='Pick map center']"));
+        Assert.Single(map.FindAll("[aria-label='Recenter map']"));
     }
 
     [Fact]

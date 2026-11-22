@@ -145,17 +145,25 @@ public sealed class AttractionWorkspaceTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("No attractions found", page.Markup));
         page.Find(".attractions-heading button").Click();
         page.Find("#attraction-name").Input("Unsaved museum");
+        page.Find("#attraction-address").Input("123 Museum Street");
         page.Find("#attraction-lat").Input("45");
         page.Find("#attraction-lon").Input("-73");
         page.Find(".attraction-map-action button").Click();
         Assert.Contains("placeholder", page.Find(".location-picker").TextContent);
+        Assert.Contains("123 Museum Street", page.Find(".selected-location").TextContent);
         page.Find("#map-lat").Input("46");
+        page.Find("#map-lon").Input("-74");
         page.Find(".selected-location button[type=button]").Click();
         Assert.Equal("45", page.Find("#attraction-lat").GetAttribute("value"));
+        Assert.Equal("-73", page.Find("#attraction-lon").GetAttribute("value"));
+        Assert.Equal("123 Museum Street", page.Find("#attraction-address").GetAttribute("value"));
         page.Find(".attraction-map-action button").Click();
         page.Find("#map-lat").Input("46");
+        page.Find("#map-lon").Input("-74");
         page.Find(".selected-location").Submit();
         Assert.Equal("46", page.Find("#attraction-lat").GetAttribute("value"));
+        Assert.Equal("-74", page.Find("#attraction-lon").GetAttribute("value"));
+        Assert.Equal("123 Museum Street", page.Find("#attraction-address").GetAttribute("value"));
         Assert.Equal("Unsaved museum", page.Find("#attraction-name").GetAttribute("value"));
     }
 

@@ -99,8 +99,8 @@
                 {
                     <small>PLACE DETAILS</small><h2 id="accommodation-details-heading" tabindex="-1" @ref="detailsHeading">@selected.Name</h2>
                     <span class="accommodation-visibility">@VisibilityLabel(selected.Visibility)</span>
-                    <p>@(string.IsNullOrWhiteSpace(selected.Address) ? "Address not provided" : selected.Address)</p>
-                    <dl><dt>Latitude</dt><dd>@selected.Lat</dd><dt>Longitude</dt><dd>@selected.Lon</dd></dl>
+                    <p class="location-address">@(string.IsNullOrWhiteSpace(selected.Address) ? "Street address not provided" : selected.Address)</p>
+                    <dl class="location-coordinates"><dt>Latitude</dt><dd>@selected.Lat</dd><dt>Longitude</dt><dd>@selected.Lon</dd></dl>
                     @if (selected.AccommodationId == SelectedAccommodationId)
                     {
                         <p class="accommodation-status" role="status">Saved place selected for this trip draft.</p>
@@ -123,7 +123,7 @@
         <div class="accommodation-modal-backdrop" @onclick="CloseCreate">
             <section class="accommodation-modal" role="dialog" aria-modal="true" aria-labelledby="accommodation-create-heading" @onclick:stopPropagation @onkeydown="HandleModalKeyDown">
                 <span class="visually-hidden" tabindex="0" @onfocus="FocusLastModalControl"></span>
-                <header><div><small>ADD TO YOUR CATALOGUE</small><h2 id="accommodation-create-heading">Add an accommodation</h2></div><button type="button" class="secondary" aria-label="Close add accommodation form" @onclick="CloseCreate" disabled="@saving">Close</button></header>
+                <header><div><small>ADD TO YOUR CATALOGUE</small><h2 id="accommodation-create-heading">Add an accommodation</h2></div><button type="button" class="secondary" aria-label="Close add accommodation form" title="Close add accommodation form" @onclick="CloseCreate" disabled="@saving"><img src="assets/icons/close.svg" alt="" width="24" height="24" /></button></header>
                 <p>Your place is private by default. Shared places are available to all travellers.</p>
                 @if (formError is not null)
                 {

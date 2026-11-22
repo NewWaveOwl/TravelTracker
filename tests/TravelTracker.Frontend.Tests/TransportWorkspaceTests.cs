@@ -160,6 +160,7 @@ public sealed class TransportWorkspaceTests : BunitContext
         page.WaitForAssertion(() => Assert.True(page.Markup.Contains("Saved train"), page.Markup));
         page.FindAll("button.transport-card").First().Click();
         page.Find("#new-point-name").Change("Saved station");
+        page.Find("#new-point-address").Change(Station.Address);
         page.Find("#new-point-lat").Change("43.6");
         page.Find("#new-point-lon").Change("-79.3");
         page.Find(".point-create").Submit();
@@ -167,7 +168,13 @@ public sealed class TransportWorkspaceTests : BunitContext
         Assert.NotNull(fields);
         Assert.DoesNotContain("routePointId", fields.Keys);
         Assert.DoesNotContain("departure", fields.Keys);
+        Assert.Equal(Station.Address, fields["address"].GetString());
         Assert.Equal(43.6m, fields["lat"].GetDecimal());
+        Assert.Equal(-79.3m, fields["lon"].GetDecimal());
+        var departure = page.Find("#choose-departure").TextContent;
+        Assert.Contains(Station.Address, departure);
+        Assert.Contains("Latitude: 43.6", departure);
+        Assert.Contains("Longitude: -79.3", departure);
     }
 
     [Fact]

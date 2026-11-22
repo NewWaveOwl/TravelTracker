@@ -21,3 +21,7 @@
 .movable-panel-controls button:focus-visible { outline: 3px solid currentColor; outline-offset: -3px; }
 .movable-panel-body { min-height: 0; overflow: auto; scrollbar-width: thin; }
 .movable-panel-instructions { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.movable-panel-handle { width: 44px; height: 44px; padding: 10px; }
+.movable-panel-handle img { width: 24px; height: 24px; }
+.itinerary-panel .movable-panel-handle img { filter: invert(1); }

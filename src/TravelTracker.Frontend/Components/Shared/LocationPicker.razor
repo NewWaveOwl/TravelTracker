@@ -14,13 +14,15 @@
         <form class="selected-location" @onsubmit="UseAsync" @onsubmit:preventDefault>
             <h2>Selected location</h2>
             <h3>@Name</h3>
-            <p>@Address</p>
+            <p class="location-address">@(string.IsNullOrWhiteSpace(Address) ? "Street address not provided" : Address)</p>
             @if (error is not null)
             {
                 <p class="field-error" role="alert">@error</p>
             }
-            <AttractionField Id="map-lat" Label="Latitude * (−90 to 90)" @bind-Value="latitude" InputMode="decimal" />
-            <AttractionField Id="map-lon" Label="Longitude * (−180 to 180)" @bind-Value="longitude" InputMode="decimal" />
+            <div class="location-coordinates">
+                <div><AttractionField Id="map-lat" Label="Latitude * (−90 to 90)" @bind-Value="latitude" InputMode="decimal" /></div>
+                <div><AttractionField Id="map-lon" Label="Longitude * (−180 to 180)" @bind-Value="longitude" InputMode="decimal" /></div>
+            </div>
             <p>Use this location to fill the attraction’s coordinates. Your other form entries stay as entered.</p>
             <button type="submit">Use this location</button>
             <button type="button" class="secondary" @onclick="Cancel">Cancel</button>

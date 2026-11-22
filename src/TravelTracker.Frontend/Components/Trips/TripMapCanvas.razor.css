@@ -145,3 +145,5 @@
 .trip-marker[data-move-index] { cursor: grab; }
 .full-map svg[data-dragging] .trip-marker[data-move-index] { cursor: grabbing; }
 .full-map svg[data-dragging] .marker-remove { visibility: hidden; }
+
+.map-controls .map-pick-center { width: 44px; height: 44px; }

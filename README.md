@@ -99,7 +99,11 @@ If upgrading an older Auth0 launcher setup, **rename** `.traveltracker-launch.js
 
 The launcher prints the internal service token's expiry. Restart before it expires; it does not silently refresh the service session.
 
-The **Itinerary**, **Map tools** palette and **Stop editor** panels have labelled movement handles. Drag a handle with a mouse or touch, or focus it and use arrow keys (Shift for larger steps). **Home**, a panel's **Reset**, or **Reset panel layout** restores its position without clearing trip edits. Panels remain in a responsive grid until moved; on phones, scroll below the map to reach them. Movement stays within the visible viewport below the save toolbar, and panel contents scroll independently of their handles.
+In **Map View**, the **Itinerary**, **Map tools** palette and **Stop editor** panels have icon-only movement handles. Drag a handle with a mouse or touch, or focus it and use arrow keys (Shift for larger steps). Double-click or double-tap the handle, or press **Home**, to restore its position without clearing trip edits. Panels remain in a responsive grid until moved; on phones, scroll below the map to reach them. Movement stays within the visible viewport below the save toolbar, and panel contents scroll independently of their handles. The **Trip** tab keeps its panels in place without movement controls.
+
+In the **Map** and **Trip** workspaces, choose the beginning and ending days together in the **Trip duration** calendar. A newly selected range includes both full days in the trip's time zone; each connection keeps its own departure and arrival times. The map's **Recenter** control returns to the first trip stop, or the initial map position when the trip has no stops.
+
+Place forms and details show the **street address** prominently, with **latitude and longitude** underneath in smaller text. In Map View, pick the map position and enter its street address; you can also adjust the coordinates.
 
 ### Troubleshooting database login
 

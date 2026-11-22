@@ -51,7 +51,6 @@ public partial class NewTrip : IAsyncDisposable
     readonly Dictionary<TripPlaceDto, HashSet<Guid>> pendingPlaceCreates = [];
     readonly HashSet<string> pendingModeCreates = new(StringComparer.OrdinalIgnoreCase);
     ElementReference plannerElement;
-    int panelResetVersion;
     Task<IJSObjectReference?>? undoShortcut;
     TripPlannerDraft draft = new();
     IReadOnlyList<TripPlaceDto> places = [];
@@ -216,6 +215,35 @@ public partial class NewTrip : IAsyncDisposable
         if (TimeSpan.TryParseExact(change.Value?.ToString(), "c", CultureInfo.InvariantCulture, out var offset) &&
             options.Contains(offset))
             EditTripValue(previous, new TripPlannerDraft.OffsetChoice(time, draft.TimeZone.Trim(), offset), apply);
+    }
+
+    /**
+     * Applies an inclusive day range as one undoable edit while retaining untouched saved instants.
+     * @param range The beginning and ending calendar dates in the trip's local time zone.
+     */
+    void SetTripDates((DateOnly Start, DateOnly End) range)
+    {
+        var start = range.Start.ToDateTime(TimeOnly.MinValue);
+        var end = range.End.ToDateTime(TimeOnly.MaxValue);
+        TripPlannerDraft.OffsetChoice? startOffset = null, endOffset = null;
+        var zoneId = draft.TimeZone.Trim();
+        if (TimeZoneInfo.TryFindSystemTimeZoneById(zoneId, out var zone))
+        {
+            while (zone.IsInvalidTime(start) && DateOnly.FromDateTime(start) == range.Start && start < DateTime.MaxValue.AddMinutes(-1)) start = start.AddMinutes(1);
+            while (zone.IsInvalidTime(end) && DateOnly.FromDateTime(end) == range.End && end > DateTime.MinValue.AddMinutes(1)) end = end.AddMinutes(-1);
+            if (DateOnly.FromDateTime(start) != range.Start || DateOnly.FromDateTime(end) != range.End || start > end)
+            {
+                errors = ["Choose dates that exist in the trip's time zone."];
+                actionFailed = false;
+                return;
+            }
+            if (zone.IsAmbiguousTime(start)) startOffset = new(start, zoneId, zone.GetAmbiguousTimeOffsets(start).Max());
+            if (zone.IsAmbiguousTime(end)) endOffset = new(end, zoneId, zone.GetAmbiguousTimeOffsets(end).Min());
+        }
+        if (draft.Start == start && draft.End == end && draft.StartOffset == startOffset && draft.EndOffset == endOffset) return;
+        RememberEdit();
+        (draft.Start, draft.End, draft.StartOffset, draft.EndOffset) = (start, end, startOffset, endOffset);
+        MarkEdited();
     }
 
     void SetDateTime(ChangeEventArgs change, DateTime? previous, Action<DateTime?> apply)
@@ -1006,6 +1034,7 @@ public partial class NewTrip : IAsyncDisposable
             if (place != marker.Place)
                 place = place with { PlaceId = Guid.Empty };
             EditTripValue(marker.Place, place, value => draft.UpdatePlace(marker, value));
+            (placeName, placeAddress) = (place.Name, place.Address);
             return;
         }
         AddStop(new(Guid.Empty, type, placeName.Trim(), placeAddress.Trim(), position.Lat, position.Lon), showMap ? insertAfter : null);

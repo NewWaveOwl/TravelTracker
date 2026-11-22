@@ -90,13 +90,17 @@
                     <button id="choose-departure" class="transport-card @(choosingDeparture ? "selected" : "")" disabled="@busy" aria-pressed="@Pressed(choosingDeparture)" @onclick="() => ChooseEndpoint(true)"><strong>From</strong><span>@(selectedDeparture?.Name ?? "Choose departure")</span>
                     @if (selectedDeparture is not null)
                     {
-                        <small>@Label(selectedDeparture.Type)</small><small>@selectedDeparture.Address</small><small>@selectedDeparture.Lat, @selectedDeparture.Lon</small>
+                        <small>@Label(selectedDeparture.Type)</small>
+                        <span class="location-address">@(string.IsNullOrWhiteSpace(selectedDeparture.Address) ? "Street address not provided" : selectedDeparture.Address)</span>
+                        <span class="location-coordinates"><span>Latitude: @selectedDeparture.Lat</span><span>Longitude: @selectedDeparture.Lon</span></span>
                     }
                     </button>
                     <button id="choose-destination" class="transport-card @(!choosingDeparture ? "selected" : "")" disabled="@busy" aria-pressed="@Pressed(!choosingDeparture)" @onclick="() => ChooseEndpoint(false)"><strong>To</strong><span>@(selectedPoint?.Name ?? "Choose destination")</span>
                     @if (selectedPoint is not null)
                     {
-                        <small>@Label(selectedPoint.Type)</small><small>@selectedPoint.Address</small><small>@selectedPoint.Lat, @selectedPoint.Lon</small>
+                        <small>@Label(selectedPoint.Type)</small>
+                        <span class="location-address">@(string.IsNullOrWhiteSpace(selectedPoint.Address) ? "Street address not provided" : selectedPoint.Address)</span>
+                        <span class="location-coordinates"><span>Latitude: @selectedPoint.Lat</span><span>Longitude: @selectedPoint.Lon</span></span>
                     }
                     </button>
                 </div>
@@ -137,9 +141,11 @@
                             <option value="@kind">@Label(kind)</option>
                         }
                         </select></label><TransportFieldError Errors="fieldErrors" Field="type" Id="new-point-type-error" />
-                        <label for="new-point-address">Address<input id="new-point-address" aria-describedby="@Described("address", "new-point-address-error")" @bind="address" /></label><TransportFieldError Errors="fieldErrors" Field="address" Id="new-point-address-error" />
-                        <label for="new-point-lat">Latitude *<input id="new-point-lat" aria-describedby="@Described("lat", "new-point-lat-error")" @bind="latitudeInput" inputmode="decimal" required /></label><TransportFieldError Errors="fieldErrors" Field="lat" Id="new-point-lat-error" />
-                        <label for="new-point-lon">Longitude *<input id="new-point-lon" aria-describedby="@Described("lon", "new-point-lon-error")" @bind="longitudeInput" inputmode="decimal" required /></label><TransportFieldError Errors="fieldErrors" Field="lon" Id="new-point-lon-error" />
+                        <label class="location-address" for="new-point-address">Street address (optional)<input id="new-point-address" aria-describedby="@Described("address", "new-point-address-error")" @bind="address" /></label><TransportFieldError Errors="fieldErrors" Field="address" Id="new-point-address-error" />
+                        <div class="location-coordinates">
+                            <div><label for="new-point-lat">Latitude *<input id="new-point-lat" aria-describedby="@Described("lat", "new-point-lat-error")" @bind="latitudeInput" inputmode="decimal" required /></label><TransportFieldError Errors="fieldErrors" Field="lat" Id="new-point-lat-error" /></div>
+                            <div><label for="new-point-lon">Longitude *<input id="new-point-lon" aria-describedby="@Described("lon", "new-point-lon-error")" @bind="longitudeInput" inputmode="decimal" required /></label><TransportFieldError Errors="fieldErrors" Field="lon" Id="new-point-lon-error" /></div>
+                        </div>
                         <label for="new-point-source">Source public ID (optional)<input id="new-point-source" aria-describedby="@Described("sourceId", "new-point-source-error")" @bind="sourceId" /></label><TransportFieldError Errors="fieldErrors" Field="sourceId" Id="new-point-source-error" />
                         <small>Saving creates a catalogue location for the selected endpoint before it can be added to your draft.</small><button type="submit" class="secondary">Save @(choosingDeparture ? "departure" : "destination") location</button>
                     </fieldset></form></details>

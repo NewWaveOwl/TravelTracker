@@ -3,14 +3,17 @@
 @implements IAsyncDisposable
 
 <section @ref="panel" class="movable-panel @Class" aria-label="@Label">
-    <div class="movable-panel-controls">
-        <button @ref="handle" type="button" class="movable-panel-handle" aria-label="@($"Move {Label} panel")"
-                aria-describedby="@instructionsId" aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home">
-            <span aria-hidden="true">⠿</span> Move
-        </button>
-        <button type="button" class="movable-panel-reset" aria-label="@($"Reset {Label} panel position")" @onclick="ResetAsync">Reset</button>
-    </div>
-    <span id="@instructionsId" class="movable-panel-instructions">Drag this handle or use arrow keys to move. Shift moves farther. Home or Reset restores the layout.</span>
+    @if (Enabled)
+    {
+        <div class="movable-panel-controls">
+            <button @ref="handle" type="button" class="movable-panel-handle" aria-label="@($"Move {Label} panel")"
+                    title="Drag to move; double-click or double-tap to reset" aria-describedby="@instructionsId"
+                    aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home">
+                <img src="assets/icons/drag_indicator.svg" alt="" />
+            </button>
+        </div>
+        <span id="@instructionsId" class="movable-panel-instructions">Drag this handle or use arrow keys to move. Shift moves farther. Double-click, double-tap or Home restores the layout.</span>
+    }
     <div class="movable-panel-body">@ChildContent</div>
 </section>
 
@@ -19,72 +22,72 @@
     [Parameter] public string? Class { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    /**
-     * Change this value to restore this panel without remounting its children.
-     */
-    [Parameter] public int ResetVersion { get; set; }
+    /** Whether map-only movement controls and browser handlers are enabled. */
+    [Parameter] public bool Enabled { get; set; } = true;
 
-    private readonly string instructionsId = $"panel-instructions-{Guid.NewGuid():N}";
-    private ElementReference panel;
-    private ElementReference handle;
-    private IJSObjectReference? module;
-    private IJSObjectReference? controller;
-    private int appliedResetVersion;
-    private bool disposed;
+    readonly string instructionsId = $"panel-instructions-{Guid.NewGuid():N}";
+    ElementReference panel, handle;
+    IJSObjectReference? module, controller;
+    bool disposed, synchronizing;
 
     /**
-     * Attaches browser-local handle events after rendering and applies requested layout resets.
+     * Synchronizes movement handlers after rendering without remounting editable children.
      * @param firstRender Whether this is the first interactive render.
-     * @return A task completing after the browser controller is synchronized.
+     * @return Completion of movement attachment or teardown for the current view.
      */
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (disposed || synchronizing) return;
+        synchronizing = true;
+        var enabled = Enabled;
         try
         {
-            if (firstRender)
+            if (!Enabled)
+            {
+                if (controller is not null)
+                {
+                    await controller.InvokeVoidAsync("reset");
+                    await controller.InvokeVoidAsync("dispose");
+                    await controller.DisposeAsync();
+                    controller = null;
+                }
+                return;
+            }
+            if (controller is not null) return;
+            if (module is null)
             {
                 var imported = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Trips/MovablePanel.razor.js");
                 if (disposed)
                 {
-                    await imported.DisposeAsync();
+                    if (imported is not null) await imported.DisposeAsync();
                     return;
                 }
                 module = imported;
-                var attached = await module.InvokeAsync<IJSObjectReference>("attach", panel, handle);
-                if (disposed)
+            }
+            if (disposed || !Enabled || module is null) return;
+            var attached = await module.InvokeAsync<IJSObjectReference>("attach", panel, handle);
+            if (disposed || !Enabled)
+            {
+                if (attached is not null)
                 {
+                    await attached.InvokeVoidAsync("reset");
                     await attached.InvokeVoidAsync("dispose");
                     await attached.DisposeAsync();
-                    return;
                 }
-                controller = attached;
-                appliedResetVersion = ResetVersion;
             }
-            if (controller is not null && appliedResetVersion != ResetVersion)
-            {
-                appliedResetVersion = ResetVersion;
-                await controller.InvokeVoidAsync("reset");
-            }
+            else controller = attached;
         }
         catch (JSDisconnectedException) { }
-    }
-
-    /**
-     * Restores the responsive grid position while preserving child state.
-     * @return A task completing after the browser position is reset.
-     */
-    public async Task ResetAsync()
-    {
-        try
+        finally
         {
-            if (!disposed && controller is not null) await controller.InvokeVoidAsync("reset");
+            synchronizing = false;
+            if (!disposed && enabled != Enabled) StateHasChanged();
         }
-        catch (JSDisconnectedException) { }
     }
 
     /**
-     * Releases pointer handlers, observers and browser references.
-     * @return A task completing after browser resources are released.
+     * Releases movement handlers and browser references.
+     * @return Completion of browser resource disposal.
      */
     public async ValueTask DisposeAsync()
     {

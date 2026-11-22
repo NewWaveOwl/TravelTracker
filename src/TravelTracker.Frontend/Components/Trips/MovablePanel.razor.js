@@ -5,7 +5,7 @@
  * @return {{reset: Function, dispose: Function}} Layout and lifecycle operations.
  */
 export function attach(panel, handle) {
-    let x = 0, y = 0, drag = null, moved = false;
+    let x = 0, y = 0, drag = null, moved = false, lastTap = null;
     const viewport = window.visualViewport;
     const bounds = () => ({
         left: (viewport?.offsetLeft ?? 0) + 8,
@@ -37,6 +37,7 @@ export function attach(panel, handle) {
     };
     const reset = () => {
         end();
+        lastTap = null;
         x = y = 0;
         moved = false;
         panel.style.removeProperty("transform");
@@ -46,31 +47,51 @@ export function attach(panel, handle) {
         if (drag || !event.isPrimary || event.button !== 0) return;
         event.preventDefault();
         handle.focus({ preventScroll: true });
-        drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, time: event.timeStamp, travelled: false, type: event.pointerType };
         handle.setPointerCapture(event.pointerId);
         panel.setAttribute("data-moving", "");
     };
     const pointerMove = event => {
         if (!drag || drag.id !== event.pointerId) return;
+        if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 5) {
+            drag.travelled = true;
+            lastTap = null;
+        }
+        if (!drag.travelled) return;
         move(event.clientX - drag.x, event.clientY - drag.y);
         drag.x = event.clientX;
         drag.y = event.clientY;
     };
-    const up = event => { if (drag?.id === event.pointerId) end(); };
+    const up = event => {
+        if (drag?.id !== event.pointerId) return;
+        const active = drag;
+        end();
+        if (active.travelled || event.timeStamp - active.time > 500 ||
+            Math.hypot(event.clientX - active.startX, event.clientY - active.startY) > 5) {
+            lastTap = null;
+            return;
+        }
+        if (lastTap && event.pointerType === lastTap.type && event.timeStamp - lastTap.time <= 350 &&
+            Math.hypot(event.clientX - lastTap.x, event.clientY - lastTap.y) <= 20) reset();
+        else lastTap = { time: event.timeStamp, x: event.clientX, y: event.clientY, type: event.pointerType };
+    };
+    const cancel = event => {
+        if (drag?.id === event.pointerId) { lastTap = null; end(); }
+    };
     const key = event => {
         if (event.altKey || event.ctrlKey || event.metaKey) return;
         const step = event.shiftKey ? 40 : 10;
         const offsets = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
         if (event.key === "Home") { event.preventDefault(); reset(); }
-        else if (offsets[event.key]) { event.preventDefault(); end(); move(...offsets[event.key]); }
+        else if (offsets[event.key]) { event.preventDefault(); lastTap = null; end(); move(...offsets[event.key]); }
     };
     // Do not pull untouched mobile grid items above the fold into the viewport.
     const clamp = () => { if (moved) move(0, 0); };
     handle.addEventListener("pointerdown", down);
     handle.addEventListener("pointermove", pointerMove);
     handle.addEventListener("pointerup", up);
-    handle.addEventListener("pointercancel", up);
-    handle.addEventListener("lostpointercapture", up);
+    handle.addEventListener("pointercancel", cancel);
+    handle.addEventListener("lostpointercapture", cancel);
     handle.addEventListener("keydown", key);
     window.addEventListener("resize", clamp);
     viewport?.addEventListener("resize", clamp);
@@ -85,8 +106,8 @@ export function attach(panel, handle) {
             handle.removeEventListener("pointerdown", down);
             handle.removeEventListener("pointermove", pointerMove);
             handle.removeEventListener("pointerup", up);
-            handle.removeEventListener("pointercancel", up);
-            handle.removeEventListener("lostpointercapture", up);
+            handle.removeEventListener("pointercancel", cancel);
+            handle.removeEventListener("lostpointercapture", cancel);
             handle.removeEventListener("keydown", key);
             window.removeEventListener("resize", clamp);
             viewport?.removeEventListener("resize", clamp);

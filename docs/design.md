@@ -136,8 +136,12 @@ What each part of the system lets people create, read, update and delete.
 
 **Map screen.** A large map with the itinerary list beside it. Events are grouped by day with times, place, type and transport. Choosing a list item highlights its marker and vice versa. Markers are numbered with a legend, and each segment shows the transport icon, mode and duration. Straight lines are labelled approximate and never suggest a real road or flight path. There are zoom, fit-trip and legend controls plus a text version of the itinerary. On phones, Map and Itinerary become tabs sharing one selection. If the map cannot load, the list and details keep working.
 
+**Locations.** Place forms and details show the street address prominently, with labelled latitude and longitude beneath it in smaller, readable text. Addresses remain optional, and a missing address is shown honestly. Travellers can still choose or enter the map position manually.
+
 **Trip editor.** Four steps: basics, itinerary, stays and visits, review.
 
+- In the Map/Trip workspace, **Trip duration** uses one calendar to choose a beginning day and an ending day, including both full days in the trip's time zone. Connection times stay separately editable. Existing saved trip timestamps are preserved until the date range is changed.
+- Map View panels use icon-only movement handles; double-click, double-tap or Home restores a panel's original position without clearing edits. The Trip tab has no movement controls. Recenter returns to the first trip stop, or the initial map position for an empty trip.
 - A round trip shows an explicit return leg; the app may copy places but never invents times.
 - Place search shows shared and private places, with Add Place when nothing matches.
 - Legs can be added, removed and reordered (with a keyboard alternative to dragging). A broken connection is impossible by construction, because each leg's departure is the previous leg's destination. Reordering shows the resulting chain and highlights time clashes but never fixes them silently.

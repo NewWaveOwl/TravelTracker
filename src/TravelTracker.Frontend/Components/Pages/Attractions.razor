@@ -72,7 +72,7 @@ else
                     @foreach (var item in results)
                     {
                         <article @key="item.AttractionId" class="attraction-card @(selected?.AttractionId == item.AttractionId ? "selected" : "")">
-                            <h3>@item.Name</h3><p>@item.Address</p>
+                            <h3>@item.Name</h3><p>@(string.IsNullOrWhiteSpace(item.Address) ? "Street address not provided" : item.Address)</p>
                             <p>@(item.Rating is null ? "No rating" : $"{item.Rating:0.##} / 5") · @item.EstimatedVisitMinutes min</p>
                             <button class="secondary" disabled="@(saving || loadingDetails || editing)" @onclick="() => ShowDetailsAsync(item.AttractionId)">View details<span class="visually-hidden"> for @item.Name</span></button>
                         </article>
@@ -91,11 +91,9 @@ else
                 <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
                     <h2 id="editor-heading">@(original is null ? "Create an attraction" : "Edit attraction")</h2>
                     <fieldset disabled="@(saving || !canWrite)">
-                        <div class="attraction-field-row">
-                            <div><AttractionField Id="attraction-name" Label="Name *" @bind-Value="draft.Name" Error="@FieldError("name")" /></div>
-                            <div><AttractionField Id="attraction-address" Label="Address" @bind-Value="draft.Address" Error="@FieldError("address")" /></div>
-                        </div>
-                        <div class="attraction-field-row">
+                        <AttractionField Id="attraction-name" Label="Name *" @bind-Value="draft.Name" Error="@FieldError("name")" />
+                        <div class="location-address"><AttractionField Id="attraction-address" Label="Street address (optional)" @bind-Value="draft.Address" Error="@FieldError("address")" /></div>
+                        <div class="attraction-field-row location-coordinates">
                             <div><AttractionField Id="attraction-lat" Label="Latitude * (-90 to 90)" @bind-Value="draft.Lat" InputMode="decimal" Error="@FieldError("lat")" /></div>
                             <div><AttractionField Id="attraction-lon" Label="Longitude * (-180 to 180)" @bind-Value="draft.Lon" InputMode="decimal" Error="@FieldError("lon")" /></div>
                         </div>
@@ -119,7 +117,9 @@ else
             else if (selected is not null)
             {
                 <h2 id="editor-heading" tabindex="-1" @ref="detailsHeading">@selected.Name</h2>
-                <p>@selected.Address</p><dl class="attraction-facts"><dt>Estimated visit</dt><dd>@selected.EstimatedVisitMinutes minutes</dd><dt>Rating</dt><dd>@(selected.Rating is null ? "No rating" : $"{selected.Rating:0.##} / 5")</dd><dt>Latitude</dt><dd>@selected.Lat</dd><dt>Longitude</dt><dd>@selected.Lon</dd></dl><p>@(selected.Description ?? "No description yet.")</p>
+                <p class="location-address">@(string.IsNullOrWhiteSpace(selected.Address) ? "Street address not provided" : selected.Address)</p>
+                <dl class="location-coordinates"><dt>Latitude</dt><dd>@selected.Lat</dd><dt>Longitude</dt><dd>@selected.Lon</dd></dl>
+                <dl class="attraction-facts"><dt>Estimated visit</dt><dd>@selected.EstimatedVisitMinutes minutes</dd><dt>Rating</dt><dd>@(selected.Rating is null ? "No rating" : $"{selected.Rating:0.##} / 5")</dd></dl><p>@(selected.Description ?? "No description yet.")</p>
                 @if (canWrite)
                 {
                     <button @onclick="BeginEdit" disabled="@saving">Edit attraction</button>

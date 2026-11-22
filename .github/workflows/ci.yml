@@ -37,7 +37,7 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - name: Browser interaction regression tests
-        run: node --test tests/TravelTracker.Frontend.Tests/TripSaveKeyboardTests.mjs tests/TravelTracker.Frontend.Tests/TripMapCanvasKeyboardTests.mjs tests/TravelTracker.Frontend.Tests/MovablePanelTests.cjs
+        run: node --test tests/TravelTracker.Frontend.Tests/TripSaveKeyboardTests.mjs tests/TravelTracker.Frontend.Tests/TripMapCanvasKeyboardTests.mjs tests/TravelTracker.Frontend.Tests/MovablePanelTests.cjs tests/TravelTracker.Frontend.Tests/TripDateRangePickerKeyboardTests.mjs
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x

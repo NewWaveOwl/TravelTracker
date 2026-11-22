@@ -15,9 +15,15 @@
         <button type="button" aria-label="Zoom out" title="Zoom out" disabled="@(zoom == MinimumZoom)" @onclick="() => ChangeZoom(-1)">
             <img src="@Icon("zoom-out")" alt="" />
         </button>
-        <button type="button" aria-label="@CenterAction" title="@CenterAction" disabled="@(!CanPick && Stops.Count == 0)" @onclick="UseCenterAsync">
+        <button type="button" aria-label="Recenter map" title="Recenter on the starting stop" @onclick="Recenter">
             <img src="@Icon("map-center")" alt="" />
         </button>
+        @if (CanPick)
+        {
+            <button type="button" class="map-pick-center" aria-label="Pick map center" title="Place marker at map center" @onclick="() => PickAsync(center)">
+                <img src="@Pin("attraction")" alt="" width="24" height="30" />
+            </button>
+        }
     </div>
     <div class="map-frame">
         <div @ref="basemap" class="map-basemap"></div>
@@ -161,7 +167,6 @@
     private bool UseMarkerBadges => zoom <= MarkerBadgeZoom;
     private (double X, double Y) Origin => (center.X * WorldSize - ViewportWidth / 2d, center.Y * WorldSize - ViewportHeight / 2d);
 
-    string CenterAction => CanPick ? "Pick map center" : "Fit stops";
     string MapInstructions => CanPick
         ? "Map with numbered trip stops. Right-drag or use the arrow keys to pan. Scroll to zoom."
         : "Map with numbered trip stops. Drag or use the arrow keys to pan. Scroll to zoom.";
@@ -506,13 +511,11 @@
         await PickAsync(((origin.X + point[0]) / worldSize, (origin.Y + point[1]) / worldSize));
     }
 
-    /** Picks the map center while placing a marker and fits the itinerary otherwise. */
-    Task UseCenterAsync()
+    /** Restores the starting stop or initial map center without changing zoom or creating a marker. */
+    void Recenter()
     {
-        if (CanPick) return PickAsync(center);
-
-        FitStops();
-        return Task.CompletedTask;
+        // Center the actual target even when the viewport extends past a tile edge at a low zoom.
+        center = Stops.Count > 0 ? Project(Stops[0].Lat, Stops[0].Lon) : Project(45.5019m, -73.5674m);
     }
 
     /** Pans the focused map using its directional keys. */

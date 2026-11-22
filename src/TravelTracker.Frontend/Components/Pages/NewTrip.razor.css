@@ -276,3 +276,14 @@
     color: var(--forest);
     border-color: #c48e80;
 }
+
+.trip-planner .location-address input:not([type=checkbox]) { font-size: 20px; min-height: 48px; }
+.trip-planner .location-coordinates label, .trip-planner .location-coordinates input:not([type=checkbox]) { font-size: 16px; line-height: 1.4; }
+.trip-planner .location-coordinates input:not([type=checkbox]) { min-height: 44px; }
+
+.trip-tools-close { justify-self: end; width: 44px; min-height: 44px !important; padding: 10px !important; }
+.trip-tools-close img { width: 24px; height: 24px; }
+.trip-basic-fields ::deep .trip-date-range { grid-column: 1 / -1; min-width: 0; }
+
+.map-workspace ::deep .itinerary-panel:has(.movable-panel-handle) > .movable-panel-body { scrollbar-width: none; }
+.map-workspace ::deep .itinerary-panel:has(.movable-panel-handle) > .movable-panel-body::-webkit-scrollbar { display: none; }

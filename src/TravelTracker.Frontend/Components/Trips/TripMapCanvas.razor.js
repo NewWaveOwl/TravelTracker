@@ -99,7 +99,9 @@ function attachBasemap(container, planner, initialCamera) {
                 center: [longitude, latitude],
                 zoom,
                 interactive: false,
-                trackResize: false
+                trackResize: false,
+                // The C# camera owns bounds; a second clamp would misalign tiles and stop markers near tile edges.
+                transformConstrain: (center, zoom) => ({ center, zoom })
             });
             const canvas = basemap.getCanvas();
             canvas.tabIndex = -1;

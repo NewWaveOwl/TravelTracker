@@ -122,3 +122,33 @@ test("untouched below-fold mobile panels stay in document flow and disposal remo
     assert.equal(window.visualViewport.handlers.size, 0);
     assert.equal(disconnected(), true);
 });
+
+for (const pointerType of ["mouse", "touch"]) {
+    test(`two clean ${pointerType} taps reset the original grid position`, async () => {
+        const { panel, handle } = await setup();
+        handle.fire("keydown", { key: "ArrowRight" });
+        for (const time of [100, 300]) {
+            handle.fire("pointerdown", { pointerId: 1, isPrimary: true, button: 0, pointerType, clientX: 120, clientY: 100, timeStamp: time });
+            handle.fire("pointerup", { pointerId: 1, pointerType, clientX: 120, clientY: 100, timeStamp: time + 40 });
+        }
+        assert.equal(panel.style.transform, "");
+        assert.equal(panel.getBoundingClientRect().left, 100);
+    });
+}
+
+for (const interruption of ["drag", "pointercancel", "lostpointercapture"]) {
+    test(`${interruption} cannot complete or carry over a double tap`, async () => {
+        const { panel, handle } = await setup();
+        handle.fire("keydown", { key: "ArrowRight" });
+        const down = time => handle.fire("pointerdown", { pointerId: 1, isPrimary: true, button: 0, pointerType: "touch", clientX: 120, clientY: 100, timeStamp: time });
+        const up = time => handle.fire("pointerup", { pointerId: 1, pointerType: "touch", clientX: 120, clientY: 100, timeStamp: time });
+        down(100); up(120);
+        down(180);
+        if (interruption === "drag") {
+            handle.fire("pointermove", { pointerId: 1, clientX: 150, clientY: 100 });
+            up(220);
+        } else handle.fire(interruption, { pointerId: 1 });
+        down(250); up(280);
+        assert.notEqual(panel.style.transform, "");
+    });
+}

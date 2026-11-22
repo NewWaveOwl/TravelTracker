@@ -27,7 +27,7 @@
                 {
                     <g aria-hidden="true"><text x="@x" y="@y" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#3e4f3d">@(isDeparture && isDestination ? "1/2" : isDeparture ? "1" : "2")</text></g>
                 }
-                <title>@point.Name (@point.Lat, @point.Lon)</title>
+                <title>@point.Name: @(string.IsNullOrWhiteSpace(point.Address) ? "Street address not provided" : point.Address). Latitude: @point.Lat, Longitude: @point.Lon</title>
             </g>
         }
     </svg>
