@@ -15,6 +15,9 @@ The other services continue to own their databases and enforce private ownership
    The confirmation page requires an explicit protected form submission before
    verification; it never automatically signs in or puts access/refresh tokens in
    the browser URL. The traveller signs in normally after confirmation.
+   Keep **Secure email change** enabled and use
+   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change`
+   in the **Change Email Address** template. Both inboxes must confirm the change.
 2. Under Auth signing keys, use an asymmetric signing key (ES256 or RS256).
    The application validates keys from
    `https://PROJECT.supabase.co/auth/v1/.well-known/jwks.json`, exact issuer
@@ -80,6 +83,16 @@ requests to Supabase; tokens are kept in the encrypted HttpOnly application
 session cookie rather than browser local/session storage. Session revocation and
 expiry continue to invalidate open application circuits. No automatic session
 renewal is provided; sign in again after expiry or restarting the frontend.
+
+In **Your profile**, the contact email is saved by the Users API with the
+username and address. **Sign-in credentials** uses Supabase. Each request checks
+live account standing, reauthenticates with the current sign-in email and
+password, and checks that the new session belongs to the same provider subject.
+Supabase applies its password policy and confirms login-email changes through
+its email links. A successful request ends the current TravelTracker session,
+including other tabs sharing that session. Separate device sessions follow
+provider policy, and issued access tokens remain subject to their expiry.
+Credential changes never write to the Users profile.
 
 For frontend-only development, configure `Authentication:Provider=Supabase`,
 `Supabase:Url` and `Supabase:PublishableKey` through .NET user-secrets or the matching

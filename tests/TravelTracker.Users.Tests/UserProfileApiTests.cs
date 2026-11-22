@@ -130,6 +130,8 @@ public sealed class UserProfileApiTests
     [InlineData("{\"address\":\"1 Test\\u0000 Avenue\"}")]
     [InlineData("{\"address\":\" \"}")]
     [InlineData("{\"username\":\"valid-name\",\"role\":\"administrator\"}")]
+    [InlineData("{\"username\":\"valid-name\",\"password\":\"fixture-password\"}")]
+    [InlineData("{\"email\":\"contact@example.test\",\"loginEmail\":\"signin@example.test\"}")]
     [InlineData("{\"username\":\"valid-name\",\"publicId\":\"f8ac6c5f-cda8-4986-a6d0-056cd55f88cf\"}")]
     public async Task InvalidPatchLeavesProfileAndTimestampUnchanged(string body)
     {

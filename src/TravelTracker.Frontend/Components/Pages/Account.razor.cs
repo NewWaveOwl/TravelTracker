@@ -44,6 +44,20 @@ public partial class Account : IDisposable
 
     bool CanEdit => profile is { Status: AdminAccessState.ActiveStatus } && HasScope("users.write") && !writeDenied;
 
+    [SupplyParameterFromQuery(Name = "credential")]
+    public string? CredentialResult { get; set; }
+
+    string? CredentialMessage => CredentialResult switch
+    {
+        "invalid" => "Check the email and password fields and try again.",
+        "rejected" => "The sign-in provider refused the change. Check your current credentials and the new value.",
+        "unavailable" => "The sign-in provider could not confirm the change. Check before trying again.",
+        "verify-email" => "Check your current and new sign-in email inboxes for confirmation links.",
+        "link-accepted" => "Confirmation accepted. Follow any remaining email instructions, then sign in.",
+        "password-changed" => "Password changed. Sign in again with your new password.",
+        _ => null
+    };
+
     protected override async Task OnInitializedAsync()
     {
         if (!Setup.Configured)
