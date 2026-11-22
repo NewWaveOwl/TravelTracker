@@ -105,6 +105,8 @@ In the **Map** and **Trip** workspaces, choose the beginning and ending days tog
 
 Place forms and details show the **street address** prominently, with **latitude and longitude** underneath in smaller text. In Map View, pick the map position and enter its street address; you can also adjust the coordinates.
 
+**Profile pictures:** Account → Edit profile → **Upload photo** uses the protected Users picture API and migration from [PR #137](https://github.com/NewWaveOwl/TravelTracker/pull/137), a separate backend dependency. Choose one static PNG or JPEG up to 1 MiB and 512 × 512 pixels. File selection saves the photo separately from profile text edits; a rejected upload keeps the previous photo. See [picture UI behavior and validation](docs/milestone-4/profile-picture-ui.md).
+
 ### Troubleshooting database login
 
 `28P01: password authentication failed` is a PostgreSQL credential error, even after moving sign-in to Supabase Auth. Check that the pooler host, suffixed database username and database password belong to the same project and role. Do not enter a Supabase website password or Auth user password at the database prompt. Stop and restart the launcher to re-enter the password. Changing authentication providers does not repair database passwords.

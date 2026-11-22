@@ -1,0 +1,51 @@
+@using Microsoft.AspNetCore.Components.Forms
+
+<div class="profile-picture" aria-label="Profile picture" aria-busy="@((loading || uploading).ToString().ToLowerInvariant())">
+    <div class="picture-avatar">
+        @if (pictureSource is not null)
+        {
+            <img src="@pictureSource" alt="@($"Profile picture for {DisplayName}")" />
+        }
+        else
+        {
+            <span role="img" aria-label="Profile picture not set">@Initials</span>
+        }
+    </div>
+    <div class="picture-details">
+        @if (Editing || uploading)
+        {
+            <span class="picture-label">Profile picture</span>
+            @if (CanChoose)
+            {
+                <span class="picture-upload">
+                    <span aria-hidden="true">@(uploading ? "Uploading..." : "Upload photo")</span>
+                    <InputFile @key="fileVersion" OnChange="UploadAsync" accept="image/png,image/jpeg" class="picture-file"
+                               aria-label="Upload profile photo" aria-describedby="@hintId" disabled="@(Disabled || uploading || loading)" />
+                </span>
+                <small id="@hintId">Your initials appear until you add a photo. Choose one static PNG or JPEG, up to 1 MiB and 512 &times; 512 pixels. Selecting a file saves the photo independently of profile text changes.</small>
+            }
+            else
+            {
+                <small>Profile pictures are read-only for this account or session.</small>
+            }
+        }
+        else
+        {
+            <p class="picture-name">@DisplayName</p>
+            <p class="picture-help">@(Editable ? pictureSource is null ? "Add a profile picture in Edit profile." : "Change your profile picture in Edit profile." : pictureSource is null ? "No profile picture saved." : "Your saved profile picture.")</p>
+        }
+        @if (loading) { <small role="status">Loading profile picture...</small> }
+        @if (uploading) { <small role="status">Uploading photo...</small> }
+        @if (status is not null) { <p class="picture-status" role="status">@status</p> }
+        @if (error is not null)
+        {
+            <div class="picture-feedback @appearance" role="alert">
+                <p>@error</p>
+                @if (authorityValid && !uploading && !loading)
+                {
+                    <button type="button" class="secondary" @onclick="ReloadAsync">Reload picture</button>
+                }
+            </div>
+        }
+    </div>
+</div>

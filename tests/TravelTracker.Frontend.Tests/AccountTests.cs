@@ -20,14 +20,18 @@ public sealed class AccountTests : BunitContext
 
     public AccountTests() => authentication = new(new SessionRegistry(clock));
 
-    void Configure(bool configured = true, StubHandler? handler = null)
+    void Configure(bool configured = true, StubHandler? handler = null, bool pictureEndpoint = false)
     {
         Services.AddSingleton(new AuthSetup(configured));
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         Services.AddSingleton<TimeProvider>(clock);
         Services.AddSingleton(authentication.Sessions);
         Services.AddSingleton(new ServiceDirectory(new Dictionary<string, string> { ["Users"] = "https://localhost:5101" }));
-        Services.AddSingleton(new ServiceClient(new HttpClient(handler ?? StubHandler.Status(200, Profile)), NullLogger<ServiceClient>.Instance));
+        var backend = new HttpMessageInvoker(handler ?? StubHandler.Status(200, Profile));
+        Services.AddSingleton(backend);
+        var routed = new StubHandler((request, token) => !pictureEndpoint && request.RequestUri!.AbsolutePath == "/api/v1/users/me/picture"
+            ? Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)) : backend.SendAsync(request, token));
+        Services.AddSingleton(new ServiceClient(new HttpClient(routed), NullLogger<ServiceClient>.Instance));
         Services.AddScoped<ProtectedClient>();
         Services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         Services.AddScoped<TravelTracker.Frontend.Api.Users.UsersClient>();
@@ -43,6 +47,47 @@ public sealed class AccountTests : BunitContext
         Assert.Contains("Sign in to view your profile", page.Markup);
         Assert.Contains("connected to your TravelTracker account", page.Markup);
         Assert.DoesNotContain("stay on this device", page.Markup);
+    }
+
+    [Fact]
+    public void SavedPictureStaysWhenProfileTextChangesAreCancelled()
+    {
+        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1cAAAAASUVORK5CYII=");
+        byte[]? picture = null;
+        var profileWrites = 0;
+        Configure(pictureEndpoint: true, handler: new StubHandler(async (request, token) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/v1/users/me/picture")
+            {
+                Assert.Equal("Bearer token", request.Headers.Authorization!.ToString());
+                if (request.Method == HttpMethod.Put)
+                {
+                    picture = await request.Content!.ReadAsByteArrayAsync(token);
+                    return new HttpResponseMessage(HttpStatusCode.NoContent);
+                }
+                if (picture is null) return new HttpResponseMessage(HttpStatusCode.NotFound);
+                var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(picture) };
+                response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+                return response;
+            }
+            if (request.Method != HttpMethod.Get) profileWrites++;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile, System.Text.Encoding.UTF8, "application/json") };
+        }));
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        var widget = page.FindComponent<TravelTracker.Frontend.Components.Users.ProfilePicture>().Instance;
+        page.Find("button").Click();
+        page.Find("#profile-username").Change("unsaved_text_name");
+        var file = Bunit.InputFileContent.CreateFromBinary(png, "private.png", contentType: "image/png");
+        page.FindComponent<Microsoft.AspNetCore.Components.Forms.InputFile>().UploadFiles(file);
+        page.WaitForAssertion(() => Assert.Contains("Photo saved.", page.Markup));
+
+        page.FindAll("button").Single(button => button.TextContent == "Cancel").Click();
+
+        Assert.Same(widget, page.FindComponent<TravelTracker.Frontend.Components.Users.ProfilePicture>().Instance);
+        Assert.Equal("data:image/png;base64," + Convert.ToBase64String(png), page.Find(".profile-picture img").GetAttribute("src"));
+        Assert.DoesNotContain("unsaved_text_name", page.Markup);
+        Assert.Equal(0, profileWrites);
     }
 
     [Fact]

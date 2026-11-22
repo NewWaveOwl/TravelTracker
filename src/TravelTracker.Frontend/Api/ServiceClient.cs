@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 namespace TravelTracker.Frontend.Api;
 
 /**
- * Exchanges JSON HTTP contracts with bounded waiting; cookies and redirects are never followed.
+ * Exchanges JSON and bounded image HTTP contracts with bounded waiting; cookies and redirects are never followed.
  * @param httpClient The client used for outbound requests.
  * @param logger Receives failure categories, never tokens, request bodies or problem diagnostics.
  */
@@ -81,6 +81,67 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
         catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
         {
             throw Fail(FailureKind.Unexpected, method == HttpMethod.Get ? "The service returned an unreadable response." : "The save response could not be read. Check the saved record before retrying.", method, resource: ResourceOf(request), exception: exception);
+        }
+    }
+
+    /**
+     * Exchanges a bounded raw image contract without following a returned Location or logging image data.
+     * @param method GET for a private PNG or PUT for raw PNG/JPEG bytes.
+     * @param url The configured, validated destination.
+     * @param body Upload bytes, or null for a read.
+     * @param contentType The upload media type, or null for a read.
+     * @param maxResponseBytes Independent cap for a normalized PNG response.
+     * @param accessToken Bearer supplied by ProtectedClient, never an image URL parameter.
+     * @param cancellationToken Cancels the consuming view's work.
+     * @return The bounded PNG bytes for GET, or an empty array after a confirmed 204 PUT.
+     */
+    public async Task<byte[]> SendImageAsync(HttpMethod method, string url, byte[]? body, string? contentType,
+        int maxResponseBytes, string accessToken, CancellationToken cancellationToken = default)
+    {
+        if (method != HttpMethod.Get && method != HttpMethod.Put || maxResponseBytes is < 1 or > 2 * 1024 * 1024)
+            throw new ApiError(FailureKind.Unexpected, "Unsupported image request.");
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        bounded.CancelAfter(Timeout);
+        using var request = new HttpRequestMessage(method, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/png"));
+        request.Headers.CacheControl = new CacheControlHeaderValue { NoStore = true };
+        if (body is not null)
+        {
+            request.Content = new ByteArrayContent(body);
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType!);
+        }
+        try
+        {
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, bounded.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                var status = (int)response.StatusCode;
+                throw Fail(Classify(status), MessageFor(status), method, status, resource: ResourceOf(request));
+            }
+            if (method == HttpMethod.Put)
+            {
+                if (response.StatusCode != System.Net.HttpStatusCode.NoContent)
+                    throw Fail(FailureKind.Unexpected, "The service did not confirm the photo upload.", method, resource: ResourceOf(request));
+                return [];
+            }
+            if (response.StatusCode != System.Net.HttpStatusCode.OK ||
+                !string.Equals(response.Content.Headers.ContentType?.MediaType, "image/png", StringComparison.OrdinalIgnoreCase) ||
+                response.Content.Headers.ContentLength > maxResponseBytes)
+                throw Fail(FailureKind.Unexpected, "The service returned an unreadable profile picture.", method, resource: ResourceOf(request));
+            var buffer = new byte[maxResponseBytes + 1];
+            await using var stream = await response.Content.ReadAsStreamAsync(bounded.Token);
+            var count = await stream.ReadAtLeastAsync(buffer, buffer.Length, false, bounded.Token);
+            if (count > maxResponseBytes || count < 8 || !buffer.AsSpan(0, 8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }))
+                throw Fail(FailureKind.Unexpected, "The service returned an unreadable profile picture.", method, resource: ResourceOf(request));
+            return buffer[..count];
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OperationCanceledException)
+        {
+            throw Fail(FailureKind.Network, method == HttpMethod.Get ? "The profile picture could not be loaded. Try again."
+                : "The photo upload could not be confirmed. Reload the picture before trying another upload.", method,
+                resource: ResourceOf(request), exception: exception);
         }
     }
 

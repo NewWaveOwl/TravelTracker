@@ -12,6 +12,26 @@ namespace TravelTracker.Frontend.Tests;
 public sealed class SupabaseSignInTests
 {
     [Theory]
+    [InlineData("/account", false)]
+    [InlineData("/account/", false)]
+    [InlineData("/account", true)]
+    [InlineData("/account/", true)]
+    public async Task AccountRouteAliasesKeepProfileAndSignInStateNonCacheable(string path, bool signedIn)
+    {
+        using var host = new SupabaseFrontendFactory();
+        using var browser = host.CreateBrowser();
+        if (signedIn) await LoginAsync(browser);
+
+        using var response = await browser.GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var markup = await response.Content.ReadAsStringAsync();
+        Assert.Contains(signedIn ? "traveller_1" : "Sign in to view your profile", markup);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal("no-referrer", Assert.Single(response.Headers.GetValues("Referrer-Policy")));
+    }
+
+    [Theory]
     [InlineData("/auth/v1/token", 500)]
     [InlineData("/auth/v1/token", 503)]
     [InlineData("/auth/v1/token", 429)]
