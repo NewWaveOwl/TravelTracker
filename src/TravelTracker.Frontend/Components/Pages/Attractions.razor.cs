@@ -26,8 +26,8 @@ public partial class Attractions : IDisposable
     ApiError? error;
     IReadOnlyDictionary<string, string[]> errors = new Dictionary<string, string[]>();
     bool signedIn, canWrite, loaded, searching, loadingDetails, editing, saving, pickingLocation, disposed, retrySearch;
-    bool focusError, focusDetails, focusLocationEntry;
-    ElementReference errorSummary, detailsHeading, locationEntry;
+    bool focusError, focusDetails, focusLocationEntry, focusModal, focusCreate;
+    ElementReference errorSummary, detailsHeading, locationEntry, modalHeading, modalCancel, createButton;
     CancellationTokenSource? request;
     int generation;
 
@@ -43,6 +43,8 @@ public partial class Attractions : IDisposable
 
     protected override async Task OnAfterRenderAsync(bool _firstRender)
     {
+        if (focusModal && editing && !pickingLocation) { focusModal = false; await modalHeading.FocusAsync(); }
+        if (focusCreate && !editing) { focusCreate = false; await createButton.FocusAsync(); }
         if (focusError)
         {
             focusError = false;
@@ -186,23 +188,37 @@ public partial class Attractions : IDisposable
     {
         if (saving || editing || !canWrite) return;
         CancelRequest(); searching = loadingDetails = false; selected = original = null;
-        draft = new(); editing = true; status = null; ClearError();
+        draft = new(); editing = true; focusModal = true; status = null; ClearError();
     }
 
     void BeginEdit()
     {
         if (saving || !canWrite || selected is null) return;
-        original = selected; draft = AttractionDraft.From(selected); editing = true; status = null; ClearError();
+        original = selected; draft = AttractionDraft.From(selected); editing = true; focusModal = true; status = null; ClearError();
     }
 
     void CancelEdit()
     {
         if (saving) return;
         editing = false;
+        focusDetails = selected is not null;
+        focusCreate = selected is null;
         original = null;
         draft = new();
         ClearError();
     }
+
+    /**
+     * Handles modal dismissal while keeping save requests and keyboard focus safe.
+     * @param keyboard The key pressed within the attraction dialog.
+     */
+    void ModalKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs keyboard)
+    {
+        if (editing && keyboard.Key == "Escape") CancelEdit();
+    }
+
+    async Task FocusModalFirst() => await modalHeading.FocusAsync();
+    async Task FocusModalLast() { if (saving) await modalHeading.FocusAsync(); else await modalCancel.FocusAsync(); }
 
     void OpenLocation()
     {

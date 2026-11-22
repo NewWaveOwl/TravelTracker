@@ -5,16 +5,17 @@
 <section @ref="panel" class="movable-panel @Class" aria-label="@Label">
     @if (Enabled)
     {
-        <div class="movable-panel-controls">
+        <div @ref="header" class="movable-panel-controls">
+            <span class="movable-panel-label">@Label</span>
             <button @ref="handle" type="button" class="movable-panel-handle" aria-label="@($"Move {Label} panel")"
-                    title="Drag to move; double-click or double-tap to reset" aria-describedby="@instructionsId"
+                    title="Click to collapse or expand; drag to move; double-click to restore" aria-expanded="true" aria-controls="@bodyId" aria-describedby="@instructionsId"
                     aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home">
-                <img src="assets/icons/drag_indicator.svg" alt="" />
+                <img src="assets/icons/panel-box.svg" alt="" />
             </button>
         </div>
-        <span id="@instructionsId" class="movable-panel-instructions">Drag this handle or use arrow keys to move. Shift moves farther. Double-click, double-tap or Home restores the layout.</span>
+        <span id="@instructionsId" class="movable-panel-instructions">Click to collapse or expand. Drag the header or icon, or use arrow keys to move. Shift moves farther. Double-click, double-tap or Home restores the position and expands the panel.</span>
     }
-    <div class="movable-panel-body">@ChildContent</div>
+    <div id="@bodyId" class="movable-panel-body">@ChildContent</div>
 </section>
 
 @code {
@@ -24,11 +25,15 @@
 
     /** Whether map-only movement controls and browser handlers are enabled. */
     [Parameter] public bool Enabled { get; set; } = true;
+    /** Advances when a workspace action needs its panel content revealed at the current position. */
+    [Parameter] public long RevealVersion { get; set; }
 
     readonly string instructionsId = $"panel-instructions-{Guid.NewGuid():N}";
-    ElementReference panel, handle;
+    readonly string bodyId = $"panel-body-{Guid.NewGuid():N}";
+    ElementReference panel, handle, header;
     IJSObjectReference? module, controller;
     bool disposed, synchronizing;
+    long revealedVersion;
 
     /**
      * Synchronizes movement handlers after rendering without remounting editable children.
@@ -44,6 +49,7 @@
         {
             if (!Enabled)
             {
+                revealedVersion = RevealVersion;
                 if (controller is not null)
                 {
                     await controller.InvokeVoidAsync("reset");
@@ -53,7 +59,7 @@
                 }
                 return;
             }
-            if (controller is not null) return;
+            if (controller is not null) { await RevealRequestedAsync(); return; }
             if (module is null)
             {
                 var imported = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Trips/MovablePanel.razor.js");
@@ -65,7 +71,7 @@
                 module = imported;
             }
             if (disposed || !Enabled || module is null) return;
-            var attached = await module.InvokeAsync<IJSObjectReference>("attach", panel, handle);
+            var attached = await module.InvokeAsync<IJSObjectReference>("attach", panel, handle, header);
             if (disposed || !Enabled)
             {
                 if (attached is not null)
@@ -75,7 +81,7 @@
                     await attached.DisposeAsync();
                 }
             }
-            else controller = attached;
+            else { controller = attached; await RevealRequestedAsync(); }
         }
         catch (JSDisconnectedException) { }
         finally
@@ -83,6 +89,17 @@
             synchronizing = false;
             if (!disposed && enabled != Enabled) StateHasChanged();
         }
+    }
+
+    /**
+     * Reveals requested feedback without resetting panel position or editable child state.
+     * @return Completion of any requested browser expansion.
+     */
+    async Task RevealRequestedAsync()
+    {
+        if (controller is null || revealedVersion == RevealVersion) return;
+        revealedVersion = RevealVersion;
+        await controller.InvokeVoidAsync("expand");
     }
 
     /**

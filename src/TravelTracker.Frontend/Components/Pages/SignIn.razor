@@ -2,6 +2,7 @@
 @using TravelTracker.Frontend.Auth
 @inject AuthSetup Setup
 
+<div class="auth-page">
 <PageTitle>@(Register ? "Create account" : "Sign in") | TravelTracker</PageTitle>
 <PageHeading Title="@(Register ? "Create your account" : "Sign in")" />
 
@@ -11,7 +12,8 @@
 }
 else
 {
-    <section class="profile-panel" aria-labelledby="sign-in-heading">
+    <p>@(Register ? "Plan your next journey with TravelTracker." : "Plan and track your trips with ease!")</p>
+    <section class="profile-panel" aria-label="@(Register ? "Create account" : "Sign in")">
         <h2 id="sign-in-heading">@(Register ? "Join TravelTracker" : "Welcome back")</h2>
         @if (Error == "rate-limit")
         {
@@ -57,10 +59,12 @@ else
             <button type="submit">@(Register ? "Create account" : "Sign in")</button>
         </form>
         <p><a href="@(Register ? "/sign-in" : "/sign-in?mode=register")">@(Register ? "Already have an account? Sign in" : "Create an account")</a></p>
-        <p>Need to reset your password? Contact the project administrator for account recovery.</p>
+        <p class="auth-recovery">Need to reset your password? Contact the project administrator for account recovery.</p>
         <p><a href="/">Back to TravelTracker</a></p>
     </section>
 }
+
+</div>
 
 @code {
     [SupplyParameterFromQuery(Name = "mode")] public string? Mode { get; set; }

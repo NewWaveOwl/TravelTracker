@@ -31,6 +31,27 @@ public sealed class MovablePanelTests : BunitContext
     }
 
     [Fact]
+    public void NewAttentionRevealsTheExistingPanelWithoutResettingPositionOrChildren()
+    {
+        var module = JSInterop.SetupModule("./Components/Trips/MovablePanel.razor.js");
+        var controller = module.SetupModule("attach", _ => true);
+        controller.SetupVoid("expand").SetVoidResult();
+        controller.SetupVoid("dispose").SetVoidResult();
+        var panel = Render<MovablePanel>(parameters => parameters.AddChildContent<MovablePanelTestEditor>());
+        var editor = panel.FindComponent<MovablePanelTestEditor>().Instance;
+        panel.Find("input").Change("Keep these unsaved fields");
+
+        panel.Render(parameters => parameters.Add(component => component.RevealVersion, 1));
+
+        Assert.Single(controller.Invocations["expand"]);
+        Assert.Empty(controller.Invocations["reset"]);
+        Assert.Same(editor, panel.FindComponent<MovablePanelTestEditor>().Instance);
+        Assert.Equal("Keep these unsaved fields", panel.Find("input").GetAttribute("value"));
+        panel.Render();
+        Assert.Single(controller.Invocations["expand"]);
+    }
+
+    [Fact]
     public void ChangingViewsDetachesAndReattachesMovementWithoutRemountingEditors()
     {
         var module = JSInterop.SetupModule("./Components/Trips/MovablePanel.razor.js");

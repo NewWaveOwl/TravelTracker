@@ -33,8 +33,8 @@
         }
         @if (error is not null)
         {
-            <section class="accommodation-error" role="alert" tabindex="-1" @ref="errorSummary">
-                <h2>@ErrorHeading</h2><p>@error.Message</p>
+            <section class="accommodation-error @(error?.Kind == FailureKind.Validation || errors.Count > 0 ? "validation" : error?.Kind == FailureKind.Permission ? "permission" : "failure")" role="alert" tabindex="-1" @ref="errorSummary">
+                <h2>@ErrorHeading</h2><p>@error!.Message</p>
                 @if (VisibleErrors.Any())
                 {
                     <ul>
@@ -127,7 +127,7 @@
                 <p>Your place is private by default. Shared places are available to all travellers.</p>
                 @if (formError is not null)
                 {
-                    <div class="accommodation-error" role="alert" tabindex="-1" @ref="createErrorSummary"><h3>@ErrorHeading</h3><p>@formError</p></div>
+                    <div class="accommodation-error @(error?.Kind == FailureKind.Validation || errors.Count > 0 ? "validation" : error?.Kind == FailureKind.Permission ? "permission" : "failure")" role="alert" tabindex="-1" @ref="createErrorSummary"><h3>@ErrorHeading</h3><p>@formError</p></div>
                 }
                 <form @onsubmit="CreateAsync" @onsubmit:preventDefault>
                     <fieldset disabled="@saving">

@@ -7,7 +7,8 @@
 @using TravelTracker.Frontend.Features.Users
 
 <PageTitle>Your profile | TravelTracker</PageTitle>
-<PageHeading Title="Your profile" />
+<PageHeading Title="@(editing ? "Edit profile" : "Your profile")" />
+<p>@(editing ? "Update your profile details." : "View and manage your TravelTracker profile.")</p>
 
 @if (CredentialMessage is not null)
 {
@@ -29,6 +30,7 @@ else if (!signedIn)
         {
             <Feedback Kind="FeedbackKind.Unexpected" Title="Unable to sign in" Eyebrow="SIGN-IN ERROR">@LoginFailure.MessageFor(SignInFailure)</Feedback>
         }
+        <small>ACCESS REQUIRED</small>
         <h2 id="guest-profile-heading">Sign in to view your profile</h2>
         <p>Your profile is connected to your TravelTracker account. Sign in to view and update your permitted profile details.</p>
         @if (sessionMessage is not null)

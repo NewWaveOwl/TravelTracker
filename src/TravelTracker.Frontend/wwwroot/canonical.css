@@ -1,0 +1,153 @@
+/* Canonical TravelTracker screen and component tokens (Figma V4). */
+:root {
+    --text: #182318;
+    --muted: #586557;
+    --surface: #fff;
+    --selection: #ffcabe;
+    --warning: #845600;
+    --warning-surface: #f7d58b;
+    --error-surface: #fce8e6;
+    color: var(--text);
+}
+main { width: min(1104px, calc(100% - 64px)); }
+main:has(.trip-planner:not(.map-workspace)) { max-width: 1104px; padding: 32px 0 80px; }
+main:has(.map-workspace) { width: 100%; }
+.site-header { z-index: 10; }
+.site-header .brand { flex-shrink: 0; }
+.site-header .icon { width: 72px; flex: none; }
+.site-header a.icon img { width: 64px; height: 60px; }
+.site-header button.icon img { width: 69.3335px; height: 48px; }
+.site-header .menu { z-index: 20; }
+h1 { overflow-wrap: anywhere; }
+input, select, textarea { color: var(--text); border-radius: 5px; }
+textarea { max-width: 100%; font: 24px/31px 'Atkinson Hyperlegible', sans-serif; }
+.button.secondary, button.secondary { border: 1px solid var(--border); }
+button:disabled { cursor: default; opacity: .6; }
+.actions { flex-wrap: wrap; }
+.intro, .intro.returning { padding: 32px 0; }
+.home-plan { width: min(480px, 100%); min-height: 100px; font-size: 32px; }
+.intro.returning > a { color: var(--forest); }
+.form-panel { background: var(--surface); border-radius: 10px; }
+
+/* Authentication keeps the narrower 720px reading column. */
+.auth-page { width: min(720px, 100%); margin: 16px auto 0; }
+.auth-page .profile-panel { padding: 0; background: transparent; border: 0; }
+.auth-page .profile-panel > h2 { display: none; }
+.auth-page form { width: 100%; }
+.auth-page .profile-field { width: 100%; }
+.auth-page .profile-field input { width: 100%; font-size: 24px; min-height: 56px; }
+.auth-page form > button { width: 100%; min-height: 64px; }
+.auth-page .auth-recovery { font-size: 20px; line-height: 26px; color: var(--muted); }
+.auth-page .profile-panel > p[role=alert] { background: var(--error-surface); color: var(--error); border: 1px solid var(--error); padding: 16px; }
+
+/* Shared feedback distinguishes invalid input from a service failure. */
+.feedback { border-radius: 5px; }
+.feedback.validation { background: var(--warning-surface); border: 1px solid var(--warning); color: var(--warning); }
+.feedback.permission { background: white; border: 1px solid var(--forest); color: var(--forest); }
+.feedback.success { background: #e0ebdb; color: var(--forest); }
+.feedback.loading { align-items: stretch; text-align: left; padding: 32px; }
+.feedback-skeleton { display: grid; gap: 24px; width: 100%; }
+.feedback-skeleton span { display: block; height: 72px; background: #f7f7f2; border-radius: 12px; padding: 28px 24px; }
+.feedback-skeleton span::before { content: ''; display: block; width: 40%; height: 16px; border-radius: 8px; background: var(--border); }
+.feedback-skeleton span:nth-child(2)::before { width: 48%; }
+.feedback-skeleton span:nth-child(3)::before { width: 56%; }
+input[aria-invalid=true], select[aria-invalid=true], textarea[aria-invalid=true], input.invalid, textarea.invalid { border: 2px solid var(--warning); }
+.field-error, .validation-message, .profile-validation-summary { color: var(--warning); }
+.profile-validation-summary { background: var(--warning-surface); padding: 16px; }
+.profile-card, .profile-panel { padding: 32px; border-radius: 5px; background: white; }
+.profile-details { grid-template-columns: 1fr; gap: 8px; }
+.profile-details dt { color: var(--muted); font-size: 24px; }
+.profile-details dd { padding: 12px 24px; border: 1px solid var(--border); border-radius: 5px; margin-bottom: 16px; }
+.profile-card .profile-field input, .profile-card .profile-field textarea { width: 100%; font-size: 24px; }
+.profile-editor .actions { justify-content: flex-end; }
+.profile-editor .actions > .secondary { order: -1; }
+.profile-panel[aria-labelledby=guest-profile-heading] { border: 1px solid var(--forest); }
+.profile-help, .profile-field small { color: var(--muted); }
+
+.settings-groups { grid-template-columns: 1fr; gap: 24px; }
+.settings-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding: 32px; border-radius: 5px; background: white; }
+.settings-group h2 { grid-column: 1 / -1; font-size: 40px; line-height: 52px; }
+.settings-group[aria-labelledby=trip-preferences-heading] > .settings-field:nth-child(2),
+.settings-group[aria-labelledby=trip-preferences-heading] > .settings-field:last-child { grid-column: 1 / -1; }
+.settings-page input, .settings-page select { border: 1px solid var(--border); border-radius: 5px; line-height: 31px; }
+.settings-actions { justify-content: flex-end; }
+.settings-hint { color: var(--muted); }
+.settings-alert.validation { background: var(--warning-surface); color: var(--warning); border-color: var(--warning); }
+.settings-alert.failure { background: var(--error-surface); color: var(--error); border-color: var(--error); }
+.settings-alert.failure h2, .settings-alert.failure p, .settings-alert.failure a { color: var(--error); }
+.settings-alert.permission, .attraction-error.permission, .accommodation-error.permission { background: white; color: var(--forest); border: 1px solid var(--forest); }
+.settings-alert.permission h2, .settings-alert.permission p, .settings-alert.permission a { color: var(--forest); }
+
+.administrator-panel > section[aria-labelledby=all-users-heading] { padding: 32px; border-radius: 10px; background: #fffdf7; }
+.admin-confirmation { border: 1px solid var(--warning); border-radius: 10px; background: var(--warning-surface); color: var(--warning); }
+.admin-users-table { border-collapse: separate; border-spacing: 0 16px; background: transparent; }
+.admin-users-table thead { background: transparent; color: var(--forest); }
+.admin-users-table tbody tr { background: #f4f1e8; }
+.admin-users-table th, .admin-users-table td { border: 0; }
+.admin-users-table tbody th { border-radius: 10px 0 0 10px; }
+.admin-users-table tbody td:last-child { border-radius: 0 10px 10px 0; }
+.service-status-card { padding: 32px; background: #fffdf7; border-radius: 10px; }
+.service-status-card > h2 { margin-bottom: 24px; }
+.service-status-card select { width: 100%; }
+.service-status-card .feedback { padding: 24px; align-items: flex-start; text-align: left; }
+.service-status-card .feedback > p { max-width: 100%; }
+
+/* Catalogues retain wider layouts and the same field/feedback components. */
+main:has(.attractions-page) { width: 100%; }
+.attractions-page { --peach: var(--selection); }
+.attractions-page h1 { font-size: 64px; line-height: 83px; }
+.attraction-editor { background: #fffdf7; border-radius: 12px; }
+.attraction-card .secondary { border: 1px solid var(--border); padding: 12px 24px; }
+.attraction-editor .attraction-facts, .attraction-about, .attraction-location { background: #f4f1e8; border-radius: 12px; padding: 20px 24px; }
+.attraction-about h3, .attraction-location h3 { margin-bottom: 12px; }
+.attractions-page input[aria-invalid=true] { border-color: var(--warning); }
+.attractions-page .field-error { color: var(--warning); }
+.attraction-error.validation, .accommodation-error.validation { background: var(--warning-surface); border-color: var(--warning); color: var(--warning); }
+.attraction-modal-scrim { position: fixed; inset: 0; z-index: 30; background: rgba(26,37,28,.52); }
+.attraction-editor.attraction-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(1060px, calc(100vw - 40px)); max-height: calc(100dvh - 48px); overflow-y: auto; z-index: 31; padding: 32px; }
+.attraction-modal .actions { justify-content: flex-end; }
+.attraction-modal .actions .secondary { order: -1; }
+.attraction-modal .attraction-form-name { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.accommodation-heading { background: transparent; padding: 0; height: auto; color: var(--text); }
+.accommodation-heading h2 { font-size: 64px; line-height: 83px; }
+.accommodation-details { background: #fffdf7; border-radius: 12px; }
+.accommodation-card.selected { background: var(--selection); }
+.accommodation-modal-backdrop { background: rgba(26,37,28,.52); z-index: 30; }
+.accommodation-modal { width: min(1060px, calc(100vw - 40px)); border-radius: 12px; background: #fffdf7; padding: 32px; }
+.accommodation-modal .actions { justify-content: flex-end; }
+.accommodation-modal .actions .secondary { order: -1; }
+
+.trip-page .trip-form, .trip-page .trip-review, .saved-trip-card { background: #fffdf7; border-radius: 12px; padding: 24px; }
+.trip-page .trip-legs > li { background: #f4f1e8; border-radius: 12px; padding: 20px 24px; }
+.trip-page .trip-alert { background: var(--warning-surface); color: var(--warning); border-color: var(--warning); }
+.trip-page .trip-alert.failure { background: var(--error-surface); color: var(--error); border-color: var(--error); }
+.trip-dialog { border-radius: 12px; background: #fffdf7; }
+.recovery-card { display: grid; justify-items: start; gap: 16px; padding: 24px; background: #fffdf7; border-radius: 10px; }
+.recovery-card p { margin: 0; }
+.recovery-card.failure { background: var(--error-surface); }
+@media(min-width:1400px) {
+    .site-header .primary-navigation { display: grid; grid-template-columns: 200px 200px 130px; width: 530px; gap: 0; margin-right: 120px; flex-shrink: 0; }
+    .site-header .primary-navigation a { width: 100px; }
+    .site-header .primary-navigation a:nth-child(2) { width: 145px; }
+    .site-header .primary-navigation a:nth-child(3) { width: 130px; }
+}
+@media(max-width:1200px) {
+    main { width: auto; }
+    .attractions-page h1, .accommodation-heading h2 { font-size: 48px; line-height: 1.3; }
+}
+@media(max-width:700px) {
+    .site-header .primary-navigation { display: none; }
+    .site-header .menu .mobile-navigation-link { display: block; }
+    main { width: auto; }
+    .site-header .icon { width: 44px; min-height: 48px; }
+    .site-header a.icon img { width: 40px; height: 37.5px; }
+    .site-header button.icon img { width: 40px; height: 28px; }
+    .auth-page { margin-top: 0; }
+    .settings-group { grid-template-columns: 1fr; padding: 24px 16px; }
+    .settings-group h2 { font-size: 28px; line-height: 1.4; }
+    .profile-card, .profile-panel, .service-status-card { padding: 24px 16px; }
+    .auth-page .profile-field input, .profile-card .profile-field input, .profile-card .profile-field textarea { font-size: 20px; }
+    .attractions-page h1, .accommodation-heading h2 { font-size: 36px; line-height: 1.3; }
+    .attraction-modal .attraction-form-name { grid-template-columns: 1fr; }
+    .attraction-editor.attraction-modal, .accommodation-modal { padding: 24px 16px; }
+}

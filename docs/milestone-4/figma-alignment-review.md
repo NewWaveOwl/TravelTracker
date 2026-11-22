@@ -1,5 +1,8 @@
 # Figma alignment follow-up — PR #133
 
+This is a historical comparison. The updated 2026-11-22 canonical design and
+implementation are recorded in [Canonical UI alignment](canonical-ui-alignment.md).
+
 Source: [TravelTracker — FianlView](https://www.figma.com/design/7eOFtBm64Ep9fQXr0TtUSC/TravelTracker?node-id=92-3446).
 
 Used the `figma-design-to-code` skill and official Figma tools. The supplied node is a whole canvas; its initial design-context call required a layer selection. Metadata identified the relevant child frames, then high-fidelity design context and screenshots were retrieved for each comparison below before editing. The Figma document was not modified.

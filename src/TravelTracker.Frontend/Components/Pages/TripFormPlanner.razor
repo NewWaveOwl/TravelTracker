@@ -3,7 +3,9 @@
 @using TravelTracker.Frontend.Features.Trips
 @implements IDisposable
 
-<PageHeading Title="New Trip" />
+<small>TRIP PLANNING / YOUR ITINERARY</small>
+<PageHeading Title="Plan your trip" />
+<p>Build your itinerary, review the route and save when you are ready.</p>
 <p><a class="button secondary" href="new-trip">Open trip editor</a></p>
 <NavigationLock OnBeforeInternalNavigation="ConfirmLeaveAsync" ConfirmExternalNavigation="@Dirty" />
 <div class="trip-page">
@@ -40,7 +42,7 @@ else
     }
     @if (saveError is not null)
     {
-        <section class="trip-alert" role="alert">
+        <section class="trip-alert @(saveError.Kind == FailureKind.Validation ? "validation" : "failure")" role="alert">
             <h2>@SaveHeading</h2>
             <p>@saveError.Message</p>
             <p>Everything you entered is still here. Fix what is listed or try the save again.</p>

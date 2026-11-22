@@ -4,6 +4,7 @@
 {
     <PageTitle>Trip history | TravelTracker</PageTitle>
     <PageHeading Title="History" />
+    <p>View and manage your saved trips.</p>
 }
 else
 {
@@ -33,8 +34,8 @@ else if (failure is not null)
 }
 else if (trips.Count == 0)
 {
-    <Feedback Kind="FeedbackKind.Empty" Title="No saved trips yet">
-        <a href="trip">Create a trip</a> and save it to see it here.
+    <Feedback Kind="FeedbackKind.Empty" Title="No saved trips yet" Eyebrow="EMPTY">
+        Plan your first trip. It will appear here after you save it. <a class="button" href="trip">Plan a trip</a>
     </Feedback>
 }
 else

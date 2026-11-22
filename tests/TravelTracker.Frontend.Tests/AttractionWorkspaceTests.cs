@@ -22,6 +22,53 @@ public sealed class AttractionWorkspaceTests : BunitContext
     static readonly Guid Id = Guid.Parse("00000000-0000-0000-0000-000000000123");
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
 
+    [Fact]
+    public void AttractionDialogKeepsCatalogueInertAndEscapeCancelsWithoutWriting()
+    {
+        var writes = 0;
+        Configure(new StubHandler((request, _) =>
+        {
+            if (request.Method != HttpMethod.Get) writes++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) });
+        }));
+        var page = Render<Attractions>();
+        page.Find(".attractions-heading button").Click();
+        page.Find("#attraction-name").Input("Unconfirmed museum");
+
+        Assert.True(page.Find(".attraction-catalogue").HasAttribute("inert"));
+        page.Find("[role=dialog]").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Escape" });
+
+        Assert.Empty(page.FindAll("[role=dialog]"));
+        Assert.False(page.Find(".attraction-catalogue").HasAttribute("inert"));
+        Assert.Equal(0, writes);
+    }
+
+    [Fact]
+    public async Task BusyAttractionDialogKeepsFocusInsideAndCannotBeDismissedDuringSave()
+    {
+        var response = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Configure(new StubHandler((request, _) => request.Method == HttpMethod.Post ? response.Task
+            : Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) })));
+        var page = Render<Attractions>();
+        page.Find(".attractions-heading button").Click();
+        var headingFocus = JSInterop.Invocations.Last(invocation => invocation.Identifier.EndsWith("focus", StringComparison.Ordinal)).Arguments[0];
+        page.Find("#attraction-name").Input("Museum");
+        page.Find("#attraction-lat").Input("45");
+        page.Find("#attraction-lon").Input("-73");
+        page.Find("#attraction-estimatedVisitMinutes").Input("60");
+        var submission = page.Find(".attraction-editor form").SubmitAsync();
+        page.WaitForAssertion(() => Assert.True(page.Find(".attraction-editor fieldset").HasAttribute("disabled")));
+
+        page.Find("[role=dialog] > span[tabindex='0']").Focus();
+        Assert.Equal(headingFocus, JSInterop.Invocations.Last(invocation => invocation.Identifier.EndsWith("focus", StringComparison.Ordinal)).Arguments[0]);
+        page.Find("[role=dialog]").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Escape" });
+        Assert.Single(page.FindAll("[role=dialog]"));
+
+        response.SetResult(new HttpResponseMessage(HttpStatusCode.Created) { Content = JsonContent.Create(new AttractionDto(Id, "Museum", null, null, "", 45, -73, 60)) });
+        await submission;
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll("[role=dialog]")));
+    }
+
     /**
      * connects the real frontend HTTP stack to an isolated deterministic HTTP stub.
      * @param handler Answers public contract calls without an external service.

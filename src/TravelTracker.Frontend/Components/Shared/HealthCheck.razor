@@ -11,7 +11,7 @@
         <option @key="name" value="@name">@name</option>
     }
 </select>
-<Feedback Kind="kind" Retry="RetryCallback">@Message</Feedback>
+<Feedback Kind="kind" Eyebrow="@(kind == FeedbackKind.Success ? "SERVICE AVAILABLE" : null)" Retry="RetryCallback">@Message</Feedback>
 
 @code {
     string service = "";

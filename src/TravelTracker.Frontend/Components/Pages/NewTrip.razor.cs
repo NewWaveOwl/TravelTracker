@@ -61,7 +61,10 @@ public partial class NewTrip : IAsyncDisposable
     bool browseAccommodations;
     bool browseSaved;
     bool stopsStep;
-    bool toolsOpen = true;
+    long editorRevealVersion;
+    IReadOnlyList<string> observedEditorErrors = [];
+    string? observedEditorNotice;
+    bool observedEditorReview;
     bool savedReview;
     MapTool? mapTool;
     (string Code, string Label)? pendingMode;
@@ -102,7 +105,7 @@ public partial class NewTrip : IAsyncDisposable
 
     static string Pressed(bool active) => active ? "true" : "false";
 
-    bool MapVisible => showMap || review;
+    bool MapVisible => showMap;
     string TripTitle => string.IsNullOrWhiteSpace(draft.Name) ? "Untitled trip" : draft.Name;
     bool CanUndo => !busy && undoHistory.Count > 0;
     bool HasUnsavedWork => dirty || HasUnconfirmedMarkerChanges;
@@ -147,13 +150,17 @@ public partial class NewTrip : IAsyncDisposable
 
     ElementReference durationHoursInput;
     ElementReference stopNameInput, savedStopSearchInput;
-    ElementReference toolsToggle;
     bool focusDuration;
     bool focusStopDetails;
-    bool focusToolsToggle;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        var needsAttention = errors.Count > 0 && !ReferenceEquals(errors, observedEditorErrors)
+            || notice is not null && notice != observedEditorNotice || review && !observedEditorReview;
+        observedEditorErrors = errors;
+        observedEditorNotice = notice;
+        observedEditorReview = review;
+        if (showMap && needsAttention) { editorRevealVersion++; StateHasChanged(); }
         if (firstRender)
             undoShortcut = RegisterUndoShortcutAsync();
         if (focusDuration)
@@ -165,11 +172,6 @@ public partial class NewTrip : IAsyncDisposable
         {
             focusStopDetails = false;
             await (markerType == "transport_stop" ? savedStopSearchInput : stopNameInput).FocusAsync();
-        }
-        if (focusToolsToggle)
-        {
-            focusToolsToggle = false;
-            await toolsToggle.FocusAsync();
         }
         if (firstRender)
             await undoShortcut!;
@@ -646,9 +648,12 @@ public partial class NewTrip : IAsyncDisposable
         CancelConnection();
     }
 
+    // Standard steps keep the editable marker buffer and child components intact.
+    void ShowTripBasics() { stopsStep = false; review = savedReview = false; }
+    void ShowTripItinerary() { stopsStep = true; review = savedReview = false; }
+
     void ShowStops()
     {
-        toolsOpen = true;
         stopsStep = true;
         review = false;
         savedReview = false;
@@ -661,12 +666,12 @@ public partial class NewTrip : IAsyncDisposable
     async Task BackFromReview()
     {
         if (showMap) ShowStops();
-        else await SwitchView(false);
+        else ShowTripItinerary();
+        await Task.CompletedTask;
     }
 
     void OpenMarkers()
     {
-        toolsOpen = true;
         stopsStep = true;
         mapTool = MapTool.Markers;
         markerType = null;
@@ -679,13 +684,6 @@ public partial class NewTrip : IAsyncDisposable
     }
 
     void OpenTransport() => ShowStops();
-
-    /** Slides the editing panel without resetting its selection, buffers or connections. */
-    void ToggleTools()
-    {
-        toolsOpen = !toolsOpen;
-        focusToolsToggle = !toolsOpen;
-    }
 
     void CancelConnection()
     {
@@ -769,6 +767,7 @@ public partial class NewTrip : IAsyncDisposable
 
     void ShowReview()
     {
+        editorRevealVersion++;
         review = true;
         savedReview = false;
         CancelConnection();
@@ -970,7 +969,6 @@ public partial class NewTrip : IAsyncDisposable
     /** Opens an isolated edit buffer for the selected stop without moving the map. */
     void EditSelectedStop()
     {
-        toolsOpen = true;
         var marker = draft.Stops[selected];
         editingMarker = marker;
         editingStopDetails = true;
@@ -1156,10 +1154,10 @@ public partial class NewTrip : IAsyncDisposable
      */
     async Task SaveWorkspaceAsync()
     {
+        editorRevealVersion++;
         if (busy || savingCatalogue || openingRoute)
             return;
 
-        toolsOpen = true;
         notice = null;
         if (HasUnconfirmedMarkerChanges)
         {

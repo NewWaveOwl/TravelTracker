@@ -11,7 +11,7 @@
 <PageTitle>@(openingRoute ? "Opening trip" : showMap ? TripTitle : "Trip Editor") | TravelTracker</PageTitle>
 <NavigationLock ConfirmExternalNavigation="HasUnsavedWork" OnBeforeInternalNavigation="ConfirmDraftNavigationAsync" />
 
-<div @ref="plannerElement" class="trip-planner @(MapVisible ? "map-workspace" : null)">
+<div @ref="plannerElement" class="trip-planner @(showMap ? "map-workspace" : review ? "standard-review" : stopsStep ? "standard-itinerary" : "standard-basics")">
 @if (openingRoute)
 {
     <h1>Trip</h1>
@@ -20,11 +20,18 @@
 else
 {
     <div class="trip-workspace-actions" aria-label="Trip workspace">
-        <button type="button" data-trip-save aria-keyshortcuts="Control+S Meta+S"
-                disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</button>
-        <button type="button" disabled="@busy" @onclick="CreateNewAsync">Create new</button>
-        <button type="button" class="secondary" disabled="@busy" aria-expanded="@Pressed(browseSaved)"
-                aria-controls="saved-trip-browser" @onclick="() => browseSaved = !browseSaved">Open saved</button>
+        @if (showMap)
+        {
+            <button type="button" class="map-icon-action secondary" disabled="@busy" title="New trip" aria-label="New trip" @onclick="CreateNewAsync"><img src="assets/icons/new-trip.svg" alt="" /><span class="visually-hidden">Create new</span></button>
+            <button type="button" class="map-icon-action" data-trip-save aria-keyshortcuts="Control+S Meta+S" title="Save trip" aria-label="@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")"
+                    disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync"><img src="assets/icons/save-trip.svg" alt="" /><span class="visually-hidden">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</span></button>
+        }
+        else
+        {
+            <button type="button" data-trip-save aria-keyshortcuts="Control+S Meta+S" disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</button>
+            <button type="button" class="secondary" disabled="@busy" @onclick="CreateNewAsync">Create new</button>
+            <button type="button" class="secondary" disabled="@busy" aria-expanded="@Pressed(browseSaved)" aria-controls="saved-trip-browser" @onclick="() => browseSaved = !browseSaved">Open saved</button>
+        }
     </div>
     @if (browseSaved)
     {
@@ -46,8 +53,10 @@ else
     {
         <div class="trip-heading">
             <div>
-                <h1>Trip editor</h1>
-                <p>Plan your trip with places, transport and times.</p>
+                <small>TRIP PLANNING / YOUR ITINERARY</small>
+                <h1>@(string.IsNullOrWhiteSpace(draft.Name) ? "Plan your trip" : draft.Name)</h1>
+                <p>Build your itinerary, review the route and save when you are ready.</p>
+                <p class="trip-progress" aria-live="polite">Step @(review ? 3 : stopsStep ? 2 : 1) of 3 &middot; @(review ? "Review and save" : stopsStep ? "Itinerary" : "Trip basics")</p>
             </div>
             <div class="trip-actions" role="group" aria-label="Trip view">
                 @if (draft.Id is null)
@@ -61,7 +70,6 @@ else
                     @if (browseAccommodations) { <img src="assets/icons/close.svg" alt="" width="24" height="24" /> }
                     else { <text>Browse accommodations</text> }
                 </button>
-                <button type="button" class="secondary" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review on map</button>
             </div>
         </div>
         @if (browseAccommodations)
@@ -73,8 +81,8 @@ else
     }
 
     <div class="trip-columns @(!MapVisible ? "editor" : null)">
-        <MovablePanel Label="Itinerary" Class="itinerary-panel" Enabled="showMap">
-        <section class="trip-chain" aria-labelledby="trip-chain-title">
+        <MovablePanel Label="Map view / Trip planning" Class="itinerary-panel" Enabled="showMap">
+        <section class="trip-chain @(stopsStep ? "chain-stops" : "chain-basics")" aria-labelledby="trip-chain-title">
             @if (MapVisible)
             {
                 <small class="trip-eyebrow">Map view / Trip planning</small>
@@ -83,7 +91,9 @@ else
                            @bind:get="draft.Name" @bind:set="value => EditTripValue(draft.Name, value ?? string.Empty, next => draft.Name = next)" />
                 </h1>
                 <div class="trip-actions trip-steps" role="group" aria-label="Planning steps">
-                    <button type="button" class="secondary" aria-pressed="@Pressed(review)" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review on map</button>
+                    <button type="button" class="secondary" aria-pressed="@Pressed(!stopsStep && !review)" disabled="@busy" @onclick="ShowTripBasics">Basics</button>
+                    <button type="button" class="secondary" aria-pressed="@Pressed(stopsStep && !review)" disabled="@busy" @onclick="ShowTripItinerary">Stops</button>
+                    <button type="button" class="secondary" aria-pressed="@Pressed(review)" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review trip</button>
                 </div>
                 <details class="browser-draft-actions">
                 <summary>Browser draft</summary>
@@ -152,7 +162,7 @@ else
                     </li>
                 }
             </ol>
-            @if (showMap && !review && stopsStep)
+            @if (!review && (stopsStep || !showMap))
             {
                 <button type="button" class="secondary" disabled="@busy" @onclick="OpenMarkers">+ Add stop</button>
             }
@@ -168,7 +178,6 @@ else
             <MovablePanel Label="Map tools" Class="tools-panel" Enabled="showMap">
             <section class="trip-tools" aria-label="Map tools">
                 <div class="trip-palette">
-                    <button @ref="toolsToggle" type="button" aria-expanded="@Pressed(toolsOpen)" aria-controls="trip-tools-panel" disabled="@busy" @onclick="ToggleTools">Map tools</button>
                     <button type="button" class="secondary" aria-pressed="@Pressed(mapTool == MapTool.Markers)" disabled="@busy" @onclick="OpenMarkers">
                         <img src="@Icon("transport_stop")" alt="" />Markers
                     </button>
@@ -189,13 +198,8 @@ else
             </MovablePanel>
         }
 
-        <MovablePanel Label="Stop editor" Class="editor-panel" Enabled="showMap">
-        <div id="trip-tools-panel" class="trip-work @(showMap && !review && !toolsOpen ? "tools-collapsed" : null)"
-             inert="@(showMap && !review && !toolsOpen)" aria-hidden="@(showMap && !review && !toolsOpen ? "true" : null)">
-    @if (showMap && !review)
-    {
-        <button type="button" class="secondary trip-tools-close" aria-label="Close map tools" title="Close map tools" @onclick="ToggleTools"><img src="assets/icons/close.svg" alt="" /></button>
-    }
+        <MovablePanel Label="Plan stops and routes" Class="editor-panel" Enabled="showMap" RevealVersion="editorRevealVersion">
+        <div id="trip-tools-panel" class="trip-work">
     @if (notice is not null)
     {
         <div class="trip-message success" role="status">
@@ -224,7 +228,7 @@ else
             @if (review)
             {
                 <section class="trip-panel trip-review" aria-label="Trip review details">
-                    <h2>@(savedReview ? "Saved trip" : "Review on map")</h2>
+                    <h2>@(savedReview ? "Saved trip" : "Review trip")</h2>
                     <p>@(string.IsNullOrWhiteSpace(draft.Name) ? "Untitled trip" : draft.Name)</p>
                     <small>@(draft.RoundTrip ? "Round trip" : "One way") · @TimeLabel(draft.Start) → @TimeLabel(draft.End) · @draft.TimeZone</small>
                     <ol class="review-legs">
@@ -262,6 +266,10 @@ else
                 {
                     @TripBasics
                     @OpenSavedTrip
+                }
+                @if (!showMap)
+                {
+                    <div class="trip-itinerary-navigation"><button type="button" class="secondary" disabled="@busy" @onclick="ShowTripBasics">Back to basics</button><button type="button" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review trip</button></div>
                 }
                 @if (!showMap || mapTool != MapTool.Transport)
                 {
@@ -430,6 +438,10 @@ else
             <label class="trip-checkbox"><input type="checkbox" @bind:get="draft.RoundTrip"
                                                 @bind:set="value => EditTripValue(draft.RoundTrip, value, next => draft.RoundTrip = next)" /> Return to start</label>
         </fieldset>
+        @if (!showMap)
+        {
+            <button type="button" disabled="@busy" @onclick="ShowTripItinerary">Continue to itinerary</button>
+        }
     </section>;
 
     RenderFragment MarkerPalette => @<div>

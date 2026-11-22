@@ -1,13 +1,21 @@
-<section class="feedback @(IsError ? "error" : "")" role="@(IsError ? "alert" : "status")" aria-busy="@(Kind == FeedbackKind.Loading ? "true" : "false")">
-    @if (Eyebrow is not null)
+<section class="feedback @Appearance" role="@(IsAlert ? "alert" : "status")" aria-busy="@(Kind == FeedbackKind.Loading ? "true" : "false")">
+    @if (Label is not null)
     {
-        <small>@Eyebrow</small>
+        <small>@Label</small>
     }
     <h2>@(Title ?? Heading)</h2>
     <p>@ChildContent</p>
+    @if (Kind == FeedbackKind.Loading)
+    {
+        <div class="feedback-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
+    }
     @if (Retry.HasDelegate)
     {
         <button @onclick="Retry">Retry</button>
+    }
+    @if (Retry.HasDelegate && Kind is FeedbackKind.Network or FeedbackKind.Unavailable)
+    {
+        <a class="button secondary" href="/">Back to start</a>
     }
 </section>
 
@@ -30,7 +38,28 @@
     [Parameter]
     public EventCallback Retry { get; set; }
 
-    bool IsError => Kind is FeedbackKind.Validation or FeedbackKind.Permission or FeedbackKind.Network or FeedbackKind.Unavailable or FeedbackKind.Unexpected;
+    bool IsAlert => Kind is FeedbackKind.Validation or FeedbackKind.Permission or FeedbackKind.Network or FeedbackKind.Unavailable or FeedbackKind.Unexpected;
+    string Appearance => Kind switch
+    {
+        FeedbackKind.Validation => "validation",
+        FeedbackKind.Permission => "permission",
+        FeedbackKind.Network or FeedbackKind.Unavailable or FeedbackKind.Unexpected => "error",
+        FeedbackKind.Success => "success",
+        FeedbackKind.Loading => "loading",
+        _ => "empty",
+    };
+    string? Label => Eyebrow ?? Kind switch
+    {
+        FeedbackKind.Loading => "LOADING",
+        FeedbackKind.Empty => "EMPTY",
+        FeedbackKind.Validation => "CHECK YOUR INPUT",
+        FeedbackKind.Permission => "ACCESS REQUIRED",
+        FeedbackKind.Network => "CONNECTION ERROR",
+        FeedbackKind.Unavailable => "SERVICE UNAVAILABLE",
+        FeedbackKind.Unexpected => "SERVICE ERROR",
+        FeedbackKind.Success => "SAVED",
+        _ => null,
+    };
 
     string Heading => Kind switch
     {

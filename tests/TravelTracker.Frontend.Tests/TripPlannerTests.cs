@@ -38,6 +38,77 @@ public sealed class TripPlannerTests : BunitContext
         false, [new(1, Hotel, Museum, Train, Start.AddHours(1), Start.AddHours(2))]);
 
     [Theory]
+    [InlineData("Save trip")]
+    [InlineData("Review trip")]
+    public void GlobalActionsRequestTheDetailsPanelEvenWhenItsContentWasCollapsed(string action)
+    {
+        Configure((_, _) => Task.FromResult(Json(Saved)));
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var details = page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Last();
+        var originalVersion = details.Instance.RevealVersion;
+        page.Find(".map-trip-name").Change("");
+
+        Click(page, action);
+
+        page.WaitForAssertion(() => Assert.True(details.Instance.RevealVersion > originalVersion));
+        Assert.Contains("Enter a trip name", page.Find("[role=alert]").TextContent);
+    }
+
+    [Fact]
+    public void UnavailableMapTripRequestsAttentionForItsLoadFailure()
+    {
+        Configure((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+
+        page.WaitForAssertion(() =>
+        {
+            Assert.Contains("unavailable", page.Find("[role=alert]").TextContent);
+            Assert.True(page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Last().Instance.RevealVersion > 0);
+        });
+    }
+
+    [Fact]
+    public void StandardTripStepsKeepTheDraftAndUseANonMapReview()
+    {
+        Configure((_, _) => Task.FromResult(Json(Saved)));
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/trip/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var editor = page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Last().Instance;
+        page.Find(".trip-basics input").Change("Weekend with friends");
+
+        Click(page, "Continue to itinerary");
+        Assert.Contains("Step 2 of 3", page.Find(".trip-progress").TextContent);
+        Click(page, "Back to basics");
+        Assert.Equal("Weekend with friends", page.Find(".trip-basics input").GetAttribute("value"));
+        Click(page, "Continue to itinerary");
+        Click(page, "Review trip");
+
+        Assert.Contains("Step 3 of 3", page.Find(".trip-progress").TextContent);
+        Assert.Empty(page.FindAll(".trip-map-canvas, .movable-panel-handle"));
+        Assert.Contains("Weekend with friends", page.Find("[aria-label='Trip review details']").TextContent);
+        Assert.Same(editor, page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Last().Instance);
+        Click(page, "Back to stops");
+        Assert.Contains("Step 2 of 3", page.Find(".trip-progress").TextContent);
+        Assert.Equal(2, page.FindAll(".trip-stop").Count);
+    }
+
+    [Fact]
+    public void MapWorkspaceKeepsAccessibleNewThenSaveWithoutAnOpenSavedToolbar()
+    {
+        Configure((_, _) => Task.FromResult(Json(Saved)));
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+
+        Assert.Equal(new[] { "New trip", "Save trip" }, page.FindAll(".trip-workspace-actions button").Select(button => button.GetAttribute("aria-label")));
+        Assert.Single(page.FindAll("[data-trip-save]"));
+        Assert.Contains("Control+S", page.Find("[data-trip-save]").GetAttribute("aria-keyshortcuts"));
+        Assert.Empty(page.FindAll(".trip-workspace-actions [aria-controls=saved-trip-browser]"));
+        Assert.Equal(3, page.FindAll(".movable-panel-handle").Count);
+    }
+
+    [Theory]
     [InlineData("map")]
     [InlineData("trip")]
     public async Task WorkspaceSaveIsAvailableWithoutReviewAndBlocksDuplicateRequests(string route)
@@ -240,14 +311,15 @@ public sealed class TripPlannerTests : BunitContext
         Configure((_, _) => Task.FromResult(Json(Saved)));
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/{route}/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
-        var editor = page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Single(panel => panel.Instance.Label == "Stop editor").Instance;
+        var editor = page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Single(panel => panel.Instance.Label == "Plan stops and routes").Instance;
         Assert.All(page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>(), panel => Assert.Equal(movable, panel.Instance.Enabled));
         Assert.DoesNotContain("Reset panel layout", page.Markup);
         Assert.DoesNotContain("Standard editor", page.Markup);
         page.Find(".map-trip-name, .trip-basics input").Change("Unsaved panel edit");
-        Click(page, "Review on map");
-        Assert.Same(editor, page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Single(panel => panel.Instance.Label == "Stop editor").Instance);
-        Assert.Equal("Unsaved panel edit", page.Find(".map-trip-name").GetAttribute("value"));
+        Click(page, "Review trip");
+        Assert.Same(editor, page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Single(panel => panel.Instance.Label == "Plan stops and routes").Instance);
+        if (movable) Assert.Equal("Unsaved panel edit", page.Find(".map-trip-name").GetAttribute("value"));
+        else Assert.Contains("Unsaved panel edit", page.Find("[aria-label='Trip review details']").TextContent);
         Assert.All(page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>(), panel => Assert.Equal(movable, panel.Instance.Enabled));
     }
 
@@ -315,7 +387,7 @@ public sealed class TripPlannerTests : BunitContext
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
         await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, 45.52m, -73.59m)));
 
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Assert.Contains("replace it with a saved stop", page.Markup);
         Assert.DoesNotContain("Save catalogue entries", page.Markup);
         Click(page, "Back to stops");
@@ -327,7 +399,7 @@ public sealed class TripPlannerTests : BunitContext
         page.Find(".trip-search-results button").Click();
         Assert.Equal(3, page.FindAll(".trip-stop").Count);
 
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Click(page, "Save trip");
         page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
         Assert.Collection(saved!.Legs, first =>
@@ -435,25 +507,23 @@ public sealed class TripPlannerTests : BunitContext
     }
 
     [Fact]
-    public async Task MapToolsTogglePreservesSelectedStopAndUnconfirmedEditBuffer()
+    public async Task MapPlanningStepsPreserveSelectedStopAndUnconfirmedEditBuffer()
     {
         Configure((_, _) => Task.FromResult(Json(Saved)));
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
-        Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Trim() is "Basics" or "Stops");
+        Assert.Equal(new[] { "Basics", "Stops", "Review trip" }, page.FindAll(".trip-steps button").Select(button => button.TextContent));
         Assert.Single(page.FindAll(".trip-chain .trip-basics"));
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
         await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
         page.Find(".trip-place input[type=text]").Change("Pending name");
-        Click(page, "Map tools");
-        Assert.Equal("false", page.Find("[aria-controls=trip-tools-panel]").GetAttribute("aria-expanded"));
-        Assert.True(page.Find("#trip-tools-panel").HasAttribute("inert"));
-        Assert.Contains("tools-collapsed", page.Find("#trip-tools-panel").ClassName);
-        Click(page, "Map tools");
+        Click(page, "Basics");
+        Assert.Equal("true", page.FindAll(".trip-steps button")[0].GetAttribute("aria-pressed"));
+        Click(page, "Stops");
+        Assert.Equal("true", page.FindAll(".trip-steps button")[1].GetAttribute("aria-pressed"));
         Assert.Equal("Pending name", page.Find(".trip-place input[type=text]").GetAttribute("value"));
         Assert.Equal(1, canvas.Instance.SelectedIndex);
         Assert.Equal(Museum, canvas.Instance.Stops[1]);
-        Assert.False(page.Find("#trip-tools-panel").HasAttribute("inert"));
     }
 
     [Fact]
@@ -496,7 +566,7 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal(Guid.Empty, canvas.Instance.Stops[1].PlaceId);
         Assert.Equal(name, page.FindAll(".trip-stop strong")[1].TextContent);
         Assert.Empty(page.FindAll("script"));
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Click(page, "Save catalogue entries");
         Click(page, "Save trip");
         page.WaitForAssertion(() => Assert.NotNull(savedRequest));
@@ -533,7 +603,7 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Empty(page.FindAll(".trip-basics input[type=datetime-local]"));
         Assert.Equal(new DateOnly(2026, 11, 14), page.FindComponent<TravelTracker.Frontend.Components.Trips.TripDateRangePicker>().Instance.Start);
         page.Find(".map-trip-name, .trip-basics input").Change("Renamed trip");
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Click(page, "Save trip");
         page.WaitForAssertion(() => Assert.Single(writes));
         Assert.Equal(instant, writes[0].Start);
@@ -544,7 +614,7 @@ public sealed class TripPlannerTests : BunitContext
         var times = page.FindAll(".leg-panel input[type=datetime-local]");
         Assert.All(times, input => Assert.Equal("60", input.GetAttribute("step")));
         times[0].Change("2026-11-14T10:05:59.123");
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Click(page, "Save trip");
         page.WaitForAssertion(() => Assert.Equal(2, writes.Count));
         Assert.Equal(Start.AddHours(1).AddMinutes(5), writes[1].Legs[0].Departure);
@@ -669,7 +739,7 @@ public sealed class TripPlannerTests : BunitContext
         NavigateToTrip(page);
         Assert.EndsWith($"/trip/{TripId:D}", navigation.Uri);
         page.Find(".map-trip-name, .trip-basics input").Change("Updated weekend");
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Assert.Contains("Updated weekend", page.Find("[aria-label='Trip review details']").TextContent);
         Assert.Equal(new[] { "01HotelAccommodation", "02MuseumAttraction" },
             page.FindAll(".trip-stop").Select(stop => string.Concat(stop.TextContent.Where(character => !char.IsWhiteSpace(character)))));
@@ -684,7 +754,7 @@ public sealed class TripPlannerTests : BunitContext
 
         Click(page, "Back to editor");
         page.Find(".map-trip-name, .trip-basics input").Change("Edited again");
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Click(page, "Save trip");
         page.WaitForAssertion(() => Assert.Contains("Saved Edited again", page.Find("[role=status]").TextContent));
         Assert.Equal(3, writes.Count);
@@ -692,7 +762,7 @@ public sealed class TripPlannerTests : BunitContext
         navigation.NavigateTo("/new-trip");
         routes.WaitForAssertion(() =>
         {
-            Assert.Equal("Trip editor", routes.Find("h1").TextContent);
+            Assert.Equal("Plan your trip", routes.Find("h1").TextContent);
             Assert.Empty(routes.FindAll(".trip-stop"));
             Assert.Equal("", routes.Find(".map-trip-name, .trip-basics input").GetAttribute("value"));
         });
@@ -718,7 +788,7 @@ public sealed class TripPlannerTests : BunitContext
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
 
         page.Find(".map-trip-name, .trip-basics input").Change("My edit");
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Click(page, "Save trip");
         page.WaitForAssertion(() => Assert.Contains("Reopen the trip", page.Find("[role=alert]").TextContent));
         Assert.Equal(1, attempts);
@@ -804,7 +874,7 @@ public sealed class TripPlannerTests : BunitContext
         ConfigureBrowserDraftStorage();
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
         await page.InvokeAsync(() => canvas.Instance.MoveMarker(1, 15, 10));
         Assert.Empty(page.FindAll(".trip-review"));
@@ -822,7 +892,7 @@ public sealed class TripPlannerTests : BunitContext
             Assert.Contains("Map draft restored from this browser.", page.Markup);
         }
 
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Assert.Contains("They stay in the catalogue even if you discard this trip.", page.Find(".trip-review").TextContent);
         Assert.DoesNotContain(page.FindAll(".trip-review button"), button => button.TextContent == "Save trip");
         Assert.Equal(0, catalogueWrites);
@@ -910,7 +980,7 @@ public sealed class TripPlannerTests : BunitContext
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
         await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, previous.Lat + 0.000003m, previous.Lon - 0.000004m)));
 
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Click(page, "Save catalogue entries");
         page.WaitForAssertion(() => Assert.Contains("could not be confirmed", page.Find("[role=alert]").TextContent));
         Click(page, "Save catalogue entries");
@@ -968,7 +1038,7 @@ public sealed class TripPlannerTests : BunitContext
         var page = routes.FindComponent<NewTrip>();
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
         await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, 45.52m, -73.59m)));
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         var firstClick = page.Find(".trip-review button").TriggerEventAsync("onclick", new MouseEventArgs());
 
         try
@@ -978,7 +1048,7 @@ public sealed class TripPlannerTests : BunitContext
             page = routes.FindComponent<NewTrip>();
             canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
             await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, 45.53m, -73.60m)));
-            Click(page, "Review on map");
+            Click(page, "Review trip");
             var save = page.Find(".trip-review button");
             Assert.True(save.HasAttribute("disabled"));
             await save.TriggerEventAsync("onclick", new MouseEventArgs()).WaitAsync(TimeSpan.FromSeconds(3));
@@ -1012,7 +1082,7 @@ public sealed class TripPlannerTests : BunitContext
         });
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         var save = page.Find("[data-trip-save]");
         var firstClick = save.TriggerEventAsync("onclick", new MouseEventArgs());
 
@@ -1139,7 +1209,7 @@ public sealed class TripPlannerTests : BunitContext
 
         await NavigateUsingHeader("trip");
         Assert.Empty(routes.FindAll(".trip-map-canvas"));
-        Assert.Equal("Trip editor", routes.Find("h1").TextContent);
+        Assert.Equal("Weekend", routes.Find("h1").TextContent);
         Assert.Equal("page", routes.Find("a[href='trip']").GetAttribute("aria-current"));
         Assert.Equal("Weekend", routes.Find(".map-trip-name, .trip-basics input").GetAttribute("value"));
 
@@ -1257,8 +1327,10 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal(2, page.FindAll(".trip-stop").Count);
         Assert.Contains("Walk", page.Find(".trip-leg-time").TextContent);
         Assert.Empty(page.FindAll(".trip-marker"));
-        Click(page, "Review on map");
-        Assert.Equal(2, page.FindAll(".trip-marker").Count);
+        Click(page, "Review trip");
+        Assert.Empty(page.FindAll(".trip-marker"));
+        Assert.Single(page.FindAll(".review-legs li"));
+        Assert.Contains("My museum", page.Find(".review-legs").TextContent);
         Assert.Contains("Enter a trip name", page.Find("[role=alert]").TextContent);
     }
 
@@ -1288,7 +1360,7 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal(new[] { "Train", "Bus", "Walk" }, page.FindAll(".map-leg-label span").Select(label => label.TextContent));
         Assert.Equal(3, page.FindAll(".route-line").Count);
 
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Assert.Contains("Round trip", page.Find(".trip-review small").TextContent);
 
         void Connect(string mode, string from, string to)
@@ -1348,7 +1420,7 @@ public sealed class TripPlannerTests : BunitContext
         page.FindAll(".leg-panel input[type=datetime-local]")[0].Change("2026-11-14T12:00");
         page.Find("input[aria-label='Duration hours']").Change("1");
 
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Assert.Empty(page.FindAll("[role=alert]"));
         Click(page, "Save catalogue entries");
         Click(page, "Save trip");
@@ -1472,7 +1544,7 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal("1", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
         Assert.Equal("0", page.Find("input[aria-label='Duration minutes']").GetAttribute("value"));
         Assert.StartsWith("2026-11-14T11:15", page.FindAll(".leg-panel input[type=datetime-local]")[1].GetAttribute("value"));
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Assert.Empty(page.FindAll("[role=alert]"));
         Click(page, "Save catalogue entries");
         if (trainUnavailable)
@@ -1491,7 +1563,7 @@ public sealed class TripPlannerTests : BunitContext
                 page.FindAll(".trip-stop")[0].Click();
                 page.FindAll(".trip-stop")[1].Click();
             }
-            Click(page, "Review on map");
+            Click(page, "Review trip");
             Click(page, "Save catalogue entries");
         }
         Click(page, "Save map draft");
@@ -1577,7 +1649,7 @@ public sealed class TripPlannerTests : BunitContext
         page.FindAll(".leg-panel select")[1].Change("-05:00:00");
 
         Assert.Equal("1", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Assert.Empty(page.FindAll("[role=alert]"));
         Click(page, "Save trip");
         page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
@@ -1674,7 +1746,7 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal("true", page.Find(".trip-marker[aria-label='Stop 2: Station']").GetAttribute("aria-pressed"));
         Assert.Equal(2, page.FindAll(".trip-marker").Count);
 
-        Click(page, "Review on map");
+        Click(page, "Review trip");
         Assert.Equal(2, page.FindAll(".review-legs li").Count);
         Assert.Empty(page.FindAll("[role=alert]"));
     }
