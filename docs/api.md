@@ -110,11 +110,29 @@ The independent Users service runs on HTTPS port 5101 locally and owns its Postg
 | Route | Permission | Behavior |
 | --- | --- | --- |
 | `GET /api/v1/users/me` | `users.read` | Returns the caller's profile. The first valid request creates an active traveller with blank editable fields. Banned accounts can read their profile. Deactivated accounts receive 403. |
+| `GET /api/v1/users/me/picture` | `users.read` | Returns the caller's saved PNG, or 404 when absent. Banned accounts can read their picture. Deactivated accounts receive 403. |
+| `PUT /api/v1/users/me/picture` | `users.write` | Replaces the active caller's picture and returns 204 with a `Location` header for the private read route. An account must already be provisioned. |
 | `PATCH /api/v1/users/me` | `users.write` | Active accounts can change `username`, `email` and `address`. Omitted fields keep their values. A null address clears it. Invalid or unknown fields return 400. A duplicate username or stale write returns 409. |
 | `GET /internal/users/{userId}/access` | `users.access` and an allowlisted service subject | Returns `userId`, `status` and `role`, or 404 for an unknown ID. |
 | `POST /internal/users/identity` | `users.access` and an allowlisted service subject | Resolves a backend-validated issuer and subject to an existing public ID, or returns 404. |
 
 The self-profile response includes `publicId`, `username`, `email`, `address`, `role`, `status`, `createdAt` and `updatedAt`. Editable email is profile contact information. Internal lookups never create accounts. Protected routes return 401 for invalid or missing bearer credentials and 403 for missing permission. Users returns 503 when required storage is unavailable.
+
+### Profile picture
+
+Send the raw bytes of one static PNG or JPEG with matching `Content-Type`
+(`image/png` or `image/jpeg`). The maximum input is 1,048,576 bytes, with width
+and height each between 1 and 512 pixels. No multipart wrapper or client file
+name is used. The API decodes the pixels and stores a fresh PNG without the
+original metadata in the Users database. It returns `400` for an empty or
+malformed image, `413` for a byte or dimension violation, `415` for an
+unsupported or mismatched format, and `409` if another write wins a
+concurrent update. Rejected uploads leave the stored picture unchanged.
+
+The successful upload's relative `Location`, `/api/v1/users/me/picture`, is
+the stable reference. Fetch it over HTTPS with the caller's bearer in the
+Authorization header. It is private and non-cacheable. No image bytes or
+public storage URL are added to the profile JSON.
 
 `POST /api/v1/users/bootstrap-first-administrator` requires `catalogue.read`, the setup credential, an allowed verified provider email bound to the validated subject, HTTPS and a never-consumed bootstrap record. It accepts no client-selected identity or role fields. A replay for the same identity may return the current role without re-elevating the account. This setup policy does not require `users.admin`; successful first-administrator provisioning is independently gated by the operator secret and verified identity.
 

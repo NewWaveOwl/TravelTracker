@@ -105,7 +105,7 @@ In the **Map** and **Trip** workspaces, choose the beginning and ending days tog
 
 Place forms and details show the **street address** prominently, with **latitude and longitude** underneath in smaller text. In Map View, pick the map position and enter its street address; you can also adjust the coordinates.
 
-**Profile pictures:** Account → Edit profile → **Upload photo** uses the protected Users picture API and migration from [PR #137](https://github.com/NewWaveOwl/TravelTracker/pull/137), a separate backend dependency. Choose one static PNG or JPEG up to 1 MiB and 512 × 512 pixels. File selection saves the photo separately from profile text edits; a rejected upload keeps the previous photo. See [picture UI behavior and validation](docs/milestone-4/profile-picture-ui.md).
+**Profile pictures:** Account → Edit profile → **Upload photo** uses the protected Users picture API and migration merged in [PR #137](https://github.com/NewWaveOwl/TravelTracker/pull/137), now included from `milestone_4`. Choose one static PNG or JPEG up to 1 MiB and 512 × 512 pixels. File selection saves the photo separately from profile text edits; a rejected upload keeps the previous photo. See [picture UI behavior and validation](docs/milestone-4/profile-picture-ui.md).
 
 ### Troubleshooting database login
 
@@ -140,6 +140,7 @@ For PostgreSQL tests, set `TRAVELTRACKER_TEST_POSTGRES` to an isolated PostgreSQ
 `dotnet run --file scripts/TestDatabase.cs -- up` starts a disposable PostgreSQL 17 container (podman if installed, otherwise docker; override with `TRAVELTRACKER_CONTAINER_RUNTIME`) and prints the `TRAVELTRACKER_TEST_POSTGRES` value to use. `-- env` prints only the connection string and `-- down` removes the container. CI uses its own service container and does not run this script. See the [journey test guide](docs/milestone-3/critical-journey.md).
 
 - [Supabase Auth setup and migration](docs/supabase-auth.md)
+- [Supabase PostgreSQL migration audit and staging verification](docs/supabase-migration-verification.md)
 - [Environment configuration and secrets](docs/environment-configuration.md)
 - [API contracts and service URLs](docs/api.md)
 - [Trips API and persistence](docs/trips-service.md)

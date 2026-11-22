@@ -84,6 +84,20 @@ namespace TravelTracker.Users.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TravelTracker.Users.Data.Entities.UserPictureRow", b =>
+                {
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("AccountId");
+
+                    b.ToTable("UserPictures", (string)null);
+                });
+
             modelBuilder.Entity("TravelTracker.Users.Data.Entities.UserRecord", b =>
                 {
                     b.Property<long>("Id")
@@ -160,6 +174,20 @@ namespace TravelTracker.Users.Data.Migrations
 
                             t.HasCheckConstraint("CK_UserAccounts_Status", "\"Status\" IN ('active', 'banned', 'deactivated')");
                         });
+                });
+
+            modelBuilder.Entity("TravelTracker.Users.Data.Entities.UserPictureRow", b =>
+                {
+                    b.HasOne("TravelTracker.Users.Data.Entities.UserRecord", null)
+                        .WithOne("Picture")
+                        .HasForeignKey("TravelTracker.Users.Data.Entities.UserPictureRow", "AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TravelTracker.Users.Data.Entities.UserRecord", b =>
+                {
+                    b.Navigation("Picture");
                 });
 #pragma warning restore 612, 618
         }

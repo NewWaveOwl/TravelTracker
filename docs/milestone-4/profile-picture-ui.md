@@ -9,17 +9,18 @@ example name and initials are not application data.
 
 ## Integration and API dependency
 
-The requested `master` pull was already up to date. The actual default and PR
-base branch is `milestone_4`; its published configuration and redaction updates
-at `2174efa` were integrated without rewriting the PR's published history.
+The repository has no `main` branch. The actual default and PR base branch is
+`milestone_4`; its latest changes at `8d3429b` were pulled without rewriting
+the PR's published history. This includes the configuration/redaction updates,
+the profile-picture backend and the Supabase migration verification record.
 
 The picture contract is supplied by [PR #137](https://github.com/NewWaveOwl/TravelTracker/pull/137),
-checked at `3afd488` and again at `8592ef7`, and implements the backend dependency
-for [UI issue #126](https://github.com/NewWaveOwl/TravelTracker/issues/126).
-The owner explicitly chose to keep that backend PR separate from this frontend
-implementation. Until its API
-and database migration are deployed, picture reads/uploads cannot be claimed
-as an integrated live feature.
+which implements the backend for [UI issue #126](https://github.com/NewWaveOwl/TravelTracker/issues/126).
+The owner chose to keep that backend PR separate from the frontend implementation.
+It has since merged into `milestone_4` at `7b48321`, including the final image
+orientation/sampling fixes through `5953312`, and is now included by the base
+pull. Deployment still requires the Users API and database migration; live
+authenticated picture reads/uploads have not been verified.
 
 | Operation | Protected Users contract |
 | --- | --- |
@@ -64,7 +65,7 @@ After integrating `milestone_4`, the baseline Release solution build passed
 with zero warnings and errors. All 1,364 application tests passed, including
 513 frontend cases; the 41 JavaScript interaction checks also passed.
 
-Final validation:
+UI implementation validation at `045d0cc`, before the latest base pull:
 
 - Restore and Release solution build passed, with zero warnings and errors.
 - `dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL"`:
@@ -89,9 +90,22 @@ independent component reloads, native file input lifetime, profile text Cancel,
 and accepted Account URL forms. Controlled identity and HTTP doubles are not
 evidence of a live authenticated provider or physical-device journey.
 
+Base-pull validation against `milestone_4` at `8d3429b`:
+
+- Restore and Release solution build passed with zero warnings and errors.
+- Application suite: 1,430 discovered, executed and passed; zero failed or
+  skipped. The 14 additional cases come from the merged picture API tests;
+  all 565 frontend cases remain passing.
+- JavaScript interaction suites: 41 passed, zero failed, skipped or cancelled.
+- Offline launcher configuration suite: 22 passed, zero failed.
+- Read-only integration review found no confirmed correctness or security
+  regressions between the frontend and the merged picture API.
+- Whitespace and changed documentation-link checks passed.
+
 The requested cloud browser still reports an unavailable access host, so a
 fresh visual/pixel comparison and rendered geometry check remain unverified.
 Local PostgreSQL tests were not run because no isolated connection is
-configured; CI supplies the disposable relational test database. PR #137's
-backend and migration remain a separate prerequisite, and no live database,
+configured; CI supplies the disposable relational test database. The backend
+and migration from PR #137 are now in the branch through the base pull, but
+deployment and live authentication remain unverified. No live database,
 Auth settings or user pictures were modified by these checks.
