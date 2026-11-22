@@ -9,13 +9,13 @@ globalThis.Element = class {
     closest() { return this.dialog ? {} : null; }
 };
 
-function setup({ disabled = false, connected = true, present = true } = {}) {
+function setup({ disabled = false, connected = true, present = true, active, onSave } = {}) {
     let listener;
     let signal;
     let clicks = 0;
-    globalThis.document = { addEventListener: (_, callback, options) => { listener = callback; signal = options.signal; } };
-    const registration = watchUndo({ isConnected: connected, querySelector: selector =>
-        selector === "[data-trip-save]" && present ? { disabled, click: () => clicks++ } : null });
+    globalThis.document = { activeElement: active, addEventListener: (_, callback, options) => { listener = callback; signal = options.signal; } };
+    const registration = watchUndo({ isConnected: connected, contains: element => element === active, querySelector: selector =>
+        selector === "[data-trip-save]" && present ? { disabled, click: () => { clicks++; onSave?.(); } } : null });
     return {
         send: (overrides = {}) => {
             let prevented = false;
@@ -36,6 +36,14 @@ for (const modifier of ["ctrlKey", "metaKey"]) {
 
 test("busy save suppresses the browser dialog without another submission", () => {
     assert.deepEqual(setup({ disabled: true }).send(), { prevented: true, clicks: 0 });
+});
+
+test("shortcut commits the focused field change before invoking save", () => {
+    let boundValue = "Old name";
+    const active = new Element();
+    active.blur = () => { boundValue = "Typed name"; };
+    const fixture = setup({ active, onSave: () => assert.equal(boundValue, "Typed name") });
+    assert.deepEqual(fixture.send(), { prevented: true, clicks: 1 });
 });
 
 test("held shortcut suppresses repeat submissions", () => {

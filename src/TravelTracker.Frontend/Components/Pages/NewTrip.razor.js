@@ -8,7 +8,12 @@ export function watchUndo(planner) {
             const save = planner.querySelector("[data-trip-save]");
             if (!save) return;
             event.preventDefault();
-            if (!event.repeat && !save.disabled) save.click();
+            if (!event.repeat && !save.disabled) {
+                // Blazor onchange bindings must receive the active edit before the save event.
+                const active = document.activeElement;
+                if (active instanceof Element && planner.contains(active) && typeof active.blur === "function") active.blur();
+                save.click();
+            }
             return;
         }
         if (event.defaultPrevented || event.isComposing || event.repeat || event.altKey || event.shiftKey ||
