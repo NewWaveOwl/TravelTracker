@@ -180,6 +180,108 @@ public sealed class AttractionWorkspaceTests : BunitContext
         Assert.True(page.Find("fieldset").HasAttribute("disabled"));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ForbiddenReadClearsCachedCardsAndPrivateDetails(bool details)
+    {
+        var saved = new AttractionDto(Id, "Private museum", "Private description", null, "Private address", 45, -73, 30);
+        var handler = new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = request.RequestUri!.AbsolutePath.EndsWith(Id.ToString()) ? JsonContent.Create(saved) : JsonContent.Create(new[] { saved })
+        }));
+        Configure(handler);
+        var page = Render<Attractions>();
+        page.Find(".attraction-card button").Click();
+        Assert.Contains("Private description", page.Markup);
+
+        handler.RespondWith(403);
+        if (details) page.Find(".attraction-card button").Click();
+        else page.Find(".attraction-search").Submit();
+
+        Assert.Single(page.FindAll("[role=alert]"));
+        Assert.Empty(page.FindAll(".attraction-card"));
+        Assert.DoesNotContain("Private description", page.Markup);
+        Assert.DoesNotContain("Private address", page.Markup);
+        Assert.DoesNotContain("Edit attraction", page.Markup);
+        Assert.DoesNotContain("Sign in to browse", page.Markup);
+    }
+
+    [Fact]
+    public void MissingDetailRemovesOnlyTheUnavailableCardAndItsEditableSelection()
+    {
+        var saved = new AttractionDto(Id, "Unavailable museum", "Private description", null, "Private address", 45, -73, 30);
+        var other = saved with { AttractionId = Guid.Parse("00000000-0000-0000-0000-000000000124"), Name = "Other museum", Description = "Other description", Address = "Other address" };
+        var handler = new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = request.RequestUri!.AbsolutePath.EndsWith(Id.ToString()) ? JsonContent.Create(saved) : JsonContent.Create(new[] { saved, other })
+        }));
+        Configure(handler);
+        var page = Render<Attractions>();
+        page.Find(".attraction-card button").Click();
+        handler.RespondWith(404);
+        page.Find(".attraction-card button").Click();
+
+        Assert.Single(page.FindAll("[role=alert]"));
+        Assert.Single(page.FindAll(".attraction-card"));
+        Assert.Contains("Other museum", page.Markup);
+        Assert.DoesNotContain("Unavailable museum", page.Markup);
+        Assert.DoesNotContain("Private description", page.Markup);
+        Assert.DoesNotContain("Edit attraction", page.Markup);
+    }
+
+    [Fact]
+    public void ForbiddenEditPreservesPendingFieldsWithoutClaimingSaveSuccess()
+    {
+        var saved = new AttractionDto(Id, "Museum", "Original description", null, "Address", 45, -73, 30);
+        var handler = new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = request.RequestUri!.AbsolutePath.EndsWith(Id.ToString()) ? JsonContent.Create(saved) : JsonContent.Create(new[] { saved })
+        }));
+        Configure(handler);
+        var page = Render<Attractions>();
+        page.Find(".attraction-card button").Click();
+        page.FindAll("button").Single(button => button.TextContent == "Edit attraction").Click();
+        page.Find("#attraction-name").Input("Pending museum name");
+        handler.RespondWith(403);
+        page.Find(".attraction-editor form").Submit();
+
+        Assert.Equal("Pending museum name", page.Find("#attraction-name").GetAttribute("value"));
+        Assert.True(page.Find("fieldset").HasAttribute("disabled"));
+        Assert.DoesNotContain("Attraction saved.", page.Markup);
+    }
+
+    [Theory]
+    [InlineData(401)]
+    [InlineData(503)]
+    public void FailedReadDistinguishesRejectedSessionFromTemporaryServiceFailure(int status)
+    {
+        var saved = new AttractionDto(Id, "Cached museum", "Cached description", null, "Address", 45, -73, 30);
+        var handler = new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = request.RequestUri!.AbsolutePath.EndsWith(Id.ToString()) ? JsonContent.Create(saved) : JsonContent.Create(new[] { saved })
+        }));
+        Configure(handler);
+        var page = Render<Attractions>();
+        page.Find(".attraction-card button").Click();
+        handler.RespondWith(status);
+        page.Find(".attraction-search").Submit();
+
+        if (status == 401)
+        {
+            Assert.Contains("Sign in to browse", page.Markup);
+            Assert.DoesNotContain("Cached description", page.Markup);
+            Assert.Empty(page.FindAll(".attraction-card"));
+        }
+        else
+        {
+            Assert.Contains("Cached description", page.Markup);
+            Assert.Single(page.FindAll(".attraction-card"));
+            Assert.Contains("Retry search", page.Markup);
+            Assert.DoesNotContain("Sign in to browse", page.Markup);
+        }
+    }
+
     /**
      * Opens the create form, fills it with valid values and submits it to a service that rejects the write with the given status.
      * @param status The status the write answers with.

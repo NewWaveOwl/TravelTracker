@@ -127,8 +127,8 @@ public partial class Attractions : IDisposable
             if (Current(version))
             {
                 LogFailure("search", failure);
-                ShowError(failure);
-                retrySearch = signedIn;
+                HandleReadFailure(failure);
+                retrySearch = signedIn && failure.Status != 403;
             }
         }
         finally
@@ -173,7 +173,7 @@ public partial class Attractions : IDisposable
             if (Current(version))
             {
                 LogFailure("details", failure);
-                ShowError(failure);
+                HandleReadFailure(failure, attractionId);
             }
         }
         finally
@@ -265,8 +265,8 @@ public partial class Attractions : IDisposable
             {
                 if (!Current(version)) return;
                 LogFailure("refresh after save", failure);
-                ShowError(failure);
-                retrySearch = true;
+                HandleReadFailure(failure);
+                retrySearch = signedIn && failure.Status != 403;
                 if (failure.Status != 401) status = "Attraction saved, but search results could not be refreshed. Retry the search; do not submit the attraction again.";
             }
         }
@@ -312,6 +312,29 @@ public partial class Attractions : IDisposable
         }
 
         if (failure.Status == 403) canWrite = false;
+    }
+
+    /**
+     * Removes cached data when a read no longer authorizes it, without discarding drafts on write denial.
+     * @param failure The failed catalogue read.
+     * @param attractionId The detail record requested, or null for a collection read.
+     */
+    void HandleReadFailure(ApiError failure, Guid? attractionId = null)
+    {
+        ShowError(failure);
+        if (failure.Status == 403)
+        {
+            results = [];
+            selected = original = null;
+            editing = pickingLocation = false;
+            draft = new();
+            status = null;
+        }
+        else if (failure.Status == 404 && attractionId is { } id)
+        {
+            results = results.Where(item => item.AttractionId != id).ToArray();
+            if (selected?.AttractionId == id) selected = null;
+        }
     }
 
     /**
