@@ -60,9 +60,49 @@ internal static class ProfilePictureUpload
             return (StatusCodes.Status400BadRequest, null);
 
         cancellationToken.ThrowIfCancellationRequested();
-        using var encoded = bitmap.Encode(SKEncodedImageFormat.Png, 100)
+        using var oriented = Orient(bitmap, decoder.EncodedOrigin);
+        using var encoded = (oriented ?? bitmap).Encode(SKEncodedImageFormat.Png, 100)
             ?? throw new InvalidOperationException("Profile picture encoding failed.");
         return (StatusCodes.Status204NoContent, encoded.ToArray());
+    }
+
+    /**
+     * Applies the EXIF transform to the pixel grid before discarding image metadata.
+     * @param source The decoded bitmap in encoded pixel order.
+     * @param origin The orientation reported by the codec.
+     * @return A caller-owned bitmap in display orientation, or null when no transform is needed.
+     */
+    private static SKBitmap? Orient(SKBitmap source, SKEncodedOrigin origin)
+    {
+        var width = source.Width;
+        var height = source.Height;
+        // Map bitmap edges rather than pixel indices so the canvas transform stays pixel-aligned.
+        var (xx, xy, x, yx, yy, y) = origin switch
+        {
+            SKEncodedOrigin.TopRight => (-1, 0, width, 0, 1, 0),
+            SKEncodedOrigin.BottomRight => (-1, 0, width, 0, -1, height),
+            SKEncodedOrigin.BottomLeft => (1, 0, 0, 0, -1, height),
+            SKEncodedOrigin.LeftTop => (0, 1, 0, 1, 0, 0),
+            SKEncodedOrigin.RightTop => (0, -1, height, 1, 0, 0),
+            SKEncodedOrigin.RightBottom => (0, -1, height, -1, 0, width),
+            SKEncodedOrigin.LeftBottom => (0, 1, 0, -1, 0, width),
+            _ => (1, 0, 0, 0, 1, 0)
+        };
+        if (origin is SKEncodedOrigin.TopLeft) return null;
+
+        var rotated = xx == 0;
+        var result = new SKBitmap(new SKImageInfo(rotated ? height : width, rotated ? width : height,
+            SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(result);
+        canvas.Clear(SKColors.Transparent);
+        canvas.SetMatrix(new SKMatrix
+        {
+            ScaleX = xx, SkewX = xy, TransX = x,
+            SkewY = yx, ScaleY = yy, TransY = y,
+            Persp2 = 1
+        });
+        canvas.DrawBitmap(source, 0, 0);
+        return result;
     }
 
     /**

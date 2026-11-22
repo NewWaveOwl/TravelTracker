@@ -44,6 +44,28 @@ public sealed class UserPictureApiTests
         Assert.Equal(24, replaced.Width);
     }
 
+    [Fact]
+    public async Task ExifOrientationSixRotatesTheSavedPixelsClockwise()
+    {
+        using var host = new UsersApiFactory();
+        using var caller = host.Browser(host.Token(subject: Owner, scope: "users.read users.write"));
+        using var profile = await caller.GetAsync("/api/v1/users/me");
+        Assert.Equal(HttpStatusCode.OK, profile.StatusCode);
+        var jpeg = CreateOrientationSixJpeg();
+        using var upload = await UploadAsync(caller, jpeg, "image/jpeg");
+        Assert.Equal(HttpStatusCode.NoContent, upload.StatusCode);
+
+        using var saved = SKBitmap.Decode(await caller.GetByteArrayAsync(Picture));
+        Assert.NotNull(saved);
+        Assert.Equal(16, saved.Width);
+        Assert.Equal(32, saved.Height);
+        var top = saved.GetPixel(8, 4);
+        var bottom = saved.GetPixel(8, 27);
+        // Sample away from the boundary and allow for JPEG compression.
+        Assert.True(top.Red > 200 && top.Blue < 50);
+        Assert.True(bottom.Blue > 200 && bottom.Red < 50);
+    }
+
     [Theory]
     [InlineData("declared-unsupported", HttpStatusCode.UnsupportedMediaType)]
     [InlineData("spoofed", HttpStatusCode.UnsupportedMediaType)]
@@ -173,6 +195,33 @@ public sealed class UserPictureApiTests
         bitmap.Erase(SKColors.Teal);
         using var encoded = bitmap.Encode(format, 100);
         return encoded.ToArray();
+    }
+
+    /**
+     * Creates a two-color JPEG with a little-endian EXIF orientation tag set to 6.
+     * @return JPEG bytes with the APP1 segment inserted after the start marker.
+     */
+    private static byte[] CreateOrientationSixJpeg()
+    {
+        using var bitmap = new SKBitmap(32, 16);
+        using (var canvas = new SKCanvas(bitmap))
+        using (var paint = new SKPaint { Color = SKColors.Red })
+        {
+            canvas.Clear(SKColors.Blue);
+            canvas.DrawRect(0, 0, 16, 16, paint);
+        }
+        using var encoded = bitmap.Encode(SKEncodedImageFormat.Jpeg, 100);
+        var jpeg = encoded.ToArray();
+        byte[] exif =
+        [
+            0xff, 0xe1, 0x00, 0x22,
+            (byte)'E', (byte)'x', (byte)'i', (byte)'f', 0, 0,
+            0x49, 0x49, 42, 0, 8, 0, 0, 0, // TIFF header and first directory offset
+            1, 0,                            // one directory entry
+            0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, // Orientation, SHORT, one value
+            0, 0, 0, 0                      // no next directory
+        ];
+        return [.. jpeg.AsSpan(0, 2), .. exif, .. jpeg.AsSpan(2)];
     }
 
     private static byte[] CorruptPngPixels(byte[] png)
