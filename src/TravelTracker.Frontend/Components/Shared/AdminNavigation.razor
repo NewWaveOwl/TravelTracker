@@ -41,7 +41,7 @@
         }
         catch (Exception exception)
         {
-            Logger.LogError(exception, "Administrator link check failed unexpectedly");
+            Logger.LogError("Administrator link check failed unexpectedly ({FailureType})", exception.GetType().Name);
         }
     }
 
@@ -56,7 +56,7 @@
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.LogError(exception, "Administrator link could not refresh");
+            Logger.LogError("Administrator link could not refresh ({FailureType})", exception.GetType().Name);
         }
     }
 

@@ -78,13 +78,13 @@ public static class AuthExtensions
                     var token = context.TokenEndpointResponse?.AccessToken;
                     if (string.IsNullOrEmpty(token))
                     {
-                        logger.LogWarning("Sign-in completed without an access token for audience {Audience}", settings.Audience);
+                        logger.LogWarning("Sign-in completed without an access token.");
                         context.Fail(new IncompleteSignInException("An access token is required."));
                         return Task.CompletedTask;
                     }
                     if (!int.TryParse(context.TokenEndpointResponse?.ExpiresIn, out var seconds) || seconds <= 0)
                     {
-                        logger.LogWarning("Sign-in completed without a usable token lifetime for audience {Audience}", settings.Audience);
+                        logger.LogWarning("Sign-in completed without a usable token lifetime.");
                         context.Fail(new IncompleteSignInException("A token lifetime is required."));
                         return Task.CompletedTask;
                     }
@@ -128,11 +128,11 @@ public static class AuthExtensions
                 },
                 OnRemoteFailure = context =>
                 {
-                    // the callback carries provider diagnostics; keep them in the log and show only a fixed code
+                    // Provider diagnostics can include credentials or untrusted callback text.
                     var code = context.Failure is IncompleteSignInException
                         ? LoginFailure.IncompleteSignIn
                         : LoginFailure.CodeFor(context.Request.Query["error"], context.Request.Query["error_description"]);
-                    logger.LogWarning(context.Failure, "Sign-in failed as {Code} (provider error {Error})", code, context.Request.Query["error"].ToString());
+                    logger.LogWarning("Sign-in failed as {Code}", code);
                     context.Response.Redirect($"{AccountPath}?signin={code}");
                     context.HandleResponse();
                     return Task.CompletedTask;
@@ -159,7 +159,7 @@ public static class AuthExtensions
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 // most likely the tenant's discovery document could not be fetched; nothing was sent to the browser yet
-                loggers.CreateLogger("TravelTracker.Frontend.Auth").LogError(exception, "Could not start Auth0 sign-in");
+                loggers.CreateLogger("TravelTracker.Frontend.Auth").LogError("Could not start Auth0 sign-in ({FailureType})", exception.GetType().Name);
                 context.Response.Redirect($"{AccountPath}?signin={LoginFailure.StartFailed}");
             }
         });
@@ -183,7 +183,7 @@ public static class AuthExtensions
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                loggers.CreateLogger("TravelTracker.Frontend.Auth").LogError(exception, "Signed out locally but Auth0 logout could not be started");
+                loggers.CreateLogger("TravelTracker.Frontend.Auth").LogError("Signed out locally but Auth0 logout could not be started ({FailureType})", exception.GetType().Name);
                 context.Response.Redirect($"{AccountPath}?signedout=local");
             }
         }).WithMetadata(new RequireAntiforgeryTokenAttribute());

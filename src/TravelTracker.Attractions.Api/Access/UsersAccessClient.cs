@@ -27,7 +27,8 @@ public sealed class UsersAccessClient(HttpClient httpClient, IConfiguration conf
         var internalBase = configuration["Users:InternalBaseUrl"];
         var useScopedLookup = !string.IsNullOrWhiteSpace(internalBase);
         if (!Uri.TryCreate(useScopedLookup ? internalBase : configuration["Users:AccessEndpoint"], UriKind.Absolute, out var endpoint) ||
-            endpoint.Scheme != Uri.UriSchemeHttps)
+            endpoint.Scheme != Uri.UriSchemeHttps || endpoint.UserInfo.Length != 0 ||
+            endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0)
         {
             logger.LogError("Users access configuration is invalid: an absolute HTTPS endpoint is required.");
             return null;

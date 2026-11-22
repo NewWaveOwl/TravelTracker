@@ -31,7 +31,7 @@ public class TransportProgram
             options.OperationFilter<BearerSecurityOperationFilter>();
         });
         builder.Services.AddDbContextFactory<TransportDbContext>(options => options.UseNpgsql(
-            builder.Configuration.GetConnectionString("Transport") ?? throw new InvalidOperationException("ConnectionStrings:Transport is required.")));
+            builder.RequireDatabaseConnection("Transport")));
         builder.Services.AddSingleton(provider => new EntityIdGenerator(cancellationToken =>
             TransportDatabase.HighestKeyAsync(provider.GetRequiredService<IDbContextFactory<TransportDbContext>>(), cancellationToken)));
         builder.Services.AddScoped<ITransportModeRepository, EfTransportModeRepository>();
@@ -42,15 +42,18 @@ public class TransportProgram
             .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         var app = builder.Build();
+        if (app.Environment.IsProduction())
+            builder.RequireDatabaseConnection("Transport");
+        builder.ValidateUsersDependency();
         app.UseTransportExceptionHandling();
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<TransportProgram>();
-        var applyMigrations = app.Configuration.GetValue<bool>("Database:ApplyMigrations");
-        var seedExamples = app.Configuration.GetValue<bool>("Database:SeedExamples");
+        var applyMigrations = app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations");
+        var seedExamples = app.Configuration.ReadDatabaseFlag("Database:SeedExamples");
         logger.LogInformation("Transport starting in {Environment} (apply migrations: {ApplyMigrations}, seed examples: {SeedExamples}).", app.Environment.EnvironmentName, applyMigrations, seedExamples);
         if (applyMigrations)
         {
             await using var scope = app.Services.CreateAsyncScope();
-            var seededCount = await TransportDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<TransportDbContext>(), seedExamples);
+            var seededCount = await DatabaseConfiguration.RunMigrationAsync(() => TransportDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<TransportDbContext>(), seedExamples));
             var seedState = !seedExamples ? "disabled" : seededCount > 0 ? $"inserted {seededCount} record(s)" : "skipped, the tables already have rows";
             logger.LogInformation("Transport migrations applied (seeding {SeedState}).", seedState);
         }

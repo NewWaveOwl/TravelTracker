@@ -190,7 +190,7 @@ public partial class NewTrip : IAsyncDisposable
         }
         catch (JSException exception)
         {
-            Logger.LogWarning(exception, "Undo shortcut could not be registered");
+            Logger.LogWarning("Undo shortcut could not be registered ({FailureType})", exception.GetType().Name);
             return null;
         }
     }
@@ -316,7 +316,7 @@ public partial class NewTrip : IAsyncDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.LogError(exception, "Resetting the trip editor after an account change failed");
+            Logger.LogError("Resetting the trip editor after an account change failed ({FailureType})", exception.GetType().Name);
         }
     }
 
@@ -511,7 +511,7 @@ public partial class NewTrip : IAsyncDisposable
         }
         catch (Exception error) when (IsBrowserDraftFailure(error))
         {
-            Logger.LogWarning(error, "Could not {Operation} browser map draft {DraftKey}.", restore ? "restore" : "save", key);
+            Logger.LogWarning("Could not {Operation} browser map draft {DraftKey}. ({FailureType})", restore ? "restore" : "save", key, error.GetType().Name);
             if (version == routeVersion)
                 browserDraftNotice = restore ? "The browser draft could not be restored." : "The browser draft could not be saved.";
         }
@@ -560,7 +560,7 @@ public partial class NewTrip : IAsyncDisposable
         }
         catch (JSException exception)
         {
-            Logger.LogWarning(exception, "Leave confirmation failed in the browser; navigation was prevented");
+            Logger.LogWarning("Leave confirmation failed in the browser; navigation was prevented ({FailureType})", exception.GetType().Name);
             context.PreventNavigation();
         }
     }
@@ -585,7 +585,7 @@ public partial class NewTrip : IAsyncDisposable
         }
         catch (JSException exception)
         {
-            Logger.LogWarning(exception, "Undo shortcut could not be released");
+            Logger.LogWarning("Undo shortcut could not be released ({FailureType})", exception.GetType().Name);
         }
     }
 
@@ -1206,7 +1206,7 @@ public partial class NewTrip : IAsyncDisposable
         }
         catch (Exception error) when (IsBrowserDraftFailure(error))
         {
-            Logger.LogWarning(error, "Could not copy the browser map draft to {DraftKey}.", key);
+            Logger.LogWarning("Could not copy the browser map draft to {DraftKey}. ({FailureType})", key, error.GetType().Name);
             if (version == routeVersion)
                 browserDraftNotice = "The trip was saved, but the browser draft could not be copied to its new link.";
         }

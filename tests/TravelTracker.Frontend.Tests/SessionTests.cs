@@ -171,6 +171,9 @@ public sealed class SessionTests
         registry.Revoke(identifier);
 
         Assert.Equal(new[] { identifier }, notified);
-        Assert.Contains(logger.Entries, entry => entry.Exception is InvalidOperationException);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Null(entry.Exception);
+        Assert.Contains(nameof(InvalidOperationException), entry.Message);
+        Assert.DoesNotContain("subscriber failed", entry.Message);
     }
 }

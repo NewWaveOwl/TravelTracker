@@ -28,6 +28,7 @@ try
     await Check("direct host explains session pooler requirement", Changed("PoolerHost", "db.example.supabase.co"), "--check-config", 1, "Session pooler");
     await Check("pooler username requires project suffix", Changed("DatabaseUser", "postgres"), "--check-config", 1, "project-reference suffix");
     await Check("missing certificate explains local path", Changed("RootCertificate", Path.Combine(temporary, "missing.crt")), "--check-config", 1, "does not exist on this machine");
+    await Check("unexpected path exception is redacted", Changed("RootCertificate", "\0do-not-print-this"), "--check-config", 1, "TravelTracker launcher failed");
     await Check("placeholder public key rejected", Changed("PublishableKey", "YOUR-PUBLISHABLE-KEY"), "--check-config", 1, "example placeholder");
     await Check("project URL normalized", Changed("SupabaseUrl", "https://exampleproject.supabase.co/"), "--setup", 0, "configuration is valid");
     Require(JsonDocument.Parse(File.ReadAllText(configPath)).RootElement.GetProperty("SupabaseUrl").GetString() == "https://exampleproject.supabase.co", "Project URL normalization failed");

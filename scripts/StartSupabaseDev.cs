@@ -55,7 +55,7 @@ try
 {
     var solution = Path.Combine(repo, "TravelTracker.slnx");
     if (!File.Exists(solution))
-        throw new InvalidOperationException("Run the launcher from the TravelTracker repository root.");
+        throw new LaunchConfigurationException("Run the launcher from the TravelTracker repository root.");
 
     var configPath = Path.GetFullPath(Environment.GetEnvironmentVariable("TRAVELTRACKER_LAUNCH_CONFIG")
         ?? Path.Combine(repo, ".traveltracker-launch.json"));
@@ -70,11 +70,11 @@ try
     var databaseUser = Setting(config, "DatabaseUser", null,
         "Supabase Session pooler User (include the .project-reference suffix)", interactive);
     if (!Regex.IsMatch(databaseUser, @"\A[a-z0-9_]+\.[a-z0-9]+\z"))
-        throw new InvalidOperationException("DatabaseUser must be the Session pooler username including its .project-reference suffix.");
+        throw new LaunchConfigurationException("DatabaseUser must be the Session pooler username including its .project-reference suffix.");
     var rootCertificate = Path.GetFullPath(Setting(config, "RootCertificate", null,
         "Supabase root certificate file path on THIS machine (download from Database Settings > SSL)", interactive).Trim('"', '\''));
     if (!File.Exists(rootCertificate))
-        throw new InvalidOperationException("RootCertificate file does not exist on this machine. Run with --setup to correct its path.");
+        throw new LaunchConfigurationException("RootCertificate file does not exist on this machine. Run with --setup to correct its path.");
     config["RootCertificate"] = rootCertificate;
     var supabase = ParseSupabaseUrl(Setting(config, "SupabaseUrl", "Supabase__Url",
         "Supabase > Project Settings > API: Project URL (https://project.supabase.co)", interactive));
@@ -85,7 +85,7 @@ try
     var serviceEmail = Setting(config, "ServiceEmail", "TRAVELTRACKER_SERVICE_EMAIL",
         "Dedicated Supabase Auth service user's email (signed scope must be users.access only)", interactive);
     if (!System.Net.Mail.MailAddress.TryCreate(serviceEmail, out var serviceAddress) || serviceAddress.Address != serviceEmail)
-        throw new InvalidOperationException("ServiceEmail must be a valid email address for the dedicated Supabase Auth service user.");
+        throw new LaunchConfigurationException("ServiceEmail must be a valid email address for the dedicated Supabase Auth service user.");
     var authority = new Uri(supabase, "auth/v1");
     const string audience = "authenticated";
     if (!checkOnly)
@@ -101,7 +101,7 @@ try
 
     var listeners = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners();
     if (listeners.Any(listener => services.Any(service => service.Port == listener.Port)))
-        throw new InvalidOperationException("A TravelTracker port is already in use. Stop the existing stack first.");
+        throw new LaunchConfigurationException("A TravelTracker port is already in use. Stop the existing stack first.");
 
     await RunDotnetAsync(repo, ["dev-certs", "https", "--check", "--trust"],
         "Trust the Users development certificate with dotnet dev-certs https --trust.", shutdown.Token);
@@ -168,7 +168,7 @@ try
         }
 
         Console.WriteLine($"Starting {service} at {origin}");
-        var process = Process.Start(start) ?? throw new InvalidOperationException($"Could not start {service}.");
+        var process = Process.Start(start) ?? throw new LaunchConfigurationException($"Could not start {service}.");
         processes.Add(process);
         await WaitForHostAsync(probe, process, service, origin, shutdown.Token);
     }
@@ -179,7 +179,7 @@ try
     var exited = await Task.WhenAny(processes.Select(process => process.WaitForExitAsync(shutdown.Token)));
     await exited;
     if (!shutdown.IsCancellationRequested)
-        throw new InvalidOperationException("A TravelTracker host stopped. See its output above.");
+        throw new LaunchConfigurationException("A TravelTracker host stopped. See its output above.");
     return 0;
 }
 catch (OperationCanceledException) when (shutdown.IsCancellationRequested)
@@ -188,7 +188,7 @@ catch (OperationCanceledException) when (shutdown.IsCancellationRequested)
 }
 catch (Exception error)
 {
-    Console.Error.WriteLine(error.Message);
+    Console.Error.WriteLine(error is LaunchConfigurationException ? error.Message : $"TravelTracker launcher failed ({error.GetType().Name}). Check local configuration and dependency availability.");
     return 1;
 }
 finally
@@ -213,18 +213,18 @@ static Dictionary<string, string> LoadConfiguration(string path)
     try
     {
         var config = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(path))
-            ?? throw new InvalidOperationException("Local launch settings must be a JSON object.");
+            ?? throw new LaunchConfigurationException("Local launch settings must be a JSON object.");
         string[] legacy = ["BackendClientId", "Auth0Domain", "FrontendClientId", "Audience", "FrontendType"];
         if (config.Keys.Any(key => legacy.Contains(key)))
-            throw new InvalidOperationException("Saved launch settings use Auth0. Rename .traveltracker-launch.json, then run --setup for Supabase Auth; retain your database host, username and certificate path.");
+            throw new LaunchConfigurationException("Saved launch settings use Auth0. Rename .traveltracker-launch.json, then run --setup for Supabase Auth; retain your database host, username and certificate path.");
         string[] allowed = ["PoolerHost", "DatabaseUser", "RootCertificate", "SupabaseUrl", "PublishableKey", "ServiceEmail"];
         if (config.Keys.Any(key => !allowed.Contains(key)))
-            throw new InvalidOperationException("Local launch settings contain unsupported fields. Store only non-secret launcher settings.");
+            throw new LaunchConfigurationException("Local launch settings contain unsupported fields. Store only non-secret launcher settings.");
         return config;
     }
     catch (JsonException)
     {
-        throw new InvalidOperationException("Local launch settings contain invalid JSON. Correct or rename .traveltracker-launch.json, then run --setup.");
+        throw new LaunchConfigurationException("Local launch settings contain invalid JSON. Correct or rename .traveltracker-launch.json, then run --setup.");
     }
 }
 
@@ -262,7 +262,7 @@ string Setting(Dictionary<string, string> config, string key, string? environmen
     }
     if (string.IsNullOrWhiteSpace(value) || (key != "PoolerHost" && value.Contains("YOUR-", StringComparison.OrdinalIgnoreCase)) ||
         value.Contains("your-tenant", StringComparison.OrdinalIgnoreCase))
-        throw new InvalidOperationException($"{key} is missing or contains an example placeholder. {prompt}. Run --setup in an interactive terminal.");
+        throw new LaunchConfigurationException($"{key} is missing or contains an example placeholder. {prompt}. Run --setup in an interactive terminal.");
     config[key] = value;
     return value;
 }
@@ -282,15 +282,15 @@ static (string Host, string? User) ParseConnection(string input)
         var schemeEnd = host.IndexOf("://", StringComparison.Ordinal) + 3;
         var at = host.LastIndexOf('@');
         if (at <= schemeEnd)
-            throw new InvalidOperationException("The PostgreSQL URI must contain a username and host. Copy the Session pooler URI from Supabase.");
+            throw new LaunchConfigurationException("The PostgreSQL URI must contain a username and host. Copy the Session pooler URI from Supabase.");
         var credentials = host[schemeEnd..at];
         user = Uri.UnescapeDataString(credentials.Split(':', 2)[0]);
         if (!Uri.TryCreate("postgresql://" + host[(at + 1)..], UriKind.Absolute, out var uri) || uri.Port is not (-1 or 5432))
-            throw new InvalidOperationException("Use the Supabase Session pooler on port 5432, rather than the transaction pooler.");
+            throw new LaunchConfigurationException("Use the Supabase Session pooler on port 5432, rather than the transaction pooler.");
         host = uri.Host;
     }
     if (!Regex.IsMatch(host, @"\A[a-z0-9-]+\.pooler\.supabase\.com\z"))
-        throw new InvalidOperationException("PoolerHost must end in .pooler.supabase.com. In Supabase choose Connect > Direct > Session pooler; the db.* direct host will not work here.");
+        throw new LaunchConfigurationException("PoolerHost must end in .pooler.supabase.com. In Supabase choose Connect > Direct > Session pooler; the db.* direct host will not work here.");
     return (host, user);
 }
 
@@ -305,7 +305,7 @@ static Uri ParseSupabaseUrl(string input)
         url.UserInfo.Length != 0 || url.Query.Length != 0 || url.Fragment.Length != 0 ||
         url.AbsolutePath != "/" || !url.IsDefaultPort ||
         !Regex.IsMatch(url.Host, @"\A[a-z0-9-]+\.supabase\.co\z"))
-        throw new InvalidOperationException("SupabaseUrl must be the HTTPS Project URL (https://project.supabase.co), without a path, query, credentials, or custom port.");
+        throw new LaunchConfigurationException("SupabaseUrl must be the HTTPS Project URL (https://project.supabase.co), without a path, query, credentials, or custom port.");
     return url;
 }
 
@@ -326,7 +326,7 @@ static void ValidatePublicKey(string value)
         }
     }
     catch (Exception error) when (error is JsonException or FormatException or InvalidOperationException) { }
-    throw new InvalidOperationException("PublishableKey must be an sb_publishable_ key or legacy anon key. Secret and service_role keys are never accepted.");
+    throw new LaunchConfigurationException("PublishableKey must be an sb_publishable_ key or legacy anon key. Secret and service_role keys are never accepted.");
 }
 
 /**
@@ -364,12 +364,12 @@ static ProcessStartInfo Dotnet(string folder, params string[] arguments)
 
 static async Task RunDotnetAsync(string repo, string[] arguments, string failure, CancellationToken cancellationToken)
 {
-    using var process = Process.Start(Dotnet(repo, arguments)) ?? throw new InvalidOperationException(failure);
+    using var process = Process.Start(Dotnet(repo, arguments)) ?? throw new LaunchConfigurationException(failure);
     try
     {
         await process.WaitForExitAsync(cancellationToken);
         if (process.ExitCode != 0)
-            throw new InvalidOperationException(failure);
+            throw new LaunchConfigurationException(failure);
     }
     finally { StopProcess(process); }
 }
@@ -385,7 +385,7 @@ static void StopProcess(Process process)
         }
     }
     catch (InvalidOperationException) when (process.HasExited) { }
-    catch (System.ComponentModel.Win32Exception error) { Console.Error.WriteLine($"Could not stop host: {error.Message}"); }
+    catch (System.ComponentModel.Win32Exception error) { Console.Error.WriteLine($"Could not stop host ({error.GetType().Name})."); }
 }
 
 /**
@@ -405,7 +405,7 @@ static async Task WaitForHostAsync(HttpClient probe, Process process, string ser
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (process.HasExited)
-            throw new InvalidOperationException($"{service} exited during startup. See its output above.");
+            throw new LaunchConfigurationException($"{service} exited during startup. See its output above.");
 
         try
         {
@@ -424,7 +424,7 @@ static async Task WaitForHostAsync(HttpClient probe, Process process, string ser
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
         await Task.Delay(250, cancellationToken);
     }
-    throw new InvalidOperationException($"{service} did not become ready at {origin}. See its output above.");
+    throw new LaunchConfigurationException($"{service} did not become ready at {origin}. See its output above.");
 }
 
 /**
@@ -447,27 +447,27 @@ static async Task<(string Token, string Subject, DateTimeOffset Expiry)> GetServ
     });
     using var response = await http.PostAsync(new Uri(project, "auth/v1/token?grant_type=password"), request, cancellationToken);
     if (!response.IsSuccessStatusCode)
-        throw new InvalidOperationException($"Supabase Auth returned HTTP {(int)response.StatusCode}. Check the service account email/password, confirmed email, public API key and access-token hook.");
+        throw new LaunchConfigurationException($"Supabase Auth returned HTTP {(int)response.StatusCode}. Check the service account email/password, confirmed email, public API key and access-token hook.");
 
     using var result = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
     var token = result?.RootElement.TryGetProperty("access_token", out var accessToken) == true ? accessToken.GetString() : null;
     if (token is null || !Regex.IsMatch(token, @"\A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z"))
-        throw new InvalidOperationException("Supabase Auth did not return an access JWT.");
+        throw new LaunchConfigurationException("Supabase Auth did not return an access JWT.");
 
     var parts = token.Split('.');
     using var header = JsonDocument.Parse(DecodeBase64Url(parts[0]));
     var algorithm = header.RootElement.GetProperty("alg").GetString();
     var keyId = header.RootElement.GetProperty("kid").GetString();
     if (algorithm is not ("ES256" or "RS256") || string.IsNullOrWhiteSpace(keyId))
-        throw new InvalidOperationException("Supabase Auth must use an asymmetric ES256 or RS256 signing key. Rotate away from the legacy HS256 key before starting TravelTracker.");
+        throw new LaunchConfigurationException("Supabase Auth must use an asymmetric ES256 or RS256 signing key. Rotate away from the legacy HS256 key before starting TravelTracker.");
     using var keyResponse = await http.GetAsync(new Uri(project, "auth/v1/.well-known/jwks.json"), cancellationToken);
     if (!keyResponse.IsSuccessStatusCode)
-        throw new InvalidOperationException("Supabase Auth signing keys could not be retrieved.");
+        throw new LaunchConfigurationException("Supabase Auth signing keys could not be retrieved.");
     using var keys = await keyResponse.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
     var matching = keys!.RootElement.GetProperty("keys").EnumerateArray()
         .Where(key => key.TryGetProperty("kid", out var id) && id.GetString() == keyId).ToArray();
     if (matching.Length != 1 || !VerifySignature(matching[0], algorithm, Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]), DecodeBase64Url(parts[2])))
-        throw new InvalidOperationException("Supabase Auth access token signature is invalid.");
+        throw new LaunchConfigurationException("Supabase Auth access token signature is invalid.");
 
     using var jwt = JsonDocument.Parse(DecodeBase64Url(parts[1]));
     var claims = jwt.RootElement;
@@ -480,17 +480,17 @@ static async Task<(string Token, string Subject, DateTimeOffset Expiry)> GetServ
         claims.GetProperty("role").GetString() != "authenticated" ||
         claims.TryGetProperty("nbf", out var notBefore) && notBefore.GetInt64() > DateTimeOffset.UtcNow.ToUnixTimeSeconds() ||
         !claims.TryGetProperty("scope", out var scope) || scope.GetString()?.Trim() != "users.access")
-        throw new InvalidOperationException("The service token must be current, issued by this project for authenticated users, and grant users.access only. Check the access-token hook and the dedicated user's admin-managed metadata.");
+        throw new LaunchConfigurationException("The service token must be current, issued by this project for authenticated users, and grant users.access only. Check the access-token hook and the dedicated user's admin-managed metadata.");
 
     using var identityRequest = new HttpRequestMessage(HttpMethod.Get, new Uri(project, "auth/v1/user"));
     identityRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
     using var identityResponse = await http.SendAsync(identityRequest, cancellationToken);
     if (!identityResponse.IsSuccessStatusCode)
-        throw new InvalidOperationException("Supabase Auth could not verify the service account session.");
+        throw new LaunchConfigurationException("Supabase Auth could not verify the service account session.");
     using var identity = await identityResponse.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
     if (identity?.RootElement.GetProperty("id").GetString() != subject ||
         !identity.RootElement.TryGetProperty("email_confirmed_at", out var confirmed) || confirmed.ValueKind != JsonValueKind.String)
-        throw new InvalidOperationException("The service session must belong to the confirmed Supabase Auth service user.");
+        throw new LaunchConfigurationException("The service session must belong to the confirmed Supabase Auth service user.");
     return (token, subject, expiry);
 }
 
@@ -551,7 +551,7 @@ static bool VerifySignature(JsonElement key, string algorithm, byte[] data, byte
 static string ReadSecret(string prompt, CancellationToken cancellationToken, string? fallback = null)
 {
     if (Console.IsInputRedirected)
-        throw new InvalidOperationException("Run the launcher in an interactive terminal so it can prompt for secrets.");
+        throw new LaunchConfigurationException("Run the launcher in an interactive terminal so it can prompt for secrets.");
 
     Console.Write($"{prompt}: ");
     var value = new StringBuilder();
@@ -567,5 +567,8 @@ static string ReadSecret(string prompt, CancellationToken cancellationToken, str
             value.Append(key.KeyChar);
     }
     Console.WriteLine();
-    return value.Length > 0 ? value.ToString() : fallback ?? throw new InvalidOperationException($"{prompt} is required.");
+    return value.Length > 0 ? value.ToString() : fallback ?? throw new LaunchConfigurationException($"{prompt} is required.");
 }
+
+/** Carries only launcher-authored diagnostics that are safe to print. */
+sealed class LaunchConfigurationException(string message) : Exception(message);

@@ -11,15 +11,21 @@ using TravelTracker.Frontend.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning)
+    .AddFilter("Microsoft.AspNetCore.Authentication.OpenIdConnect", LogLevel.None)
+    .AddFilter("Microsoft.AspNetCore.Components.Server.Circuits", LogLevel.None);
 
 var serviceUrls = builder.Configuration.GetSection("Services").Get<Dictionary<string, string>>()
     ?? throw new InvalidOperationException("The Services configuration section is missing.");
 if (serviceUrls.Count == 0)
     throw new InvalidOperationException("The Services configuration section lists no services.");
+var production = builder.Environment.IsProduction();
+ServiceDirectory.Validate(serviceUrls, production);
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddSingleton(new ServiceDirectory(serviceUrls));
-builder.Services.AddHttpClient<ServiceClient>().ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+builder.Services.AddHttpClient<ServiceClient>().RemoveAllLoggers()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<SessionRegistry>();
 builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationStateProvider>();
@@ -42,6 +48,8 @@ var supabase = string.IsNullOrWhiteSpace(provider) || string.Equals(provider, "S
     ? SupabaseSettings.TryRead(builder.Configuration) : null;
 var auth0 = string.Equals(provider, "Auth0", StringComparison.OrdinalIgnoreCase)
     ? Auth0Settings.TryRead(builder.Configuration, startupLogger) : null;
+if (production && supabase is null && auth0?.ClientSecret is null)
+    throw new InvalidOperationException("Production sign-in requires valid Supabase:Url and Supabase:PublishableKey, or Auth0:Domain, ClientId, ClientSecret and Audience when Auth0 is selected.");
 builder.Services.AddSingleton(new AuthSetup(auth0 is not null || supabase is not null, supabase));
 if (supabase is not null)
 {
@@ -56,19 +64,22 @@ else if (auth0 is null)
 }
 else
 {
-    startupLogger.LogInformation("Auth0 sign-in configured for {Authority} with audience {Audience}", auth0.Authority, auth0.Audience);
+    startupLogger.LogInformation("Auth0 sign-in configured.");
     builder.Services.AddAuth0(auth0, startupLogger);
 }
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-foreach (var (name, url) in serviceUrls)
-    app.Logger.LogInformation("Configured service {Service} at {Url}", name, url);
+app.UseExceptionHandler(new ExceptionHandlerOptions
+{
+    ExceptionHandlingPath = "/Error",
+    CreateScopeForErrors = true,
+    SuppressDiagnosticsCallback = _ => true
+});
 
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
 

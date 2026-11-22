@@ -95,6 +95,7 @@ public static class TripServiceCollectionExtensions
      */
     private static bool IsAbsoluteUrl(string? value, bool allowHttp) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0
         && (uri.Scheme == Uri.UriSchemeHttps || (allowHttp && uri.Scheme == Uri.UriSchemeHttp));
 
     /**
