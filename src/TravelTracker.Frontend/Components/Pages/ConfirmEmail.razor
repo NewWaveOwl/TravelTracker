@@ -5,14 +5,14 @@
 <PageTitle>Confirm email | TravelTracker</PageTitle>
 <PageHeading Title="Confirm your email" />
 
-@if (Setup.Supabase is not null && Type == "email" && !string.IsNullOrWhiteSpace(TokenHash))
+@if (Setup.Supabase is not null && (Type is "email" or "email_change") && !string.IsNullOrWhiteSpace(TokenHash))
 {
     <section class="profile-panel">
-        <p>Confirm your email address to finish creating your TravelTracker account.</p>
+        <p>@(Type == "email_change" ? "Confirm this address for your sign-in email change." : "Confirm your email address to finish creating your TravelTracker account.")</p>
         <form method="post" action="/auth/confirm-email">
             <AntiforgeryToken />
             <input type="hidden" name="token_hash" value="@TokenHash" />
-            <input type="hidden" name="type" value="email" />
+            <input type="hidden" name="type" value="@Type" />
             <button type="submit">Confirm email</button>
         </form>
     </section>

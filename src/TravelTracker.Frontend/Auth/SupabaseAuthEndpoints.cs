@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.RateLimiting;
+using TravelTracker.Frontend.Api;
+using TravelTracker.Frontend.Api.Users;
 
 namespace TravelTracker.Frontend.Auth;
 
@@ -64,8 +66,95 @@ public static class SupabaseAuthEndpoints
         endpoints.MapPost("/auth/login", SignInAsync).RequireRateLimiting(AuthLimit);
         endpoints.MapPost("/auth/register", SignUpAsync).RequireRateLimiting(AuthLimit);
         endpoints.MapPost("/auth/confirm-email", ConfirmEmailAsync).RequireRateLimiting(AuthLimit);
+        endpoints.MapPost("/auth/change-credential", ChangeCredentialAsync).RequireRateLimiting(AuthLimit);
         endpoints.MapPost("/auth/logout", SignOutAsync);
         return endpoints;
+    }
+
+    /**
+     * Reauthenticates the signed-in owner and submits one provider-owned credential change.
+     * @param context The credential form request.
+     * @param antiforgery Validates the submitted form token.
+     * @param auth Supabase Auth client.
+     * @param sessions Local session registry.
+     * @param clock Supplies the current session time.
+     * @param directory Resolves the configured Users API.
+     * @param client Reads live profile standing with the current bearer.
+     * @return A fixed redirect or a request rejection.
+     */
+    static async Task<IResult> ChangeCredentialAsync(HttpContext context, IAntiforgery antiforgery,
+        SupabaseAuthClient auth, SessionRegistry sessions, TimeProvider clock, ServiceDirectory directory, ServiceClient client)
+    {
+        if (!await ValidFormAsync(context, antiforgery)) return Results.BadRequest();
+        var user = context.User;
+        var token = AccessTokenClaims.ActiveToken(user, clock.GetUtcNow());
+        if (token is null || !sessions.IsActive(user)) return Results.Unauthorized();
+        if (!AccessTokenClaims.GrantedScopes(user).Contains("users.write")) return Results.StatusCode(403);
+
+        var form = await context.Request.ReadFormAsync(context.RequestAborted);
+        var operation = form["operation"].ToString();
+        var email = form["loginEmail"].ToString().Trim();
+        var currentPassword = form["currentPassword"].ToString();
+        var newEmail = form["newEmail"].ToString().Trim();
+        var newPassword = form["newPassword"].ToString();
+        var confirmation = form["passwordConfirmation"].ToString();
+        var validChange = operation switch
+        {
+            "email" => ValidCredentials(newEmail, currentPassword) && newPassword.Length == 0 && confirmation.Length == 0,
+            "password" => newEmail.Length == 0 && newPassword.Length is >= 8 and <= 128 && newPassword == confirmation,
+            _ => false
+        };
+        if (!validChange || !ValidCredentials(email, currentPassword) ||
+            form.Any(field => field.Value.Count != 1 || field.Key is not
+                ("operation" or "loginEmail" or "currentPassword" or "newEmail" or "newPassword" or "passwordConfirmation" or "__RequestVerificationToken")))
+            return Results.Redirect("/account?credential=invalid");
+
+        SupabaseSession? fresh = null;
+        try
+        {
+            var cancellationToken = context.RequestAborted;
+            var profile = await client.SendAsync<SelfUserProfile>(HttpMethod.Get,
+                directory.ProtectedUrlFor("Users", "/api/v1/users/me"), null, cancellationToken, token);
+            if (profile.Body?.Status != "active") return Results.StatusCode(403);
+
+            fresh = await auth.SignInAsync(email, currentPassword, cancellationToken);
+            if (fresh is null || fresh.User.FindFirstValue("sub") != user.FindFirstValue("sub"))
+                return Results.Redirect("/account?credential=rejected");
+            if (!sessions.IsActive(user)) return Results.Unauthorized();
+            if (!await auth.ChangeCredentialAsync(fresh.AccessToken, operation == "email" ? newEmail : null,
+                    operation == "password" ? newPassword : null, currentPassword, cancellationToken))
+                return Results.Redirect("/account?credential=rejected");
+
+            sessions.Revoke(SessionRegistry.IdFor(user));
+            await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            await EndProviderSessionAsync(auth, token);
+            return Results.Redirect(operation == "email" ? "/account?credential=verify-email" : "/account?credential=password-changed");
+        }
+        catch (ApiError error) when (error.Status is 401 or 403)
+        {
+            return Results.StatusCode(error.Status.Value);
+        }
+        catch (Exception error) when (error is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
+        {
+            return Results.Redirect("/account?credential=unavailable");
+        }
+        finally
+        {
+            if (fresh is not null) await EndProviderSessionAsync(auth, fresh.AccessToken);
+        }
+    }
+
+    /**
+     * Attempts bounded provider cleanup even after the browser disconnects.
+     * @param auth Supabase Auth client.
+     * @param token The token for the provider session to close.
+     * @return A task that completes without leaking provider diagnostics.
+     */
+    static async Task EndProviderSessionAsync(SupabaseAuthClient auth, string token)
+    {
+        try { await auth.SignOutAsync(token, CancellationToken.None); }
+        catch (HttpRequestException) { }
+        catch (OperationCanceledException) { }
     }
 
     /**
@@ -183,13 +272,15 @@ public static class SupabaseAuthEndpoints
         if (!await ValidFormAsync(context, antiforgery)) return Results.BadRequest("The confirmation request could not be verified.");
         var form = await context.Request.ReadFormAsync(context.RequestAborted);
         var hash = form["token_hash"].ToString();
-        if (form["type"] != "email" || hash.Length is < 16 or > 512 ||
+        var type = form["type"].ToString();
+        if (type is not ("email" or "email_change") || hash.Length is < 16 or > 512 ||
             !hash.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_'))
             return Results.Redirect("/sign-in?error=confirmation");
         try
         {
-            return await auth.ConfirmEmailAsync(hash, context.RequestAborted)
-                ? Results.Redirect("/sign-in?message=confirmed") : Results.Redirect("/sign-in?error=confirmation");
+            return await auth.ConfirmEmailAsync(hash, type, context.RequestAborted)
+                ? Results.Redirect(type == "email_change" ? "/account?credential=link-accepted" : "/sign-in?message=confirmed")
+                : Results.Redirect("/sign-in?error=confirmation");
         }
         catch (HttpRequestException error) when (error.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
         {

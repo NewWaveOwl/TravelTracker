@@ -239,9 +239,13 @@ else
                     </ol>
                     @if (!savedReview)
                     {
-                        @if (HasPendingCatalogueEntries)
+                        @if (HasDraftTransportStops)
                         {
-                            <p>Save new locations and any missing transport modes to the catalogue first. They stay in the catalogue even if you discard this trip.</p>
+                            <p>Select each draft transport stop and replace it with a saved stop before saving the trip.</p>
+                        }
+                        else if (HasPendingCatalogueEntries)
+                        {
+                            <p>Check transport modes and save any new locations before saving the trip. They stay in the catalogue even if you discard this trip.</p>
                             <button type="button" disabled="@(busy || savingCatalogue)" @onclick="SaveCatalogueEntriesAsync">@(savingCatalogue ? "Saving catalogue entries" : "Save catalogue entries")</button>
                         }
                         else
@@ -438,8 +442,13 @@ else
     </div>;
 
     RenderFragment TransportPalette => @<div>
+                    @{ var knownModes = HasPendingModes ? availableModeCodes : null; }
+                    @if (knownModes is { Count: 0 })
+                    {
+                        <p>No transport modes are available. Ask an administrator to add one, then check the catalogue again from trip review.</p>
+                    }
                     <div class="trip-palette" aria-label="Transport palette">
-                        @foreach (var option in Modes)
+                        @foreach (var option in Modes.Where(option => knownModes?.Contains(option.Code) != false))
                         {
                             <button type="button" class="secondary" aria-pressed="@Pressed((showMap ? pendingMode?.Code ?? CurrentLeg?.Mode?.Code : CurrentLeg?.Mode?.Code) == option.Code)" @onclick="() => ChooseMode(option)"><img src="@Icon(option.Code)" alt="" />@option.Label</button>
                         }
@@ -478,7 +487,7 @@ else
 
     RenderFragment MarkerEditor => @<div>
                 <section class="trip-panel marker-panel" aria-labelledby="marker-panel-title">
-                    <h2 id="marker-panel-title">@(editingStopDetails ? "Edit stop details" : showMap ? "Add a marker" : "Markers")</h2>
+                    <h2 id="marker-panel-title">@(editingStopDetails ? markerType == "transport_stop" ? "Replace transport stop" : "Edit stop details" : showMap ? "Add a marker" : "Markers")</h2>
                     <fieldset class="marker-fields" disabled="@busy">
                     @if (!showMap)
                     {
@@ -501,10 +510,10 @@ else
                                 </select>
                             </label>
                         }
-                        @if (!editingStopDetails)
+                        @if (!editingStopDetails || activeMarker == "transport_stop")
                         {
                         <form class="trip-search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
-                            <label>Search saved @MarkerLabel(activeMarker).ToLowerInvariant() locations <input type="search" @bind="searchValue" placeholder="Enter a place name" /></label>
+                            <label>Search saved @MarkerLabel(activeMarker).ToLowerInvariant() locations <input @ref="savedStopSearchInput" type="search" @bind="searchValue" placeholder="Enter a place name" /></label>
                             <button type="submit">Search</button>
                         </form>
                         @if (searched)
@@ -518,13 +527,21 @@ else
                                 <ul class="trip-search-results">
                                     @foreach (var place in places)
                                     {
-                                        <li><button type="button" class="secondary" @onclick="() => AddStop(place, showMap ? insertAfter : null)"><strong>@place.Name</strong><small>@place.Address</small></button></li>
+                                        <li><button type="button" class="secondary" @onclick="() => SelectSavedPlace(place)"><strong>@place.Name</strong><small>@place.Address</small></button></li>
                                     }
                                 </ul>
                             }
                         }
                         }
-                        @if (!placing)
+                        @if (activeMarker == "transport_stop")
+                        {
+                            <p>Choose a saved transport stop to use in your trip. Map pins placed by hand can be kept in a browser draft.</p>
+                            @if (editingStopDetails)
+                            {
+                                <button type="button" class="secondary" @onclick="CancelMarkerDetails">Cancel</button>
+                            }
+                        }
+                        else if (!placing)
                         {
                             <button type="button" class="secondary" @onclick="BeginPlacement">@(showMap ? "Pick a location on the map" : "Enter a location")</button>
                         }
@@ -532,10 +549,6 @@ else
                         {
                             <form class="trip-place" @onsubmit="AddPickedStop" @onsubmit:preventDefault>
                                 <p>@(editingStopDetails ? "Confirm your changes to update this stop. Changed locations must be saved to the catalogue before saving the trip." : showMap ? "Select a point on the map or enter its coordinates." : "Enter the coordinates for this place.")</p>
-                                @if (activeMarker == "transport_stop")
-                                {
-                                    <p>Saving this trip adds new stops to the shared location catalogue.</p>
-                                }
                                 <label>Place name <input @ref="stopNameInput" type="text" required @bind="placeName" /></label>
                                 <label class="location-address">Street address (optional) <input type="text" @bind="placeAddress" /></label>
                                 <div class="trip-fields location-coordinates">

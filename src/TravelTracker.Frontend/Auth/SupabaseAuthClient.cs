@@ -82,12 +82,30 @@ public sealed class SupabaseAuthClient(HttpClient http, SupabaseSettings setting
     /**
      * Verifies a confirmation email hash without retaining the provider's returned session tokens.
      * @param tokenHash The one-time hash from Supabase's confirmation email template.
+     * @param type The validated signup or login-email confirmation purpose.
      * @param cancellationToken Cancels the provider request.
      * @return Whether confirmation succeeded.
      */
-    public async Task<bool> ConfirmEmailAsync(string tokenHash, CancellationToken cancellationToken)
+    public async Task<bool> ConfirmEmailAsync(string tokenHash, string type, CancellationToken cancellationToken)
     {
-        using var response = await SendAsync(HttpMethod.Post, "/verify", new { token_hash = tokenHash, type = "email" }, null, cancellationToken);
+        using var response = await SendAsync(HttpMethod.Post, "/verify", new { token_hash = tokenHash, type }, null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /**
+     * Submits one credential change using a freshly authenticated owner token.
+     * @param token The fresh owner access token.
+     * @param email The new sign-in email for an email change.
+     * @param password The new password for a password change.
+     * @param currentPassword The current password for the provider's password policy check.
+     * @param cancellationToken Cancels the provider request.
+     * @return Whether the provider accepted the change.
+     */
+    public async Task<bool> ChangeCredentialAsync(string token, string? email, string? password,
+        string currentPassword, CancellationToken cancellationToken)
+    {
+        object change = email is null ? new { password, current_password = currentPassword } : new { email };
+        using var response = await SendAsync(HttpMethod.Put, "/user", change, token, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 

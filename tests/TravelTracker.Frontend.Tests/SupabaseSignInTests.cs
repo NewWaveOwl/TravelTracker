@@ -162,6 +162,7 @@ public sealed class SupabaseSignInTests
     [InlineData("/auth/register")]
     [InlineData("/auth/logout")]
     [InlineData("/auth/confirm-email")]
+    [InlineData("/auth/change-credential")]
     public async Task CredentialAndLogoutPostsRequireAntiforgery(string path)
     {
         using var host = new SupabaseFrontendFactory();
@@ -223,24 +224,67 @@ public sealed class SupabaseSignInTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task EmailConfirmationExchangesOnlyTheHashAndNeverStartsASession(bool rejected)
+    [InlineData("email", false)]
+    [InlineData("email", true)]
+    [InlineData("email_change", false)]
+    public async Task EmailConfirmationExchangesOnlyTheHashAndNeverStartsASession(string type, bool rejected)
     {
         using var host = new SupabaseFrontendFactory();
         host.Provider.ConfirmationRejected = rejected;
         var browser = host.CreateBrowser();
-        var page = await browser.GetAsync("/auth/confirm?token_hash=confirmation-hash-fixture&type=email");
+        var page = await browser.GetAsync($"/auth/confirm?token_hash=confirmation-hash-fixture&type={type}");
         Assert.Contains("no-store", page.Headers.CacheControl!.ToString());
         Assert.Equal("no-referrer", Assert.Single(page.Headers.GetValues("Referrer-Policy")));
         var result = await browser.PostAsync("/auth/confirm-email", new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            ["token_hash"] = "confirmation-hash-fixture", ["type"] = "email",
+            ["token_hash"] = "confirmation-hash-fixture", ["type"] = type,
             ["__RequestVerificationToken"] = FrontendFactory.AntiforgeryTokenFrom(await page.Content.ReadAsStringAsync())
         }));
-        Assert.Equal(rejected ? "/sign-in?error=confirmation" : "/sign-in?message=confirmed", result.Headers.Location?.OriginalString);
+        var expected = rejected ? "/sign-in?error=confirmation"
+            : type == "email_change" ? "/account?credential=link-accepted" : "/sign-in?message=confirmed";
+        Assert.Equal(expected, result.Headers.Location?.OriginalString);
         Assert.Equal(1, host.Provider.ConfirmationRequests);
         Assert.Contains("Sign in to view your profile", await browser.GetStringAsync("/account"));
+    }
+
+    [Theory]
+    [InlineData("password", "accepted", "password-changed", "password", true)]
+    [InlineData("email", "accepted", "verify-email", "email", true)]
+    [InlineData("password", "provider-rejected", "rejected", "password", false)]
+    [InlineData("email", "other-owner", "rejected", null, false)]
+    [InlineData("password", "invalid", "invalid", null, false)]
+    public async Task CredentialChangesRequireFreshOwnerAuthenticationAndRevokeOnlyAfterSuccess(
+        string operation, string scenario, string outcome, string? writtenField, bool signedOut)
+    {
+        using var host = new SupabaseFrontendFactory();
+        var browser = host.CreateBrowser();
+        using var login = await LoginAsync(browser);
+        var secondTab = host.CreateBrowser();
+        secondTab.DefaultRequestHeaders.Add("Cookie", string.Join("; ",
+            login.Headers.GetValues("Set-Cookie").Select(value => value.Split(';')[0])));
+        var account = await browser.GetStringAsync("/account");
+        var form = new Dictionary<string, string>
+        {
+            ["operation"] = operation, ["loginEmail"] = "traveller@example.test",
+            ["currentPassword"] = "fixture-password",
+            ["__RequestVerificationToken"] = FrontendFactory.AntiforgeryTokenFrom(account)
+        };
+        if (operation == "email") form["newEmail"] = "updated@example.test";
+        else
+        {
+            form["newPassword"] = "updated-password";
+            form["passwordConfirmation"] = scenario == "invalid" ? "different" : "updated-password";
+        }
+        host.Provider.CredentialChangeRejected = scenario == "provider-rejected";
+        if (scenario == "other-owner") host.Provider.CurrentSubject = Guid.NewGuid().ToString();
+
+        using var result = await browser.PostAsync("/auth/change-credential", new FormUrlEncodedContent(form));
+
+        Assert.Equal($"/account?credential={outcome}", result.Headers.Location?.OriginalString);
+        Assert.Equal(writtenField, host.Provider.CredentialField);
+        Assert.Equal(scenario == "invalid" ? 1 : 2, host.Provider.PasswordRequests);
+        var secondPage = await secondTab.GetStringAsync("/account");
+        Assert.Equal(signedOut, secondPage.Contains("Sign in to view your profile", StringComparison.Ordinal));
     }
 
     [Theory]

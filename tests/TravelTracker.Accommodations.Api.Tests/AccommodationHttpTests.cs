@@ -274,6 +274,26 @@ public sealed class AccommodationHttpTests
     }
 
     [Fact]
+    public async Task BannedCaller_CannotCreatePrivateAccommodationAndNothingIsPersisted()
+    {
+        using var factory = new ApiFactory();
+        using var banned = factory.CreateClientFor("banned", "catalogue.write catalogue.read");
+
+        using var create = await banned.PostAsJsonAsync("/api/v1/accommodations", new
+        {
+            name = "Banned Private Inn",
+            lat = 45m,
+            lon = -73m
+        });
+        using var collection = await banned.GetAsync("/api/v1/accommodations");
+        var records = await collection.Content.ReadFromJsonAsync<JsonElement[]>();
+
+        Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, collection.StatusCode);
+        Assert.Empty(records!);
+    }
+
+    [Fact]
     public async Task DeactivatedCallerIsForbiddenForReadsAndWrites()
     {
         using var factory = new ApiFactory();
