@@ -51,6 +51,7 @@ public partial class NewTrip : IAsyncDisposable
     readonly Dictionary<TripPlaceDto, HashSet<Guid>> pendingPlaceCreates = [];
     readonly HashSet<string> pendingModeCreates = new(StringComparer.OrdinalIgnoreCase);
     ElementReference plannerElement;
+    int panelResetVersion;
     Task<IJSObjectReference?>? undoShortcut;
     TripPlannerDraft draft = new();
     IReadOnlyList<TripPlaceDto> places = [];

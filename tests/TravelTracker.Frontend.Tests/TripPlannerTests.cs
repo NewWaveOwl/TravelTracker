@@ -90,6 +90,22 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal(Museum.Name, canvas.Instance.Stops[1].Name);
     }
 
+    [Fact]
+    public void ResettingPanelLayoutKeepsTheSelectedStopAndUnconfirmedEdits()
+    {
+        Configure((_, _) => Task.FromResult(Json(Saved)));
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var panels = page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Select(panel => panel.Instance).ToArray();
+        page.Find(".map-trip-name").Change("Unsaved panel edit");
+
+        Click(page, "Reset panel layout");
+
+        Assert.Equal("Unsaved panel edit", page.Find(".map-trip-name").GetAttribute("value"));
+        Assert.Equal(panels, page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Select(panel => panel.Instance).ToArray());
+        Assert.All(panels, panel => Assert.Equal(1, panel.ResetVersion));
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]

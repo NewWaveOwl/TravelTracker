@@ -99,6 +99,8 @@ If upgrading an older Auth0 launcher setup, **rename** `.traveltracker-launch.js
 
 The launcher prints the internal service token's expiry. Restart before it expires; it does not silently refresh the service session.
 
+The **Itinerary**, **Map tools** palette and **Stop editor** panels have labelled movement handles. Drag a handle with a mouse or touch, or focus it and use arrow keys (Shift for larger steps). **Home**, a panel's **Reset**, or **Reset panel layout** restores its position without clearing trip edits. Panels remain in a responsive grid until moved; on phones, scroll below the map to reach them. Movement stays within the visible viewport below the save toolbar, and panel contents scroll independently of their handles.
+
 ### Troubleshooting database login
 
 `28P01: password authentication failed` is a PostgreSQL credential error, even after moving sign-in to Supabase Auth. Check that the pooler host, suffixed database username and database password belong to the same project and role. Do not enter a Supabase website password or Auth user password at the database prompt. Stop and restart the launcher to re-enter the password. Changing authentication providers does not repair database passwords.

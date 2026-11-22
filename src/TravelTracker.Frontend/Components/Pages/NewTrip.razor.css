@@ -178,6 +178,13 @@
     max-width: 100%;
 }
 .trip-tools button { gap: 6px; }
+.trip-columns ::deep .movable-panel { pointer-events: auto; }
+.map-workspace .trip-columns ::deep .movable-panel { max-height: calc(100dvh - 230px); }
+.map-workspace ::deep .itinerary-panel { grid-column: 1; grid-row: 1; }
+.map-workspace ::deep .tools-panel { grid-column: 2; grid-row: 1; justify-self: start; max-width: 100%; }
+.map-workspace ::deep .editor-panel { grid-column: 3; grid-row: 1; }
+.map-workspace ::deep .editor-panel:has(.tools-collapsed) { visibility: hidden; pointer-events: none; }
+.map-workspace .trip-chain, .map-workspace .trip-work { max-height: none; overflow: visible; }
 .map-workspace .trip-work { grid-column: 3; grid-row: 1; padding-bottom: 5px; }
 .map-workspace .trip-basic-fields { grid-template-columns: minmax(0, 1fr); }
 .map-workspace .trip-basic-fields input[type=datetime-local] { font-size: 15px; padding-inline: 6px; }
@@ -188,9 +195,13 @@
 .map-workspace .trip-review li small { display: block; }
 .map-workspace .trip-work > .secondary { justify-self: start; }
 @media (max-width: 900px) {
+    .map-workspace .trip-columns ::deep .movable-panel { max-height: calc(100dvh - 100px); }
+    .map-workspace ::deep .tools-panel { grid-column: 1 / -1; grid-row: 1; justify-self: stretch; }
+    .map-workspace ::deep .itinerary-panel { grid-column: 1; grid-row: 2; }
+    .map-workspace ::deep .editor-panel { grid-column: 2; grid-row: 2; }
     .map-workspace .map-surface { position: relative; height: calc(100dvh - 120px); min-height: 360px; }
     .map-workspace .trip-columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: auto; }
-    .map-workspace .trip-tools { grid-column: auto; grid-row: auto; position: absolute; bottom: 100%; left: 12px; top: auto; transform: translateY(-10px); max-width: calc(100% - 120px); }
+    .map-workspace .trip-tools { position: static; max-width: 100%; }
     .map-workspace .trip-chain, .map-workspace .trip-work { grid-row: 1; max-height: none; }
     .map-workspace .trip-work { grid-column: 2; }
 }
@@ -198,6 +209,8 @@
     .map-workspace .map-surface { height: calc(100dvh - 100px); }
 }
 @media (max-width: 550px) {
+    .map-workspace ::deep .itinerary-panel { grid-column: 1; grid-row: 2; }
+    .map-workspace ::deep .editor-panel { grid-column: 1; grid-row: 3; }
     .map-workspace .trip-columns { grid-template-columns: minmax(0, 1fr); }
     .map-workspace .trip-work { grid-column: 1; grid-row: 2; }
     .trip-tools { padding: 8px; }

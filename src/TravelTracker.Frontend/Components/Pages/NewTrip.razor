@@ -25,6 +25,7 @@ else
         <button type="button" disabled="@busy" @onclick="CreateNewAsync">Create new</button>
         <button type="button" class="secondary" disabled="@busy" aria-expanded="@Pressed(browseSaved)"
                 aria-controls="saved-trip-browser" @onclick="() => browseSaved = !browseSaved">Open saved</button>
+        <button type="button" class="secondary" @onclick="() => panelResetVersion++">Reset panel layout</button>
     </div>
     @if (browseSaved)
     {
@@ -71,6 +72,7 @@ else
     }
 
     <div class="trip-columns @(!MapVisible ? "editor" : null)">
+        <MovablePanel Label="Itinerary" Class="itinerary-panel" ResetVersion="panelResetVersion">
         <section class="trip-chain" aria-labelledby="trip-chain-title">
             @if (MapVisible)
             {
@@ -158,9 +160,11 @@ else
                 <button type="button" class="secondary" disabled="@busy" @onclick="AddReturnStop">+ Return to starting accommodation</button>
             }
         </section>
+        </MovablePanel>
 
         @if (showMap && !review)
         {
+            <MovablePanel Label="Map tools" Class="tools-panel" ResetVersion="panelResetVersion">
             <section class="trip-tools" aria-label="Map tools">
                 <div class="trip-palette">
                     <button @ref="toolsToggle" type="button" aria-expanded="@Pressed(toolsOpen)" aria-controls="trip-tools-panel" disabled="@busy" @onclick="ToggleTools">Map tools</button>
@@ -181,8 +185,10 @@ else
                     <small>@ConnectionHint</small>
                 }
             </section>
+            </MovablePanel>
         }
 
+        <MovablePanel Label="Stop editor" Class="editor-panel" ResetVersion="panelResetVersion">
         <div id="trip-tools-panel" class="trip-work @(showMap && !review && !toolsOpen ? "tools-collapsed" : null)"
              inert="@(showMap && !review && !toolsOpen)" aria-hidden="@(showMap && !review && !toolsOpen ? "true" : null)">
     @if (showMap && !review)
@@ -349,6 +355,7 @@ else
                 }
             }
         </div>
+        </MovablePanel>
     </div>
 }
 </div>
