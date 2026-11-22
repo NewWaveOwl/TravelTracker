@@ -24,6 +24,9 @@ public sealed class FakeSupabaseAuth : HttpMessageHandler
     public bool LogoutUnavailable { get; set; }
     public bool Anonymous { get; set; }
     public bool ConfirmationRejected { get; set; }
+    public bool CredentialChangeRejected { get; set; }
+    public string CurrentSubject { get; set; } = Subject;
+    public string? CredentialField { get; private set; }
     public string Scope { get; set; } = "users.read users.write catalogue.read trips.read trips.write";
     public int PasswordRequests { get; private set; }
     public int SignupRequests { get; private set; }
@@ -52,14 +55,23 @@ public sealed class FakeSupabaseAuth : HttpMessageHandler
                     : Json(new { keys = new[] { new { kty = "RSA", use = "sig", kid = "rsa", n = Base64UrlEncoder.Encode(rsa.Modulus!), e = Base64UrlEncoder.Encode(rsa.Exponent!) } } });
             case "/auth/v1/user":
                 Assert.Equal(LastAccessToken, request.Headers.Authorization?.Parameter);
-                return Json(new { id = Subject, email = "traveller@example.test", email_confirmed_at = Verified ? "2026-01-01T00:00:00Z" : null, is_anonymous = false });
+                if (request.Method == HttpMethod.Put)
+                {
+                    var change = await request.Content!.ReadFromJsonAsync<Dictionary<string, string>>(cancellationToken);
+                    Assert.NotNull(change);
+                    if (change.Remove("current_password", out var currentPassword))
+                        Assert.Equal("fixture-password", currentPassword);
+                    CredentialField = Assert.Single(change).Key;
+                    return Json(new { id = CurrentSubject }, CredentialChangeRejected ? HttpStatusCode.BadRequest : HttpStatusCode.OK);
+                }
+                return Json(new { id = CurrentSubject, email = "traveller@example.test", email_confirmed_at = Verified ? "2026-01-01T00:00:00Z" : null, is_anonymous = false });
             case "/auth/v1/signup":
                 SignupRequests++;
                 return Json(new { user = new { id = Subject }, session = (object?)null });
             case "/auth/v1/verify":
                 ConfirmationRequests++;
                 var verification = await request.Content!.ReadFromJsonAsync<Dictionary<string, string>>(cancellationToken);
-                Assert.Equal("email", verification!["type"]);
+                Assert.Contains(verification!["type"], new[] { "email", "email_change" });
                 Assert.Equal("confirmation-hash-fixture", verification["token_hash"]);
                 return Json(new { access_token = "must-never-be-used", refresh_token = "must-never-be-stored" },
                     ConfirmationRejected ? HttpStatusCode.BadRequest : HttpStatusCode.OK);
@@ -83,7 +95,7 @@ public sealed class FakeSupabaseAuth : HttpMessageHandler
         var now = DateTime.UtcNow;
         return LastAccessToken = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
             Issuer, Audience,
-            [new Claim("sub", Subject), new Claim("email", "traveller@example.test"), new Claim("role", "authenticated"),
+            [new Claim("sub", CurrentSubject), new Claim("email", "traveller@example.test"), new Claim("role", "authenticated"),
              new Claim("scope", Scope), new Claim("is_anonymous", Anonymous ? "true" : "false", ClaimValueTypes.Boolean),
              new Claim("user_metadata", "{\"scope\":\"users.access\",\"role\":\"administrator\"}", JsonClaimValueTypes.Json)],
             now.AddHours(-1), Expired ? now.AddSeconds(-1) : now.AddHours(1),
