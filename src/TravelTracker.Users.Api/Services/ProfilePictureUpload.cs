@@ -30,7 +30,7 @@ internal static class ProfilePictureUpload
             return (StatusCodes.Status413PayloadTooLarge, null);
 
         var buffer = new byte[MaxBytes + 1];
-        var count = await request.Body.ReadAtLeastAsync(buffer, buffer.Length, throwIfEndOfStream: false, cancellationToken);
+        var count = await request.Body.ReadAtLeastAsync(buffer, buffer.Length, false, cancellationToken);
         if (count > MaxBytes)
             return (StatusCodes.Status413PayloadTooLarge, null);
         if (count == 0)
