@@ -5,9 +5,11 @@
 @using TravelTracker.Frontend.Api.Users
 @using TravelTracker.Frontend.Auth
 @using TravelTracker.Frontend.Features.Users
+@using TravelTracker.Frontend.Components.Users
 
 <PageTitle>Your profile | TravelTracker</PageTitle>
-<PageHeading Title="Your profile" />
+<PageHeading Title="@(editing ? "Edit profile" : "Your profile")" />
+<p>@(editing ? "Update your profile details." : "View and manage your TravelTracker profile.")</p>
 
 @if (CredentialMessage is not null)
 {
@@ -29,6 +31,7 @@ else if (!signedIn)
         {
             <Feedback Kind="FeedbackKind.Unexpected" Title="Unable to sign in" Eyebrow="SIGN-IN ERROR">@LoginFailure.MessageFor(SignInFailure)</Feedback>
         }
+        <small>ACCESS REQUIRED</small>
         <h2 id="guest-profile-heading">Sign in to view your profile</h2>
         <p>Your profile is connected to your TravelTracker account. Sign in to view and update your permitted profile details.</p>
         @if (sessionMessage is not null)
@@ -81,10 +84,17 @@ else
             <aside class="profile-error" role="alert"><strong>Profile editing is unavailable</strong><p>@(saveError ?? "Your account no longer has permission to edit this profile. Your entered values are still shown below.")</p></aside>
         }
 
-        @if (editing && editModel is not null && editContext is not null)
-        {
-            <section class="profile-card profile-editor" aria-labelledby="edit-profile-heading">
-                <h2 id="edit-profile-heading">Edit profile</h2>
+        <section class="profile-card @(editing ? "profile-editor" : null)" aria-labelledby="@(editing ? "edit-profile-heading" : "profile-overview-heading")">
+            <div class="profile-heading-row">
+                <h2 id="@(editing ? "edit-profile-heading" : "profile-overview-heading")">@(editing ? "Edit profile" : "Profile details")</h2>
+                @if (!editing && CanEdit)
+                {
+                    <button @onclick="BeginEdit">Edit profile</button>
+                }
+            </div>
+            <ProfilePicture @key="generation" Profile="profile" Editable="CanEdit" Editing="editing" Disabled="busy" />
+            @if (editing && editModel is not null && editContext is not null)
+            {
                 <p class="profile-help">Email is contact information and does not change your sign-in email or password.</p>
                 @if (saveError is not null && !writeDenied)
                 {
@@ -116,18 +126,9 @@ else
                         <button type="button" class="secondary" disabled="@busy" @onclick="CancelEdit">Cancel</button>
                     </div>
                 </EditForm>
-            </section>
-        }
-        else
-        {
-            <section class="profile-card" aria-labelledby="profile-overview-heading">
-                <div class="profile-heading-row">
-                    <h2 id="profile-overview-heading">Profile details</h2>
-                    @if (CanEdit)
-                    {
-                        <button @onclick="BeginEdit">Edit profile</button>
-                    }
-                </div>
+            }
+            else
+            {
                 <dl class="profile-details">
                     <dt>Username</dt><dd>@Display(profile.Username)</dd>
                     <dt>Contact email</dt><dd>@Display(profile.Email)</dd>
@@ -135,8 +136,8 @@ else
                     <dt>Account type</dt><dd>@RoleLabel(profile.Role)</dd>
                     <dt>Account status</dt><dd>@StatusLabel(profile.Status)</dd>
                 </dl>
-            </section>
-        }
+            }
+        </section>
 
         @if (CanEdit && Setup.Supabase is not null)
         {

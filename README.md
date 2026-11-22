@@ -94,10 +94,18 @@ If upgrading an older Auth0 launcher setup, **rename** `.traveltracker-launch.js
 
 1. Enter the **Supabase Auth service account password**, then the **PostgreSQL database password**, at the hidden prompts. These are different credentials.
 2. When startup completes, open [TravelTracker](http://localhost:5100/) and sign in using a traveller's Supabase Auth account. New sign-ups may need to confirm their email before signing in.
-3. Build an itinerary in [Map View](http://localhost:5100/map), select **Review on map**, and **Save trip**. Save any new catalogue entries first.
+3. Build an itinerary in [Map View](http://localhost:5100/map), then use the workspace **Save trip** button or **Ctrl+S** (**Cmd+S** on macOS). Save any new catalogue entries explicitly in review first. Save errors keep your draft available for correction or retry. The current API still requires the existing complete itinerary; relaxed empty/single-stop saves depend on #105.
 4. Copy the saved trip URL, stop the stack with **Ctrl+C**, restart and sign in, then reopen that URL or find the trip in **History**.
 
 The launcher prints the internal service token's expiry. Restart before it expires; it does not silently refresh the service session.
+
+In **Map View**, each floating panel has a box icon. Click it to collapse or expand the panel. Double-click or double-tap it, or press **Home**, to restore the panel's position and expand it without clearing trip edits. Drag the header or icon with a mouse or touch; keyboard users can focus the icon and use arrow keys (Shift for larger steps). On phones, panels start collapsed. **New trip** and **Save trip** stay at the top right of the map. The **Trip** tab keeps its panels in place without movement controls. See [the current UI reference](docs/milestone-4/canonical-ui-alignment.md).
+
+In the **Map** and **Trip** workspaces, choose the beginning and ending days together in the **Trip duration** calendar. A newly selected range includes both full days in the trip's time zone; each connection keeps its own departure and arrival times. The map's **Recenter** control returns to the first trip stop, or the initial map position when the trip has no stops.
+
+Place forms and details show the **street address** prominently, with **latitude and longitude** underneath in smaller text. In Map View, pick the map position and enter its street address; you can also adjust the coordinates.
+
+**Profile pictures:** Account → Edit profile → **Upload photo** uses the protected Users picture API and migration merged in [PR #137](https://github.com/NewWaveOwl/TravelTracker/pull/137), now included from `milestone_4`. Choose one static PNG or JPEG up to 1 MiB and 512 × 512 pixels. File selection saves the photo separately from profile text edits; a rejected upload keeps the previous photo. See [picture UI behavior and validation](docs/milestone-4/profile-picture-ui.md).
 
 ### Troubleshooting database login
 

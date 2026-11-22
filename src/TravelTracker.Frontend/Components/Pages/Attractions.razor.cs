@@ -26,8 +26,8 @@ public partial class Attractions : IDisposable
     ApiError? error;
     IReadOnlyDictionary<string, string[]> errors = new Dictionary<string, string[]>();
     bool signedIn, canWrite, loaded, searching, loadingDetails, editing, saving, pickingLocation, disposed, retrySearch;
-    bool focusError, focusDetails, focusLocationEntry;
-    ElementReference errorSummary, detailsHeading, locationEntry;
+    bool focusError, focusDetails, focusLocationEntry, focusModal, focusCreate;
+    ElementReference errorSummary, detailsHeading, locationEntry, modalHeading, modalCancel, createButton;
     CancellationTokenSource? request;
     int generation;
 
@@ -43,6 +43,8 @@ public partial class Attractions : IDisposable
 
     protected override async Task OnAfterRenderAsync(bool _firstRender)
     {
+        if (focusModal && editing && !pickingLocation) { focusModal = false; await modalHeading.FocusAsync(); }
+        if (focusCreate && !editing) { focusCreate = false; await createButton.FocusAsync(); }
         if (focusError)
         {
             focusError = false;
@@ -127,8 +129,8 @@ public partial class Attractions : IDisposable
             if (Current(version))
             {
                 LogFailure("search", failure);
-                ShowError(failure);
-                retrySearch = signedIn;
+                HandleReadFailure(failure);
+                retrySearch = signedIn && failure.Status != 403;
             }
         }
         finally
@@ -173,7 +175,7 @@ public partial class Attractions : IDisposable
             if (Current(version))
             {
                 LogFailure("details", failure);
-                ShowError(failure);
+                HandleReadFailure(failure, attractionId);
             }
         }
         finally
@@ -186,23 +188,37 @@ public partial class Attractions : IDisposable
     {
         if (saving || editing || !canWrite) return;
         CancelRequest(); searching = loadingDetails = false; selected = original = null;
-        draft = new(); editing = true; status = null; ClearError();
+        draft = new(); editing = true; focusModal = true; status = null; ClearError();
     }
 
     void BeginEdit()
     {
         if (saving || !canWrite || selected is null) return;
-        original = selected; draft = AttractionDraft.From(selected); editing = true; status = null; ClearError();
+        original = selected; draft = AttractionDraft.From(selected); editing = true; focusModal = true; status = null; ClearError();
     }
 
     void CancelEdit()
     {
         if (saving) return;
         editing = false;
+        focusDetails = selected is not null;
+        focusCreate = selected is null;
         original = null;
         draft = new();
         ClearError();
     }
+
+    /**
+     * Handles modal dismissal while keeping save requests and keyboard focus safe.
+     * @param keyboard The key pressed within the attraction dialog.
+     */
+    void ModalKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs keyboard)
+    {
+        if (editing && keyboard.Key == "Escape") CancelEdit();
+    }
+
+    async Task FocusModalFirst() => await modalHeading.FocusAsync();
+    async Task FocusModalLast() { if (saving) await modalHeading.FocusAsync(); else await modalCancel.FocusAsync(); }
 
     void OpenLocation()
     {
@@ -265,8 +281,8 @@ public partial class Attractions : IDisposable
             {
                 if (!Current(version)) return;
                 LogFailure("refresh after save", failure);
-                ShowError(failure);
-                retrySearch = true;
+                HandleReadFailure(failure);
+                retrySearch = signedIn && failure.Status != 403;
                 if (failure.Status != 401) status = "Attraction saved, but search results could not be refreshed. Retry the search; do not submit the attraction again.";
             }
         }
@@ -312,6 +328,29 @@ public partial class Attractions : IDisposable
         }
 
         if (failure.Status == 403) canWrite = false;
+    }
+
+    /**
+     * Removes cached data when a read no longer authorizes it, without discarding drafts on write denial.
+     * @param failure The failed catalogue read.
+     * @param attractionId The detail record requested, or null for a collection read.
+     */
+    void HandleReadFailure(ApiError failure, Guid? attractionId = null)
+    {
+        ShowError(failure);
+        if (failure.Status == 403)
+        {
+            results = [];
+            selected = original = null;
+            editing = pickingLocation = false;
+            draft = new();
+            status = null;
+        }
+        else if (failure.Status == 404 && attractionId is { } id)
+        {
+            results = results.Where(item => item.AttractionId != id).ToArray();
+            if (selected?.AttractionId == id) selected = null;
+        }
     }
 
     /**

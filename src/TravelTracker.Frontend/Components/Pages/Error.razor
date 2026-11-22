@@ -1,4 +1,8 @@
 @page "/Error"
 
 <PageHeading Title="Something went wrong" />
-<Feedback Kind="FeedbackKind.Unexpected"><a href="/">Back to start</a></Feedback>
+<section class="recovery-card failure" role="alert" aria-labelledby="unexpected-error-heading">
+    <h2 id="unexpected-error-heading">The page couldn’t load</h2>
+    <p>Something unexpected happened. Return to the start and try again.</p>
+    <a class="button" href="/">Back to start</a>
+</section>

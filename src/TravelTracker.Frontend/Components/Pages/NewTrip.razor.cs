@@ -61,7 +61,10 @@ public partial class NewTrip : IAsyncDisposable
     bool browseAccommodations;
     bool browseSaved;
     bool stopsStep;
-    bool toolsOpen = true;
+    long editorRevealVersion;
+    IReadOnlyList<string> observedEditorErrors = [];
+    string? observedEditorNotice;
+    bool observedEditorReview;
     bool savedReview;
     MapTool? mapTool;
     (string Code, string Label)? pendingMode;
@@ -102,7 +105,7 @@ public partial class NewTrip : IAsyncDisposable
 
     static string Pressed(bool active) => active ? "true" : "false";
 
-    bool MapVisible => showMap || review;
+    bool MapVisible => showMap;
     string TripTitle => string.IsNullOrWhiteSpace(draft.Name) ? "Untitled trip" : draft.Name;
     bool CanUndo => !busy && undoHistory.Count > 0;
     bool HasUnsavedWork => dirty || HasUnconfirmedMarkerChanges;
@@ -147,13 +150,17 @@ public partial class NewTrip : IAsyncDisposable
 
     ElementReference durationHoursInput;
     ElementReference stopNameInput, savedStopSearchInput;
-    ElementReference toolsToggle;
     bool focusDuration;
     bool focusStopDetails;
-    bool focusToolsToggle;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        var needsAttention = errors.Count > 0 && !ReferenceEquals(errors, observedEditorErrors)
+            || notice is not null && notice != observedEditorNotice || review && !observedEditorReview;
+        observedEditorErrors = errors;
+        observedEditorNotice = notice;
+        observedEditorReview = review;
+        if (showMap && needsAttention) { editorRevealVersion++; StateHasChanged(); }
         if (firstRender)
             undoShortcut = RegisterUndoShortcutAsync();
         if (focusDuration)
@@ -165,11 +172,6 @@ public partial class NewTrip : IAsyncDisposable
         {
             focusStopDetails = false;
             await (markerType == "transport_stop" ? savedStopSearchInput : stopNameInput).FocusAsync();
-        }
-        if (focusToolsToggle)
-        {
-            focusToolsToggle = false;
-            await toolsToggle.FocusAsync();
         }
         if (firstRender)
             await undoShortcut!;
@@ -219,6 +221,35 @@ public partial class NewTrip : IAsyncDisposable
         if (TimeSpan.TryParseExact(change.Value?.ToString(), "c", CultureInfo.InvariantCulture, out var offset) &&
             options.Contains(offset))
             EditTripValue(previous, new TripPlannerDraft.OffsetChoice(time, draft.TimeZone.Trim(), offset), apply);
+    }
+
+    /**
+     * Applies an inclusive day range as one undoable edit while retaining untouched saved instants.
+     * @param range The beginning and ending calendar dates in the trip's local time zone.
+     */
+    void SetTripDates((DateOnly Start, DateOnly End) range)
+    {
+        var start = range.Start.ToDateTime(TimeOnly.MinValue);
+        var end = range.End.ToDateTime(TimeOnly.MaxValue);
+        TripPlannerDraft.OffsetChoice? startOffset = null, endOffset = null;
+        var zoneId = draft.TimeZone.Trim();
+        if (TimeZoneInfo.TryFindSystemTimeZoneById(zoneId, out var zone))
+        {
+            while (zone.IsInvalidTime(start) && DateOnly.FromDateTime(start) == range.Start && start < DateTime.MaxValue.AddMinutes(-1)) start = start.AddMinutes(1);
+            while (zone.IsInvalidTime(end) && DateOnly.FromDateTime(end) == range.End && end > DateTime.MinValue.AddMinutes(1)) end = end.AddMinutes(-1);
+            if (DateOnly.FromDateTime(start) != range.Start || DateOnly.FromDateTime(end) != range.End || start > end)
+            {
+                errors = ["Choose dates that exist in the trip's time zone."];
+                actionFailed = false;
+                return;
+            }
+            if (zone.IsAmbiguousTime(start)) startOffset = new(start, zoneId, zone.GetAmbiguousTimeOffsets(start).Max());
+            if (zone.IsAmbiguousTime(end)) endOffset = new(end, zoneId, zone.GetAmbiguousTimeOffsets(end).Min());
+        }
+        if (draft.Start == start && draft.End == end && draft.StartOffset == startOffset && draft.EndOffset == endOffset) return;
+        RememberEdit();
+        (draft.Start, draft.End, draft.StartOffset, draft.EndOffset) = (start, end, startOffset, endOffset);
+        MarkEdited();
     }
 
     void SetDateTime(ChangeEventArgs change, DateTime? previous, Action<DateTime?> apply)
@@ -617,9 +648,12 @@ public partial class NewTrip : IAsyncDisposable
         CancelConnection();
     }
 
+    // Standard steps keep the editable marker buffer and child components intact.
+    void ShowTripBasics() { stopsStep = false; review = savedReview = false; }
+    void ShowTripItinerary() { stopsStep = true; review = savedReview = false; }
+
     void ShowStops()
     {
-        toolsOpen = true;
         stopsStep = true;
         review = false;
         savedReview = false;
@@ -632,12 +666,12 @@ public partial class NewTrip : IAsyncDisposable
     async Task BackFromReview()
     {
         if (showMap) ShowStops();
-        else await SwitchView(false);
+        else ShowTripItinerary();
+        await Task.CompletedTask;
     }
 
     void OpenMarkers()
     {
-        toolsOpen = true;
         stopsStep = true;
         mapTool = MapTool.Markers;
         markerType = null;
@@ -650,13 +684,6 @@ public partial class NewTrip : IAsyncDisposable
     }
 
     void OpenTransport() => ShowStops();
-
-    /** Slides the editing panel without resetting its selection, buffers or connections. */
-    void ToggleTools()
-    {
-        toolsOpen = !toolsOpen;
-        focusToolsToggle = !toolsOpen;
-    }
 
     void CancelConnection()
     {
@@ -740,6 +767,7 @@ public partial class NewTrip : IAsyncDisposable
 
     void ShowReview()
     {
+        editorRevealVersion++;
         review = true;
         savedReview = false;
         CancelConnection();
@@ -941,7 +969,6 @@ public partial class NewTrip : IAsyncDisposable
     /** Opens an isolated edit buffer for the selected stop without moving the map. */
     void EditSelectedStop()
     {
-        toolsOpen = true;
         var marker = draft.Stops[selected];
         editingMarker = marker;
         editingStopDetails = true;
@@ -1030,6 +1057,7 @@ public partial class NewTrip : IAsyncDisposable
             if (place != marker.Place)
                 place = place with { PlaceId = Guid.Empty };
             EditTripValue(marker.Place, place, value => draft.UpdatePlace(marker, value));
+            (placeName, placeAddress) = (place.Name, place.Address);
             return;
         }
         AddStop(new(Guid.Empty, type, placeName.Trim(), placeAddress.Trim(), position.Lat, position.Lon), showMap ? insertAfter : null);
@@ -1120,7 +1148,33 @@ public partial class NewTrip : IAsyncDisposable
         }
     }
 
-    /** Saves the itinerary using confirmed catalogue references only. */
+    /**
+     * Runs the workspace button and keyboard save through the same validation and save path.
+     * @return A task completing after validation or the trip request, without creating catalogue entries.
+     */
+    async Task SaveWorkspaceAsync()
+    {
+        editorRevealVersion++;
+        if (busy || savingCatalogue || openingRoute)
+            return;
+
+        notice = null;
+        if (HasUnconfirmedMarkerChanges)
+        {
+            errors = ["Apply or cancel your marker details before saving the trip."];
+            actionFailed = false;
+            return;
+        }
+
+        ShowReview();
+        if (!HasPendingCatalogueEntries)
+            await SaveAsync();
+    }
+
+    /**
+     * Saves the itinerary using confirmed catalogue references only.
+     * @return A task completing after the save or a validation failure; failed saves retain the draft.
+     */
     async Task SaveAsync()
     {
         if (busy || HasPendingCatalogueEntries)

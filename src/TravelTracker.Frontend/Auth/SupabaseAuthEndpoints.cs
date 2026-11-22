@@ -191,6 +191,10 @@ public static class SupabaseAuthEndpoints
                 new AuthenticationProperties { ExpiresUtc = session.ExpiresAt, IsPersistent = false });
             return Results.Redirect("/account");
         }
+        catch (HttpRequestException error) when (error.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        {
+            return Results.Redirect("/sign-in?error=rate-limit");
+        }
         catch (Exception error) when (error is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
         {
             // Do not log exception details: auth provider responses can contain sensitive identity data.
@@ -218,6 +222,10 @@ public static class SupabaseAuthEndpoints
             if (!await auth.SignUpAsync(email, password, context.RequestAborted))
                 return Results.Redirect("/sign-in?mode=register&error=registration");
             return Results.Redirect("/sign-in?message=confirmation");
+        }
+        catch (HttpRequestException error) when (error.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        {
+            return Results.Redirect("/sign-in?mode=register&error=rate-limit");
         }
         catch (Exception error) when (error is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
         {
@@ -273,6 +281,10 @@ public static class SupabaseAuthEndpoints
             return await auth.ConfirmEmailAsync(hash, type, context.RequestAborted)
                 ? Results.Redirect(type == "email_change" ? "/account?credential=link-accepted" : "/sign-in?message=confirmed")
                 : Results.Redirect("/sign-in?error=confirmation");
+        }
+        catch (HttpRequestException error) when (error.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        {
+            return Results.Redirect("/sign-in?error=rate-limit");
         }
         catch (Exception error) when (error is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
         {

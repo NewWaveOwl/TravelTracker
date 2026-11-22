@@ -1,0 +1,207 @@
+@using System.Globalization
+@using Microsoft.JSInterop
+@inject TimeProvider Clock
+@inject IJSRuntime JavaScript
+@implements IAsyncDisposable
+
+<div class="trip-date-range">
+    <button @ref="trigger" type="button" class="range-trigger secondary" aria-haspopup="dialog" aria-expanded="@open.ToString().ToLowerInvariant()"
+            aria-controls="@dialogId" disabled="@Disabled" @onclick="Toggle">
+        <span>Travel dates</span><strong>@Summary</strong>
+    </button>
+    @if (open)
+    {
+        <section id="@dialogId" class="range-calendar" role="dialog" aria-label="Choose trip dates">
+            <div class="calendar-month">
+                <button type="button" class="secondary" aria-label="Previous month" disabled="@(month.Year == 1 && month.Month == 1)" @onclick="() => ChangeMonth(-1)">&#x2039;</button>
+                <strong id="@monthId" aria-live="polite">@month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</strong>
+                <button type="button" class="secondary" aria-label="Next month" disabled="@(month.Year == 9999 && month.Month == 12)" @onclick="() => ChangeMonth(1)">&#x203a;</button>
+            </div>
+            <p id="@helpId" role="status">@(pendingStart is null ? "Choose a beginning day, then an ending day." : $"Beginning {Display(pendingStart.Value)}. Choose the ending day.")</p>
+            <div @ref="grid" class="calendar-grid" role="grid" tabindex="0" aria-labelledby="@monthId" aria-describedby="@helpId"
+                 aria-multiselectable="true" aria-activedescendant="@DayId(focused)" @onkeydown="KeyAsync">
+                <div role="row" class="calendar-week">
+                    @foreach (var name in CultureInfo.InvariantCulture.DateTimeFormat.AbbreviatedDayNames)
+                    {
+                        <span role="columnheader">@name[..2]</span>
+                    }
+                </div>
+                @for (var week = 0; week < 6; week++)
+                {
+                    <div role="row" class="calendar-week">
+                        @for (var column = 0; column < 7; column++)
+                        {
+                            var dayNumber = month.DayNumber - (int)month.DayOfWeek + week * 7 + column;
+                            @if (dayNumber < 0 || dayNumber > DateOnly.MaxValue.DayNumber)
+                            {
+                                <span role="gridcell" aria-disabled="true"></span>
+                            }
+                            else
+                            {
+                                var day = DateOnly.FromDayNumber(dayNumber);
+                                <button id="@DayId(day)" type="button" role="gridcell" tabindex="-1" data-calendar-day data-date="@day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
+                                        class="calendar-day @(day.Month != month.Month ? "other-month" : null) @(Selected(day) ? "in-range" : null) @(Edge(day) ? "range-edge" : null) @(day == focused ? "focused-day" : null)"
+                                        aria-label="@day.ToString("dddd, MMMM d, yyyy", CultureInfo.InvariantCulture)" aria-selected="@Selected(day).ToString().ToLowerInvariant()"
+                                        @onclick="() => ChooseAsync(day)">@day.Day</button>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+            <button type="button" class="secondary calendar-close" aria-label="Close calendar" title="Close calendar" @onclick="Close"><img src="assets/icons/close.svg" alt="" width="24" height="24" /></button>
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public DateOnly? Start { get; set; }
+    [Parameter] public DateOnly? End { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<(DateOnly Start, DateOnly End)> RangeChanged { get; set; }
+
+    readonly string dialogId = $"trip-calendar-{Guid.NewGuid():N}";
+    string monthId => dialogId + "-month";
+    string helpId => dialogId + "-help";
+    DateOnly month, focused;
+    DateOnly? pendingStart;
+    bool open, focusGrid, focusTrigger, disposed, synchronizing;
+    int version;
+    ElementReference grid, trigger;
+    IJSObjectReference? module, keyboard;
+    string Summary => Start is { } start && End is { } end ? $"{Display(start)} - {Display(end)}" : "Choose beginning and ending dates";
+
+    static string Display(DateOnly day) => day.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+    string DayId(DateOnly day) => $"{dialogId}-{day:yyyy-MM-dd}";
+    bool Edge(DateOnly day) => pendingStart is { } pending ? day == pending : day == Start || day == End;
+    bool Selected(DateOnly day) => pendingStart is { } pending ? day == pending : Start is { } start && End is { } end && day >= start && day <= end;
+
+    /** Opens one shared calendar without changing saved trip bounds until both dates are chosen. */
+    void Toggle()
+    {
+        if (open) { Close(); return; }
+        focused = Start ?? DateOnly.FromDateTime(Clock.GetLocalNow().DateTime);
+        month = new(focused.Year, focused.Month, 1);
+        pendingStart = null;
+        open = focusGrid = true;
+        version++;
+    }
+
+    void Close() { open = false; pendingStart = null; focusGrid = false; focusTrigger = true; version++; }
+
+    /**
+     * Commits only complete, ordered ranges, including a beginning and ending on the same day.
+     * @param day The selected calendar day.
+     * @return Completion of a range change, or only the provisional beginning selection.
+     */
+    async Task ChooseAsync(DateOnly day)
+    {
+        if (Disabled) return;
+        focused = day;
+        if (pendingStart is not { } start || day < start)
+        {
+            pendingStart = day;
+            month = new(day.Year, day.Month, 1);
+            focusGrid = true;
+            return;
+        }
+        await RangeChanged.InvokeAsync((start, day));
+        Close();
+    }
+
+    /** Moves the displayed month while keeping an unfinished range and calendar focus. */
+    void ChangeMonth(int delta)
+    {
+        month = month.AddMonths(delta);
+        focused = new(month.Year, month.Month, Math.Min(focused.Day, DateTime.DaysInMonth(month.Year, month.Month)));
+        focusGrid = true;
+    }
+
+    /**
+     * Supports arrows, week boundaries, month navigation, selection and escape within the calendar grid.
+     * @param key The pressed calendar key.
+     * @return Completion of selection or focus movement.
+     */
+    async Task KeyAsync(KeyboardEventArgs key)
+    {
+        if (key.AltKey || key.CtrlKey || key.MetaKey) return;
+        if (key.Key is "Enter" or " ") { await ChooseAsync(focused); return; }
+        if (key.Key == "Escape") { Close(); return; }
+        if (key.Key is not ("ArrowLeft" or "ArrowRight" or "ArrowUp" or "ArrowDown" or "Home" or "End" or "PageUp" or "PageDown")) return;
+        try
+        {
+            focused = key.Key switch
+            {
+                "ArrowLeft" => focused.AddDays(-1), "ArrowRight" => focused.AddDays(1),
+                "ArrowUp" => focused.AddDays(-7), "ArrowDown" => focused.AddDays(7),
+                "Home" => focused.AddDays(-(int)focused.DayOfWeek), "End" => focused.AddDays(6 - (int)focused.DayOfWeek),
+                "PageUp" => focused.AddMonths(-1), "PageDown" => focused.AddMonths(1), _ => focused
+            };
+        }
+        catch (ArgumentOutOfRangeException) { return; }
+        month = new(focused.Year, focused.Month, 1);
+        focusGrid = true;
+    }
+
+    /**
+     * Attaches scroll guards to calendar keys and restores focus after opening, navigation or closing.
+     * @param firstRender Whether this is the initial render.
+     * @return Completion of browser keyboard and focus synchronization.
+     */
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (disposed || synchronizing) return;
+        synchronizing = true;
+        var renderedVersion = version;
+        try
+        {
+            if (open)
+            {
+                if (module is null)
+                {
+                    var imported = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Trips/TripDateRangePicker.razor.js");
+                    if (disposed) { if (imported is not null) await imported.DisposeAsync(); return; }
+                    module = imported;
+                }
+                if (!open || renderedVersion != version) return;
+                if (keyboard is null && module is not null)
+                {
+                    var attached = await module.InvokeAsync<IJSObjectReference>("attach", grid);
+                    if (disposed || !open || renderedVersion != version)
+                    {
+                        if (attached is not null) { await attached.InvokeVoidAsync("dispose"); await attached.DisposeAsync(); }
+                        return;
+                    }
+                    keyboard = attached;
+                }
+                if (focusGrid && !disposed && open && renderedVersion == version)
+                {
+                    focusGrid = false;
+                    await grid.FocusAsync();
+                }
+            }
+            else
+            {
+                if (keyboard is not null) { await keyboard.InvokeVoidAsync("dispose"); await keyboard.DisposeAsync(); keyboard = null; }
+                if (focusTrigger && !disposed && !open && renderedVersion == version) { focusTrigger = false; await trigger.FocusAsync(); }
+            }
+        }
+        catch (JSDisconnectedException) { }
+        finally
+        {
+            synchronizing = false;
+            if (!disposed && renderedVersion != version) StateHasChanged();
+        }
+    }
+
+    /** @return Completion of keyboard listener and module disposal. */
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        try
+        {
+            if (keyboard is not null) { await keyboard.InvokeVoidAsync("dispose"); await keyboard.DisposeAsync(); }
+            if (module is not null) await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+}

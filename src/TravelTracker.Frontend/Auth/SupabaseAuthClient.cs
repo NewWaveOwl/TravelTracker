@@ -128,7 +128,7 @@ public sealed class SupabaseAuthClient(HttpClient http, SupabaseSettings setting
      * @param body Optional request body.
      * @param token Optional validated session token.
      * @param cancellationToken Request cancellation.
-     * @return The caller-owned provider response.
+     * @return The caller-owned provider response; temporary failures throw without retaining provider diagnostics.
      */
     async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body, string? token, CancellationToken cancellationToken)
     {
@@ -136,6 +136,14 @@ public sealed class SupabaseAuthClient(HttpClient http, SupabaseSettings setting
         request.Headers.Add("apikey", settings.PublishableKey);
         if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (body is not null) request.Content = JsonContent.Create(body);
-        return await http.SendAsync(request, cancellationToken);
+        var response = await http.SendAsync(request, cancellationToken);
+        if (response.StatusCode is System.Net.HttpStatusCode.TooManyRequests or System.Net.HttpStatusCode.RequestTimeout ||
+            (int)response.StatusCode >= 500)
+        {
+            var status = response.StatusCode;
+            response.Dispose();
+            throw new HttpRequestException("The authentication provider is temporarily unavailable.", null, status);
+        }
+        return response;
     }
 }

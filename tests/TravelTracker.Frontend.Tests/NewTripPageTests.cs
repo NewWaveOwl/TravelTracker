@@ -123,7 +123,7 @@ public sealed class NewTripPageTests : BunitContext
         var editorLink = routes.Find("main a[href='new-trip']");
 
         await routes.InvokeAsync(() => navigation.NavigateTo(editorLink.GetAttribute("href")!));
-        routes.WaitForAssertion(() => Assert.Equal("Trip editor", routes.Find("h1").TextContent));
+        routes.WaitForAssertion(() => Assert.Equal("Plan your trip", routes.Find("h1").TextContent));
         Assert.Single(routes.FindComponents<NewTrip>());
     }
 

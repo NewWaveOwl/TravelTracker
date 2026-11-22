@@ -19,7 +19,7 @@ else
 {
     @if (error is not null)
     {
-        <section class="settings-alert" role="alert" tabindex="-1" @ref="errorSummary">
+        <section class="settings-alert @(error.Kind == FailureKind.Validation ? "validation" : error.Kind == FailureKind.Permission ? "permission" : "failure")" role="alert" tabindex="-1" @ref="errorSummary">
             <h2>@ErrorHeading</h2>
             <p>@error.Message</p>
             @if (VisibleErrors.Any())

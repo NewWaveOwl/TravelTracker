@@ -22,6 +22,53 @@ public sealed class AttractionWorkspaceTests : BunitContext
     static readonly Guid Id = Guid.Parse("00000000-0000-0000-0000-000000000123");
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
 
+    [Fact]
+    public void AttractionDialogKeepsCatalogueInertAndEscapeCancelsWithoutWriting()
+    {
+        var writes = 0;
+        Configure(new StubHandler((request, _) =>
+        {
+            if (request.Method != HttpMethod.Get) writes++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) });
+        }));
+        var page = Render<Attractions>();
+        page.Find(".attractions-heading button").Click();
+        page.Find("#attraction-name").Input("Unconfirmed museum");
+
+        Assert.True(page.Find(".attraction-catalogue").HasAttribute("inert"));
+        page.Find("[role=dialog]").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Escape" });
+
+        Assert.Empty(page.FindAll("[role=dialog]"));
+        Assert.False(page.Find(".attraction-catalogue").HasAttribute("inert"));
+        Assert.Equal(0, writes);
+    }
+
+    [Fact]
+    public async Task BusyAttractionDialogKeepsFocusInsideAndCannotBeDismissedDuringSave()
+    {
+        var response = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Configure(new StubHandler((request, _) => request.Method == HttpMethod.Post ? response.Task
+            : Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) })));
+        var page = Render<Attractions>();
+        page.Find(".attractions-heading button").Click();
+        var headingFocus = JSInterop.Invocations.Last(invocation => invocation.Identifier.EndsWith("focus", StringComparison.Ordinal)).Arguments[0];
+        page.Find("#attraction-name").Input("Museum");
+        page.Find("#attraction-lat").Input("45");
+        page.Find("#attraction-lon").Input("-73");
+        page.Find("#attraction-estimatedVisitMinutes").Input("60");
+        var submission = page.Find(".attraction-editor form").SubmitAsync();
+        page.WaitForAssertion(() => Assert.True(page.Find(".attraction-editor fieldset").HasAttribute("disabled")));
+
+        page.Find("[role=dialog] > span[tabindex='0']").Focus();
+        Assert.Equal(headingFocus, JSInterop.Invocations.Last(invocation => invocation.Identifier.EndsWith("focus", StringComparison.Ordinal)).Arguments[0]);
+        page.Find("[role=dialog]").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Escape" });
+        Assert.Single(page.FindAll("[role=dialog]"));
+
+        response.SetResult(new HttpResponseMessage(HttpStatusCode.Created) { Content = JsonContent.Create(new AttractionDto(Id, "Museum", null, null, "", 45, -73, 60)) });
+        await submission;
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll("[role=dialog]")));
+    }
+
     /**
      * connects the real frontend HTTP stack to an isolated deterministic HTTP stub.
      * @param handler Answers public contract calls without an external service.
@@ -145,17 +192,25 @@ public sealed class AttractionWorkspaceTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("No attractions found", page.Markup));
         page.Find(".attractions-heading button").Click();
         page.Find("#attraction-name").Input("Unsaved museum");
+        page.Find("#attraction-address").Input("123 Museum Street");
         page.Find("#attraction-lat").Input("45");
         page.Find("#attraction-lon").Input("-73");
         page.Find(".attraction-map-action button").Click();
         Assert.Contains("placeholder", page.Find(".location-picker").TextContent);
+        Assert.Contains("123 Museum Street", page.Find(".selected-location").TextContent);
         page.Find("#map-lat").Input("46");
+        page.Find("#map-lon").Input("-74");
         page.Find(".selected-location button[type=button]").Click();
         Assert.Equal("45", page.Find("#attraction-lat").GetAttribute("value"));
+        Assert.Equal("-73", page.Find("#attraction-lon").GetAttribute("value"));
+        Assert.Equal("123 Museum Street", page.Find("#attraction-address").GetAttribute("value"));
         page.Find(".attraction-map-action button").Click();
         page.Find("#map-lat").Input("46");
+        page.Find("#map-lon").Input("-74");
         page.Find(".selected-location").Submit();
         Assert.Equal("46", page.Find("#attraction-lat").GetAttribute("value"));
+        Assert.Equal("-74", page.Find("#attraction-lon").GetAttribute("value"));
+        Assert.Equal("123 Museum Street", page.Find("#attraction-address").GetAttribute("value"));
         Assert.Equal("Unsaved museum", page.Find("#attraction-name").GetAttribute("value"));
     }
 
@@ -178,6 +233,108 @@ public sealed class AttractionWorkspaceTests : BunitContext
         var page = RenderRejectedSave(403);
 
         Assert.True(page.Find("fieldset").HasAttribute("disabled"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ForbiddenReadClearsCachedCardsAndPrivateDetails(bool details)
+    {
+        var saved = new AttractionDto(Id, "Private museum", "Private description", null, "Private address", 45, -73, 30);
+        var handler = new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = request.RequestUri!.AbsolutePath.EndsWith(Id.ToString()) ? JsonContent.Create(saved) : JsonContent.Create(new[] { saved })
+        }));
+        Configure(handler);
+        var page = Render<Attractions>();
+        page.Find(".attraction-card button").Click();
+        Assert.Contains("Private description", page.Markup);
+
+        handler.RespondWith(403);
+        if (details) page.Find(".attraction-card button").Click();
+        else page.Find(".attraction-search").Submit();
+
+        Assert.Single(page.FindAll("[role=alert]"));
+        Assert.Empty(page.FindAll(".attraction-card"));
+        Assert.DoesNotContain("Private description", page.Markup);
+        Assert.DoesNotContain("Private address", page.Markup);
+        Assert.DoesNotContain("Edit attraction", page.Markup);
+        Assert.DoesNotContain("Sign in to browse", page.Markup);
+    }
+
+    [Fact]
+    public void MissingDetailRemovesOnlyTheUnavailableCardAndItsEditableSelection()
+    {
+        var saved = new AttractionDto(Id, "Unavailable museum", "Private description", null, "Private address", 45, -73, 30);
+        var other = saved with { AttractionId = Guid.Parse("00000000-0000-0000-0000-000000000124"), Name = "Other museum", Description = "Other description", Address = "Other address" };
+        var handler = new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = request.RequestUri!.AbsolutePath.EndsWith(Id.ToString()) ? JsonContent.Create(saved) : JsonContent.Create(new[] { saved, other })
+        }));
+        Configure(handler);
+        var page = Render<Attractions>();
+        page.Find(".attraction-card button").Click();
+        handler.RespondWith(404);
+        page.Find(".attraction-card button").Click();
+
+        Assert.Single(page.FindAll("[role=alert]"));
+        Assert.Single(page.FindAll(".attraction-card"));
+        Assert.Contains("Other museum", page.Markup);
+        Assert.DoesNotContain("Unavailable museum", page.Markup);
+        Assert.DoesNotContain("Private description", page.Markup);
+        Assert.DoesNotContain("Edit attraction", page.Markup);
+    }
+
+    [Fact]
+    public void ForbiddenEditPreservesPendingFieldsWithoutClaimingSaveSuccess()
+    {
+        var saved = new AttractionDto(Id, "Museum", "Original description", null, "Address", 45, -73, 30);
+        var handler = new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = request.RequestUri!.AbsolutePath.EndsWith(Id.ToString()) ? JsonContent.Create(saved) : JsonContent.Create(new[] { saved })
+        }));
+        Configure(handler);
+        var page = Render<Attractions>();
+        page.Find(".attraction-card button").Click();
+        page.FindAll("button").Single(button => button.TextContent == "Edit attraction").Click();
+        page.Find("#attraction-name").Input("Pending museum name");
+        handler.RespondWith(403);
+        page.Find(".attraction-editor form").Submit();
+
+        Assert.Equal("Pending museum name", page.Find("#attraction-name").GetAttribute("value"));
+        Assert.True(page.Find("fieldset").HasAttribute("disabled"));
+        Assert.DoesNotContain("Attraction saved.", page.Markup);
+    }
+
+    [Theory]
+    [InlineData(401)]
+    [InlineData(503)]
+    public void FailedReadDistinguishesRejectedSessionFromTemporaryServiceFailure(int status)
+    {
+        var saved = new AttractionDto(Id, "Cached museum", "Cached description", null, "Address", 45, -73, 30);
+        var handler = new StubHandler((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = request.RequestUri!.AbsolutePath.EndsWith(Id.ToString()) ? JsonContent.Create(saved) : JsonContent.Create(new[] { saved })
+        }));
+        Configure(handler);
+        var page = Render<Attractions>();
+        page.Find(".attraction-card button").Click();
+        handler.RespondWith(status);
+        page.Find(".attraction-search").Submit();
+
+        if (status == 401)
+        {
+            Assert.Contains("Sign in to browse", page.Markup);
+            Assert.DoesNotContain("Cached description", page.Markup);
+            Assert.Empty(page.FindAll(".attraction-card"));
+        }
+        else
+        {
+            Assert.Contains("Cached description", page.Markup);
+            Assert.Single(page.FindAll(".attraction-card"));
+            Assert.Contains("Retry search", page.Markup);
+            Assert.DoesNotContain("Sign in to browse", page.Markup);
+        }
     }
 
     /**

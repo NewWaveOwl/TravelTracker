@@ -47,6 +47,38 @@ public sealed class AdminSetupTests : BunitContext
         Assert.Null(handler.LastRequest);
     }
 
+    [Theory]
+    [InlineData(403)]
+    [InlineData(503)]
+    public void FailedAccountLookupShowsRecoverableErrorWithoutOfferingSetup(int status)
+    {
+        var failing = true;
+        Configure(new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(
+            failing ? (HttpStatusCode)status : HttpStatusCode.NotFound))));
+        var page = Render<AdminSetup>();
+
+        Assert.Contains("Unable to check your account", page.Find("[role=alert]").TextContent);
+        Assert.DoesNotContain("Sign in first", page.Markup);
+        Assert.DoesNotContain("Administrator access confirmed", page.Markup);
+        Assert.True(page.FindAll("button").Single(button => button.TextContent.Contains("Make this account")).HasAttribute("disabled"));
+
+        failing = false;
+        page.FindAll("button").Single(button => button.TextContent == "Retry account check").Click();
+        Assert.Empty(page.FindAll("[role=alert]"));
+        Assert.False(page.FindAll("button").Single(button => button.TextContent.Contains("Make this account")).HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public void RejectedAccountSessionShowsSignInWithoutFocusingAnAbsentError()
+    {
+        Configure(StubHandler.Status(401));
+        var page = Render<AdminSetup>();
+
+        Assert.Contains("Sign in first", page.Markup);
+        Assert.Empty(page.FindAll("button"));
+        Assert.DoesNotContain("Administrator access confirmed", page.Markup);
+    }
+
     [Fact]
     public void DisplaysConfirmedRoleAndNeverRendersOperatorSecret()
     {

@@ -99,7 +99,9 @@ function attachBasemap(container, planner, initialCamera) {
                 center: [longitude, latitude],
                 zoom,
                 interactive: false,
-                trackResize: false
+                trackResize: false,
+                // The C# camera owns bounds; a second clamp would misalign tiles and stop markers near tile edges.
+                transformConstrain: (center, zoom) => ({ center, zoom })
             });
             const canvas = basemap.getCanvas();
             canvas.tabIndex = -1;
@@ -263,6 +265,9 @@ export function watchViewport(svg, container, map, camera) {
     }, { ...options, capture: true });
     svg.addEventListener("keydown", event => {
         if (event.target === svg && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key))
+            event.preventDefault();
+        // SVG buttons activate in Blazor; Space must not also scroll the page.
+        if (event.key === " " && event.target.closest(".trip-marker, .marker-remove"))
             event.preventDefault();
     }, options);
 

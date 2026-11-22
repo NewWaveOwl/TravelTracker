@@ -5,12 +5,12 @@
 {
     <small class="field-error" id="@(Prefix)-name-error">@nameError</small>
 }
-<label for="@(Prefix)-address">Address<input id="@(Prefix)-address" @bind="Draft.Address" aria-invalid="@(Message("address") is null ? null : "true")" aria-describedby="@(Message("address") is null ? null : Prefix + "-address-error")" /></label>
+<label class="location-address" for="@(Prefix)-address">Street address (optional)<input id="@(Prefix)-address" @bind="Draft.Address" aria-invalid="@(Message("address") is null ? null : "true")" aria-describedby="@(Message("address") is null ? null : Prefix + "-address-error")" /></label>
 @if (Message("address") is { } addressError)
 {
     <small class="field-error" id="@(Prefix)-address-error">@addressError</small>
 }
-<div class="accommodation-coordinate-grid">
+<div class="accommodation-coordinate-grid location-coordinates">
     <div><label for="@(Prefix)-lat">Latitude *<input id="@(Prefix)-lat" @bind="Draft.Lat" inputmode="decimal" required aria-invalid="@(Message("lat") is null ? null : "true")" aria-describedby="@(Message("lat") is null ? null : Prefix + "-lat-error")" /></label>
     @if (Message("lat") is { } latError)
     {

@@ -87,7 +87,7 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseHttpsRedirection();
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path == "/sign-in" || context.Request.Path.StartsWithSegments("/auth"))
+    if (context.Request.Path.StartsWithSegments("/account") || context.Request.Path == "/sign-in" || context.Request.Path.StartsWithSegments("/auth"))
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers["Referrer-Policy"] = "no-referrer";

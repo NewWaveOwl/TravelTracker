@@ -105,7 +105,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
     {
         Dictionary<string, JsonElement>? body = null;
         var created = false;
-        var item = new AccommodationDto(Id, "Harbour Stay", "Toronto", 43.6m, -79.4m, "private");
+        var item = new AccommodationDto(Id, "Harbour Stay", "12 Harbour Street", 43.6m, -79.4m, "private");
         Configure(Handler(async request =>
         {
             if (request.Method == HttpMethod.Post)
@@ -123,7 +123,7 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         Assert.Empty(page.FindAll("#accommodation-visibility"));
         page.Find(".accommodation-heading button").Click();
         page.Find("#accommodation-name").Change(" Harbour Stay ");
-        page.Find("#accommodation-address").Change("Toronto");
+        page.Find("#accommodation-address").Change("12 Harbour Street");
         page.Find("#accommodation-lat").Change("43.6");
         page.Find("#accommodation-lon").Change("-79.4");
         page.Find(".accommodation-modal form").Submit();
@@ -131,6 +131,12 @@ public sealed class AccommodationWorkspaceTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("Place saved and selected", page.Markup));
         Assert.Equal(Id, chosen!.AccommodationId);
         Assert.Equal("Harbour Stay", body!["name"].GetString());
+        Assert.Equal("12 Harbour Street", body["address"].GetString());
+        Assert.Equal(43.6m, body["lat"].GetDecimal());
+        Assert.Equal(-79.4m, body["lon"].GetDecimal());
+        Assert.Equal("12 Harbour Street", chosen.Address);
+        Assert.Equal(43.6m, chosen.Lat);
+        Assert.Equal(-79.4m, chosen.Lon);
         Assert.Equal("private", body["visibility"].GetString());
         Assert.Equal(new[] { "address", "lat", "lon", "name", "visibility" }, body.Keys.Order(StringComparer.Ordinal).ToArray());
     }

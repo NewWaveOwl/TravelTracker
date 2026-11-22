@@ -8,6 +8,52 @@ namespace TravelTracker.Frontend.Api.Users;
  */
 public sealed class UsersClient(ProtectedClient client, IConfiguration configuration, ILogger<UsersClient>? logger = null)
 {
+    public const int MaxPictureUploadBytes = 1024 * 1024;
+    public const int MaxPictureReadBytes = 2 * 1024 * 1024;
+    public const int MaxPictureSide = 512;
+    const string PicturePath = "/api/v1/users/me/picture";
+
+    /**
+     * Reads the current owner's private normalized PNG through bearer-authenticated HTTP.
+     * @param expectedSessionId Optional rendered-owner session guard.
+     * @param cancellationToken Cancels a closed or superseded view.
+     * @return The bounded image, or null when no picture has been saved.
+     */
+    public async Task<byte[]?> GetPictureAsync(string? expectedSessionId = null, CancellationToken cancellationToken = default)
+    {
+        try { return await client.SendImageAsync("Users", HttpMethod.Get, PicturePath, null, null, MaxPictureReadBytes, expectedSessionId, cancellationToken); }
+        catch (ApiError failure) when (failure.Status == 404) { return null; }
+    }
+
+    /**
+     * Replaces only the current active owner's photo using raw PNG/JPEG bytes; no multipart filename is sent.
+     * @param picture Bounded input bytes. The server verifies pixels, dimensions and static format.
+     * @param contentType The file's PNG or JPEG media type.
+     * @param expectedSessionId Optional rendered-owner session guard.
+     * @param cancellationToken Cancels a closed or superseded view.
+     * @return Completion only after the API confirms 204. A subsequent read always uses the fixed own-picture path.
+     */
+    public async Task ReplacePictureAsync(byte[] picture, string contentType, string? expectedSessionId = null, CancellationToken cancellationToken = default)
+    {
+        if (picture.Length is < 1 or > MaxPictureUploadBytes)
+            throw new ApiError(FailureKind.Validation, "Choose a photo no larger than 1 MiB (1,048,576 bytes).", 413);
+        if (!string.Equals(contentType, "image/png", StringComparison.OrdinalIgnoreCase) && !string.Equals(contentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
+            throw new ApiError(FailureKind.Validation, "Choose one static PNG or JPEG photo.", 415);
+        try
+        {
+            await client.SendImageAsync("Users", HttpMethod.Put, PicturePath, picture, contentType.ToLowerInvariant(), MaxPictureReadBytes, expectedSessionId, cancellationToken);
+        }
+        catch (ApiError failure) when (failure.Status is 400 or 413 or 415)
+        {
+            throw new ApiError(FailureKind.Validation, failure.Status switch
+            {
+                413 => "Choose a photo no larger than 1 MiB with width and height no greater than 512 pixels.",
+                415 => "Choose one static PNG or JPEG photo with its matching format.",
+                _ => "The photo is empty or could not be read. Choose a valid static PNG or JPEG."
+            }, failure.Status);
+        }
+    }
+
     /** true when the operator provisioned a long enough bootstrap secret. */
     public bool SetupEnabled => configuration["AdminBootstrap:Secret"] is { Length: >= 32 };
 

@@ -10,7 +10,7 @@
 }
 else
 {
-    <div class="attractions-heading">
+    <div class="attractions-heading" inert="@editing">
         <div>
             <small>ATTRACTIONS / YOUR CATALOGUE</small>
             <h1 tabindex="-1">Find your next stop</h1>
@@ -18,7 +18,7 @@ else
         </div>
         @if (canWrite)
         {
-            <button disabled="@(saving || editing)" @onclick="BeginCreate">Create attraction</button>
+            <button @ref="createButton" disabled="@(saving || editing)" @onclick="BeginCreate">Create attraction</button>
         }
     </div>
     @if (!signedIn && loaded)
@@ -31,27 +31,12 @@ else
         {
             <p class="attraction-status" role="status">@status</p>
         }
-        @if (error is not null)
+        @if (error is not null && !editing)
         {
-            <section class="attraction-error" role="alert" tabindex="-1" @ref="errorSummary">
-                <h2>@ErrorHeading</h2><p>@error.Message</p>
-                @if (VisibleErrors.Any())
-                {
-                    <ul>
-                    @foreach (var field in VisibleErrors)
-                    {
-                        <li><a href="@("#attraction-" + field.Key)">@string.Join(" ", field.Value)</a></li>
-                    }
-                    </ul>
-                }
-                @if (retrySearch)
-                {
-                    <button @onclick="SearchAsync" disabled="@saving">Retry search</button>
-                }
-            </section>
+            @AttractionErrors
         }
         <div class="attraction-columns">
-            <section class="attraction-catalogue" aria-labelledby="catalogue-heading" aria-busy="@searching.ToString().ToLowerInvariant()">
+            <section inert="@editing" class="attraction-catalogue" aria-labelledby="catalogue-heading" aria-busy="@searching.ToString().ToLowerInvariant()">
                 <h2 id="catalogue-heading">Your attraction catalogue</h2>
                 <form class="attraction-search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
                     <label for="attraction-search">Attraction name<input id="attraction-search" @bind="query" placeholder="Search by name" disabled="@saving" /></label>
@@ -72,7 +57,7 @@ else
                     @foreach (var item in results)
                     {
                         <article @key="item.AttractionId" class="attraction-card @(selected?.AttractionId == item.AttractionId ? "selected" : "")">
-                            <h3>@item.Name</h3><p>@item.Address</p>
+                            <h3>@item.Name</h3><p>@(string.IsNullOrWhiteSpace(item.Address) ? "Street address not provided" : item.Address)</p>
                             <p>@(item.Rating is null ? "No rating" : $"{item.Rating:0.##} / 5") · @item.EstimatedVisitMinutes min</p>
                             <button class="secondary" disabled="@(saving || loadingDetails || editing)" @onclick="() => ShowDetailsAsync(item.AttractionId)">View details<span class="visually-hidden"> for @item.Name</span></button>
                         </article>
@@ -81,21 +66,25 @@ else
                 }
                 <small>Select a place to view or edit its details.</small>
             </section>
-            <section class="attraction-editor" aria-labelledby="editor-heading" aria-busy="@(saving || loadingDetails ? "true" : "false")">
+            @if (editing) { <div class="attraction-modal-scrim" aria-hidden="true"></div> }
+            <section class="attraction-editor @(editing ? "attraction-modal" : null)" role="@(editing ? "dialog" : null)" aria-modal="@(editing ? "true" : null)" aria-labelledby="editor-heading" aria-busy="@(saving || loadingDetails ? "true" : "false")" @onkeydown="ModalKeyDown">
             @if (loadingDetails)
             {
                 <h2 id="editor-heading">Loading attraction…</h2><p role="status">Fetching saved details.</p>
             }
             else if (editing)
             {
+                <span class="visually-hidden" tabindex="0" @onfocus="FocusModalLast"></span>
                 <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
-                    <h2 id="editor-heading">@(original is null ? "Create an attraction" : "Edit attraction")</h2>
+                    <h2 id="editor-heading" tabindex="-1" @ref="modalHeading">@(original is null ? "Create an attraction" : "Edit attraction")</h2>
+                    <p>@(original is null ? "Add an attraction. Your catalogue search stays open behind this dialog." : "Update the selected attraction. Your catalogue search stays open behind this dialog.")</p>
+                    @if (error is not null) { @AttractionErrors }
                     <fieldset disabled="@(saving || !canWrite)">
-                        <div class="attraction-field-row">
+                        <div class="attraction-form-name">
                             <div><AttractionField Id="attraction-name" Label="Name *" @bind-Value="draft.Name" Error="@FieldError("name")" /></div>
-                            <div><AttractionField Id="attraction-address" Label="Address" @bind-Value="draft.Address" Error="@FieldError("address")" /></div>
+                            <div class="location-address"><AttractionField Id="attraction-address" Label="Street address (optional)" @bind-Value="draft.Address" Error="@FieldError("address")" /></div>
                         </div>
-                        <div class="attraction-field-row">
+                        <div class="attraction-field-row location-coordinates">
                             <div><AttractionField Id="attraction-lat" Label="Latitude * (-90 to 90)" @bind-Value="draft.Lat" InputMode="decimal" Error="@FieldError("lat")" /></div>
                             <div><AttractionField Id="attraction-lon" Label="Longitude * (-180 to 180)" @bind-Value="draft.Lon" InputMode="decimal" Error="@FieldError("lon")" /></div>
                         </div>
@@ -112,14 +101,17 @@ else
                             <small id="attraction-description-error" class="field-error">@descriptionError</small>
                         }
                         <small id="optional-fields-help">Clear description or rating to remove it. Fields marked * are required.</small>
-                        <div class="actions"><button type="submit" disabled="@(!canWrite || saving)">@(saving ? "Saving…" : original is null ? "Create attraction" : "Save changes")</button><button type="button" class="secondary" @onclick="CancelEdit">Cancel</button></div>
                     </fieldset>
+                    <div class="actions"><button type="submit" disabled="@(!canWrite || saving)">@(saving ? "Saving..." : original is null ? "Create attraction" : "Save changes")</button><button @ref="modalCancel" type="button" class="secondary" disabled="@saving" @onclick="CancelEdit">Cancel</button></div>
                 </form>
+                <span class="visually-hidden" tabindex="0" @onfocus="FocusModalFirst"></span>
             }
             else if (selected is not null)
             {
                 <h2 id="editor-heading" tabindex="-1" @ref="detailsHeading">@selected.Name</h2>
-                <p>@selected.Address</p><dl class="attraction-facts"><dt>Estimated visit</dt><dd>@selected.EstimatedVisitMinutes minutes</dd><dt>Rating</dt><dd>@(selected.Rating is null ? "No rating" : $"{selected.Rating:0.##} / 5")</dd><dt>Latitude</dt><dd>@selected.Lat</dd><dt>Longitude</dt><dd>@selected.Lon</dd></dl><p>@(selected.Description ?? "No description yet.")</p>
+                <p class="location-address">@(string.IsNullOrWhiteSpace(selected.Address) ? "Street address not provided" : selected.Address)</p>
+                <div class="attraction-location"><h3>Location</h3><dl class="location-coordinates"><dt>Latitude</dt><dd>@selected.Lat</dd><dt>Longitude</dt><dd>@selected.Lon</dd></dl></div>
+                <dl class="attraction-facts"><dt>Estimated visit</dt><dd>@selected.EstimatedVisitMinutes minutes</dd><dt>Rating</dt><dd>@(selected.Rating is null ? "No rating" : $"{selected.Rating:0.##} / 5")</dd></dl><div class="attraction-about"><h3>About</h3><p>@(selected.Description ?? "No description yet.")</p></div>
                 @if (canWrite)
                 {
                     <button @onclick="BeginEdit" disabled="@saving">Edit attraction</button>
@@ -142,3 +134,22 @@ else
     }
 }
 </div>
+
+@code {
+    RenderFragment AttractionErrors => @<section class="attraction-error @(error?.Kind == FailureKind.Validation ? "validation" : error?.Kind == FailureKind.Permission ? "permission" : "failure")" role="alert" tabindex="-1" @ref="errorSummary">
+                <h2>@ErrorHeading</h2><p>@error!.Message</p>
+                @if (VisibleErrors.Any())
+                {
+                    <ul>
+                    @foreach (var entry in VisibleErrors)
+                    {
+                        <li><a href="@("#attraction-" + entry.Key)">@string.Join(" ", entry.Value)</a></li>
+                    }
+                    </ul>
+                }
+                @if (retrySearch)
+                {
+                    <button @onclick="SearchAsync" disabled="@saving">Retry search</button>
+                }
+            </section>;
+}

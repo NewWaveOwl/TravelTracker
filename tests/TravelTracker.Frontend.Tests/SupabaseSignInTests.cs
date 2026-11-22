@@ -1,5 +1,8 @@
 using System.Net;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Tests.Support;
 
@@ -8,6 +11,113 @@ namespace TravelTracker.Frontend.Tests;
 /** Exercises Supabase authentication through real forms, JWT validation and revocable cookie middleware. */
 public sealed class SupabaseSignInTests
 {
+    [Theory]
+    [InlineData("/account", false)]
+    [InlineData("/account/", false)]
+    [InlineData("/account", true)]
+    [InlineData("/account/", true)]
+    public async Task AccountRouteAliasesKeepProfileAndSignInStateNonCacheable(string path, bool signedIn)
+    {
+        using var host = new SupabaseFrontendFactory();
+        using var browser = host.CreateBrowser();
+        if (signedIn) await LoginAsync(browser);
+
+        using var response = await browser.GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var markup = await response.Content.ReadAsStringAsync();
+        Assert.Contains(signedIn ? "traveller_1" : "Sign in to view your profile", markup);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal("no-referrer", Assert.Single(response.Headers.GetValues("Referrer-Policy")));
+    }
+
+    [Theory]
+    [InlineData("/auth/v1/token", 500)]
+    [InlineData("/auth/v1/token", 503)]
+    [InlineData("/auth/v1/token", 429)]
+    [InlineData("/auth/v1/token", -1)]
+    [InlineData("/auth/v1/.well-known/jwks.json", 500)]
+    [InlineData("/auth/v1/.well-known/jwks.json", 503)]
+    [InlineData("/auth/v1/.well-known/jwks.json", 429)]
+    [InlineData("/auth/v1/user", 500)]
+    [InlineData("/auth/v1/user", 503)]
+    [InlineData("/auth/v1/user", 429)]
+    public async Task ProviderServiceFailuresDoNotBlameCredentialsOrStartASession(string path, int status)
+    {
+        using var fixture = new SupabaseFrontendFactory();
+        using var host = WithProviderFailure(fixture, path, status);
+        using var browser = host.CreateDefaultClient(new CookieJarHandler(TimeProvider.System));
+        var response = await LoginAsync(browser);
+
+        Assert.Equal(status == 429 ? "/sign-in?error=rate-limit" : "/sign-in?error=unavailable", response.Headers.Location?.OriginalString);
+        var page = await browser.GetStringAsync(response.Headers.Location);
+        Assert.Contains(status == 429 ? "Too many authentication attempts" : "temporarily unavailable", page);
+        Assert.DoesNotContain("Check your email and password", page);
+        Assert.DoesNotContain("private-provider-diagnostic", page);
+        Assert.DoesNotContain("fixture-password", page);
+        Assert.Contains("Sign in to view your profile", await browser.GetStringAsync("/account"));
+    }
+
+    [Theory]
+    [InlineData("/auth/v1/token")]
+    [InlineData("/auth/v1/user")]
+    public async Task ProviderUnauthorizedStillShowsCredentialFailure(string path)
+    {
+        using var fixture = new SupabaseFrontendFactory();
+        using var host = WithProviderFailure(fixture, path, 401);
+        using var browser = host.CreateDefaultClient(new CookieJarHandler(TimeProvider.System));
+        var response = await LoginAsync(browser);
+
+        Assert.Equal("/sign-in?error=credentials", response.Headers.Location?.OriginalString);
+        Assert.Contains("Sign in to view your profile", await browser.GetStringAsync("/account"));
+    }
+
+    [Theory]
+    [InlineData("register", 503)]
+    [InlineData("register", 429)]
+    [InlineData("confirm-email", 503)]
+    [InlineData("confirm-email", 429)]
+    public async Task RegistrationAndConfirmationReportProviderFailuresWithoutClaimingSuccess(string action, int status)
+    {
+        using var fixture = new SupabaseFrontendFactory();
+        using var host = WithProviderFailure(fixture, action == "register" ? "/auth/v1/signup" : "/auth/v1/verify", status);
+        using var browser = host.CreateDefaultClient(new CookieJarHandler(TimeProvider.System));
+        var page = await browser.GetStringAsync("/sign-in");
+        var response = await browser.PostAsync("/auth/" + action, new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["email"] = "traveller@example.test", ["password"] = "fixture-password", ["passwordConfirmation"] = "fixture-password",
+            ["token_hash"] = "confirmation-hash-fixture", ["type"] = "email",
+            ["__RequestVerificationToken"] = FrontendFactory.AntiforgeryTokenFrom(page)
+        }));
+
+        var location = response.Headers.Location?.OriginalString;
+        Assert.Equal($"/sign-in?{(action == "register" ? "mode=register&" : "")}error={(status == 429 ? "rate-limit" : "unavailable")}", location);
+        var failure = await browser.GetStringAsync(response.Headers.Location);
+        Assert.DoesNotContain("private-provider-diagnostic", failure);
+        Assert.DoesNotContain("Your email is confirmed", failure);
+        Assert.Contains("Sign in to view your profile", await browser.GetStringAsync("/account"));
+    }
+
+    /**
+     * Overrides one provider response while keeping real forms, signed JWTs and cookie middleware.
+     * @param fixture Supplies valid provider answers for the remaining requests.
+     * @param path The provider path to fail.
+     * @param status The HTTP status, or -1 for a connection failure.
+     * @return An isolated frontend host with the selected failure.
+     */
+    static WebApplicationFactory<Program> WithProviderFailure(SupabaseFrontendFactory fixture, string path, int status) =>
+        fixture.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddHttpClient<SupabaseAuthClient>().ConfigurePrimaryHttpMessageHandler(() => new StubHandler(async (request, token) =>
+            {
+                if (request.RequestUri!.AbsolutePath == path)
+                {
+                    if (status == -1) throw new HttpRequestException("private-provider-diagnostic");
+                    return new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent("private-provider-diagnostic") };
+                }
+                using var provider = new HttpMessageInvoker(fixture.Provider, disposeHandler: false);
+                return await provider.SendAsync(request, token);
+            }))));
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
