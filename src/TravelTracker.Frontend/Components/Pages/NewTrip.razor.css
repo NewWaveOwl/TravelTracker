@@ -1,6 +1,6 @@
 .trip-planner { color: var(--forest); font-size: 18px; --trip-peach: #ffccbd; --trip-panel-surface: #ece2ca; --trip-itinerary-surface: #3a4b37; --trip-ink: #293428; }
 .trip-workspace-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; position: sticky; top: 0; z-index: 4; width: fit-content; max-width: 100%; background: var(--trip-panel-surface); padding: 8px 12px; border-radius: 12px; }
-.map-workspace .trip-workspace-actions { position: absolute; left: 27.34%; top: 24px; max-width: calc(44.74% - 24px); margin: 0; }
+.map-workspace .trip-workspace-actions { position: fixed; left: 27.34%; top: 144px; max-width: calc(44.74% - 24px); margin: 0; }
 .trip-planner [data-trip-save], .trip-planner [data-review-save] { min-height: 60px; padding: 12px 24px; font: clamp(18px, 1.46vw, 28px)/1.28 'Aldrich', sans-serif; }
 .trip-review [data-review-save] { width: 100%; }
 .trip-saved-browser { position: relative; z-index: 2; max-height: 45dvh; overflow: auto; background: white; color: var(--forest); margin: 12px; padding: 16px; border-radius: 7px; }
