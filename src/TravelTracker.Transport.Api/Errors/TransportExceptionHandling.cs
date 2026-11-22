@@ -17,8 +17,7 @@ public static class TransportExceptionHandling
         {
             await next(context);
         }
-        catch (Exception error) when (!context.Response.HasStarted &&
-            (error is NpgsqlException || error is DbUpdateException))
+        catch (Exception error) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {
             var databaseError = error as NpgsqlException ?? error.InnerException as NpgsqlException;
             var status = databaseError switch
@@ -29,10 +28,9 @@ public static class TransportExceptionHandling
                 { IsTransient: true } => StatusCodes.Status503ServiceUnavailable,
                 _ => StatusCodes.Status500InternalServerError
             };
-            // client outcomes are warnings; only server-side failures are errors. Only unexpected 500s keep the exception object, because provider messages can carry connection details.
+            // Provider exception messages can carry connection details.
             context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(TransportExceptionHandling))
                 .Log(status >= StatusCodes.Status500InternalServerError ? LogLevel.Error : LogLevel.Warning,
-                    status == StatusCodes.Status500InternalServerError ? error : null,
                     "Transport storage failed with status {Status} (sql state {SqlState}, exception type {ExceptionType}, trace {TraceId}).", status,
                     (databaseError as PostgresException)?.SqlState, error.GetType().Name, context.TraceIdentifier);
             await Results.Problem(statusCode: status, title: status switch

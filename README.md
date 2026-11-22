@@ -133,6 +133,7 @@ For PostgreSQL tests, set `TRAVELTRACKER_TEST_POSTGRES` to an isolated PostgreSQ
 
 - [Supabase Auth setup and migration](docs/supabase-auth.md)
 - [Supabase PostgreSQL migration audit and staging verification](docs/supabase-migration-verification.md)
+- [Environment configuration and secrets](docs/environment-configuration.md)
 - [API contracts and service URLs](docs/api.md)
 - [Trips API and persistence](docs/trips-service.md)
 - [First administrator setup](docs/first-administrator-setup.md)

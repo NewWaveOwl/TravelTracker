@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Logging;
 
 namespace TravelTracker.Security.Hosting;
 
@@ -13,9 +14,18 @@ public static class ApiHostBuilder
      * @param args host arguments, including any --environment or --urls overrides.
      * @return a builder ready for service registration.
      */
-    public static WebApplicationBuilder Create(string[] args) => WebApplication.CreateBuilder(new WebApplicationOptions
+    public static WebApplicationBuilder Create(string[] args)
     {
-        Args = args,
-        ContentRootPath = AppContext.BaseDirectory
-    });
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            Args = args,
+            ContentRootPath = AppContext.BaseDirectory
+        });
+        // API handlers record failure categories. Provider exception text can carry database or submitted values.
+        builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.None)
+            .AddFilter("Npgsql", LogLevel.None)
+            .AddFilter("Microsoft.AspNetCore.Authentication.JwtBearer", LogLevel.None)
+            .AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+        return builder;
+    }
 }

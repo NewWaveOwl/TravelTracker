@@ -215,7 +215,7 @@ public partial class AdministratorPanel : IDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.LogError(exception, "Administrator panel account change failed");
+            Logger.LogError("Administrator panel account change failed ({FailureType})", exception.GetType().Name);
         }
     }
 

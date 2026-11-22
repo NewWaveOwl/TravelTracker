@@ -100,7 +100,7 @@ public sealed class SessionRegistry(TimeProvider clock, ILogger<SessionRegistry>
             }
             catch (Exception exception)
             {
-                handlerLogger.LogError(exception, "A session revocation handler failed; the remaining handlers still run");
+                handlerLogger.LogError("A session revocation handler failed; the remaining handlers still run ({FailureType})", exception.GetType().Name);
             }
         }
     }

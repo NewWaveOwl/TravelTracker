@@ -92,7 +92,7 @@ public partial class Attractions : IDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.LogError(exception, "Attractions account change failed");
+            Logger.LogError("Attractions account change failed ({FailureType})", exception.GetType().Name);
         }
     }
 
