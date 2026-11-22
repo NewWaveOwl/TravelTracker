@@ -2,6 +2,8 @@
 
 Branch: `braacnh_artiom_ml4`, based on the repository's actual default branch `milestone_4` at `68746a0`. The initial working tree was clean; no pre-existing user changes were included or discarded.
 
+The subsequent [Figma alignment review](figma-alignment-review.md) records the user's design reference, visual corrections to the added controls, verification and retained differences from older mockups.
+
 Supported sub-agents used the repository's frontend, persistence, testing and read-only code-review instructions. The Markdown agent definitions were used as guidance for available runtime agents, rather than claimed as directly launched agent types. File ownership was separated; the primary agent alone staged, committed and published changes. The final reviewer found and rechecked the focused-field save fix; additional feature-review findings are recorded below.
 
 ## Scope and dependency decisions

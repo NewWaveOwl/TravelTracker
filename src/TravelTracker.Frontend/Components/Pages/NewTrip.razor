@@ -243,6 +243,10 @@ else
                             <p>Save new locations and any missing transport modes to the catalogue first. They stay in the catalogue even if you discard this trip.</p>
                             <button type="button" disabled="@(busy || savingCatalogue)" @onclick="SaveCatalogueEntriesAsync">@(savingCatalogue ? "Saving catalogue entries" : "Save catalogue entries")</button>
                         }
+                        else
+                        {
+                            <button type="button" data-review-save disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</button>
+                        }
                     }
                     <button type="button" class="secondary" disabled="@busy" @onclick="BackFromReview">@(savedReview ? "Back to editor" : "Back to stops")</button>
                 </section>

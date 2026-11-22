@@ -60,7 +60,8 @@ public sealed class TripPlannerTests : BunitContext
         var saving = page.Find("[data-trip-save]").ClickAsync(new MouseEventArgs());
         page.WaitForAssertion(() => Assert.Equal(1, writes));
         Assert.True(page.Find("[data-trip-save]").HasAttribute("disabled"));
-        await page.Find("[data-trip-save]").ClickAsync(new MouseEventArgs());
+        Assert.True(page.Find("[data-review-save]").HasAttribute("disabled"));
+        await page.Find("[data-review-save]").ClickAsync(new MouseEventArgs());
         Assert.Equal(1, writes);
         response.SetResult(Json(Saved));
         await saving;
@@ -1554,5 +1555,6 @@ public sealed class TripPlannerTests : BunitContext
     };
 
     static void Click(IRenderedComponent<NewTrip> page, string label) =>
-        page.FindAll("button").Single(button => button.TextContent.Trim() == label).Click();
+        (label is "Save trip" or "Retry save" ? page.Find("[data-trip-save]")
+            : page.FindAll("button").Single(button => button.TextContent.Trim() == label)).Click();
 }

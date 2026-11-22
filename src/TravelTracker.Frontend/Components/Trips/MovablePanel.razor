@@ -6,7 +6,7 @@
     <div class="movable-panel-controls">
         <button @ref="handle" type="button" class="movable-panel-handle" aria-label="@($"Move {Label} panel")"
                 aria-describedby="@instructionsId" aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home">
-            <span aria-hidden="true">⠿</span> Move @Label
+            <span aria-hidden="true">⠿</span> Move
         </button>
         <button type="button" class="movable-panel-reset" aria-label="@($"Reset {Label} panel position")" @onclick="ResetAsync">Reset</button>
     </div>

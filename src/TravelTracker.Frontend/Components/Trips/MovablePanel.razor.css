@@ -6,17 +6,18 @@
     min-width: 0;
     max-width: calc(100vw - 16px);
     max-height: calc(100dvh - 16px);
-    border-radius: 7px;
-    background: #fffdf5;
-    color: #263a2a;
-    box-shadow: 0 3px 12px #0003;
+    border-radius: 12px;
+    background: var(--trip-panel-surface, #ece2ca);
+    color: var(--trip-ink, #293428);
     pointer-events: auto;
 }
 .movable-panel:focus-within, .movable-panel[data-moving] { z-index: 5; }
-.movable-panel-controls { display: flex; flex: none; gap: 4px; padding: 4px; }
-.movable-panel-controls button { min-height: 44px; border: 1px solid #687663; border-radius: 4px; background: #fffdf5; color: #263a2a; }
-.movable-panel-handle { flex: 1; min-width: 0; overflow-wrap: anywhere; cursor: grab; touch-action: none; user-select: none; }
+.movable-panel.itinerary-panel { background: var(--trip-itinerary-surface, #3a4b37); color: #fffdf7; }
+.movable-panel-controls { display: flex; flex: none; justify-content: flex-end; gap: 8px; padding: 4px 12px 0; }
+.movable-panel-controls button { min-height: 44px; padding: 6px 8px; border: 0; border-radius: 7px; background: transparent; color: inherit; font: 16px/1.25 'Atkinson Hyperlegible', sans-serif; }
+.movable-panel-controls button:hover { background: #fffdf733; }
+.movable-panel-handle { display: inline-flex; align-items: center; gap: 8px; min-width: 44px; cursor: grab; touch-action: none; user-select: none; }
 .movable-panel[data-moving] .movable-panel-handle { cursor: grabbing; }
-.movable-panel-controls button:focus-visible { outline: 3px solid #a34c1d; outline-offset: 2px; }
+.movable-panel-controls button:focus-visible { outline: 3px solid currentColor; outline-offset: -3px; }
 .movable-panel-body { min-height: 0; overflow: auto; scrollbar-width: thin; }
 .movable-panel-instructions { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
