@@ -166,8 +166,11 @@ catalogue entries** before saving the trip, so reopening uses the confirmed
 location snapshot. Transport stops are selected from the shared catalogue.
 Hand-placed transport pins can be kept in a browser draft. Before saving the
 trip, select each draft pin and choose a saved stop from the search results.
-Replacing a pin preserves its connections. Administrators can add shared
-route points in the Transport workspace. Switching editor views asks before discarding unconfirmed
+Replacing a pin preserves its connections. Trip review checks draft transport
+modes against the shared catalogue before saving new places. If a mode is
+missing, the editor offers saved modes for the affected connections. An
+administrator can add shared modes and route points in the Transport
+workspace. Switching editor views asks before discarding unconfirmed
 marker fields. Selecting or editing a marker preserves the map camera; opening
 a different saved trip fits its stops. **Fit stops** remains an explicit
 navigation action within a trip. Time inputs show minutes,

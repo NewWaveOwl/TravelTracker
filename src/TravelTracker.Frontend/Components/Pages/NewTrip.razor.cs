@@ -49,7 +49,7 @@ public partial class NewTrip : IAsyncDisposable
     bool disposed;
     readonly List<Action> undoHistory = [];
     readonly Dictionary<TripPlaceDto, HashSet<Guid>> pendingPlaceCreates = [];
-    readonly HashSet<string> pendingModeCreates = new(StringComparer.OrdinalIgnoreCase);
+    HashSet<string>? availableModeCodes;
     ElementReference plannerElement;
     Task<IJSObjectReference?>? undoShortcut;
     TripPlannerDraft draft = new();
@@ -111,7 +111,8 @@ public partial class NewTrip : IAsyncDisposable
     bool HasDraftTransportStops => draft.Stops.Any(stop =>
         stop.Place.Type == "transport_stop" && stop.Place.PlaceId == Guid.Empty);
 
-    bool HasPendingCatalogueEntries => draft.Stops.Any(stop => stop.Place.PlaceId == Guid.Empty) ||
+    bool HasPendingCatalogueEntries => HasPendingModes || draft.Stops.Any(stop => stop.Place.PlaceId == Guid.Empty);
+    bool HasPendingModes =>
         Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(draft.LegTo)
             .Any(leg => leg.Mode?.TransportModeId == Guid.Empty);
     string ConnectionHint => pendingMode is null ? "Choose a mode, then select a starting stop and a destination."
@@ -377,7 +378,7 @@ public partial class NewTrip : IAsyncDisposable
         ResetBrowserDraftTracking();
         undoHistory.Clear();
         pendingPlaceCreates.Clear();
-        pendingModeCreates.Clear();
+        availableModeCodes = null;
         routeId = null;
         selected = -1;
         pendingOpen = null;
@@ -399,7 +400,7 @@ public partial class NewTrip : IAsyncDisposable
         Navigation.ToBaseRelativePath(Navigation.ToAbsoluteUri(location).AbsoluteUri).Split('?', '#')[0].TrimEnd('/');
 
     sealed record BrowserDraft(TripPlannerDraft.BrowserSnapshot Map, int MarkerNumber,
-        PendingPlace[] PendingPlaces, string[] PendingModes);
+        PendingPlace[] PendingPlaces);
 
     sealed record PendingPlace(TripPlaceDto Place, Guid[] ExistingIds);
 
@@ -458,8 +459,7 @@ public partial class NewTrip : IAsyncDisposable
             if (!restore)
             {
                 var snapshot = new BrowserDraft(draft.CaptureBrowserSnapshot(), markerNumber,
-                    pendingPlaceCreates.Select(pair => new PendingPlace(pair.Key, pair.Value.ToArray())).ToArray(),
-                    pendingModeCreates.ToArray());
+                    pendingPlaceCreates.Select(pair => new PendingPlace(pair.Key, pair.Value.ToArray())).ToArray());
                 await storage.SetAsync(key, snapshot);
                 if (version == routeVersion && !token.IsCancellationRequested)
                 {
@@ -484,7 +484,7 @@ public partial class NewTrip : IAsyncDisposable
             if (version != routeVersion || token.IsCancellationRequested)
                 return;
 
-            if (saved.Map is null || saved.Map.Id != draft.Id || saved.PendingPlaces is null || saved.PendingModes is null)
+            if (saved.Map is null || saved.Map.Id != draft.Id || saved.PendingPlaces is null)
                 throw new InvalidDataException("The browser draft does not match this trip or is missing catalogue data.");
             var restored = TripPlannerDraft.FromBrowserSnapshot(saved.Map);
             var pendingPlaces = new Dictionary<TripPlaceDto, HashSet<Guid>>();
@@ -492,9 +492,6 @@ public partial class NewTrip : IAsyncDisposable
                 if (place?.Place is null || place.ExistingIds is null ||
                     !pendingPlaces.TryAdd(place.Place, place.ExistingIds.ToHashSet()))
                     throw new InvalidDataException("The browser draft contains invalid pending catalogue places.");
-            if (saved.PendingModes.Any(string.IsNullOrWhiteSpace))
-                throw new InvalidDataException("The browser draft contains invalid pending transport modes.");
-
             draft = restored;
             ResetBrowserDraftTracking();
             if (draft.Id is null && accountPrefix is not null)
@@ -506,8 +503,7 @@ public partial class NewTrip : IAsyncDisposable
             pendingPlaceCreates.Clear();
             foreach (var place in pendingPlaces)
                 pendingPlaceCreates.Add(place.Key, place.Value);
-            pendingModeCreates.Clear();
-            pendingModeCreates.UnionWith(saved.PendingModes);
+            availableModeCodes = null;
             undoHistory.Clear();
             ShowBasics();
             MarkEdited();
@@ -1084,6 +1080,7 @@ public partial class NewTrip : IAsyncDisposable
                 return;
             var saved = revision.Trip;
             draft = TripPlannerDraft.FromSaved(revision);
+            availableModeCodes = null;
             browseSaved = false;
             ResetBrowserDraftTracking();
             undoHistory.Clear();
@@ -1149,6 +1146,7 @@ public partial class NewTrip : IAsyncDisposable
             var saved = revision.Trip;
             var checkpoint = draft.Id is null ? newBrowserDraft : null;
             draft = TripPlannerDraft.FromSaved(revision);
+            availableModeCodes = null;
             ResetBrowserDraftTracking();
             undoHistory.Clear();
             dirty = false;
@@ -1264,6 +1262,9 @@ public partial class NewTrip : IAsyncDisposable
      */
     async Task ResolveCatalogueAsync(TripPlannerDraft savingDraft, int version, CancellationToken token)
     {
+        if (!await ResolveModesAsync(savingDraft, version, token))
+            return;
+
         var pendingPlaces = savingDraft.Stops.Where(stop => stop.Place.PlaceId == Guid.Empty)
             .GroupBy(stop => PlaceDetails(stop.Place));
         foreach (var group in pendingPlaces)
@@ -1275,21 +1276,6 @@ public partial class NewTrip : IAsyncDisposable
                 stop.Place = place;
 
             // older snapshots contain temporary IDs for the now-persisted locations.
-            if (ReferenceEquals(draft, savingDraft))
-                undoHistory.Clear();
-            if (version != routeVersion)
-                return;
-        }
-
-        var pendingModes = Enumerable.Range(1, savingDraft.Stops.Count - 1).Select(savingDraft.LegTo)
-            .Where(leg => leg.Mode is { TransportModeId: var id } && id == Guid.Empty).GroupBy(leg => leg.Mode!.Code);
-        foreach (var group in pendingModes)
-        {
-            var mode = await ResolveModeAsync(group.First().Mode!, version, token);
-            if (mode is null)
-                return;
-            foreach (var leg in group)
-                leg.Mode = mode;
             if (ReferenceEquals(draft, savingDraft))
                 undoHistory.Clear();
             if (version != routeVersion)
@@ -1359,45 +1345,45 @@ public partial class NewTrip : IAsyncDisposable
     }
 
     /**
-     * Looks up a mode by its exact code before creating it or recovering an uncertain creation.
-     * @param mode Mode to resolve with its draft code and label.
+     * Resolves draft modes against the shared catalogue before saving any new places.
+     * @param savingDraft The itinerary being prepared.
      * @param version The planner route version at the start of the operation.
      * @param token Cancels pending work.
-     * @return A confirmed mode, or null if navigation superseded the lookup.
+     * @return Whether the draft modes were confirmed for the current route.
      */
-    async Task<TripDto.Mode?> ResolveModeAsync(TripDto.Mode mode, int version, CancellationToken token)
+    async Task<bool> ResolveModesAsync(TripPlannerDraft savingDraft, int version, CancellationToken token)
     {
-        var entries = await Transport.SearchTransportAsync("", mode.Code, token);
+        var pending = Enumerable.Range(1, savingDraft.Stops.Count - 1).Select(savingDraft.LegTo)
+            .Where(leg => leg.Mode is { TransportModeId: var id } && id == Guid.Empty).ToArray();
+        if (pending.Length == 0)
+            return true;
+
+        var entries = await Transport.SearchTransportAsync("", "", token);
         if (version != routeVersion)
-            return null;
+            return false;
 
-        var saved = entries.FirstOrDefault(entry => entry.TransportModeId != Guid.Empty &&
-            string.Equals(entry.Code, mode.Code, StringComparison.OrdinalIgnoreCase));
-        if (saved is not null)
+        var saved = entries.Where(entry => entry.TransportModeId != Guid.Empty)
+            .ToLookup(entry => entry.Code, StringComparer.OrdinalIgnoreCase);
+        availableModeCodes = Modes.Select(option => option.Code).Where(code => saved.Contains(code))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = pending.Select(leg => leg.Mode!).Where(mode => !saved.Contains(mode.Code))
+            .DistinctBy(mode => mode.Code).Select(mode => mode.Name).ToArray();
+        if (missing.Length > 0)
         {
-            pendingModeCreates.Remove(mode.Code);
-            return new(saved.TransportModeId, saved.Code, saved.Name);
+            var nextStep = availableModeCodes.Count == 0
+                ? "Ask an administrator to add a transport mode, then check the catalogue again."
+                : "Go back to the affected connections and choose a saved mode, or ask an administrator to add the missing modes.";
+            errors = [$"Transport modes unavailable in the catalogue: {string.Join(", ", missing)}. {nextStep}"];
+            return false;
         }
 
-        // nothing matched after an unconfirmed create, so clear the marker and let the next save retry.
-        if (pendingModeCreates.Remove(mode.Code))
-            throw new ApiError(FailureKind.Unexpected, $"No saved {mode.Name} mode matches the earlier save. The earlier save may not have applied, so save catalogue entries again to retry.");
-
-        pendingModeCreates.Add(mode.Code);
-        try
+        foreach (var leg in pending)
         {
-            var created = await Transport.CreateTransportAsync(
-                new() { ["code"] = mode.Code, ["name"] = mode.Name }, token);
-            if (created.TransportModeId == Guid.Empty)
-                throw UnconfirmedCatalogueEntry(mode.Name);
-            pendingModeCreates.Remove(mode.Code);
-            return new(created.TransportModeId, created.Code, created.Name);
+            var mode = saved[leg.Mode!.Code].First();
+            leg.Mode = new(mode.TransportModeId, mode.Code, mode.Name);
         }
-        catch (ApiError error) when (CatalogueWriteRejected(error))
-        {
-            pendingModeCreates.Remove(mode.Code);
-            throw;
-        }
+        undoHistory.Clear();
+        return true;
     }
 
     static TripPlaceDto PlaceDetails(TripPlaceDto place) =>

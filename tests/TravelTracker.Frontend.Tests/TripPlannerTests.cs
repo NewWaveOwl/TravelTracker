@@ -1107,7 +1107,7 @@ public sealed class TripPlannerTests : BunitContext
         {
             if (request.RequestUri!.AbsolutePath == "/api/v1/transport-modes")
             {
-                Assert.Contains("code=pedestrian", request.RequestUri.Query);
+                Assert.Equal(HttpMethod.Get, request.Method);
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new[] { walk }) };
             }
 
@@ -1192,12 +1192,15 @@ public sealed class TripPlannerTests : BunitContext
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void MapPlannerCreatesATripFromSavedPlacesAndReusesTheReturnedId(bool loseModeResponse)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void TravellerSavesMapTripUsingAnExistingMode(bool trainUnavailable, bool catalogueInitiallyEmpty)
     {
         SaveTripRequest? created = null;
-        var modeWrites = 0;
+        var walk = new TripDto.Mode(Guid.Parse("00000000-0000-0000-0000-000000009015"), "pedestrian", "Walk");
+        var expectedMode = trainUnavailable && !catalogueInitiallyEmpty ? walk : Train;
+        var catalogueReads = 0;
         Configure(async (request, token) =>
         {
             var path = request.RequestUri!.AbsolutePath;
@@ -1211,25 +1214,17 @@ public sealed class TripPlannerTests : BunitContext
                     return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(
                         new[] { new { AttractionId = Museum.PlaceId, Museum.Name, Museum.Address, Museum.Lat, Museum.Lon, EstimatedVisitMinutes = 30 } }) };
                 case "/api/v1/transport-modes":
-                    if (request.Method == HttpMethod.Get)
-                    {
-                        Assert.Contains("code=train", request.RequestUri.Query);
-                        var modes = loseModeResponse && modeWrites == 0 ? Array.Empty<TripDto.Mode>() : [Train];
-                        return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(modes) };
-                    }
-
-                    Assert.True(loseModeResponse);
-                    Assert.Equal(HttpMethod.Post, request.Method);
-                    modeWrites++;
-                    throw new HttpRequestException("Response lost after creating the transport mode.");
+                    Assert.Equal(HttpMethod.Get, request.Method);
+                    var modes = catalogueInitiallyEmpty && catalogueReads++ == 0 ? Array.Empty<TripDto.Mode>() : [expectedMode];
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(modes) };
                 case "/api/v1/trips":
                     Assert.Equal(HttpMethod.Post, request.Method);
                     created = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
-                    return Json(Saved);
+                    return Json(Saved with { Legs = [Saved.Legs[0] with { Transport = expectedMode }] });
                 default:
                     throw new InvalidOperationException($"Unexpected request path {path}.");
             }
-        });
+        }, scopes: "catalogue.read catalogue.write trips.read trips.write");
         ConfigureBrowserDraftStorage();
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/map");
@@ -1273,9 +1268,23 @@ public sealed class TripPlannerTests : BunitContext
         Click(page, "Review on map");
         Assert.Empty(page.FindAll("[role=alert]"));
         Click(page, "Save catalogue entries");
-        if (loseModeResponse)
+        if (trainUnavailable)
         {
-            page.WaitForAssertion(() => Assert.Contains("could not be confirmed", page.Find("[role=alert]").TextContent));
+            page.WaitForAssertion(() => Assert.Contains("Transport modes unavailable in the catalogue: Train", page.Find("[role=alert]").TextContent));
+            Assert.Null(created);
+            Click(page, "Back to stops");
+            Assert.DoesNotContain(page.FindAll(".trip-palette button"), button => button.TextContent.Trim() == "Train");
+            if (catalogueInitiallyEmpty)
+            {
+                Assert.Contains("No transport modes are available", page.Markup);
+            }
+            else
+            {
+                Click(page, "Walk");
+                page.FindAll(".trip-stop")[0].Click();
+                page.FindAll(".trip-stop")[1].Click();
+            }
+            Click(page, "Review on map");
             Click(page, "Save catalogue entries");
         }
         Click(page, "Save map draft");
@@ -1285,13 +1294,12 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Collection(JSInterop.Invocations["localStorage.setItem"],
             item => Assert.EndsWith("-new", Assert.IsType<string>(item.Arguments[0])),
             item => Assert.EndsWith($"-{TripId:D}", Assert.IsType<string>(item.Arguments[0])));
-        Assert.Equal(loseModeResponse ? 1 : 0, modeWrites);
         Assert.NotNull(created);
         Assert.Equal(Start, created.Start);
         var leg = Assert.Single(created.Legs);
         Assert.Equal(Hotel.PlaceId, leg.From.PlaceId);
         Assert.Equal(Museum.PlaceId, leg.To.PlaceId);
-        Assert.Equal(Train.TransportModeId, leg.TransportModeId);
+        Assert.Equal(expectedMode.TransportModeId, leg.TransportModeId);
         Assert.Equal(Start.AddMinutes(75), leg.Departure);
         Assert.Equal(Start.AddMinutes(135), leg.Arrival);
         Assert.EndsWith($"/map/{TripId:D}", navigation.Uri);

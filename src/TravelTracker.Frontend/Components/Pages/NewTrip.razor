@@ -236,7 +236,7 @@ else
                         }
                         else if (HasPendingCatalogueEntries)
                         {
-                            <p>Save new locations and any missing transport modes to the catalogue first. They stay in the catalogue even if you discard this trip.</p>
+                            <p>Check transport modes and save any new locations before saving the trip. They stay in the catalogue even if you discard this trip.</p>
                             <button type="button" disabled="@(busy || savingCatalogue)" @onclick="SaveCatalogueEntriesAsync">@(savingCatalogue ? "Saving catalogue entries" : "Save catalogue entries")</button>
                         }
                         else
@@ -438,8 +438,13 @@ else
     </div>;
 
     RenderFragment TransportPalette => @<div>
+                    @{ var knownModes = HasPendingModes ? availableModeCodes : null; }
+                    @if (knownModes is { Count: 0 })
+                    {
+                        <p>No transport modes are available. Ask an administrator to add one, then check the catalogue again from trip review.</p>
+                    }
                     <div class="trip-palette" aria-label="Transport palette">
-                        @foreach (var option in Modes)
+                        @foreach (var option in Modes.Where(option => knownModes?.Contains(option.Code) != false))
                         {
                             <button type="button" class="secondary" aria-pressed="@Pressed((showMap ? pendingMode?.Code ?? CurrentLeg?.Mode?.Code : CurrentLeg?.Mode?.Code) == option.Code)" @onclick="() => ChooseMode(option)"><img src="@Icon(option.Code)" alt="" />@option.Label</button>
                         }
