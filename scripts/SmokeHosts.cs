@@ -31,6 +31,8 @@ foreach (var (name, port) in hosts)
     startInfo.ArgumentList.Add(dll);
     var settings = new Dictionary<string, string>
     {
+        ["ASPNETCORE_ENVIRONMENT"] = "Testing",
+        ["DOTNET_ENVIRONMENT"] = "Testing",
         ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}",
         [$"ConnectionStrings__{name}"] = postgres is { Length: > 0 } ? $"{postgres};Database=traveltracker_{name.ToLowerInvariant()}" : "Host=127.0.0.1;Port=1;Database=unused",
         ["Database__ApplyMigrations"] = (postgres is { Length: > 0 }).ToString().ToLowerInvariant(),

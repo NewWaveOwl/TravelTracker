@@ -24,6 +24,12 @@ public class TripsProgram
     public static async Task Main(string[] args)
     {
         var builder = ApiHostBuilder.Create(args);
+        var connectionString = builder.RequireDatabaseConnection("Trips");
+        if (builder.Environment.IsProduction())
+        {
+            foreach (var key in new[] { "TripReferences:AccommodationsBaseUrl", "TripReferences:AttractionsBaseUrl", "TripReferences:TransportBaseUrl" })
+                DependencyConfiguration.RequireHttps(builder.Configuration[key], key);
+        }
         builder.Services.AddControllers();
         builder.Services.Configure<ApiBehaviorOptions>(options =>
         {
@@ -53,9 +59,7 @@ public class TripsProgram
             });
             options.OperationFilter<BearerSecurityOperationFilter>();
         });
-        var tripsConnectionString = builder.Configuration.GetConnectionString("Trips") ??
-            throw new InvalidOperationException("ConnectionStrings:Trips is required.");
-        builder.Services.AddDbContext<TripsDbContext>(options => options.UseNpgsql(tripsConnectionString));
+        builder.Services.AddDbContext<TripsDbContext>(options => options.UseNpgsql(connectionString));
         builder.Services.AddScoped<ITripRepository, EfTripRepository>();
         builder.Services.AddScoped<TripReadService>();
         builder.Services.AddTripReferences(builder.Configuration);
@@ -68,16 +72,15 @@ public class TripsProgram
         });
         var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("TripsStartup");
         var references = app.Services.GetRequiredService<IOptions<TripReferenceOptions>>().Value;
-        var applyMigrations = app.Configuration.GetValue<bool>("Database:ApplyMigrations");
+        var applyMigrations = app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations");
         startupLogger.LogInformation(
-            "Trips host configured: migrations on startup {ApplyMigrations}; catalogue hosts {Accommodations}, {Attractions}, {Transport}; Users {Users}; reference timeout {Timeout} s.",
-            applyMigrations, references.AccommodationsBaseUrl, references.AttractionsBaseUrl, references.TransportBaseUrl,
-            references.UsersBaseUrl, references.Timeout.TotalSeconds);
+            "Trips host configured: migrations on startup {ApplyMigrations}; reference timeout {Timeout} s.",
+            applyMigrations, references.Timeout.TotalSeconds);
         if (applyMigrations)
         {
             startupLogger.LogInformation("applying Trips migrations to the configured database before accepting requests.");
             await using var scope = app.Services.CreateAsyncScope();
-            await TripsDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<TripsDbContext>());
+            await DatabaseConfiguration.RunMigrationAsync(() => TripsDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<TripsDbContext>()));
             startupLogger.LogInformation("Trips migrations are applied.");
         }
         if (app.Environment.IsDevelopment())

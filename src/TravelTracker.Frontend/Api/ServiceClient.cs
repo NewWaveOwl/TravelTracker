@@ -99,12 +99,12 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
         catch (JsonException exception)
         {
             // non-JSON failures still have a usable status-based message
-            logger.LogWarning(exception, "Field errors in a failure response were not valid JSON; the status-based message is shown instead");
+            logger.LogWarning("Field errors in a failure response were not valid JSON; the status-based message is shown instead ({FailureType})", exception.GetType().Name);
         }
         catch (HttpRequestException exception)
         {
             // the connection dropped while the error body was read; the status still tells the caller what failed
-            logger.LogWarning(exception, "Field errors in a failure response could not be read; the status-based message is shown instead");
+            logger.LogWarning("Field errors in a failure response could not be read; the status-based message is shown instead ({FailureType})", exception.GetType().Name);
             return new Dictionary<string, string[]>();
         }
         return result;
@@ -141,13 +141,15 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
      * @param status The response status, when the server answered.
      * @param errors Field errors the server listed, when present.
      * @param resource The route-only resource name, never record identifiers.
-     * @param exception The underlying cause, so network, TLS and charset problems stay in the log.
+     * @param exception The underlying cause, represented in the log only by its type.
      * @return The error to throw.
      */
     ApiError Fail(FailureKind kind, string message, HttpMethod method, int? status = null, IReadOnlyDictionary<string, string[]>? errors = null, string? resource = null, Exception? exception = null)
     {
         // a 404 is an expected answer for lookups (for example a first sign-in with no account yet), so it is not a warning
-        logger.Log(status == 404 ? LogLevel.Information : LogLevel.Warning, exception, "{Method} service request to {Resource} failed as {Kind} (status {Status})", method, resource, kind, status);
+        logger.Log(status == 404 ? LogLevel.Information : LogLevel.Warning,
+            "{Method} service request to {Resource} failed as {Kind} (status {Status}, failure type {FailureType})",
+            method, resource, kind, status, exception?.GetType().Name);
         return new ApiError(kind, message, status, errors);
     }
 }

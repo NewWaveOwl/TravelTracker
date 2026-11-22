@@ -162,7 +162,8 @@ public static class BearerAuthenticationExtensions
      * @return Whether it is an absolute HTTPS URL.
      */
     private static bool IsHttps(string value) =>
-        Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps &&
+        uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0;
 
     /**
      * Pins the Supabase key endpoint to a credential-free HTTPS Auth issuer.

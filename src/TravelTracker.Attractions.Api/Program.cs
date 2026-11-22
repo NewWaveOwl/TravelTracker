@@ -33,7 +33,7 @@ public partial class AttractionsProgram
             options.OperationFilter<BearerSecurityOperationFilter>();
         });
         builder.Services.AddDbContextFactory<AttractionsDbContext>(options => options.UseNpgsql(
-            builder.Configuration.GetConnectionString("Attractions") ?? throw new InvalidOperationException("ConnectionStrings:Attractions is required.")));
+            builder.RequireDatabaseConnection("Attractions")));
         builder.Services.AddSingleton(provider => new EntityIdGenerator(cancellationToken =>
             AttractionsDatabase.HighestKeyAsync(provider.GetRequiredService<IDbContextFactory<AttractionsDbContext>>(), cancellationToken)));
         builder.Services.AddScoped<IAttractionRepository, EfAttractionRepository>();
@@ -43,18 +43,21 @@ public partial class AttractionsProgram
             .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         var app = builder.Build();
+        if (app.Environment.IsProduction())
+            builder.RequireDatabaseConnection("Attractions");
+        builder.ValidateUsersDependency();
         app.UseAttractionExceptionHandling();
         var internalBase = app.Configuration["Users:InternalBaseUrl"];
         var usersEndpoint = string.IsNullOrWhiteSpace(internalBase) ? app.Configuration["Users:AccessEndpoint"] : internalBase;
         if (Uri.TryCreate(usersEndpoint, UriKind.Absolute, out var usersUri) && usersUri.Scheme == Uri.UriSchemeHttps)
-            app.Logger.LogInformation("Users access endpoint configured at {UsersEndpoint}.", usersUri.GetLeftPart(UriPartial.Authority));
+            app.Logger.LogInformation("Users access endpoint configured.");
         else
             app.Logger.LogError("Users access endpoint must be an absolute HTTPS URL; protected requests will fail closed.");
-        if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+        if (app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"))
         {
-            var seedExamples = app.Configuration.GetValue<bool>("Database:SeedExamples");
+            var seedExamples = app.Configuration.ReadDatabaseFlag("Database:SeedExamples");
             await using var scope = app.Services.CreateAsyncScope();
-            var seededCount = await AttractionsDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<AttractionsDbContext>(), seedExamples);
+            var seededCount = await DatabaseConfiguration.RunMigrationAsync(() => AttractionsDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<AttractionsDbContext>(), seedExamples));
             var seedState = !seedExamples ? "disabled" : seededCount > 0 ? $"inserted {seededCount} record(s)" : "skipped, the table already has rows";
             app.Logger.LogInformation("Attractions database migrations applied; example seeding {SeedState}.", seedState);
         }

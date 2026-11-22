@@ -73,7 +73,7 @@ public sealed partial class TripDetails : IDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.LogError(exception, "Trip details account change failed");
+            Logger.LogError("Trip details account change failed ({FailureType})", exception.GetType().Name);
         }
     }
 

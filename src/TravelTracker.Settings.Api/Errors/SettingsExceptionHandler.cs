@@ -52,8 +52,8 @@ public static class SettingsExceptionHandler
             StatusCodes.Status503ServiceUnavailable => "dependency failure",
             _ => "request failure"
         };
-        // only unexpected 500s keep the exception object; provider messages can carry connection details, so other failures log the type name only
-        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning, status == StatusCodes.Status500InternalServerError ? exception : null,
+        // Exception messages can carry credentials or submitted values.
+        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning,
             "Settings request failed with HTTP {StatusCode} ({FailureKind}, {ExceptionType}).", status, failureKind,
             exception?.GetType().Name ?? "unknown");
         await Results.Problem(statusCode: status, title: title).ExecuteAsync(context);
