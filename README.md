@@ -94,7 +94,7 @@ If upgrading an older Auth0 launcher setup, **rename** `.traveltracker-launch.js
 
 1. Enter the **Supabase Auth service account password**, then the **PostgreSQL database password**, at the hidden prompts. These are different credentials.
 2. When startup completes, open [TravelTracker](http://localhost:5100/) and sign in using a traveller's Supabase Auth account. New sign-ups may need to confirm their email before signing in.
-3. Build an itinerary in [Map View](http://localhost:5100/map), select **Review on map**, and **Save trip**. Save any new catalogue entries first.
+3. Build an itinerary in [Map View](http://localhost:5100/map), then use the workspace **Save trip** button or **Ctrl+S** (**Cmd+S** on macOS). Save any new catalogue entries explicitly in review first. Save errors keep your draft available for correction or retry. The current API still requires the existing complete itinerary; relaxed empty/single-stop saves depend on #105.
 4. Copy the saved trip URL, stop the stack with **Ctrl+C**, restart and sign in, then reopen that URL or find the trip in **History**.
 
 The launcher prints the internal service token's expiry. Restart before it expires; it does not silently refresh the service session.

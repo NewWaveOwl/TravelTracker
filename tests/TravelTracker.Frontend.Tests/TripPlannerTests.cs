@@ -38,6 +38,59 @@ public sealed class TripPlannerTests : BunitContext
         false, [new(1, Hotel, Museum, Train, Start.AddHours(1), Start.AddHours(2))]);
 
     [Theory]
+    [InlineData("map")]
+    [InlineData("trip")]
+    public async Task WorkspaceSaveIsAvailableWithoutReviewAndBlocksDuplicateRequests(string route)
+    {
+        var response = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writes = 0;
+        Configure((request, _) =>
+        {
+            if (request.Method == HttpMethod.Get) return Task.FromResult(Json(Saved));
+            Assert.Equal(HttpMethod.Put, request.Method);
+            writes++;
+            return response.Task;
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/{route}/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("[data-trip-save]:enabled")));
+        Assert.Empty(page.FindAll(".trip-review"));
+        Assert.Equal("Control+S Meta+S", page.Find("[data-trip-save]").GetAttribute("aria-keyshortcuts"));
+
+        var saving = page.Find("[data-trip-save]").ClickAsync(new MouseEventArgs());
+        page.WaitForAssertion(() => Assert.Equal(1, writes));
+        Assert.True(page.Find("[data-trip-save]").HasAttribute("disabled"));
+        await page.Find("[data-trip-save]").ClickAsync(new MouseEventArgs());
+        Assert.Equal(1, writes);
+        response.SetResult(Json(Saved));
+        await saving;
+        page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find(".trip-message.success").TextContent));
+    }
+
+    [Fact]
+    public async Task WorkspaceSavePreservesUnconfirmedMarkerDetailsWithoutWriting()
+    {
+        var writes = 0;
+        Configure((request, _) =>
+        {
+            if (request.Method != HttpMethod.Get) writes++;
+            return Task.FromResult(Json(Saved));
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
+        page.Find(".trip-place input[type=text]").Change("Unconfirmed change");
+
+        page.Find("[data-trip-save]").Click();
+
+        Assert.Contains("Apply or cancel your marker details", page.Find("[role=alert]").TextContent);
+        Assert.Equal("Unconfirmed change", page.Find(".trip-place input[type=text]").GetAttribute("value"));
+        Assert.Equal(0, writes);
+        Assert.Equal(Museum.Name, canvas.Instance.Stops[1].Name);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -743,13 +796,13 @@ public sealed class TripPlannerTests : BunitContext
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
         Click(page, "Review on map");
-        var save = page.Find(".trip-review button");
+        var save = page.Find("[data-trip-save]");
         var firstClick = save.TriggerEventAsync("onclick", new MouseEventArgs());
 
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            Assert.True(page.Find(".trip-review button").HasAttribute("disabled"));
+            Assert.True(page.Find("[data-trip-save]").HasAttribute("disabled"));
             Assert.DoesNotContain("Saved Weekend", page.Markup);
             await save.TriggerEventAsync("onclick", new MouseEventArgs()).WaitAsync(TimeSpan.FromSeconds(3));
             Assert.Equal(1, writes);

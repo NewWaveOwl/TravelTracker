@@ -1094,7 +1094,33 @@ public partial class NewTrip : IAsyncDisposable
         }
     }
 
-    /** Saves the itinerary using confirmed catalogue references only. */
+    /**
+     * Runs the workspace button and keyboard save through the same validation and save path.
+     * @return A task completing after validation or the trip request, without creating catalogue entries.
+     */
+    async Task SaveWorkspaceAsync()
+    {
+        if (busy || savingCatalogue || openingRoute)
+            return;
+
+        toolsOpen = true;
+        notice = null;
+        if (HasUnconfirmedMarkerChanges)
+        {
+            errors = ["Apply or cancel your marker details before saving the trip."];
+            actionFailed = false;
+            return;
+        }
+
+        ShowReview();
+        if (!HasPendingCatalogueEntries)
+            await SaveAsync();
+    }
+
+    /**
+     * Saves the itinerary using confirmed catalogue references only.
+     * @return A task completing after the save or a validation failure; failed saves retain the draft.
+     */
     async Task SaveAsync()
     {
         if (busy || HasPendingCatalogueEntries)

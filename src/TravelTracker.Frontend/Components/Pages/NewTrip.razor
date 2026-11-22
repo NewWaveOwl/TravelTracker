@@ -20,6 +20,8 @@
 else
 {
     <div class="trip-workspace-actions" aria-label="Trip workspace">
+        <button type="button" data-trip-save aria-keyshortcuts="Control+S Meta+S"
+                disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</button>
         <button type="button" disabled="@busy" @onclick="CreateNewAsync">Create new</button>
         <button type="button" class="secondary" disabled="@busy" aria-expanded="@Pressed(browseSaved)"
                 aria-controls="saved-trip-browser" @onclick="() => browseSaved = !browseSaved">Open saved</button>
@@ -234,10 +236,6 @@ else
                         {
                             <p>Save new locations and any missing transport modes to the catalogue first. They stay in the catalogue even if you discard this trip.</p>
                             <button type="button" disabled="@(busy || savingCatalogue)" @onclick="SaveCatalogueEntriesAsync">@(savingCatalogue ? "Saving catalogue entries" : "Save catalogue entries")</button>
-                        }
-                        else
-                        {
-                            <button type="button" disabled="@busy" @onclick="SaveAsync">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</button>
                         }
                     }
                     <button type="button" class="secondary" disabled="@busy" @onclick="BackFromReview">@(savedReview ? "Back to editor" : "Back to stops")</button>
