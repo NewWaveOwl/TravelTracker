@@ -145,7 +145,7 @@ public partial class Account : IDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.LogError(exception, "Account authentication change failed");
+            Logger.LogError("Account authentication change failed ({FailureType})", exception.GetType().Name);
         }
     }
 
@@ -189,7 +189,7 @@ public partial class Account : IDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.LogError(exception, "Session expiry check failed");
+            Logger.LogError("Session expiry check failed ({FailureType})", exception.GetType().Name);
         }
     }
 
@@ -240,7 +240,7 @@ public partial class Account : IDisposable
         {
             if (Current(version))
             {
-                Logger.LogError(exception, "Users profile request failed unexpectedly");
+                Logger.LogError("Users profile request failed unexpectedly ({FailureType})", exception.GetType().Name);
                 SetLoadFailure(FailureKind.Unexpected, "Your profile could not be loaded. Try again.");
             }
         }
@@ -375,7 +375,7 @@ public partial class Account : IDisposable
         catch (Exception exception)
         {
             if (!Current(version)) return;
-            Logger.LogError(exception, "Users profile update failed unexpectedly");
+            Logger.LogError("Users profile update failed unexpectedly ({FailureType})", exception.GetType().Name);
             saveError = "Your profile could not be updated. Your entered values are still here; try again.";
         }
         finally
@@ -423,7 +423,7 @@ public partial class Account : IDisposable
         }
         catch (Exception exception)
         {
-            if (Current(version)) Logger.LogWarning(exception, "Users profile access recheck failed unexpectedly");
+            if (Current(version)) Logger.LogWarning("Users profile access recheck failed unexpectedly ({FailureType})", exception.GetType().Name);
         }
     }
 

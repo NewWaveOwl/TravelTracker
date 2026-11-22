@@ -38,7 +38,7 @@ public class UsersProgram
         });
         builder.Services.AddDbContextFactory<UsersDbContext>(options => options.UseNpgsql(
             // read lazily on purpose: health must answer without database configuration
-            builder.Configuration.GetConnectionString("Users") ?? throw new InvalidOperationException("ConnectionStrings:Users is required.")));
+            builder.RequireDatabaseConnection("Users")));
         builder.Services.AddScoped<IUserRepository, EfUserRepository>();
         builder.Services.AddScoped<TravelTracker.Users.Data.Repositories.Profile.IUserRepository,
             TravelTracker.Users.Data.Repositories.Profile.UserRepository>();
@@ -48,14 +48,16 @@ public class UsersProgram
             .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         var app = builder.Build();
+        if (app.Environment.IsProduction())
+            builder.RequireDatabaseConnection("Users");
         app.Logger.LogInformation("Users host starting; ApplyMigrations={ApplyMigrations}, AllowedServiceSubjects={ServiceSubjectCount}, Bootstrap configured={BootstrapConfigured}, ServiceToken configured={ServiceTokenConfigured}.",
-            app.Configuration.GetValue<bool>("Database:ApplyMigrations"), allowedServiceSubjects.Value.Count,
+            app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"), allowedServiceSubjects.Value.Count,
             !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Email"]) && !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Issuer"]) && app.Configuration["Bootstrap:Secret"] is { Length: >= 32 },
             app.Configuration["UsersAccess:ServiceToken"] is { Length: >= 32 });
-        if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+        if (app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"))
         {
             await using var scope = app.Services.CreateAsyncScope();
-            await scope.ServiceProvider.GetRequiredService<UsersDbContext>().Database.MigrateAsync();
+            await DatabaseConfiguration.RunMigrationAsync(() => scope.ServiceProvider.GetRequiredService<UsersDbContext>().Database.MigrateAsync());
             app.Logger.LogInformation("Users database migrations applied.");
         }
         app.Use(async (context, next) =>

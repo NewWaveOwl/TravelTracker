@@ -52,15 +52,17 @@ public sealed class ServiceClientTests
     }
 
     [Fact]
-    public async Task LogsTheTransportCauseOfANetworkFailure()
+    public async Task LogsTheTransportFailureTypeWithoutTheException()
     {
-        var cause = new HttpRequestException("offline");
+        var cause = new HttpRequestException("test-secret-sentinel");
         var (client, logger) = RecordedClientFor(new StubHandler((_, _) => throw cause));
 
         await Assert.ThrowsAsync<ApiError>(() => client.GetJsonAsync<object>("http://service/api/v1/trips/example"));
 
         var entry = Assert.Single(logger.Entries);
-        Assert.Same(cause, entry.Exception);
+        Assert.Null(entry.Exception);
+        Assert.Contains(nameof(HttpRequestException), entry.Message);
+        Assert.DoesNotContain("test-secret-sentinel", entry.Message);
         Assert.Contains("/api/v1/trips", entry.Message);
         Assert.DoesNotContain("example", entry.Message);
     }
@@ -90,7 +92,8 @@ public sealed class ServiceClientTests
         Assert.Equal(FailureKind.Validation, error.Kind);
         Assert.Equal(400, error.Status);
         Assert.Empty(error.Errors);
-        Assert.Contains(logger.Entries, entry => entry.Exception is HttpRequestException);
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains(nameof(HttpRequestException), StringComparison.Ordinal));
+        Assert.All(logger.Entries, entry => Assert.Null(entry.Exception));
     }
 
     [Fact]

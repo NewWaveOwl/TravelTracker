@@ -116,7 +116,7 @@ public partial class Settings : IDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.LogError(exception, "Settings authentication change failed");
+            Logger.LogError("Settings authentication change failed ({FailureType})", exception.GetType().Name);
         }
     }
 
@@ -155,7 +155,7 @@ public partial class Settings : IDisposable
         }
         catch (Exception exception)
         {
-            Logger.LogError(exception, "Settings load failed unexpectedly");
+            Logger.LogError("Settings load failed unexpectedly ({FailureType})", exception.GetType().Name);
             if (Current(version)) ShowError(new ApiError(FailureKind.Unexpected, "Your settings could not be loaded. Try again."), "load");
         }
         finally
@@ -209,7 +209,7 @@ public partial class Settings : IDisposable
         }
         catch (Exception exception)
         {
-            Logger.LogError(exception, "Settings save failed unexpectedly");
+            Logger.LogError("Settings save failed unexpectedly ({FailureType})", exception.GetType().Name);
             if (Current(version)) ShowError(new ApiError(FailureKind.Unexpected, "The save could not be completed. Your edits are kept."), "save");
         }
         finally

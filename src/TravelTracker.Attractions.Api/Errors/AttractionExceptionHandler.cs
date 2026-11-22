@@ -55,9 +55,8 @@ public static class AttractionExceptionHandler
             : status == StatusCodes.Status409Conflict ? "conflict"
             : status == StatusCodes.Status503ServiceUnavailable ? "dependency failure"
             : "request failure";
-        // only unexpected 500s keep the exception object; provider messages can carry connection details, so other failures log the type name and trace id only
+        // Exception messages can carry credentials or submitted values.
         logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning,
-            status == StatusCodes.Status500InternalServerError ? exception : null,
             "Attraction request failed with HTTP {StatusCode} ({FailureKind}, {ExceptionType}), trace {TraceIdentifier}.", status,
             failureKind, exception?.GetType().Name ?? "unknown", context.TraceIdentifier);
         await Results.Problem(statusCode: status, title: title,

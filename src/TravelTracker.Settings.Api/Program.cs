@@ -52,8 +52,7 @@ public class SettingsProgram
             options.OperationFilter<BearerSecurityOperationFilter>();
         });
         builder.Services.AddDbContextFactory<SettingsDbContext>(options => options.UseNpgsql(
-            builder.Configuration.GetConnectionString("Settings") ??
-            throw new InvalidOperationException("ConnectionStrings:Settings is required.")));
+            builder.RequireDatabaseConnection("Settings")));
         builder.Services.AddScoped<ISettingsRepository, EfSettingsRepository>();
         builder.Services.AddScoped<ISettingsService, SettingsService>();
         builder.Services.AddScoped<CallerContext>();
@@ -62,19 +61,22 @@ public class SettingsProgram
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 
         var app = builder.Build();
+        if (app.Environment.IsProduction())
+            builder.RequireDatabaseConnection("Settings");
+        builder.ValidateUsersDependency();
         app.UseExceptionHandler(new ExceptionHandlerOptions
         {
             ExceptionHandler = SettingsExceptionHandler.HandleAsync,
             SuppressDiagnosticsCallback = _ => true
         });
         if (Uri.TryCreate(app.Configuration["Users:InternalBaseUrl"], UriKind.Absolute, out var usersUri) && usersUri.Scheme == Uri.UriSchemeHttps)
-            app.Logger.LogInformation("Users access endpoint configured at {UsersEndpoint}.", usersUri.GetLeftPart(UriPartial.Authority));
+            app.Logger.LogInformation("Users access endpoint configured.");
         else
             app.Logger.LogError("Users:InternalBaseUrl must be an absolute HTTPS URL; protected requests will fail closed.");
-        if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+        if (app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"))
         {
             await using var scope = app.Services.CreateAsyncScope();
-            await SettingsDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<SettingsDbContext>());
+            await DatabaseConfiguration.RunMigrationAsync(() => SettingsDatabase.InitializeAsync(scope.ServiceProvider.GetRequiredService<SettingsDbContext>()));
             app.Logger.LogInformation("Settings database migrations applied.");
         }
         if (app.Environment.IsDevelopment())

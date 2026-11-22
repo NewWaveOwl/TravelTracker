@@ -74,7 +74,7 @@
         }
         catch (Exception exception)
         {
-            Logger.LogError(exception, "Health check of {Service} failed unexpectedly", service);
+            Logger.LogError("Health check of {Service} failed unexpectedly ({FailureType})", service, exception.GetType().Name);
             kind = FeedbackKind.Unexpected;
         }
     }

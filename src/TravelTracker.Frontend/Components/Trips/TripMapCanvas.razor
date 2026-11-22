@@ -217,7 +217,7 @@
         }
         catch (JSException exception)
         {
-            Logger.LogWarning(exception, "Map background failed to load or update");
+            Logger.LogWarning("Map background failed to load or update ({FailureType})", exception.GetType().Name);
             await SetBasemapReady(false);
         }
     }
@@ -254,7 +254,7 @@
         }
         catch (JSException exception)
         {
-            Logger.LogWarning(exception, "Map background retry failed");
+            Logger.LogWarning("Map background retry failed ({FailureType})", exception.GetType().Name);
             await SetBasemapReady(false);
         }
     }
@@ -504,7 +504,7 @@
         }
         catch (JSException exception)
         {
-            Logger.LogWarning(exception, "Map pick failed because the pointer position could not be read");
+            Logger.LogWarning("Map pick failed because the pointer position could not be read ({FailureType})", exception.GetType().Name);
             return;
         }
         if (point.Any(value => !double.IsFinite(value))) return;
@@ -632,7 +632,7 @@
         }
         catch (JSException exception)
         {
-            Logger.LogWarning(exception, "Map could not be released cleanly");
+            Logger.LogWarning("Map could not be released cleanly ({FailureType})", exception.GetType().Name);
         }
         finally
         {

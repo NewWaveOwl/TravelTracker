@@ -102,6 +102,9 @@ public sealed class AuthenticationTests
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
+                    ["ConnectionStrings:Transport"] = "Host=db.example.test;Database=unused;Username=runtime;SSL Mode=VerifyFull",
+                    ["Users:InternalBaseUrl"] = "https://users.example.test",
+                    ["Users:ServiceAccessToken"] = "test-fixture-token",
                     ["Authentication:Bearer:Authority"] = "",
                     ["Authentication:Bearer:Issuer"] = "",
                     ["Authentication:Bearer:Audience"] = ""

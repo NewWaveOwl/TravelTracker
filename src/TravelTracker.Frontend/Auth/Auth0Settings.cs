@@ -19,6 +19,9 @@ public sealed partial record Auth0Settings(string Domain, string ClientId, strin
     /** the tenant authority URL derived from the domain. */
     public string Authority => $"https://{Domain}/";
 
+    /** @return The settings type without any configured values. */
+    public override string ToString() => nameof(Auth0Settings);
+
     /**
      * Reads the Auth0 section without accepting malformed hosts.
      *

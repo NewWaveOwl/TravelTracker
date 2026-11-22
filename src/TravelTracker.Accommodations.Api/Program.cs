@@ -52,8 +52,7 @@ public class AccommodationsProgram
             options.OperationFilter<BearerSecurityOperationFilter>();
         });
         builder.Services.AddDbContextFactory<AccommodationsDbContext>(options => options.UseNpgsql(
-            builder.Configuration.GetConnectionString("Accommodations") ??
-            throw new InvalidOperationException("ConnectionStrings:Accommodations is required.")));
+            builder.RequireDatabaseConnection("Accommodations")));
         builder.Services.AddScoped<IAccommodationRepository, EfAccommodationRepository>();
         builder.Services.AddScoped<IAccommodationService, AccommodationService>();
         builder.Services.AddScoped<CallerContext>();
@@ -62,6 +61,9 @@ public class AccommodationsProgram
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 
         var app = builder.Build();
+        if (app.Environment.IsProduction())
+            builder.RequireDatabaseConnection("Accommodations");
+        builder.ValidateUsersDependency();
         app.UseExceptionHandler(new ExceptionHandlerOptions
         {
             ExceptionHandler = AccommodationExceptionHandler.HandleAsync,
@@ -69,14 +71,14 @@ public class AccommodationsProgram
         });
         var usersBaseUrl = app.Configuration["Users:InternalBaseUrl"];
         if (Uri.TryCreate(usersBaseUrl, UriKind.Absolute, out var usersUri) && usersUri.Scheme == Uri.UriSchemeHttps)
-            app.Logger.LogInformation("Users access endpoint configured at {UsersEndpoint}.", usersUri.GetLeftPart(UriPartial.Authority));
+            app.Logger.LogInformation("Users access endpoint configured.");
         else
             app.Logger.LogError("Users:InternalBaseUrl must be an absolute HTTPS URL; protected requests will fail closed.");
-        if (app.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+        if (app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"))
         {
             await using var scope = app.Services.CreateAsyncScope();
-            await AccommodationsDatabase.InitializeAsync(
-                scope.ServiceProvider.GetRequiredService<AccommodationsDbContext>());
+            await DatabaseConfiguration.RunMigrationAsync(() => AccommodationsDatabase.InitializeAsync(
+                scope.ServiceProvider.GetRequiredService<AccommodationsDbContext>()));
             app.Logger.LogInformation("Accommodations database migrations applied.");
         }
         if (app.Environment.IsDevelopment())

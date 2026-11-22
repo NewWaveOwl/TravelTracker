@@ -72,7 +72,7 @@ public partial class PlaceSelector : IDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.LogError(exception, "Refreshing the catalogue write hint failed");
+            Logger.LogError("Refreshing the catalogue write hint failed ({FailureType})", exception.GetType().Name);
         }
     }
 

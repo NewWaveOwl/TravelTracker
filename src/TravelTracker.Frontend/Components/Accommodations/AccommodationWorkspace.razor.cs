@@ -112,7 +112,7 @@ public partial class AccommodationWorkspace : IDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.LogError(exception, "Accommodation workspace account change failed");
+            Logger.LogError("Accommodation workspace account change failed ({FailureType})", exception.GetType().Name);
         }
     }
 
