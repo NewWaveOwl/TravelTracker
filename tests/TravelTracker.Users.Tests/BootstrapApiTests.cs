@@ -11,6 +11,7 @@ namespace TravelTracker.Users.Tests;
 public sealed class BootstrapApiTests
 {
     const string Bootstrap = "/api/v1/users/bootstrap-first-administrator";
+    const string DefaultTravellerScopes = "catalogue.read catalogue.write users.read users.write settings.read settings.write trips.read trips.write";
 
     static Task<HttpResponseMessage> Provision(HttpClient client, string? secret = UsersApiFactory.Secret)
     {
@@ -54,10 +55,10 @@ public sealed class BootstrapApiTests
     }
 
     [Fact]
-    public async Task MissingUsersAdminScopeCannotBootstrap()
+    public async Task MissingCatalogueReadScopeCannotBootstrap()
     {
         using var app = new UsersApiFactory();
-        using var client = app.Browser(app.Token(scope: "catalogue.read users.read"));
+        using var client = app.Browser(app.Token(scope: "users.read users.write"));
         Assert.Equal(HttpStatusCode.Forbidden, (await Provision(client)).StatusCode);
         Assert.Equal(0, app.Repository.BootstrapCalls);
     }
@@ -127,7 +128,7 @@ public sealed class BootstrapApiTests
     public async Task VerifiedTargetBootstrapsAndReadsRoleWithoutExposingProviderIdentifiers()
     {
         using var app = new UsersApiFactory();
-        var token = app.Token();
+        var token = app.Token(scope: DefaultTravellerScopes);
         using var client = app.Browser(token);
         var response = await Provision(client);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

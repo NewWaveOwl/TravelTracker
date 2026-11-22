@@ -36,7 +36,7 @@ public sealed partial class TripFormPlanner : IDisposable
     ApiError? saveError;
     string? modeFailure, pendingTarget;
     int step = 1;
-    bool signedIn, canWrite, loaded, saving, completed, focusDialog, focusHeading, focusAddLeg, focusProgress;
+    bool signedIn, canWrite, canCreateSharedStops, loaded, saving, completed, focusDialog, focusHeading, focusAddLeg, focusProgress;
     int generation;
     ElementReference leaveDialog, stepHeading, addLegButton, progressList;
     readonly CancellationTokenSource lifetime = new();
@@ -84,6 +84,7 @@ public sealed partial class TripFormPlanner : IDisposable
     {
         signedIn = AccessTokenClaims.IsSignedIn(state.User, Sessions, Clock.GetUtcNow());
         canWrite = signedIn && AccessTokenClaims.GrantedScopes(state.User).Contains("trips.write");
+        canCreateSharedStops = signedIn && AccessTokenClaims.GrantedScopes(state.User).Contains("users.admin");
         if (!signedIn) return;
         var preferences = await Preferences.LoadAsync(lifetime.Token);
         if (preferences is not null && draft.Name.Length == 0 && !draft.Legs.Any() && SettingsRules.IsKnownTimeZone(preferences.TimeZone)) draft.TimeZone = preferences.TimeZone;

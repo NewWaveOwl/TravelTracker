@@ -23,7 +23,7 @@ The historical `Accomodation` model, `IAccomadationRepository`, and the shared `
 
 | Service | Routes |
 |---|---|
-| Users | `GET/PATCH /api/v1/users/me` (`users.read` / `users.write`), `POST /api/v1/users/access` (no user token; guarded by the service credential), `POST /api/v1/users/bootstrap-first-administrator` and `GET /api/v1/users` (`users.admin`), `PATCH /api/v1/users/{id}/role` (`users.admin`); service-to-service `POST /internal/users/identity` and `GET /internal/users/{userId}/access` (`users.access`) |
+| Users | `GET/PATCH /api/v1/users/me` (`users.read` / `users.write`), `POST /api/v1/users/access` (no user token; guarded by the service credential), `POST /api/v1/users/bootstrap-first-administrator` (`catalogue.read` plus one-time operator secret and verified identity), `GET /api/v1/users` and `PATCH /api/v1/users/{id}/role` (`users.admin`); service-to-service `POST /internal/users/identity` and `GET /internal/users/{userId}/access` (`users.access`) |
 | Accommodations | `GET /accommodations`, `GET/POST/PATCH /accommodations/{id}` |
 | Transport | `GET /transport-modes`, `GET /transport-modes/{id}` |
 | Attractions | `GET/POST /attractions`, `GET/PATCH /attractions/{id}` |
@@ -116,7 +116,7 @@ The independent Users service runs on HTTPS port 5101 locally and owns its Postg
 
 The self-profile response includes `publicId`, `username`, `email`, `address`, `role`, `status`, `createdAt` and `updatedAt`. Editable email is profile contact information. Internal lookups never create accounts. Protected routes return 401 for invalid or missing bearer credentials and 403 for missing permission. Users returns 503 when required storage is unavailable.
 
-`POST /api/v1/users/bootstrap-first-administrator` requires `users.admin`, the setup credential, an allowed verified provider email bound to the validated subject, and a never-consumed bootstrap record. It accepts no client-selected identity or role fields. A replay for the same identity may return the current role without re-elevating the account.
+`POST /api/v1/users/bootstrap-first-administrator` requires `catalogue.read`, the setup credential, an allowed verified provider email bound to the validated subject, HTTPS and a never-consumed bootstrap record. It accepts no client-selected identity or role fields. A replay for the same identity may return the current role without re-elevating the account. This setup policy does not require `users.admin`; successful first-administrator provisioning is independently gated by the operator secret and verified identity.
 
 `POST /api/v1/users/access` uses a separate high-entropy service Bearer credential over HTTPS, rather than the caller's access token, to return live status/role for the legacy Attractions consumer. Unknown identities return deactivated/traveller. The endpoint never creates an account. `/health` is anonymous liveness only. See [first-admin setup](first-administrator-setup.md). The self-profile GET/PATCH routes above are implemented; general cross-account profile CRUD, account status changes, and account deletion are not. Administrator listing and role changes are documented below.
 

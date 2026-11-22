@@ -194,7 +194,7 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
      * @return Confirmed profile or a safe authentication, authorization or initialization failure.
      */
     [HttpPost("bootstrap-first-administrator")]
-    [Authorize(Policy = ScopePolicies.UsersAdministration)]
+    [Authorize(Policy = ScopePolicies.CatalogueRead)]
     public Task<IResult> Bootstrap()
     {
         if (!Request.IsHttps) return Task.FromResult<IResult>(Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Administrator setup requires HTTPS."));
