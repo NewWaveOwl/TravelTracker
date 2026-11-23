@@ -58,6 +58,39 @@ Requests and responses use camelCase JSON and public GUIDs only. The owner comes
 
 Ticket imports use a raw `application/pdf` body with an optional display-only `X-Ticket-File-Name` header. They are bounded to 10 MiB and 10 pages, parsed on the Trips server, and retained only in private process memory for 15 minutes. The saved-trip **Tickets & bookings** entry opens `/trips/{tripId}/ticket-import` for editable review. This draft-only flow does not persist attachments or replace an itinerary. See [PDF ticket drafts](ticket-import.md) for its exact contract, supported input and security boundaries.
 
+### Minimal draft and save fields (#105)
+
+This contract implements #105 without changing existing leg payloads. Browser drafts may be incomplete; a service save requires the following:
+
+| Field | Save rule |
+| --- | --- |
+| `name` | Required, nonblank. |
+| `timeZone` | Required, recognized IANA or Windows zone ID. |
+| `start`, `end` | Required offset-bearing times; `end >= start` by instant. Their entered offsets are retained, including UTC boundaries on earlier saved trips. Equal boundaries are valid for an itinerary without journeys. |
+| `isRoundTrip` | Optional, defaults to `false`. Stored as traveller intent; it imposes no return, category or visit requirement. |
+| `legs` | Required array, possibly empty. Supplied legs need consecutive sequences, connected endpoints, a visible transport mode, positive duration, no overlap and times within trip bounds. |
+| `stops` | Optional ordered array of `{ "placeId": "<public GUID>", "type": "<supported type>" }`. Omitted or null derives the list from legs. With no legs, zero or one stop is valid. With legs, an explicit list must equal the first departure followed by each destination, by place ID and type. |
+
+All supported types (`accommodation`, `attraction`, `transport_stop`) may be an endpoint or the only stop. No category, visit or closed loop is needed. Two or more stops require connecting legs. The service does not fabricate a self-leg, mode, visit, dates or offsets to fill gaps. The response adds `stops` containing authoritative snapshots in occurrence order; existing `legs` fields are preserved. A legacy request that supplies only legs continues to work. A legacy stored trip derives stops from its leg snapshots until it is next saved.
+
+The smallest empty saved trip is:
+
+```json
+{
+  "name": "Weekend ideas",
+  "timeZone": "Europe/Paris",
+  "start": "2026-06-01T08:00:00+02:00",
+  "end": "2026-06-01T08:00:00+02:00",
+  "legs": []
+}
+```
+
+For a single-stop plan add `"stops": [{ "placeId": "<catalogue id>", "type": "transport_stop" }]` to that body. The same shape supports an accommodation or attraction. The ID is checked against its owning service with the caller's token; caller-supplied coordinates, snapshots and owner fields are not accepted. Latitude must be -90..90 and longitude -180..180 in every resolved snapshot. Invalid or incomplete upstream data fails closed with `503`; invalid submitted references/shapes/times return field errors without a write.
+
+Both `trips.write` and `catalogue.read` remain required even for an empty itinerary. Live active Users standing is always checked. Replacement still requires an owned trip and its current `If-Match` revision before catalogue resolution. Another subject, issuer or administrator cannot replace a private trip. Parent, stops, legs and revision are committed atomically; a refusal or failed write leaves the stored aggregate unchanged.
+
+The requester confirmed retaining the required basics and adding optional stop references in chat on 2026-11-22. This additive contract is prepared for review on `allow-flexible-trip-saves`; it does not record teammate approval. A different teammate still reviews the PR before integration, as requested by #105.
+
 ### Create and replace body
 
 Send all trip fields and every leg when replacing a trip. The route identifier selects the trip to edit.
@@ -84,7 +117,7 @@ Successful reads, creates, and replacements include a strong `ETag` header. Send
 }
 ```
 
-`type` is `accommodation`, `attraction` or `transport_stop`. `timeZone` is an IANA or Windows zone id. Each time carries its offset, which must be valid for the zone; the domain rejects an impossible or ambiguous local time.
+`type` is `accommodation`, `attraction` or `transport_stop`. `timeZone` is an IANA or Windows zone id. Each journey time carries an offset valid for that zone. Impossible local journey times are rejected; an ambiguous local time needs an explicitly valid offset. Trip boundaries retain their submitted offsets and are compared as instants; they are not silently normalized to the display zone.
 
 ### Status mapping
 
@@ -93,7 +126,7 @@ Successful reads, creates, and replacements include a strong `ETag` header. Send
 | Created | `201` | Trip, legs and snapshots, in one transaction |
 | Replaced | `200` | Updated trip, legs and snapshots, in one transaction |
 | Malformed or unknown field, missing required field, unknown time zone | `400` | No |
-| Itinerary breaks a trip rule (for example a one-way trip not ending at an attraction) | `400` with field errors | No |
+| Itinerary breaks a retained rule (for example overlapping legs, invalid zone offsets or inconsistent stops) | `400` with field errors | No |
 | Referenced place or transport mode absent, or private to someone else | `404` with `errors` keyed by field | No |
 | Banned, deactivated or unknown account (create) | `403` | No |
 | Valid token but missing scope | `403` | No |
@@ -112,17 +145,17 @@ The `404` for a reference uses one message for absent and private places, so the
 ## Checks before a save
 
 1. The validated caller identity and the forwarded access token must be present.
-2. The request is bound and its time zone and leg entries are checked. For replacements, action-level field errors are returned after the standing check.
+2. The request is bound and its time zone, stop references and leg entries are checked. For replacements, action-level field errors are returned after the standing check.
 3. Account standing is read live from Users with the backend credential, which holds `users.access`. Only an `active` account may save. The caller's own token is never sent to Users.
 4. A replacement checks ownership and the supplied revision before looking up catalogue records. The database write checks both again. Place types are checked before calling the catalogue.
-5. Every place is read from its owning service with the caller's token: accommodations, attractions and transport stops (route points), and transport modes. A private record owned by someone else appears absent.
+5. Every referenced place, including a lone stop, is read from its owning service with the caller's token: accommodations, attractions and transport stops (route points), and transport modes used by legs. A private record owned by someone else appears absent. Empty itineraries perform no catalogue lookup.
 6. The trip rules run on the snapshot values, and the trip is saved only when every check passes.
 
 Each refusal and each fail-closed path is logged with its reason, without tokens, identities or upstream response bodies.
 
 ## Persistence
 
-The `Trips` table holds the trip, its owner (issuer and subject), its time zone id, and its start and end instants with the offsets the traveller entered. The `TripLegs` table holds the ordered legs. Each leg row stores snapshots of its departure place, arrival place and transport mode, so later catalogue edits never change a stored trip. A save writes the trip row and every leg row in one explicit transaction. A replacement updates the owned trip row only at the expected revision and advances that revision before replacing its legs. A failure leaves the previous revision, trip and legs intact.
+The `Trips` table holds the trip, its owner (issuer and subject), its time zone id, and its start and end instants with the offsets the traveller entered. The `TripLegs` table holds the ordered legs. Each leg row stores snapshots of its departure place, arrival place and transport mode, so later catalogue edits never change a stored trip. The additive `TripStops` table retains ordered place snapshots, including a lone stop with no leg. Existing trips without stop rows derive their stops from their saved legs. A save writes the trip row and every stop and leg row in one explicit transaction. A replacement updates the owned trip row only at the expected revision and advances that revision before replacing its stops and legs. A failure leaves the previous revision and all snapshots intact. Apply the new migration before running the updated API; earlier applied migrations are preserved.
 
 Instants are written in UTC because Npgsql refuses a non-zero offset for `timestamptz`; the entered offsets are stored beside them and restored on read. Owner scoping is part of every read query, so another owner's trip is indistinguishable from an absent one.
 
@@ -130,7 +163,7 @@ Instants are written in UTC because Npgsql refuses a non-zero offset for `timest
 
 | Project | What it proves | Requirement |
 | --- | --- | --- |
-| `tests/TravelTracker.Trips.Domain.Tests` | Itinerary rules: ordering, connections, endpoints, time zone offsets | None |
+| `tests/TravelTracker.Trips.Domain.Tests` | Empty/single-stop plans, all supported endpoint categories, ordering, connections, coordinates and time zone offsets | None |
 | `tests/TravelTracker.Api.Tests` | Reference validation, save service and logs | None |
 | `tests/TravelTracker.Trips.Api.Tests` | Real signed-JWT validation, scope matrix, status mapping, ownership, standing rules, fail-closed paths, public DTO shape, health | None (owner-aware in-memory store and scripted upstream) |
 | `tests/TravelTracker.Trips.Data.Tests` | PostgreSQL migration, replacement, atomic rollback when a leg write fails, restart preservation with offsets, owner scoping, database check constraints | `TRAVELTRACKER_TEST_POSTGRES` with CREATEDB; tests are marked `Category=PostgreSQL` |
@@ -142,6 +175,38 @@ dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category=
 ```
 
 EF InMemory and the in-memory store do not prove migration, constraint, transaction or restart behavior; those are verified only by the PostgreSQL group.
+
+### Verification for #105 (2026-11-22)
+
+The requester confirmed keeping the existing required trip basics before integration. Changes are on `allow-flexible-trip-saves`, based on the previously validated `41d4f50` working tree. A different teammate still needs to review the PR. No teammate approval or remote CI result is claimed here.
+
+| Test group | Baseline | Final discovered / executed / passed | Failed / skipped |
+| --- | --- | --- | --- |
+| All application/domain/HTTP tests (`Category!=PostgreSQL`) | 1,179 passed | 1,298 / 1,298 / 1,298 | 0 / 0 |
+| Trips Domain | 7 passed | 56 / 56 / 56 | 0 / 0 |
+| Trips HTTP | 120 passed | 182 / 182 / 182 | 0 / 0 |
+| Frontend | 410 passed | 418 / 418 / 418 | 0 / 0 |
+| All PostgreSQL tests (`Category=PostgreSQL`) | Not run before edits; local instance was not configured | 81 / 81 / 81 | 0 / 0 |
+| Trips PostgreSQL (included above) | 7 existing cases | 23 / 23 / 23 | 0 / 0 |
+
+The application suite added 119 cases; Trips persistence added 16 PostgreSQL cases. Evidence lives in [pure domain tests](../tests/TravelTracker.Trips.Domain.Tests/TripTests.cs), [HTTP regression cases](../tests/TravelTracker.Trips.Api.Tests/FlexibleTripSaveTests.cs), [PostgreSQL migration/atomicity tests](../tests/TravelTracker.Trips.Data.Tests/TripRepositoryPostgreSqlTests.cs), [planner cases](../tests/TravelTracker.Frontend.Tests/TripPlannerTests.cs) and [form page cases](../tests/TravelTracker.Frontend.Tests/NewTripPageTests.cs). Tests cover all nine supported endpoint combinations, empty and single-stop plans, both round-trip flags, private references and cross-user requests, invalid data, unchanged rejected replacements, migration of legacy UTC boundaries, and a concurrent replacement between split read queries.
+
+Validation commands:
+
+```powershell
+dotnet restore TravelTracker.slnx
+dotnet build TravelTracker.slnx --configuration Release --no-restore --verbosity quiet
+dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL" --logger "trx;LogFilePrefix=issue105-final"
+# With TRAVELTRACKER_TEST_POSTGRES pointing only at an isolated local PostgreSQL instance:
+dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category=PostgreSQL" --logger "trx;LogFilePrefix=issue105-postgresql-final"
+git diff --check
+```
+
+The solution build completed with **0 warnings and 0 errors**. PostgreSQL verification used a temporary PostgreSQL 17.12 process bound to loopback, with each test creating and dropping its own database; shared development data was not used. The additive migration SQL was reviewed and EF reported no pending model changes. Local TRX files are ignored under each test project's `TestResults/`, using `issue105-baseline`, `issue105-final` and `issue105-postgresql-final` prefixes.
+
+A disposable Kestrel smoke host exercised the production Trips API, signed JWT validation and actual PostgreSQL repository with scripted Users/catalogue responses. It verified empty/single-stop creates (`201`), an attraction-to-accommodation journey with round-trip intent (`200` replacement), own reads (`200`), cross-owner reads/replacements (`404`), reversed dates (`400`) leaving the body and ETag unchanged, single-stop-to-empty replacement and reloading from a new database context. Frontend cases exercise the real protected HTTP stack in component tests; a live Auth0/browser session and deployment were not tested.
+
+Read-only agent review found and resolved a legacy UTC-boundary read regression and a multiplied-row query before final checks; no unresolved findings remain. One earlier targeted API run hit the unchanged ticket parser concurrency test's five-second wait; the complete targeted rerun and final full application suite passed. The required human teammate review remains separate from agent review.
 
 ## Frontend (#47)
 
@@ -189,7 +254,7 @@ separate messages. Account changes clear both summaries and filter state.
 
 In the form-only planner:
 
-- Places are picked from their owning catalogue and sent by public id: accommodations (`AccommodationsClient`), attractions (`AttractionsClient`) and transport stops (`TransportClient`, route points of type `transport_stop`). The first leg starts at an accommodation; a new leg starts where the previous one ended, and the traveller can change that, which shows the disconnected-leg error instead of repairing it. With the optional `catalogue.write` grant, the accommodation picker also offers "Add a new accommodation": a private place saved through the Accommodations service, then selected by the id the service confirms. Shared places stay on the accommodation workspace (#46).
+- Places are picked from their owning catalogue and sent by public id: accommodations (`AccommodationsClient`), attractions (`AttractionsClient`) and transport stops (`TransportClient`, route points of type `transport_stop`). Any supported type may start or end a leg. A new leg starts where the previous one ended, and the traveller can change that, which shows the disconnected-leg error instead of repairing it. Empty itineraries are allowed; Map View also retains a single selected stop on save and reopen. With the optional `catalogue.write` grant, the accommodation picker also offers "Add a new accommodation": a private place saved through the Accommodations service, then selected by the id the service confirms. Shared places stay on the accommodation workspace (#46).
 - Times are entered as local times in the trip time zone. The client attaches the zone's offset. A time that does not exist (clocks skip forward) or happens twice (clocks go back) is refused with a message; the client never picks an offset. The service stays authoritative and its field errors (`legs[1].arrival`) are shown on the matching field.
 - The draft lives only in memory. A failed save (validation, permission, network or unavailable dependency) keeps every entry and shows what happened. The save button is disabled while a request is in flight and the handler ignores a second click, so one click sequence creates at most one request. The create has no idempotency key, so after a network failure the outcome is unknown; the message says so.
 - Leaving with entries asks first (in-app dialog for links, the browser's own prompt for closing the tab). The draft is dropped when the signed-in identity changes.

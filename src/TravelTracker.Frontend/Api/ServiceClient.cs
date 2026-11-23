@@ -195,7 +195,7 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
         return result;
     }
 
-    [GeneratedRegex(@"\A(?:start|end|isRoundTrip|legs(?:\[\d+\](?:\.(?:sequence|from(?:\.(?:type|placeId))?|to(?:\.(?:type|placeId))?|transport(?:ModeId)?|departure|arrival))?)?)\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\A(?:start|end|isRoundTrip|stops(?:\[\d+\](?:\.(?:type|placeId))?)?|legs(?:\[\d+\](?:\.(?:sequence|from(?:\.(?:type|placeId))?|to(?:\.(?:type|placeId))?|transport(?:ModeId)?|departure|arrival))?)?)\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TripField();
 
     static FailureKind Classify(int status) => status switch

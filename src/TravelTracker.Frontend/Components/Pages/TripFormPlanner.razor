@@ -78,8 +78,9 @@ else
             </div>
             <fieldset class="trip-kind">
                 <legend>Trip type *</legend>
-                <label><input type="radio" name="trip-kind" id="trip-one-way" checked="@(!draft.IsRoundTrip)" @onchange="() => draft.IsRoundTrip = false" /> One way: ends at an attraction</label>
-                <label><input type="radio" name="trip-kind" id="trip-round-trip" checked="@draft.IsRoundTrip" @onchange="() => draft.IsRoundTrip = true" /> Round trip: returns to where it started</label>
+                <label><input type="radio" name="trip-kind" id="trip-one-way" checked="@(!draft.IsRoundTrip)" @onchange="() => draft.IsRoundTrip = false" /> One way</label>
+                <label><input type="radio" name="trip-kind" id="trip-round-trip" checked="@draft.IsRoundTrip" @onchange="() => draft.IsRoundTrip = true" /> Round trip</label>
+                <small>This records your plan; no return leg is required to save.</small>
             </fieldset>
             <div class="trip-actions"><button type="submit">Next: itinerary</button><a class="button secondary" href="/">Cancel</a></div>
         </form>
@@ -88,7 +89,7 @@ else
     {
         <form class="trip-form" aria-label="Itinerary" @onsubmit="NextFromItinerary" @onsubmit:preventDefault>
             <h2 id="legs-heading" tabindex="-1">Itinerary</h2>
-            <p>Add each leg in order. A trip starts at an accommodation and @(draft.IsRoundTrip ? "returns to it, passing at least one attraction." : "ends at an attraction.")</p>
+            <p>Add journeys in order between any supported places, or continue with an empty itinerary.</p>
             @if (modeFailure is not null)
             {
                 <Feedback Kind="FeedbackKind.Unavailable" Retry="LoadModesAsync">@modeFailure</Feedback>
@@ -99,7 +100,7 @@ else
                 var leg = draft.Legs[position];
                 <section class="trip-leg" aria-labelledby="@($"leg-{position}-heading")">
                     <h3 id="@($"leg-{position}-heading")">Leg @(position + 1)</h3>
-                    <PlaceSelector Label="From" Id="@($"leg-{position}-from")" Types="@(position == 0 ? FirstTypes : AllTypes)" Value="leg.From" ValueChanged="place => leg.From = place" Error="@Message($"legs[{position}].from")" />
+                    <PlaceSelector Label="From" Id="@($"leg-{position}-from")" Types="AllTypes" Value="leg.From" ValueChanged="place => leg.From = place" Error="@Message($"legs[{position}].from")" />
                     <PlaceSelector Label="To" Id="@($"leg-{position}-to")" Value="leg.To" ValueChanged="place => leg.To = place" Error="@Message($"legs[{position}].to")" />
                     <div class="trip-field">
                         <label for="@($"leg-{position}-transport")">Transport mode *</label>

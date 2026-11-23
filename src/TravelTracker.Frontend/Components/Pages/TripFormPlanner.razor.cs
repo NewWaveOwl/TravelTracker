@@ -16,7 +16,6 @@ public sealed partial class TripFormPlanner : IDisposable
 {
     static readonly (int Number, string Title)[] Steps = [(1, "Basics"), (2, "Itinerary"), (3, "Review")];
     static readonly string[] AllTypes = ["accommodation", "attraction", "transport_stop"];
-    static readonly string[] FirstTypes = ["accommodation"];
 
     /** time zone names this host knows, offered as suggestions; the service still decides what it accepts. */
     static readonly IReadOnlyList<string> Zones = TimeZoneInfo.GetSystemTimeZones().Select(zone => zone.Id).OrderBy(id => id, StringComparer.Ordinal).ToArray();
@@ -136,7 +135,6 @@ public sealed partial class TripFormPlanner : IDisposable
         errors = draft.ValidateBasics();
         if (errors.Count > 0) return;
         if (modes.Count == 0) await LoadModesAsync();
-        if (draft.Legs.Count == 0) AddLeg();
         step = 2;
     }
 

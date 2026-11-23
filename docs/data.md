@@ -35,7 +35,7 @@ Enums: `TransportMode` (`car`, `bus`, `train`, `pedestrian`, `plane`), `TripType
 
 No tables yet for `TripLegs`, `Stays`, `Visits`, `TicketImports`, route points, scheduled transport routes or intermediate stops.
 
-Note: the historical `Trips` row above describes the legacy shape. The independent Trips service (`TravelTracker.Trips.Data`) stores trips in a `Trips` table with owner columns and a `TripLegs` table with ordered legs and snapshot columns. It creates or replaces each owned trip and its legs in one PostgreSQL transaction. See [Trips service](trips-service.md).
+Note: the historical `Trips` row above describes the legacy shape. The independent Trips service (`TravelTracker.Trips.Data`) stores trips in a `Trips` table with owner columns, `TripLegs` with ordered journeys and `TripStops` with ordered place snapshots (#105). The additive stop migration preserves existing rows; legacy trips without stop rows derive their stops from leg snapshots. Empty and single-stop plans need no leg. A create or replacement commits the parent, stops, legs and revision in one PostgreSQL transaction. Supported types and coordinates remain constrained, without enforcing any accommodation/attraction composition or return structure. See [Trips service](trips-service.md).
 
 ## Repository interfaces
 

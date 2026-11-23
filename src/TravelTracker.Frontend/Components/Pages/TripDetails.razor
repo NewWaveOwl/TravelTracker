@@ -22,6 +22,19 @@ else if (trip is not null)
         <dt>Type</dt><dd>@(trip.IsRoundTrip ? "Round trip" : "One way")</dd>
     </dl>
     <h2>Itinerary</h2>
+    @if (trip.Legs.Count == 0)
+    {
+        @if (trip.Stops is { Count: > 0 })
+        {
+            <ol class="trip-stops">
+                @foreach (var stop in trip.Stops)
+                {
+                    <li><strong>@stop.Name</strong><small>@stop.Address</small></li>
+                }
+            </ol>
+        }
+        else { <p>No stops planned yet.</p> }
+    }
     <ol class="trip-legs">
         @foreach (var leg in trip.Legs)
         {

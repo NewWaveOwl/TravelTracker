@@ -89,7 +89,10 @@ public sealed class FakeTripsBackend : HttpMessageHandler
             leg.GetProperty("sequence").GetInt32(), Place(leg.GetProperty("from")), Place(leg.GetProperty("to")),
             new TripDto.Mode(Bus, "bus", "City bus"), leg.GetProperty("departure").GetDateTimeOffset(), leg.GetProperty("arrival").GetDateTimeOffset())).ToList();
         var trip = new TripDto(Guid.CreateVersion7(), root.GetProperty("name").GetString()!, root.GetProperty("timeZone").GetString()!,
-            root.GetProperty("start").GetDateTimeOffset(), root.GetProperty("end").GetDateTimeOffset(), root.GetProperty("isRoundTrip").GetBoolean(), legs);
+            root.GetProperty("start").GetDateTimeOffset(), root.GetProperty("end").GetDateTimeOffset(), root.GetProperty("isRoundTrip").GetBoolean(), legs,
+            root.TryGetProperty("stops", out var stops) && stops.ValueKind == JsonValueKind.Array
+                ? stops.EnumerateArray().Select(Place).ToArray()
+                : legs.Count == 0 ? [] : new[] { legs[0].From }.Concat(legs.Select(leg => leg.To)).ToArray());
         stored[trip.TripId] = trip;
         return new HttpResponseMessage(HttpStatusCode.Created) { Content = JsonContent.Create(trip) };
     }

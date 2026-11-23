@@ -8,8 +8,9 @@ namespace TravelTracker.Trips.Api.Contracts;
  * @param TimeZone Time zone id the traveller entered times in.
  * @param Start Trip start with its offset.
  * @param End Trip end with its offset.
- * @param IsRoundTrip Whether the trip returns to its starting accommodation.
+ * @param IsRoundTrip The traveller's round-trip intent, without requiring a return leg.
  * @param Legs Ordered legs.
+ * @param Stops Ordered place snapshots, including a lone stop with no journey.
  */
 public sealed record TripResponse(Guid TripId, string Name, string TimeZone, DateTimeOffset Start, DateTimeOffset End,
-    bool IsRoundTrip, IReadOnlyList<TripLegResponse> Legs);
+    bool IsRoundTrip, IReadOnlyList<TripLegResponse> Legs, IReadOnlyList<TripPlaceResponse> Stops);

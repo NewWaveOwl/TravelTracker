@@ -61,7 +61,7 @@ else
                         @onclick="() => browseAccommodations = !browseAccommodations">
                     @(browseAccommodations ? "Close accommodation catalogue" : "Browse accommodations")
                 </button>
-                <button type="button" class="secondary" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review on map</button>
+                <button type="button" class="secondary" disabled="@busy" @onclick="ShowReview">Review on map</button>
             </div>
         </div>
         @if (browseAccommodations)
@@ -82,7 +82,7 @@ else
                            @bind:get="draft.Name" @bind:set="value => EditTripValue(draft.Name, value ?? string.Empty, next => draft.Name = next)" />
                 </h1>
                 <div class="trip-actions trip-steps" aria-label="Planning steps">
-                    <button type="button" class="secondary" aria-pressed="@Pressed(review)" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review on map</button>
+                    <button type="button" class="secondary" aria-pressed="@Pressed(review)" disabled="@busy" @onclick="ShowReview">Review on map</button>
                 </div>
                 <details class="browser-draft-actions">
                 <summary>Browser draft</summary>
@@ -107,7 +107,7 @@ else
                     title="Undo last edit (Ctrl+Z)" disabled="@(!CanUndo)" @onclick="Undo">Undo last edit</button>
             @if (draft.Stops.Count == 0)
             {
-                <p>Start with an accommodation. Add places to build your route.</p>
+                <p>Add any place to build your route, or save an empty plan.</p>
             }
             <ol aria-label="Ordered stops and transport connections">
                 @foreach (var (first, end) in ItineraryRows())
@@ -155,9 +155,9 @@ else
             {
                 <button type="button" class="secondary" disabled="@busy" @onclick="OpenMarkers">+ Add stop</button>
             }
-            @if (!review && draft.Stops.Count > 1 && draft.Stops[0].Place.Type == "accommodation")
+            @if (!review && draft.Stops.Count > 1)
             {
-                <button type="button" class="secondary" disabled="@busy" @onclick="AddReturnStop">+ Return to starting accommodation</button>
+                <button type="button" class="secondary" disabled="@busy" @onclick="AddReturnStop">+ Return to starting place</button>
             }
         </section>
 

@@ -28,6 +28,7 @@ public sealed class RoutePointReferenceClient(HttpClient http, ReferenceSender s
         var point = result.Value!;
         if (point.Type == "transport_stop")
             return string.IsNullOrWhiteSpace(point.Name) || point.Address is null || point.Lat is null || point.Lon is null
+                || point.Lat is < -90 or > 90 || point.Lon is < -180 or > 180
                 ? sender.Incomplete<TripPlace>(operation)
                 : ReferenceResult<TripPlace>.Found(new(routePointId, point.Type, point.Name, point.Address, point.Lat.Value, point.Lon.Value));
         logger.LogWarning("route point {RoutePointId} is a {Type}, not a transport stop; treated as absent.", routePointId, point.Type);

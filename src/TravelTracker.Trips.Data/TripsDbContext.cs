@@ -5,7 +5,7 @@ using TravelTracker.Trips.Data.Entities;
 namespace TravelTracker.Trips.Data;
 
 /**
- * Owns the Trips service database model: one trip row, its ordered leg rows and their place and transport snapshots.
+ * Owns each trip, its ordered stops and legs, and their place and transport snapshots.
  *
  * @param options PostgreSQL connection and EF configuration.
  */
@@ -13,9 +13,10 @@ public sealed class TripsDbContext(DbContextOptions<TripsDbContext> options) : D
 {
     internal DbSet<TripRow> Trips => Set<TripRow>();
     internal DbSet<TripLegRow> TripLegs => Set<TripLegRow>();
+    internal DbSet<TripStopRow> TripStops => Set<TripStopRow>();
 
     /**
-     * Applies the service-owned trip and leg mappings.
+     * Applies the service-owned trip, stop and leg mappings.
      *
      * @param modelBuilder EF model composition.
      */
@@ -23,5 +24,6 @@ public sealed class TripsDbContext(DbContextOptions<TripsDbContext> options) : D
     {
         modelBuilder.ApplyConfiguration(new TripConfiguration());
         modelBuilder.ApplyConfiguration(new TripLegConfiguration());
+        modelBuilder.ApplyConfiguration(new TripStopConfiguration());
     }
 }

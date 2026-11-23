@@ -1121,7 +1121,7 @@ public partial class NewTrip : IAsyncDisposable
                 return;
         }
 
-        var pendingModes = Enumerable.Range(1, savingDraft.Stops.Count - 1).Select(savingDraft.LegTo)
+        var pendingModes = Enumerable.Range(1, Math.Max(0, savingDraft.Stops.Count - 1)).Select(savingDraft.LegTo)
             .Where(leg => leg.Mode is { TransportModeId: var id } && id == Guid.Empty).GroupBy(leg => leg.Mode!.Code);
         foreach (var group in pendingModes)
         {

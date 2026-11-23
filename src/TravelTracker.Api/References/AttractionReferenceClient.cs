@@ -25,6 +25,7 @@ public sealed class AttractionReferenceClient(HttpClient http, ReferenceSender s
         if (result.Status != ReferenceStatus.Found) return result.Forward<TripPlace>();
         var place = result.Value!;
         return string.IsNullOrWhiteSpace(place.Name) || place.Address is null || place.Lat is null || place.Lon is null
+            || place.Lat is < -90 or > 90 || place.Lon is < -180 or > 180
             ? sender.Incomplete<TripPlace>(operation)
             : ReferenceResult<TripPlace>.Found(new(attractionId, "attraction", place.Name, place.Address, place.Lat.Value, place.Lon.Value));
     }

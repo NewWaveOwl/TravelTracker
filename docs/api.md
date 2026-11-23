@@ -38,6 +38,8 @@ Response codes: `201` create, `404` not found, `400` invalid trip direction/time
 
 The Trips service validates account standing and referenced place and transport IDs over HTTP against the owning services at write time. Each service owns its own store.
 
+Under #105, trip saves require a nonblank name, recognized time zone, valid start/end and a possibly empty `legs` array. Optional `stops` references represent an empty or single-stop itinerary without inventing a leg; with legs they must match the journey order. Responses include ordered `stops` snapshots. All supported place types may appear at either endpoint, visits are not required, and `isRoundTrip` is intent rather than a mandatory closed loop. Existing leg payloads remain compatible. Ownership, live standing, scopes, coordinate/time checks, `If-Match` replacement and atomic PostgreSQL persistence remain enforced. See [minimal draft/save fields and examples](trips-service.md#minimal-draft-and-save-fields-105).
+
 ## Ownership
 
 Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: James.

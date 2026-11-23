@@ -165,7 +165,7 @@ internal sealed class TripPlannerDraft
     }
 
     /**
-     * Appends another visit to the starting accommodation with the same editable location.
+     * Appends another occurrence of the starting place with the same editable location.
      * @return The index of the return visit.
      */
     internal int AddReturnToStart()
@@ -230,13 +230,6 @@ internal sealed class TripPlannerDraft
             ?? sections.FirstOrDefault(section => SamePlace(section[^1].Place, source.Place));
         var arrival = sections.FirstOrDefault(section => section != departure && section[0] == target)
             ?? sections.FirstOrDefault(section => section != departure && SamePlace(section[0].Place, target.Place));
-        if (arrival is null && departure is not null && SamePlace(departure[0].Place, target.Place))
-        {
-            var accommodation = departure.FindIndex(stop => stop.Place.Type == "accommodation");
-            if (accommodation > 0)
-                return StartLoopAtAccommodation(departure, accommodation);
-        }
-
         // When a visit already has a connection in this direction, start or end a separate visit.
         var joined = departure ?? [source.Revisit()];
         var destination = arrival?[0] ?? target.Revisit();
@@ -254,24 +247,8 @@ internal sealed class TripPlannerDraft
         return stops.IndexOf(destination);
     }
 
-    /** Rotates a newly closed loop so it begins and ends at an accommodation. */
-    int StartLoopAtAccommodation(List<Stop> section, int startIndex)
-    {
-        var start = section[startIndex];
-        var previous = section[startIndex - 1];
-        var returnVisit = start.Revisit();
-        legs[(previous, returnVisit)] = legs[(previous, start)];
-        legs.Remove((previous, start));
-
-        var offset = stops.IndexOf(section[0]);
-        stops.RemoveRange(offset, section.Count);
-        stops.InsertRange(offset, section.Skip(startIndex).Concat(section.Take(startIndex)).Append(returnVisit));
-        return offset + section.Count - startIndex;
-    }
-
-    /** Indicates whether the ordered stops return to the starting accommodation. */
-    bool ReturnsToStart => stops.Count > 1 && stops[0].Place.Type == "accommodation"
-        && SamePlace(stops[0].Place, stops[^1].Place);
+    /** Indicates whether the ordered stops return to the same place, regardless of its category. */
+    bool ReturnsToStart => stops.Count > 1 && SamePlace(stops[0].Place, stops[^1].Place);
 
     static bool SamePlace(TripPlaceDto first, TripPlaceDto second) => first == second ||
         (first.PlaceId != Guid.Empty && first.PlaceId == second.PlaceId && first.Type == second.Type);
@@ -305,6 +282,9 @@ internal sealed class TripPlannerDraft
             savedZone = trip.TimeZone
         };
         var places = new Dictionary<TripPlaceDto, Stop>();
+        if (trip.Legs.Count == 0)
+            foreach (var stop in trip.Stops ?? [])
+                draft.Add(stop);
         foreach (var leg in trip.Legs.OrderBy(leg => leg.Sequence))
         {
             if (draft.stops.Count == 0)
@@ -442,23 +422,13 @@ internal sealed class TripPlannerDraft
         if (start > end)
             errors.Add("Trip end must be at or after trip start.");
 
-        if (stops.Count < 2)
-            errors.Add("Add at least two stops.");
-        else
+        foreach (var stop in stops)
         {
-            var first = stops[0].Place;
-            var last = stops[^1].Place;
-            if (first.Type != "accommodation")
-                errors.Add("Start the trip at an accommodation.");
-            if (RoundTrip)
-            {
-                if (!SamePlace(first, last))
-                    errors.Add("Return to the starting accommodation for a round trip.");
-                if (!stops.Any(stop => stop.Place.Type == "attraction"))
-                    errors.Add("Include at least one attraction in a round trip.");
-            }
-            else if (last.Type != "attraction")
-                errors.Add("End the one-way trip at an attraction.");
+            var place = stop.Place;
+            if (place.Type is not ("accommodation" or "attraction" or "transport_stop") ||
+                string.IsNullOrWhiteSpace(place.Name) || place.Address is null ||
+                place.Lat is < -90 or > 90 || place.Lon is < -180 or > 180)
+                errors.Add("Each stop needs a supported type, name, address and valid map coordinates.");
         }
 
         var requestLegs = new List<SaveTripRequest.Leg>();
@@ -493,7 +463,8 @@ internal sealed class TripPlannerDraft
         }
 
         return errors.Count == 0 && start is not null && end is not null
-            ? (new(Name.Trim(), zoneId, start.Value, end.Value, RoundTrip, requestLegs), errors)
+            ? (new(Name.Trim(), zoneId, start.Value, end.Value, RoundTrip, requestLegs,
+                stops.Select(stop => Reference(stop.Place)).ToArray()), errors)
             : (null, errors);
 
         DateTimeOffset? Resolve(DateTime? localTime, DateTimeOffset? savedTime, OffsetChoice? choice, string field)

@@ -221,7 +221,7 @@ public sealed class TripCreationTests
         using var client = factory.CreateClientFor("alice");
         var body = new
         {
-            name = "Hotel to hotel",
+            name = "Reversed journey times",
             timeZone = "Europe/Paris",
             start = TripTestData.Start,
             end = TripTestData.Start.AddHours(4),
@@ -235,7 +235,7 @@ public sealed class TripCreationTests
                     to = new { placeId = TripTestData.Hotel, type = "accommodation" },
                     transportModeId = TripTestData.Train,
                     departure = TripTestData.Start.AddHours(1),
-                    arrival = TripTestData.Start.AddHours(2)
+                    arrival = TripTestData.Start
                 }
             }
         };
@@ -243,7 +243,7 @@ public sealed class TripCreationTests
         using var response = await client.PostAsJsonAsync("/api/v1/trips", body);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("legs[0].to", await response.Content.ReadAsStringAsync());
+        Assert.Contains("legs[0].arrival", await response.Content.ReadAsStringAsync());
         Assert.Equal(0, factory.Repository.Count);
     }
 

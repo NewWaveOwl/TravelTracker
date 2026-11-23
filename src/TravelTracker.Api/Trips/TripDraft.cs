@@ -9,8 +9,9 @@ namespace TravelTracker.Api.Trips;
  * @param TimeZone Zone the traveller entered times in.
  * @param Start Trip start.
  * @param End Trip end.
- * @param IsRoundTrip Whether the trip must return to its starting place.
+ * @param IsRoundTrip The traveller's round-trip intent, without requiring a return leg.
  * @param Legs Requested ordered legs.
+ * @param Stops Optional ordered place references; null derives them from legs.
  */
 public sealed record TripDraft(string Name, TimeZoneInfo TimeZone, DateTimeOffset Start, DateTimeOffset End, bool IsRoundTrip,
-    IReadOnlyList<TripLegDraft> Legs);
+    IReadOnlyList<TripLegDraft> Legs, IReadOnlyList<TripPlaceReference>? Stops = null);

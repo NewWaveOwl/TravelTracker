@@ -2,7 +2,7 @@ namespace TravelTracker.Frontend.Api.Trips;
 
 /** The caller-writable itinerary sent to the Trips service. */
 public sealed record SaveTripRequest(string Name, string TimeZone, DateTimeOffset Start, DateTimeOffset End,
-    bool IsRoundTrip, IReadOnlyList<SaveTripRequest.Leg> Legs)
+    bool IsRoundTrip, IReadOnlyList<SaveTripRequest.Leg> Legs, IReadOnlyList<SaveTripRequest.Place>? Stops = null)
 {
     /** A leg referencing public catalogue identifiers. */
     public sealed record Leg(int Sequence, Place From, Place To, Guid TransportModeId,

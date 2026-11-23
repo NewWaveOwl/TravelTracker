@@ -163,6 +163,54 @@ namespace TravelTracker.Trips.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TravelTracker.Trips.Data.Entities.TripStopRow", b =>
+                {
+                    b.Property<Guid>("TripId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Latitude")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("Longitude")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("PlaceAddress")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PlaceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PlaceName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PlaceType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("TripId", "Sequence");
+
+                    b.ToTable("TripStops", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TripStops_Latitude", "\"Latitude\" >= -90 AND \"Latitude\" <= 90");
+
+                            t.HasCheckConstraint("CK_TripStops_Longitude", "\"Longitude\" >= -180 AND \"Longitude\" <= 180");
+
+                            t.HasCheckConstraint("CK_TripStops_Name", "length(btrim(\"PlaceName\")) > 0");
+
+                            t.HasCheckConstraint("CK_TripStops_PlaceId", "\"PlaceId\" <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_TripStops_Sequence", "\"Sequence\" > 0");
+
+                            t.HasCheckConstraint("CK_TripStops_Type", "\"PlaceType\" IN ('accommodation', 'attraction', 'transport_stop')");
+                        });
+                });
+
             modelBuilder.Entity("TravelTracker.Trips.Data.Entities.TripLegRow", b =>
                 {
                     b.HasOne("TravelTracker.Trips.Data.Entities.TripRow", "Trip")
@@ -174,9 +222,22 @@ namespace TravelTracker.Trips.Data.Migrations
                     b.Navigation("Trip");
                 });
 
+            modelBuilder.Entity("TravelTracker.Trips.Data.Entities.TripStopRow", b =>
+                {
+                    b.HasOne("TravelTracker.Trips.Data.Entities.TripRow", "Trip")
+                        .WithMany("Stops")
+                        .HasForeignKey("TripId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Trip");
+                });
+
             modelBuilder.Entity("TravelTracker.Trips.Data.Entities.TripRow", b =>
                 {
                     b.Navigation("Legs");
+
+                    b.Navigation("Stops");
                 });
 #pragma warning restore 612, 618
         }
