@@ -36,6 +36,7 @@ public sealed class NewTripPageTests : BunitContext
      */
     SwitchableAuthentication Configure(string scope = "catalogue.read trips.read trips.write settings.read", bool signedIn = true)
     {
+        JSInterop.Mode = JSRuntimeMode.Loose;
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
         if (signedIn) authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10));
@@ -107,6 +108,75 @@ public sealed class NewTripPageTests : BunitContext
     }
 
     static IElement SaveButton(IRenderedComponent<TripFormPlanner> page) => page.FindAll("button").Single(button => button.TextContent.StartsWith("Save", StringComparison.Ordinal) || button.TextContent == "Saving…");
+
+    [Fact]
+    public void FormSaveIsProminentOnBasicsAndSavesAnEmptyPlanWithoutReview()
+    {
+        Configure();
+        var page = Render<TripFormPlanner>();
+        page.Find("[data-trip-save]").Click();
+        Assert.Contains("Check trip details", page.Find(".trip-form-save-controls [role=status]").TextContent);
+        Assert.Single(page.FindAll(".trip-form-save-controls a[href='#trip-errors-heading']"));
+        Assert.Empty(backend.Stored);
+        page.Find("#trip-name").Input("A plan without journeys");
+        page.Find("#trip-timezone").Change("Europe/Paris");
+        page.Find("#trip-start").Change("2026-06-01T08:00");
+        page.Find("#trip-end").Change("2026-06-01T08:00");
+        var save = page.Find(".trip-form-save-controls [data-trip-save]");
+        Assert.Equal("Control+S Meta+S", save.GetAttribute("aria-keyshortcuts"));
+
+        save.Click();
+
+        page.WaitForAssertion(() => Assert.Single(backend.Stored));
+        Assert.Empty(backend.Stored.Single().Legs);
+        Assert.Equal("A plan without journeys", backend.Stored.Single().Name);
+        Assert.Contains("?saved=true", Services.GetRequiredService<NavigationManager>().Uri);
+    }
+
+    [Fact]
+    public async Task FormShortcutRegistrationIsReleasedOnClose()
+    {
+        Configure();
+        var module = JSInterop.SetupModule("./Components/Pages/NewTrip.razor.js");
+        var shortcut = module.SetupModule("watchSave", _ => true);
+        shortcut.SetupVoid("disconnect").SetVoidResult();
+        var page = Render<TripFormPlanner>();
+        Assert.Single(module.Invocations["watchSave"]);
+
+        await page.Instance.DisposeAsync();
+
+        Assert.Single(shortcut.Invocations["disconnect"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SavingFromAnEditableStepLocksFieldsAndDuplicateSaveUntilFailureKeepsTheDraft(bool itinerary)
+    {
+        Configure();
+        backend.CreateGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        backend.CreateFailureStatus = HttpStatusCode.ServiceUnavailable;
+        var page = FillBasics(addLeg: false);
+        if (!itinerary) page.FindAll("button").Single(button => button.TextContent == "Back").Click();
+        var fieldset = itinerary ? "form[aria-label=Itinerary] > fieldset" : "form[aria-label='Trip basics'] > fieldset";
+
+        var pendingSave = page.Find("[data-trip-save]").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        page.WaitForAssertion(() => Assert.True(page.Find("[data-trip-save]").HasAttribute("disabled")));
+        Assert.True(page.Find(fieldset).HasAttribute("disabled"));
+        Assert.Contains("Saving trip", page.Find(".trip-form-save-controls [role=status]").TextContent);
+        page.Find("[data-trip-save]").Click();
+        backend.CreateGate.SetResult(true);
+        await pendingSave;
+
+        page.WaitForAssertion(() => Assert.Contains("Everything you entered is still here", page.Markup));
+        Assert.Contains("Trip not saved. Your entries are still here.", page.Find(".trip-form-save-controls [role=status]").TextContent);
+        Assert.Single(page.FindAll(".trip-form-save-controls a[href='#trip-save-error-heading']"));
+        Assert.False(page.Find("[data-trip-save]").HasAttribute("disabled"));
+        Assert.False(page.Find(fieldset).HasAttribute("disabled"));
+        Assert.Equal(1, backend.CreateCount);
+        if (itinerary) page.FindAll("button").Single(button => button.TextContent == "Back").Click();
+        Assert.Equal("Paris weekend", page.Find("#trip-name").GetAttribute("value"));
+    }
 
     [Fact]
     public async Task TripEditorLinksToTheStepByStepFormAndBack()

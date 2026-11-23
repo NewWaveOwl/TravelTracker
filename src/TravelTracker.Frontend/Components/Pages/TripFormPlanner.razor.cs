@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.JSInterop;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
@@ -12,7 +13,7 @@ using TravelTracker.Frontend.Services;
 namespace TravelTracker.Frontend.Components.Pages;
 
 /** Assembles a trip in memory, reviews it and saves it in one request, keeping the entries whenever a save fails. */
-public sealed partial class TripFormPlanner : IDisposable
+public sealed partial class TripFormPlanner : IAsyncDisposable
 {
     static readonly (int Number, string Title)[] Steps = [(1, "Basics"), (2, "Itinerary"), (3, "Review")];
     static readonly string[] AllTypes = ["accommodation", "attraction", "transport_stop"];
@@ -28,6 +29,7 @@ public sealed partial class TripFormPlanner : IDisposable
     [Inject] TimeProvider Clock { get; set; } = default!;
     [Inject] NavigationManager Navigation { get; set; } = default!;
     [Inject] ILogger<TripFormPlanner> Logger { get; set; } = default!;
+    [Inject] IJSRuntime JavaScript { get; set; } = default!;
 
     TripDraft draft = new();
     IReadOnlyDictionary<string, string[]> errors = new Dictionary<string, string[]>();
@@ -37,6 +39,8 @@ public sealed partial class TripFormPlanner : IDisposable
     int step = 1;
     bool signedIn, canWrite, loaded, saving, completed;
     readonly CancellationTokenSource lifetime = new();
+    ElementReference editorElement;
+    Task<IJSObjectReference?>? saveShortcut;
 
     /** true while entries would be lost by leaving, which arms the leave confirmation. */
     bool Dirty => !completed && draft.HasEntries;
@@ -57,6 +61,25 @@ public sealed partial class TripFormPlanner : IDisposable
         Authentication.AuthenticationStateChanged += AuthenticationChanged;
         await UpdateAccessAsync(await Authentication.GetAuthenticationStateAsync());
         loaded = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        saveShortcut = RegisterSaveShortcutAsync();
+        await saveShortcut;
+    }
+
+    /** @return The editor-local shortcut registration released when the form closes. */
+    async Task<IJSObjectReference?> RegisterSaveShortcutAsync()
+    {
+        try
+        {
+            await using var module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/NewTrip.razor.js");
+            return module is null ? null : await module.InvokeAsync<IJSObjectReference>("watchSave", editorElement);
+        }
+        catch (JSDisconnectedException) { return null; }
+        catch (JSException) { return null; }
     }
 
     /**
@@ -184,7 +207,7 @@ public sealed partial class TripFormPlanner : IDisposable
      */
     async Task SaveAsync()
     {
-        if (saving || !canWrite) return;
+        if (saving || !canWrite || completed || pendingTarget is not null || lifetime.IsCancellationRequested) return;
         saveError = null;
         var local = draft.ValidateBasics();
         foreach (var (key, value) in draft.ValidateItinerary()) local[key] = value;
@@ -193,6 +216,7 @@ public sealed partial class TripFormPlanner : IDisposable
             ShowErrors(local);
             return;
         }
+        errors = new Dictionary<string, string[]>();
         saving = true;
         try
         {
@@ -239,11 +263,22 @@ public sealed partial class TripFormPlanner : IDisposable
         if (target is not null) Navigation.NavigateTo(target);
     }
 
-    /** cancels pending requests and stops listening for identity changes when the view closes. */
-    public void Dispose()
+    /**
+     * Cancels pending requests and releases identity and keyboard listeners when the view closes.
+     * @return Completion of browser shortcut cleanup.
+     */
+    public async ValueTask DisposeAsync()
     {
         Authentication.AuthenticationStateChanged -= AuthenticationChanged;
         lifetime.Cancel();
         lifetime.Dispose();
+        if (saveShortcut is null) return;
+        try
+        {
+            await using var registration = await saveShortcut;
+            if (registration is not null)
+                await registration.InvokeVoidAsync("disconnect");
+        }
+        catch (JSDisconnectedException) { }
     }
 }

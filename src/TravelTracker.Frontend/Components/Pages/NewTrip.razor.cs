@@ -42,7 +42,7 @@ public partial class NewTrip : IAsyncDisposable
     readonly Dictionary<TripPlaceDto, HashSet<Guid>> pendingPlaceCreates = [];
     readonly HashSet<string> pendingModeCreates = new(StringComparer.OrdinalIgnoreCase);
     ElementReference plannerElement;
-    Task<IJSObjectReference?>? undoShortcut;
+    Task<IJSObjectReference?>? editorShortcuts;
     TripPlannerDraft draft = new();
     IReadOnlyList<TripPlaceDto> places = [];
     IReadOnlyList<string> errors = [];
@@ -61,6 +61,7 @@ public partial class NewTrip : IAsyncDisposable
     int insertAfter;
     bool review;
     bool busy;
+    bool savingTrip;
     bool openingRoute;
     string editorPath = "new-trip";
     bool savingCatalogue;
@@ -97,8 +98,10 @@ public partial class NewTrip : IAsyncDisposable
     bool MapVisible => showMap || review;
     string TripTitle => string.IsNullOrWhiteSpace(draft.Name) ? "Untitled trip" : draft.Name;
     bool CanUndo => !busy && undoHistory.Count > 0;
-    bool HasUnsavedWork => dirty || editingMarker is { } marker &&
-        (placeName != marker.Place.Name || placeAddress != marker.Place.Address || latitude != marker.Place.Lat || longitude != marker.Place.Lon);
+    bool HasUnconfirmedMarkerChanges => placing && (editingMarker is { } marker
+        ? placeName != marker.Place.Name || placeAddress != marker.Place.Address || latitude != marker.Place.Lat || longitude != marker.Place.Lon
+        : placeName.Length > 0 || placeAddress.Length > 0 || latitude is not null || longitude is not null);
+    bool HasUnsavedWork => dirty || HasUnconfirmedMarkerChanges;
     bool HasPendingCatalogueEntries => draft.Stops.Any(stop => stop.Place.PlaceId == Guid.Empty) ||
         Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(draft.LegTo)
             .Any(leg => leg.Mode?.TransportModeId == Guid.Empty);
@@ -142,7 +145,7 @@ public partial class NewTrip : IAsyncDisposable
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
-            undoShortcut = RegisterUndoShortcutAsync();
+            editorShortcuts = RegisterEditorShortcutsAsync();
         if (focusDuration)
         {
             focusDuration = false;
@@ -159,16 +162,16 @@ public partial class NewTrip : IAsyncDisposable
             await toolsToggle.FocusAsync();
         }
         if (firstRender)
-            await undoShortcut!;
+            await editorShortcuts!;
     }
 
     /** @return The browser registration used to release the trip shortcut on navigation. */
-    async Task<IJSObjectReference?> RegisterUndoShortcutAsync()
+    async Task<IJSObjectReference?> RegisterEditorShortcutsAsync()
     {
         try
         {
             await using var module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/NewTrip.razor.js");
-            return module is null ? null : await module.InvokeAsync<IJSObjectReference>("watchUndo", plannerElement);
+            return module is null ? null : await module.InvokeAsync<IJSObjectReference>("watchEditorShortcuts", plannerElement);
         }
         catch (JSDisconnectedException) { return null; }
         catch (JSException) { return null; }
@@ -273,6 +276,7 @@ public partial class NewTrip : IAsyncDisposable
         routeVersion++;
         browserDraftNotice = null;
         busy = false;
+        savingTrip = false;
         openingRoute = false;
         showMap = path.Split('/')[0].Equals("map", StringComparison.OrdinalIgnoreCase);
         if (path.Split('/')[0] is "trip" or "new-trip")
@@ -499,10 +503,10 @@ public partial class NewTrip : IAsyncDisposable
     {
         closed.Cancel();
         closed.Dispose();
-        if (undoShortcut is null) return;
+        if (editorShortcuts is null) return;
         try
         {
-            await using var registration = await undoShortcut;
+            await using var registration = await editorShortcuts;
             if (registration is not null)
                 await registration.InvokeVoidAsync("disconnect");
         }
@@ -981,11 +985,28 @@ public partial class NewTrip : IAsyncDisposable
         }
     }
 
-    /** Saves the itinerary using confirmed catalogue references only. */
+    /** Saves from the workspace button or shortcut using confirmed catalogue references only. */
     async Task SaveAsync()
     {
-        if (busy || HasPendingCatalogueEntries)
+        if (busy || closed.IsCancellationRequested)
             return;
+
+        notice = null;
+        if (HasUnconfirmedMarkerChanges)
+        {
+            toolsOpen = true;
+            review = false;
+            savedReview = false;
+            mapTool = MapTool.Markers;
+            errors = ["Apply or cancel your marker detail changes before saving the trip. Your edits are still here."];
+            saveFailed = false;
+            return;
+        }
+        if (HasPendingCatalogueEntries)
+        {
+            ShowReview();
+            return;
+        }
 
         var (request, problems) = draft.Build();
         errors = problems;
@@ -994,6 +1015,7 @@ public partial class NewTrip : IAsyncDisposable
             return;
 
         busy = true;
+        savingTrip = true;
         var token = closed.Token;
         var version = routeVersion;
         try
@@ -1036,7 +1058,10 @@ public partial class NewTrip : IAsyncDisposable
         finally
         {
             if (version == routeVersion)
+            {
                 busy = false;
+                savingTrip = false;
+            }
         }
     }
 

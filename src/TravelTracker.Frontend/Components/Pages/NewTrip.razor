@@ -19,14 +19,42 @@
 }
 else
 {
+    <div class="trip-workspace-controls">
     <div class="trip-workspace-actions" aria-label="Trip workspace">
-        <button type="button" disabled="@busy" @onclick="CreateNewAsync">Create new</button>
+        <button type="button" data-trip-save aria-keyshortcuts="Control+S Meta+S" disabled="@busy"
+                @onclick="SaveAsync">@(savingTrip ? "Saving trip" : "Save trip")</button>
+        <small class="trip-save-shortcut">Ctrl+S / ⌘S</small>
+        <button type="button" class="secondary" disabled="@busy" @onclick="CreateNewAsync">Create new</button>
         <button type="button" class="secondary" disabled="@busy" aria-expanded="@Pressed(browseSaved)"
                 aria-controls="saved-trip-browser" @onclick="() => browseSaved = !browseSaved">Open saved</button>
         @if (draft.Id is { } ticketTripId)
         {
             <a class="button secondary" href="@($"trips/{ticketTripId:D}")">Tickets &amp; bookings</a>
         }
+    </div>
+    @if (savingTrip)
+    {
+        <p class="trip-save-status" role="status">Saving trip…</p>
+    }
+    @if (notice is not null)
+    {
+        <div class="trip-message success" role="status">
+            @notice
+            @if (draft.Id is { } savedId)
+            {
+                <a href="@($"map/{savedId:D}")">Saved trip link</a>
+                <a href="history">Trip history</a>
+            }
+        </div>
+    }
+    @if (errors.Count > 0)
+    {
+        <div class="trip-message @(saveFailed ? "failure" : "validation")" role="alert">
+            <strong>@(saveFailed ? "Action could not be completed" : "Check your trip details")</strong>
+            <ul>@foreach (var error in errors) { <li>@error</li> }</ul>
+            @if (saveFailed) { <p>Your draft is still here. Try saving again when the problem is resolved.</p> }
+        </div>
+    }
     </div>
     @if (browseSaved)
     {
@@ -191,26 +219,6 @@ else
     {
         <button type="button" class="secondary" @onclick="ToggleTools">Close map tools</button>
     }
-    @if (notice is not null)
-    {
-        <div class="trip-message success" role="status">
-            @notice
-            @if (draft.Id is { } savedId)
-            {
-                <a href="@($"map/{savedId:D}")">Saved trip link</a>
-                <a href="history">Trip history</a>
-            }
-        </div>
-    }
-
-    @if (errors.Count > 0)
-    {
-        <div class="trip-message @(saveFailed ? "failure" : "validation")" role="alert">
-            <strong>@(saveFailed ? "Action could not be completed" : "Check your trip details")</strong>
-            <ul>@foreach (var error in errors) { <li>@error</li> }</ul>
-        </div>
-    }
-
             @if (review)
             {
                 <section class="trip-panel trip-review" aria-label="Trip review details">
@@ -233,10 +241,6 @@ else
                         {
                             <p>Save new locations and any missing transport modes to the catalogue first. They stay in the catalogue even if you discard this trip.</p>
                             <button type="button" disabled="@(busy || savingCatalogue)" @onclick="SaveCatalogueEntriesAsync">@(savingCatalogue ? "Saving catalogue entries" : "Save catalogue entries")</button>
-                        }
-                        else
-                        {
-                            <button type="button" disabled="@busy" @onclick="SaveAsync">@(busy ? "Saving trip" : saveFailed ? "Retry save" : "Save trip")</button>
                         }
                     }
                     <button type="button" class="secondary" disabled="@busy" @onclick="BackFromReview">@(savedReview ? "Back to editor" : "Back to stops")</button>

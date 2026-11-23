@@ -1,6 +1,12 @@
 .trip-planner { color: var(--forest); font-size: 18px; --trip-peach: #ffcbbe; }
-.trip-workspace-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-.map-workspace .trip-workspace-actions { position: relative; z-index: 2; padding: 12px 12px 0; margin: 0; }
+.trip-workspace-controls { position: sticky; top: 0; z-index: 3; padding: 10px 12px; margin-bottom: 14px; background: #f0eadf; border-bottom: 1px solid var(--border); box-shadow: 0 3px 8px #263a2a18; max-height: 50dvh; overflow: auto; }
+.trip-workspace-actions { position: sticky; top: 0; z-index: 1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: #f0eadf; }
+.trip-workspace-actions [data-trip-save] { min-height: 44px; padding-inline: 20px; font-weight: 700; }
+.trip-workspace-actions .button { padding: 8px 13px; font-size: 16px; line-height: 1.2; min-height: 44px; }
+.trip-save-shortcut { margin-right: auto; white-space: nowrap; }
+.trip-workspace-controls .trip-message { margin: 10px 0 0; }
+.trip-save-status { margin-top: 8px !important; }
+.map-workspace .trip-workspace-controls { margin-bottom: 0; }
 .trip-saved-browser { position: relative; z-index: 2; max-height: 45dvh; overflow: auto; background: white; color: var(--forest); margin: 12px; padding: 16px; border-radius: 7px; }
 .trip-planner h1 { margin: 0 0 .2em; font-size: clamp(34px, 4vw, 54px); line-height: 1.15; }
 .trip-planner h2, .trip-planner legend { font: 23px/1.25 'Aldrich', sans-serif; }
@@ -75,6 +81,8 @@
 }
 @media (max-width: 420px) {
     .trip-open form, .trip-search { grid-template-columns: minmax(0, 1fr); }
+    .trip-workspace-actions [data-trip-save] { flex: 1; }
+    .trip-save-shortcut { margin-right: 0; }
 }
 
 .trip-palette img { flex: none; }

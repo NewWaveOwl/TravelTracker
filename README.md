@@ -76,7 +76,7 @@ The old four-argument command remains supported, with Auth0 values taken from sa
 ### Sign in and save a trip
 
 1. Enter the Auth0 machine-to-machine secret and the Supabase database password at the hidden prompts.
-2. When the launcher reports that TravelTracker is running, open [Map View](http://localhost:5100/map) and sign in. Build an itinerary, choose **Review on map**, then **Save trip**. If you picked new locations or modes, save those catalogue entries first.
+2. When the launcher reports that TravelTracker is running, open [Map View](http://localhost:5100/map) and sign in. Use the visible **Save trip** action, or **Ctrl+S** (**Cmd+S** on macOS) within the editor. Review remains available; if you picked new locations or modes, confirm those catalogue entries before saving the trip.
 3. To verify persistence, copy the saved trip URL, stop the stack with **Ctrl+C**, restart it, sign in again, and reopen the URL or find the trip in **History**.
 
 A saved trip may have no stops or one stop, and any supported place type may start or end a journey. Keep a name, time zone and valid start/end; journeys still need connected stops, transport and valid times. See the [minimal trip save contract](docs/trips-service.md#minimal-draft-and-save-fields-105).

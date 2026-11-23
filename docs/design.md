@@ -146,6 +146,7 @@ What each part of the system lets people create, read, update and delete.
 - Place search shows shared and private places, with Add Place when nothing matches.
 - Legs can be added, removed and reordered (with a keyboard alternative to dragging). A broken connection is impossible by construction, because each leg's departure is the previous leg's destination. Reordering shows the resulting chain and highlights time clashes but never fixes them silently.
 - Errors appear next to each field and in a summary that jumps to the first problem.
+- **Save trip (#119)** stays prominent in the Map and Trip workspaces on desktop and mobile, including the step-by-step form. Ctrl+S and Cmd+S invoke the same save action while the editor is active; other pages keep the browser shortcut. Saving, saved and failure feedback stays visible beside the action. New catalogue entries still require explicit confirmation before a trip can be saved.
 - Saving works only when the form is valid, cannot be double-submitted, and moves on only after the save is confirmed.
 - If saving fails, nothing typed is lost. Unsaved work is kept only in memory, so leaving the editor asks first.
 

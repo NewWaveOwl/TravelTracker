@@ -215,8 +215,26 @@ The Blazor client (`TravelTracker.Frontend`) talks to the Trips, Accommodations,
 | Route | What it does |
 | --- | --- |
 | `/trip`, `/new-trip` and `/map` | Share a planner draft, including map markers and connections. Trip offers Create new and Open saved; append a trip ID to open a saved itinerary for editing. Existing links remain valid. |
-| `/new-trip/form` | Form-only trip creation with basics, itinerary cards, and a review before saving. Open it from the standard planner. |
+| `/new-trip/form` | Form-only trip creation with basics, itinerary cards, optional review and a visible save action. Open it from the standard planner. |
 | `/trips/{tripId}` | Reopens a saved trip from the service. `?saved=true` only adds a "Trip saved." line once the trip itself has loaded. |
+
+### Visible save action and editor shortcut (#119)
+
+**Save trip** stays available in the workspace action bar on Map, Trip and the
+step-by-step form, including narrow screens and collapsed Map tools. It uses
+the same Trips create/replace operation as review. Ctrl+S and Cmd+S activate
+that same button within the editor, including from a field being edited;
+the current field value is committed before saving. The shortcut registration
+is removed when the editor closes. Outside the editor, the browser keeps its
+normal save-page shortcut.
+
+The action shows saving, confirmed-save and error feedback. It blocks another
+submission while the first request is pending, and a failed request keeps the
+draft available for correction or retry. Empty and single-stop plans use the
+[minimal save contract](#minimal-draft-and-save-fields-105). Unconfirmed marker
+details and new catalogue entries still need the existing explicit review and
+confirmation steps; the shortcut does not invent a journey or automatically
+write catalogue records.
 
 In Map View, **Save map draft** stores a browser copy and keeps the undo history
 and unsaved-changes warning. Restoring a browser draft brings its edits back into
@@ -261,6 +279,61 @@ In the form-only planner:
 - Open **History** to recover a saved trip link. Stays and visits, scheduled routes, and deletion remain outside these planner flows.
 
 Verified by `tests/TravelTracker.Frontend.Tests` (`TripDraftTests`, `NewTripPageTests`, `TripsContractTests`), which drive the real pages through the real protected HTTP stack against in-process services. They are not a run against live hosts or a live Auth0 tenant.
+
+### Verification for #119 (2026-11-22)
+
+The change is on `ticket-import-and-flexible-trip-saves`, alongside #105 and
+#109. The save UI and shortcut leave the public Trips API unchanged.
+
+| Check | Discovered / executed / passed | Failed / skipped |
+| --- | --- | --- |
+| Application baseline at `e70ba63` | 1,298 / 1,298 / 1,298 | 0 / 0 |
+| Final application suite | 1,310 / 1,310 / 1,310 | 0 / 0 |
+| Final PostgreSQL group, isolated local PostgreSQL 17 | 81 / 81 / 81 | 0 / 0 |
+| Standalone JavaScript shortcut tests | 14 / 14 / 14 | 0 / 0 |
+
+Restore and the full Release build passed with zero warnings and zero errors.
+The frontend grew from 418 to 430 passing cases; no existing cases were removed.
+Commands run from the repository root:
+
+```powershell
+dotnet restore TravelTracker.slnx
+dotnet build TravelTracker.slnx --configuration Release --no-restore
+dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL" --logger "trx;LogFilePrefix=issue119-final"
+# TRAVELTRACKER_TEST_POSTGRES configured for an isolated instance with CREATEDB:
+dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category=PostgreSQL" --logger "trx;LogFilePrefix=issue119-postgresql"
+node --test tests/TravelTracker.Frontend.Tests/Browser/tripSaveShortcut.test.mjs
+```
+
+[Planner tests](../tests/TravelTracker.Frontend.Tests/TripPlannerTests.cs) cover
+direct saves of empty and single-stop plans, visible controls outside collapsed
+Map tools, blocked pending marker/catalogue changes, pending and failed saves,
+and shortcut registration/cleanup. [Form tests](../tests/TravelTracker.Frontend.Tests/NewTripPageTests.cs)
+cover saving from each editable step, validation feedback, failure retention,
+retry and locked fields while a request is pending.
+[Shortcut tests](../tests/TravelTracker.Frontend.Tests/Browser/tripSaveShortcut.test.mjs)
+execute the production JavaScript against an isolated DOM event fixture: Ctrl+S
+and Cmd+S, current-field change before button activation, native-event
+cancellation, held/repeated keys, disabled controls, dialogs, other targets,
+navigation cleanup and preservation of Undo.
+
+Native Chrome verification used the running Blazor frontend on local Kestrel
+with a test-only authenticated session and controlled HTTP service responses.
+Both the visible button and Ctrl+S saved empty and single-stop plans; the
+single-stop request retained one attraction, zero legs and round-trip intent.
+Typing a name and pressing Ctrl+S without leaving the field saved the latest
+text. A held response showed **Saving trip**; repeated Ctrl+S presses produced
+one request. A forced 503 kept the name and dates, and retry succeeded. Save
+remained visible in desktop and 390–392 px mobile emulation, including after
+scrolling. After navigating to History, Ctrl+S opened the native **Save As**
+dialog, which was cancelled without writing a file.
+
+Read-only agent review finished with no remaining findings. A human teammate
+must still review the PR; no PR review, remote CI result, live Auth0/backend
+run, physical mobile-device run or native macOS run is claimed. Cmd+S is covered
+by the JavaScript event tests. TRX files and the disposable browser harness stay
+in ignored local output; the verification summary and regression tests are
+committed for review.
 
 ## Limits
 

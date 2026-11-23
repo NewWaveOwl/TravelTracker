@@ -30,6 +30,9 @@ public sealed class FakeTripsBackend : HttpMessageHandler
     /** when set, trip creates wait for this gate before answering, so tests can observe the saving state. */
     public TaskCompletionSource<bool>? CreateGate { get; set; }
 
+    /** when set, answers a trip create after its optional gate without storing a trip. */
+    public HttpStatusCode? CreateFailureStatus { get; set; }
+
     /** the number of trip creates that arrived, whether or not they were accepted. */
     public int CreateCount => CreateBodies.Count;
 
@@ -83,6 +86,7 @@ public sealed class FakeTripsBackend : HttpMessageHandler
         var body = await request.Content!.ReadAsStringAsync(cancellationToken);
         CreateBodies.Add(body);
         if (CreateGate is { } gate) await gate.Task;
+        if (CreateFailureStatus is { } failure) return new HttpResponseMessage(failure);
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
         var legs = root.GetProperty("legs").EnumerateArray().Select(leg => new TripDto.Leg(
