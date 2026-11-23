@@ -116,7 +116,7 @@ private port. A failed health request must be resolved at the server/tunnel firs
 Successful health is operational status, not proof that Auth, Nominatim or a
 particular journey works.
 
-Once signed in, open Map tools → Transport → Load routing options and confirm
+Once signed in, open Map tools → Transport; options load automatically. Confirm
 Bike is available before Find routes. Search addresses explicitly with Search
 or Enter. If health works but protected calls still fail, inspect the server's
 TravelTracker status and Auth settings; retain manual entries while resolving

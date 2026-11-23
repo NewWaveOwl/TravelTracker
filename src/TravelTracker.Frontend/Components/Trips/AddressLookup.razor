@@ -87,10 +87,11 @@ else
     bool loading;
     bool disposed;
 
-    /** Cancels obsolete results when the selected stop, coordinates or editable address changes. */
+    /** Cancels obsolete results and suggests an address for a selected pin whose address is still unknown. */
     protected override async Task OnParametersSetAsync()
     {
-        if (!ReferenceEquals(Context, previousContext) || previousPosition != (Latitude, Longitude))
+        var positionChanged = !ReferenceEquals(Context, previousContext) || previousPosition != (Latitude, Longitude);
+        if (positionChanged)
         {
             CancelPending();
             message = null;
@@ -102,11 +103,11 @@ else
             CancelPending();
             text = previousValue = Value;
         }
-        if (ReverseVersion != previousReverseVersion)
+        var reverseRequested = ReverseVersion != previousReverseVersion && ReverseVersion > 0;
+        previousReverseVersion = ReverseVersion;
+        if ((reverseRequested || positionChanged && string.IsNullOrWhiteSpace(Value)) && Latitude is not null && Longitude is not null)
         {
-            previousReverseVersion = ReverseVersion;
-            if (ReverseVersion > 0 && Latitude is not null && Longitude is not null)
-                await LookupAsync(reverse: true);
+            await LookupAsync(reverse: true);
         }
     }
 

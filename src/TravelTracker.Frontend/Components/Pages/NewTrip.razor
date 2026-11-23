@@ -367,7 +367,7 @@ else
                         @if (pendingMode is null)
                         {
                             <RoutePlannerPanel Client="SharedRouting" Catalogue="Transport" Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())"
-                                               InitialRequest="CurrentRouteRequest" InitialDestination="selected" TimeZone="@draft.TimeZone"
+                                               InitialRequest="CurrentRouteRequest" InitialMode="@(CurrentLeg?.Mode?.Code ?? "")" InitialDestination="selected" TimeZone="@draft.TimeZone"
                                                Context="@((draft, routeVersion, routingRevision))" Disabled="busy" CanConfirmContext="@(!HasUnconfirmedMarkerChanges)"
                                                PreviewChanged="SelectRoutePreview" Confirmed="ConfirmRouteAsync" />
                         }

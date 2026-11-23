@@ -2450,7 +2450,6 @@ public sealed class TripPlannerTests : BunitContext
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
         page.Find("button[aria-label^='Edit connection 1:']").Click();
-        Click(page, "Load routing options");
         page.WaitForAssertion(() => Assert.False(page.Find("#route-mode option[value=train]").HasAttribute("disabled")));
         Click(page, "Find routes");
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".route-options > li")));
@@ -2488,6 +2487,36 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal(new[] { "Hotel", "Museum" }, page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>().Instance.Stops.Select(stop => stop.Name));
     }
 
+    [Fact]
+    public void ConnectionTransportRemainsPreselectedWhenItsDepartureIsCleared()
+    {
+        var metadataReads = 0;
+        Configure((request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/v1/routes/capabilities")
+            {
+                metadataReads++;
+                return Task.FromResult(RoutingFixtures.Json(RoutingFixtures.Capabilities));
+            }
+            if (path.StartsWith("/api/v1/transport-modes"))
+                return Task.FromResult(RoutingFixtures.Json(new[] { RoutingFixtures.Train }));
+            Assert.Equal($"/api/v1/trips/{TripId:D}", path);
+            return Task.FromResult(Json(Saved));
+        }, routing: true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        page.Find("button[aria-label^='Edit connection 1:']").Click();
+        page.WaitForAssertion(() => Assert.False(page.Find("#route-mode option[value=train]").HasAttribute("disabled")));
+
+        page.FindAll(".leg-fields input[type=datetime-local]")[0].Change("");
+
+        Assert.Null(page.FindComponent<TravelTracker.Frontend.Components.Trips.RoutePlannerPanel>().Instance.InitialRequest);
+        Assert.Equal("train", page.Find("#route-mode").GetAttribute("value"));
+        Assert.Equal(1, metadataReads);
+        Assert.True(page.FindAll("button").Single(button => button.TextContent == "Find routes").HasAttribute("disabled"));
+    }
+
     [Theory]
     [InlineData(".leg-fields input[type=datetime-local]", 0)]
     [InlineData(".leg-fields input[type=datetime-local]", 1)]
@@ -2513,7 +2542,6 @@ public sealed class TripPlannerTests : BunitContext
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
         page.Find("button[aria-label^='Edit connection 1:']").Click();
-        Click(page, "Load routing options");
         page.WaitForAssertion(() => Assert.False(page.Find("#route-mode option[value=train]").HasAttribute("disabled")));
         Click(page, "Find routes");
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".route-options > li")));
@@ -2557,7 +2585,6 @@ public sealed class TripPlannerTests : BunitContext
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
         page.Find("button[aria-label^='Edit connection 1:']").Click();
-        Click(page, "Load routing options");
         page.WaitForAssertion(() => Assert.False(page.Find("#route-mode option[value=train]").HasAttribute("disabled")));
         Click(page, "Find routes");
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".route-options > li")));
@@ -2608,7 +2635,6 @@ public sealed class TripPlannerTests : BunitContext
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
         page.Find("button[aria-label^='Edit connection 1:']").Click();
-        Click(page, "Load routing options");
         page.WaitForAssertion(() => Assert.False(page.Find("#route-mode option[value=train]").HasAttribute("disabled")));
         Click(page, "Find routes");
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".route-options > li")));

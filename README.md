@@ -125,8 +125,9 @@ Use the base URL without an API suffix. Configure the same TravelTracker Auth
 project in the server's TravelTracker settings. See the [integration, public-service
 rules and Windows update guide](docs/public-nominatim-integration.md).
 
-In **Map tools → Transport**, use **Load routing options**, then choose origin,
-destination, departure and a supported mode. Find and select a route, review its
+In **Map tools → Transport**, routing options load automatically for a connection,
+and its palette-selected transport is preselected even before a departure is set.
+Choose origin, destination, departure and a supported mode. Find and select a route, review its
 stops/times, then **Confirm selected route** to apply mode and exact times to an
 adjacent connection. Cancel preserves the draft. Save persists the chosen plan;
 provider geometry stays in the current session. See the [server update and full

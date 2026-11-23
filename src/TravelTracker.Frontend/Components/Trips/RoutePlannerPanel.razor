@@ -8,7 +8,7 @@
 <section class="route-planner-controls" aria-label="Plan a route">
     <h3>Plan a route</h3>
     <p>Preview routes between your stops. Confirm applies the selected mode and exact times to an adjacent connection; stop order stays unchanged.</p>
-    <button type="button" class="secondary" disabled="@(Disabled || loadingOptions || confirming)" @onclick="LoadOptionsAsync">@(loadingOptions ? "Checking router…" : "Load routing options")</button>
+    <button type="button" class="secondary" disabled="@(Disabled || loadingOptions || confirming)" @onclick="LoadOptionsAsync">@(loadingOptions ? "Checking router…" : capabilities is null ? "Retry routing options" : "Refresh routing options")</button>
     @if (capabilities is { } metadata)
     {
         <p class="routing-coverage">@metadata.Router.Name @(metadata.Router.Version is { } version ? $"({version})" : "(version unknown)")</p>
@@ -72,6 +72,8 @@
     [Parameter] public TransportClient? Catalogue { get; set; }
     [Parameter] public IReadOnlyList<TripPlaceDto> Stops { get; set; } = [];
     [Parameter] public RoutePlanRequest? InitialRequest { get; set; }
+    /** The leg's palette-selected mode, including when its departure has not been entered yet. */
+    [Parameter] public string InitialMode { get; set; } = "";
     [Parameter] public int InitialDestination { get; set; } = 1;
     [Parameter] public string TimeZone { get; set; } = "America/Toronto";
     [Parameter] public object? Context { get; set; }
@@ -88,13 +90,14 @@
     object? previousContext;
     string? previousZone;
     RoutePlanRequest? previousInitial;
+    string? previousMode;
     int previousDestination = -1;
     int origin, destination = 1, previewVersion;
     string mode = "";
     DateTime? departure;
     TimeSpan? chosenOffset;
     string? message;
-    bool initialized, loadingOptions, confirming, disposed;
+    bool initialized, optionsAttempted, loadingOptions, confirming, disposed;
     CancellationTokenSource? pending;
     long generation;
 
@@ -113,33 +116,39 @@
         : departure is null ? "Enter a departure date and time."
         : Offsets.Length == 0 ? "This departure time does not exist in the trip time zone. Choose another time."
         : Offsets.Length > 1 && (chosenOffset is null || !Offsets.Contains(chosenOffset.Value)) ? "Choose the UTC offset for this repeated departure time."
-        : !ModeAvailable(mode) ? "Load routing options and choose a mode supported by both the router and saved catalogue."
+        : !ModeAvailable(mode) ? "Choose a mode supported by both the router and saved catalogue. Retry routing options if they are unavailable."
         : RouteLocalTime.Resolve(departure, TimeZone, chosenOffset) is null ? "Choose a valid departure date and UTC offset." : null;
 
-    /** Drops stale previews when the draft, stop details, selected connection or time zone changes. */
+    /** Drops stale previews and loads router options automatically when a usable connection opens. */
     protected override async Task OnParametersSetAsync()
     {
-        if (initialized && Equals(Context, previousContext) && previousZone == TimeZone && InitialRequest == previousInitial &&
-            InitialDestination == previousDestination && Stops.SequenceEqual(previousStops)) return;
-        initialized = true;
-        previousContext = Context; previousZone = TimeZone; previousInitial = InitialRequest; previousDestination = InitialDestination;
-        previousStops = Stops.ToArray();
-        pending?.Cancel();
-        generation++;
-        loadingOptions = false;
-        origin = Stops.Count > 1 ? Math.Clamp(InitialDestination - 1, 0, Stops.Count - 2) : 0;
-        destination = Stops.Count > 1 ? origin + 1 : 0;
-        mode = InitialRequest?.Mode ?? "";
-        departure = InitialRequest is { } initial && TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone, out var zone)
-            ? TimeZoneInfo.ConvertTime(initial.DepartureTime, zone).DateTime : null;
-        chosenOffset = InitialRequest?.DepartureTime.Offset;
-        selection = null; message = null; previewVersion++;
-        await PreviewChanged.InvokeAsync(null);
+        if (!initialized || !Equals(Context, previousContext) || previousZone != TimeZone || InitialRequest != previousInitial ||
+            InitialMode != previousMode || InitialDestination != previousDestination || !Stops.SequenceEqual(previousStops))
+        {
+            initialized = true;
+            previousContext = Context; previousZone = TimeZone; previousInitial = InitialRequest; previousDestination = InitialDestination; previousMode = InitialMode;
+            previousStops = Stops.ToArray();
+            pending?.Cancel();
+            generation++;
+            if (loadingOptions) optionsAttempted = false;
+            loadingOptions = false;
+            origin = Stops.Count > 1 ? Math.Clamp(InitialDestination - 1, 0, Stops.Count - 2) : 0;
+            destination = Stops.Count > 1 ? origin + 1 : 0;
+            mode = string.IsNullOrEmpty(InitialMode) ? InitialRequest?.Mode ?? "" : InitialMode;
+            departure = InitialRequest is { } initial && TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone)
+                ? TimeZoneInfo.ConvertTime(initial.DepartureTime, zone).DateTime : null;
+            chosenOffset = InitialRequest?.DepartureTime.Offset;
+            selection = null; message = null; previewVersion++;
+            await PreviewChanged.InvokeAsync(null);
+        }
+        if (!optionsAttempted && !Disabled && Stops.Count >= 2 && Client is not null && Catalogue is not null)
+            await LoadOptionsAsync();
     }
 
     async Task LoadOptionsAsync()
     {
         if (Disabled || loadingOptions || confirming) return;
+        optionsAttempted = true;
         await ResetPreviewAsync();
         if (Client is null || Catalogue is null) { message = "Routing options are unavailable. Manual planning remains available."; return; }
         pending?.Cancel(); pending?.Dispose(); pending = new();

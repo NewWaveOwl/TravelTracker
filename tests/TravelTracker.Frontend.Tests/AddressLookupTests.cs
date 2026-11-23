@@ -28,6 +28,27 @@ public sealed class AddressLookupTests : BunitContext
     };
 
     [Fact]
+    public void OpeningAPinWithoutAnAddressLooksItUpOnceWithoutMovingThePin()
+    {
+        var lookups = 0;
+        string? address = null;
+        var handler = new StubHandler((request, _) =>
+        {
+            Assert.Equal("/v1/places/reverse", request.RequestUri!.AbsolutePath);
+            lookups++;
+            return Task.FromResult(Match());
+        });
+        var field = Render<AddressLookup>(parameters => parameters.Add(component => component.Client, Client(handler))
+            .Add(component => component.Latitude, 45.501m).Add(component => component.Longitude, -73.601m)
+            .Add(component => component.ValueChanged, value => address = value));
+        field.WaitForAssertion(() => Assert.Equal("120 Rue Test", address));
+        field.Render();
+
+        Assert.Equal(1, lookups);
+        Assert.Equal((45.501m, -73.601m), (field.Instance.Latitude, field.Instance.Longitude));
+    }
+
+    [Fact]
     public async Task TypingDoesNotSearchAndSubmittingShowsSpinnerInsideAddressBoxUntilResponse()
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

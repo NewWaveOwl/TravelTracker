@@ -102,8 +102,8 @@ service-account password and PostgreSQL database password separately. Use a
 traveller account for browser sign-in.
 
 Open `http://localhost:5100/map`, sign in, search explicitly for an address, and
-review the location before applying it. For routes, open **Map tools → Transport →
-Load routing options**, choose the endpoints/date/mode, Find routes, select an
+review the location before applying it. For routes, open **Map tools → Transport**,
+wait for routing options, choose the endpoints/date/mode, Find routes, select an
 alternative and **Confirm selected route**. Manual map selection remains available
 when geocoding or routing is unavailable. A route preview changes the itinerary
 only after its confirmation action; normal trip Save persists the chosen plan.

@@ -88,8 +88,11 @@ public sealed class LocationPickerTests : BunitContext
         Assert.Equal("-73.6", picker.Instance.Longitude);
     }
 
-    [Fact]
-    public async Task AddressSearchUsesReturnedPositionOnlyAfterCandidateAndLocationConfirmation()
+    [Theory]
+    [InlineData("attraction")]
+    [InlineData("accommodation")]
+    [InlineData("transport_stop")]
+    public async Task AddressSearchMovesAnExistingLocationOnlyAfterCandidateAndLocationConfirmation(string placeType)
     {
         ConfigureRouting(new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -97,10 +100,13 @@ public sealed class LocationPickerTests : BunitContext
                 [new("Selected address", 45.51m, -73.59m, "OpenStreetMap Nominatim")], "© OpenStreetMap contributors")),
         })));
         (string Lat, string Lon)? used = null;
-        var picker = Render<LocationPicker>(parameters => parameters.Add(component => component.UseLocation, value => used = value));
+        var picker = Render<LocationPicker>(parameters => parameters.Add(component => component.UseLocation, value => used = value)
+            .Add(component => component.PlaceType, placeType).Add(component => component.Latitude, "45.5")
+            .Add(component => component.Longitude, "-73.6").Add(component => component.Address, "Old address"));
         picker.Find(".address-search input").Input("Selected address");
         await picker.Find(".address-search").TriggerEventAsync("onsubmit", EventArgs.Empty);
-        Assert.Empty(picker.FindComponent<TripMapCanvas>().Instance.Stops);
+        Assert.Equal((45.5m, -73.6m), (picker.FindComponent<TripMapCanvas>().Instance.Stops[0].Lat,
+            picker.FindComponent<TripMapCanvas>().Instance.Stops[0].Lon));
         picker.Find(".address-candidates button").Click();
         Assert.Single(picker.FindComponent<TripMapCanvas>().Instance.Stops);
         Assert.Null(used);

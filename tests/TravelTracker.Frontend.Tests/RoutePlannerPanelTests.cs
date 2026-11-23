@@ -45,11 +45,33 @@ public sealed class RoutePlannerPanelTests : BunitContext
 
     static void LoadAndChoose(IRenderedComponent<RoutePlannerPanel> panel)
     {
-        panel.FindAll("button").Single(button => button.TextContent == "Load routing options").Click();
         panel.WaitForAssertion(() => Assert.False(panel.Find("#route-mode option[value=train]").HasAttribute("disabled")));
         panel.FindAll("button").Single(button => button.TextContent == "Find routes").Click();
         panel.WaitForAssertion(() => Assert.Single(panel.FindAll(".route-options > li")));
         panel.Find(".route-options > li > button").Click();
+    }
+
+    [Fact]
+    public void OptionsLoadAutomaticallyAndThePaletteModeIsSelectedBeforeADepartureIsEntered()
+    {
+        var metadataReads = 0;
+        var clients = Clients(new StubHandler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/v1/routes/capabilities") metadataReads++;
+            return Task.FromResult(Read(request));
+        }));
+        var panel = Render<RoutePlannerPanel>(parameters => parameters.Add(component => component.Client, clients.Routing)
+            .Add(component => component.Catalogue, clients.Catalogue).Add(component => component.Stops, [Origin, Destination])
+            .Add(component => component.InitialMode, "train"));
+
+        panel.WaitForAssertion(() => Assert.False(panel.Find("#route-mode option[value=train]").HasAttribute("disabled")));
+        Assert.Equal("train", panel.Find("#route-mode").GetAttribute("value"));
+        Assert.Equal(1, metadataReads);
+        Assert.True(panel.FindAll("button").Single(button => button.TextContent == "Find routes").HasAttribute("disabled"));
+        panel.Render();
+        Assert.Equal(1, metadataReads);
+        panel.Find("#route-departure").Change("2026-11-14T10:00:00");
+        Assert.False(panel.FindAll("button").Single(button => button.TextContent == "Find routes").HasAttribute("disabled"));
     }
 
     [Fact]
@@ -124,7 +146,6 @@ public sealed class RoutePlannerPanelTests : BunitContext
     {
         var panel = Panel(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath == "/v1/routes/capabilities"
             ? Json(Capabilities with { Modes = [new("train", status)] }) : Json(new[] { Train }))));
-        panel.FindAll("button").Single(button => button.TextContent == "Load routing options").Click();
         panel.WaitForAssertion(() => Assert.Contains(status == "unknown" ? "support unknown" : "unsupported by loaded router", panel.Find(".routing-modes").TextContent));
         Assert.True(panel.Find("#route-mode option[value=train]").HasAttribute("disabled"));
         Assert.True(panel.FindAll("button").Single(button => button.TextContent == "Find routes").HasAttribute("disabled"));
@@ -135,7 +156,6 @@ public sealed class RoutePlannerPanelTests : BunitContext
     {
         var panel = Panel(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath == "/v1/routes/capabilities"
             ? Json(Capabilities) : Json(Array.Empty<TransportDto>()))));
-        panel.FindAll("button").Single(button => button.TextContent == "Load routing options").Click();
         panel.WaitForAssertion(() => Assert.Contains("saved catalogue mode unavailable", panel.Find(".routing-modes").TextContent));
         Assert.True(panel.Find("#route-mode option[value=train]").HasAttribute("disabled"));
         Assert.True(panel.FindAll("button").Single(button => button.TextContent == "Confirm selected route").HasAttribute("disabled"));
@@ -155,7 +175,6 @@ public sealed class RoutePlannerPanelTests : BunitContext
             if (failing && timeout) throw new TaskCanceledException("private-network-diagnostic");
             return Task.FromResult(failing ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : Read(request));
         }));
-        panel.FindAll("button").Single(button => button.TextContent == "Load routing options").Click();
 
         panel.WaitForAssertion(() => Assert.Contains(timeout ? "dev tunnel" : "OpenTripPlanner", panel.Markup));
         Assert.Equal(1, requests);
@@ -163,7 +182,7 @@ public sealed class RoutePlannerPanelTests : BunitContext
         Assert.True(panel.FindAll("button").Single(button => button.TextContent == "Confirm selected route").HasAttribute("disabled"));
         Assert.DoesNotContain("private-network-diagnostic", panel.Markup);
         failing = false;
-        panel.FindAll("button").Single(button => button.TextContent == "Load routing options").Click();
+        panel.FindAll("button").Single(button => button.TextContent == "Retry routing options").Click();
         panel.WaitForAssertion(() => Assert.False(panel.Find("#route-mode option[value=train]").HasAttribute("disabled")));
         Assert.Equal(2, requests);
     }
@@ -174,7 +193,6 @@ public sealed class RoutePlannerPanelTests : BunitContext
         var panel = Panel(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath == "/v1/routes/capabilities"
             ? Json(new { status = "authentication_unavailable", message = "private-project-diagnostic" }, HttpStatusCode.ServiceUnavailable) : Read(request))));
 
-        panel.FindAll("button").Single(button => button.TextContent == "Load routing options").Click();
 
         panel.WaitForAssertion(() => Assert.Contains("TravelTracker Supabase URL and key", panel.Markup));
         Assert.DoesNotContain("private-project-diagnostic", panel.Markup);
@@ -216,7 +234,6 @@ public sealed class RoutePlannerPanelTests : BunitContext
     {
         var panel = Panel(new StubHandler((request, _) => Task.FromResult(Read(request))));
         panel.Render(parameters => parameters.Add(component => component.TimeZone, "Eastern Standard Time"));
-        panel.FindAll("button").Single(button => button.TextContent == "Load routing options").Click();
         panel.WaitForAssertion(() => Assert.False(panel.Find("#route-mode option[value=train]").HasAttribute("disabled")));
         panel.Find("#route-departure").Change("2026-11-01T01:30:17");
         Assert.True(panel.FindAll("button").Single(button => button.TextContent == "Find routes").HasAttribute("disabled"));

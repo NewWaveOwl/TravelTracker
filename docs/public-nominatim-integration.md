@@ -167,13 +167,18 @@ unchanged.
 
 ## Planner controls and explicit acceptance (#127)
 
-Open **Map tools → Transport → Load routing options**. The client explicitly reads
-current capabilities and saved transport entries before enabling supported modes.
+Open **Map tools → Transport**. The client automatically reads current capabilities
+and saved transport entries before enabling supported modes. It preselects the
+leg's palette transport even when the departure is not yet set. Retry/Refresh
+routing options remains available after a failure or a server configuration change.
 Choose origin, destination, departure date/time and Walk/Bike/Car/Bus/Train, then
 Find routes. Alternatives show duration/distance, actual departure/arrival and
 initial waiting; available transit details include walking legs, stops and
 transfers. Times display in the trip zone. Supported Windows zone IDs are
 translated to IANA for the request without changing the saved trip zone.
+Opening a selected pin without an address also requests one reverse-address
+suggestion. Choosing a searched address previews the new position for attractions,
+accommodations and transport stops; Apply/Use location confirms the move.
 
 Selecting a candidate draws a preview. Confirm applies the chosen saved mode and
 exact provider departure/arrival together, after rechecking the current draft,
