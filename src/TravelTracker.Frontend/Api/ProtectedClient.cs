@@ -44,7 +44,8 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
      * @param body Public request fields.
      * @param ifMatch Entity tag the service must match, or null when no precondition applies.
      * @param cancellationToken View cancellation.
-     * @return Parsed body and entity tag; 401 revokes only the session that made the request.
+     * @return Parsed body and entity tag; a core service's 401 revokes only the requesting session.
+     *         An optional Routing rejection reports a dependency failure and retains the TravelTracker session.
      */
     public Task<ServiceResponse<T>> SendAsync<T>(string service, HttpMethod method, string path, object? body, string? ifMatch, CancellationToken cancellationToken = default) =>
         SendCoreAsync<T>(service, method, path, body, cancellationToken, ifMatch: ifMatch);
@@ -129,6 +130,12 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
         }
         catch (ApiError error) when (error.Status == 401)
         {
+            if (service == "Routing")
+            {
+                logger.LogWarning("The optional routing service rejected this app session; the TravelTracker session was retained");
+                throw new ApiError(FailureKind.Unavailable,
+                    "The routing server could not authorize your TravelTracker session. Check its TravelTracker project settings, or sign in again.", 401);
+            }
             sessions.Revoke(sessionId);
             logger.LogWarning("{Service} rejected the access token", service);
             throw new ApiError(FailureKind.Permission, "Your session was rejected. Sign in again.", 401);

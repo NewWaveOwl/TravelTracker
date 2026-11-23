@@ -1,4 +1,9 @@
-# Shared OTP routing and Photon address lookup plan
+# Historical shared OTP routing and Photon proposal
+
+**Superseded address-provider decision (2026-11-22):** the owner selected Public
+Nominatim instead of a local Photon installation. Follow
+[the implemented integration and Windows/tunnel setup](public-nominatim-integration.md).
+The original capacity-trial proposal below is retained as historical context.
 
 Status: proposed future work, recorded on 2026-11-22. This document does not mean
 that geocoding, OTP integration, or a new server window is implemented in

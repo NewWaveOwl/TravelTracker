@@ -1,0 +1,10 @@
+.route-planner-controls { border-top: 1px solid #c9d2c2; padding-top: 1rem; margin-top: 1rem; }
+.route-planner-controls h3 { font-size: 1.15rem; margin: 0 0 .5rem; }
+.route-planner-controls p, .routing-modes { font-size: .85rem; line-height: 1.4; }
+.route-request-fields { display: grid; gap: .65rem; padding: 0; border: 0; margin: .75rem 0; min-width: 0; }
+.route-request-fields label { display: grid; gap: .25rem; font-size: .95rem; min-width: 0; }
+.route-request-fields input, .route-request-fields select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; font-size: 1rem; }
+.route-confirm-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.route-hint { background: #f3eee0; padding: .5rem; }
+.routing-coverage { color: #536451; }
+@media (max-width: 700px) { .route-confirm-actions { display: grid; grid-template-columns: minmax(0, 1fr); } }

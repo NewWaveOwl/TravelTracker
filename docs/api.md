@@ -103,13 +103,25 @@ Attractions failure handling: missing validated identity returns 401; forbidden 
 
 The Blazor `/attractions` view consumes these public HTTP DTOs and sends the current user's bearer token to the configured Attractions service only. Search uses one percent-encoded literal `name` parameter. Create sends only writable fields and uses the service's private visibility default. Edit sends only changed fields, with explicit null clearing rating or description. Saved details come from a confirmed response; result-refresh failures are reported separately. Unconfirmed writes are never automatically retried.
 
-The frontend's optional duration ± field is a local preview and has no HTTP or persistence field. The map is the user-supplied static placeholder; choosing a location currently means confirming manually entered coordinates. No endpoint or database change is included in #43.
+The frontend's optional duration ± field is a local preview and has no HTTP or persistence field. The current location picker (#120) uses the interactive map and optional submitted-address lookup, with explicit confirmation and manual fallback. Coordinates remain in the public DTOs and existing saved snapshots; users do not need to type them. Neither this UI change nor #43 adds endpoint or database fields.
 
 ## PDF ticket-import contracts (#109)
 
 The Trips host accepts a raw `application/pdf` upload at `POST /api/v1/trips/{tripId}/ticket-imports` with `trips.write`. It checks live active standing and saved-trip ownership before reading or parsing the body. The maximum is 10 MiB and 10 pages. A successful response proposes only supported ticket fields with `extracted`, `missing` or `uncertain` status; it never writes a trip.
 
 The original is available to its owner at `GET /api/v1/trips/{tripId}/ticket-imports/{importId}/document` with `trips.read`; `DELETE /api/v1/trips/{tripId}/ticket-imports/{importId}` with `trips.write` removes it. Temporary content expires after 15 minutes, is process-local and has no public URL. Another owner's trip or import appears absent, including to administrators. See the [full upload, response, privacy and input contract](ticket-import.md).
+
+## Shared address and route preview contracts
+
+The optional `Services:Routing` service is the shared RNDTransit Ktor backend, not
+one of the .NET catalogue APIs. Protected app-specific operations are
+`GET /v1/places/search?q=...`, `GET /v1/places/reverse?lat=...&lon=...` and
+`POST /v1/routes/plan`, plus `GET /v1/routes/capabilities` without query parameters.
+Capabilities describe router support, loaded feeds and known global service dates;
+they do not guarantee a journey for every point/date. These operations never create
+or update saved records. The Blazor server mediates through the configured HTTP
+boundary and existing session safeguards. See [request/response shapes, errors,
+authentication, global limits and configuration](public-nominatim-integration.md).
 
 ## Users contracts
 

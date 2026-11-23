@@ -1,0 +1,254 @@
+@using System.Globalization
+@using TravelTracker.Frontend.Api.Routing
+@using TravelTracker.Frontend.Api.Transport
+@using TravelTracker.Frontend.Api.Trips
+@using TravelTracker.Frontend.Features.Trips
+@implements IDisposable
+
+<section class="route-planner-controls" aria-label="Plan a route">
+    <h3>Plan a route</h3>
+    <p>Preview routes between your stops. Confirm applies the selected mode and exact times to an adjacent connection; stop order stays unchanged.</p>
+    <button type="button" class="secondary" disabled="@(Disabled || loadingOptions || confirming)" @onclick="LoadOptionsAsync">@(loadingOptions ? "Checking router…" : capabilities is null ? "Retry routing options" : "Refresh routing options")</button>
+    @if (capabilities is { } metadata)
+    {
+        <p class="routing-coverage">@metadata.Router.Name @(metadata.Router.Version is { } version ? $"({version})" : "(version unknown)")</p>
+        <p class="routing-coverage">@(metadata.Coverage.StartDate is { } start && metadata.Coverage.EndDate is { } end
+            ? $"Loaded transit dates: {start:yyyy-MM-dd} to {end:yyyy-MM-dd}. Individual feeds can cover fewer dates."
+            : "Loaded transit service dates are unknown.")</p>
+        <p class="routing-coverage">@(metadata.Coverage.Bounds is null ? "Street coverage bounds are unknown. A supported mode does not guarantee a route." : "Routing is limited to the loaded area.")</p>
+        <ul class="routing-modes" aria-label="Verified routing modes">
+            @foreach (var option in Modes)
+            {
+                <li>@option.Label: @ModeStatus(option.Code)</li>
+            }
+        </ul>
+    }
+    <fieldset class="route-request-fields" disabled="@(Disabled || confirming)">
+        <label for="route-origin">Origin
+            <select id="route-origin" value="@origin" @onchange="ChangeOriginAsync">
+                @for (var index = 0; index < Stops.Count; index++) { <option value="@index">@($"{index + 1:00} {Stops[index].Name}")</option> }
+            </select>
+        </label>
+        <label for="route-destination">Destination
+            <select id="route-destination" value="@destination" @onchange="ChangeDestinationAsync">
+                @for (var index = 0; index < Stops.Count; index++) { <option value="@index">@($"{index + 1:00} {Stops[index].Name}")</option> }
+            </select>
+        </label>
+        <label for="route-mode">Transport
+            <select id="route-mode" value="@mode" @onchange="ChangeModeAsync">
+                <option value="">Choose verified transport</option>
+                @foreach (var option in Modes)
+                {
+                    <option value="@option.Code" disabled="@(!ModeAvailable(option.Code))">@option.Label — @ModeStatus(option.Code)</option>
+                }
+            </select>
+        </label>
+        <label for="route-departure">Departure in @TimeZone
+            <input id="route-departure" type="datetime-local" step="1" value="@DepartureText" @onchange="ChangeDepartureAsync" />
+        </label>
+        @if (Offsets.Length > 1)
+        {
+            <label for="route-departure-offset">Departure UTC offset
+                <select id="route-departure-offset" value="@(chosenOffset?.ToString("c", CultureInfo.InvariantCulture) ?? "")" @onchange="ChangeOffsetAsync">
+                    <option value="">Choose which occurrence</option>
+                    @foreach (var offset in Offsets) { <option value="@offset.ToString("c", CultureInfo.InvariantCulture)">UTC @offset.ToString("c", CultureInfo.InvariantCulture)</option> }
+                </select>
+            </label>
+        }
+    </fieldset>
+    @if (ValidationMessage is { } validation) { <p class="route-hint">@validation</p> }
+    @if (!CanConfirmContext) { <p class="route-hint">Apply or cancel your marker details before confirming a route.</p> }
+    @if (destination != origin + 1) { <p class="route-hint">Only adjacent stops can receive a confirmed connection. Reorder the itinerary explicitly before confirming this pair.</p> }
+    <p role="status" aria-live="polite">@message</p>
+    <RoutePreviewPanel @key="previewVersion" Client="Client" Request="ActiveRequest" Selected="SelectPreviewAsync" CanSearch="@(!Disabled && !loadingOptions && !confirming)" Disabled="@(Disabled || confirming)" />
+    <div class="route-confirm-actions">
+        <button type="button" disabled="@(!CanConfirmSelection)" @onclick="ConfirmAsync">@(confirming ? "Applying route…" : "Confirm selected route")</button>
+        <button type="button" class="secondary" disabled="@confirming" @onclick="CancelAsync">Cancel route preview</button>
+    </div>
+</section>
+
+@code {
+    [Parameter] public RoutingClient? Client { get; set; }
+    [Parameter] public TransportClient? Catalogue { get; set; }
+    [Parameter] public IReadOnlyList<TripPlaceDto> Stops { get; set; } = [];
+    [Parameter] public RoutePlanRequest? InitialRequest { get; set; }
+    /** The leg's palette-selected mode, including when its departure has not been entered yet. */
+    [Parameter] public string InitialMode { get; set; } = "";
+    [Parameter] public int InitialDestination { get; set; } = 1;
+    [Parameter] public string TimeZone { get; set; } = "America/Toronto";
+    [Parameter] public object? Context { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool CanConfirmContext { get; set; } = true;
+    [Parameter] public EventCallback<RouteSelection?> PreviewChanged { get; set; }
+    [Parameter] public Func<RouteSelection, Task<bool>> Confirmed { get; set; } = _ => Task.FromResult(false);
+
+    static readonly (string Code, string Label)[] Modes = [("pedestrian", "Walk"), ("bike", "Bike"), ("car", "Car"), ("bus", "Bus"), ("train", "Train")];
+    RoutingCapabilities? capabilities;
+    IReadOnlyList<TransportDto> transports = [];
+    RouteSelection? selection;
+    TripPlaceDto[] previousStops = [];
+    object? previousContext;
+    string? previousZone;
+    RoutePlanRequest? previousInitial;
+    string? previousMode;
+    int previousDestination = -1;
+    int origin, destination = 1, previewVersion;
+    string mode = "";
+    DateTime? departure;
+    TimeSpan? chosenOffset;
+    string? message;
+    bool initialized, optionsAttempted, loadingOptions, confirming, disposed;
+    CancellationTokenSource? pending;
+    long generation;
+
+    TimeSpan[] Offsets => RouteLocalTime.Offsets(departure, TimeZone);
+    string DepartureText => departure?.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture) ?? "";
+    TransportDto? CurrentTransport => transports.FirstOrDefault(transport => transport.Code == mode && transport.TransportModeId != Guid.Empty);
+    RoutePlanRequest? ActiveRequest => ValidationMessage is null && RouteLocalTime.Resolve(departure, TimeZone, chosenOffset) is { } instant &&
+        RouteLocalTime.RouterZone(TimeZone) is { } zone
+        ? new(new(Stops[origin].Lat, Stops[origin].Lon), new(Stops[destination].Lat, Stops[destination].Lon), mode, instant, zone) : null;
+    bool CanConfirmSelection => !Disabled && !confirming && !loadingOptions && CanConfirmContext && destination == origin + 1 &&
+        selection is { } chosen && chosen.Request == ActiveRequest && CurrentTransport?.TransportModeId == chosen.Transport.TransportModeId;
+
+    string? ValidationMessage => Stops.Count < 2 ? "Add at least two stops to preview a route."
+        : origin < 0 || destination < 0 || origin >= Stops.Count || destination >= Stops.Count || origin == destination ? "Choose different origin and destination stops."
+        : RouteLocalTime.RouterZone(TimeZone) is null ? "This trip time zone cannot be used by the routing server. Choose a supported time zone, or keep planning manually."
+        : departure is null ? "Enter a departure date and time."
+        : Offsets.Length == 0 ? "This departure time does not exist in the trip time zone. Choose another time."
+        : Offsets.Length > 1 && (chosenOffset is null || !Offsets.Contains(chosenOffset.Value)) ? "Choose the UTC offset for this repeated departure time."
+        : !ModeAvailable(mode) ? "Choose a mode supported by both the router and saved catalogue. Retry routing options if they are unavailable."
+        : RouteLocalTime.Resolve(departure, TimeZone, chosenOffset) is null ? "Choose a valid departure date and UTC offset." : null;
+
+    /** Drops stale previews and loads router options automatically when a usable connection opens. */
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!initialized || !Equals(Context, previousContext) || previousZone != TimeZone || InitialRequest != previousInitial ||
+            InitialMode != previousMode || InitialDestination != previousDestination || !Stops.SequenceEqual(previousStops))
+        {
+            initialized = true;
+            previousContext = Context; previousZone = TimeZone; previousInitial = InitialRequest; previousDestination = InitialDestination; previousMode = InitialMode;
+            previousStops = Stops.ToArray();
+            pending?.Cancel();
+            generation++;
+            if (loadingOptions) optionsAttempted = false;
+            loadingOptions = false;
+            origin = Stops.Count > 1 ? Math.Clamp(InitialDestination - 1, 0, Stops.Count - 2) : 0;
+            destination = Stops.Count > 1 ? origin + 1 : 0;
+            mode = string.IsNullOrEmpty(InitialMode) ? InitialRequest?.Mode ?? "" : InitialMode;
+            departure = InitialRequest is { } initial && TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone)
+                ? TimeZoneInfo.ConvertTime(initial.DepartureTime, zone).DateTime : null;
+            chosenOffset = InitialRequest?.DepartureTime.Offset;
+            selection = null; message = null; previewVersion++;
+            await PreviewChanged.InvokeAsync(null);
+        }
+        if (!optionsAttempted && !Disabled && Stops.Count >= 2 && Client is not null && Catalogue is not null)
+            await LoadOptionsAsync();
+    }
+
+    async Task LoadOptionsAsync()
+    {
+        if (Disabled || loadingOptions || confirming) return;
+        optionsAttempted = true;
+        await ResetPreviewAsync();
+        if (Client is null || Catalogue is null) { message = "Routing options are unavailable. Manual planning remains available."; return; }
+        pending?.Cancel(); pending?.Dispose(); pending = new();
+        var token = pending.Token;
+        var requestGeneration = ++generation;
+        loadingOptions = true;
+        message = "Checking the running router and saved transport modes…";
+        try
+        {
+            var metadataTask = Client.CapabilitiesAsync(token);
+            var catalogueTask = Catalogue.SearchTransportAsync("", "", token);
+            await Task.WhenAll(metadataTask, catalogueTask);
+            if (disposed || token.IsCancellationRequested || requestGeneration != generation) return;
+            capabilities = await metadataTask;
+            transports = (await catalogueTask).Where(transport => transport.TransportModeId != Guid.Empty)
+                .OrderBy(transport => transport.Name, StringComparer.OrdinalIgnoreCase).ThenBy(transport => transport.TransportModeId).ToArray();
+            message = "Routing options loaded. Choose your endpoints, departure and transport.";
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (ApiError error)
+        {
+            if (!disposed && requestGeneration == generation)
+            {
+                capabilities = null; transports = [];
+                message = error.Code == "authentication_unavailable" ? error.Message
+                    : error.Status == 401 && error.Kind == FailureKind.Unavailable ? error.Message
+                    : error.Status == 401 ? "Sign in to load routing options. Manual planning remains available."
+                    : error.Kind == FailureKind.Network ? "The routing server or transport catalogue could not be reached, or did not respond in time. Check the service addresses and dev tunnel, then load routing options again. Manual planning remains available."
+                    : "Routing options are unavailable. Check the shared routing server, OpenTripPlanner and saved transport catalogue. Manual planning remains available.";
+            }
+        }
+        finally { if (!disposed && requestGeneration == generation) loadingOptions = false; }
+    }
+
+    bool ModeAvailable(string code) => capabilities?.Modes.Any(option => option.Code == code && option.Status == "available") == true &&
+        transports.Any(transport => transport.Code == code && transport.TransportModeId != Guid.Empty);
+
+    string ModeStatus(string code) => capabilities?.Modes.FirstOrDefault(option => option.Code == code)?.Status switch
+    {
+        "unsupported" => "unsupported by loaded router",
+        "available" when !transports.Any(transport => transport.Code == code && transport.TransportModeId != Guid.Empty) => "saved catalogue mode unavailable",
+        "available" => "available",
+        _ => "support unknown",
+    };
+
+    async Task ChangeOriginAsync(ChangeEventArgs change) { origin = Index(change); await ResetPreviewAsync(); }
+    async Task ChangeDestinationAsync(ChangeEventArgs change) { destination = Index(change); await ResetPreviewAsync(); }
+    async Task ChangeModeAsync(ChangeEventArgs change) { mode = change.Value?.ToString() ?? ""; await ResetPreviewAsync(); }
+    async Task ChangeDepartureAsync(ChangeEventArgs change)
+    {
+        departure = DateTime.TryParseExact(change.Value?.ToString(), ["yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed) ? parsed : null;
+        chosenOffset = null;
+        await ResetPreviewAsync();
+    }
+    async Task ChangeOffsetAsync(ChangeEventArgs change)
+    {
+        chosenOffset = TimeSpan.TryParse(change.Value?.ToString(), CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+        await ResetPreviewAsync();
+    }
+    static int Index(ChangeEventArgs change) => int.TryParse(change.Value?.ToString(), CultureInfo.InvariantCulture, out var value) ? value : -1;
+
+    async Task SelectPreviewAsync(RouteItinerary? itinerary)
+    {
+        selection = itinerary is not null && ActiveRequest is { } request && CurrentTransport is { } transport
+            ? new(request, itinerary, transport, origin, destination) : null;
+        await PreviewChanged.InvokeAsync(selection);
+    }
+
+    async Task ResetPreviewAsync()
+    {
+        selection = null; previewVersion++;
+        await PreviewChanged.InvokeAsync(null);
+    }
+
+    async Task CancelAsync()
+    {
+        pending?.Cancel();
+        generation++;
+        loadingOptions = false;
+        await ResetPreviewAsync();
+        message = "Route preview cancelled. Your itinerary and entered times are unchanged.";
+    }
+
+    async Task ConfirmAsync()
+    {
+        if (!CanConfirmSelection || selection is not { } chosen) return;
+        confirming = true;
+        try
+        {
+            var accepted = await Confirmed(chosen);
+            message = accepted ? "Selected route applied to the connection. Save the trip when ready."
+                : "The route was not applied. Check the current stops, marker details and saved transport mode.";
+        }
+        finally { confirming = false; }
+    }
+
+    /** Cancels pending metadata and catalogue reads when the planner closes. */
+    public void Dispose()
+    {
+        disposed = true;
+        pending?.Cancel(); pending?.Dispose();
+    }
+}

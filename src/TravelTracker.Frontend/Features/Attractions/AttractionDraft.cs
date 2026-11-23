@@ -52,8 +52,8 @@ public sealed class AttractionDraft
     {
         var errors = new Dictionary<string, string[]>();
         if (string.IsNullOrWhiteSpace(Name)) errors["name"] = ["Enter an attraction name."];
-        if (!RangeRules.IsDecimalInRange(Lat, -90, 90)) errors["lat"] = ["Enter a latitude from -90 to 90."];
-        if (!RangeRules.IsDecimalInRange(Lon, -180, 180)) errors["lon"] = ["Enter a longitude from -180 to 180."];
+        if (!RangeRules.IsDecimalInRange(Lat, -90, 90)) errors["lat"] = [string.IsNullOrWhiteSpace(Lat) ? "Choose an address result or a point on the map." : "Enter a latitude from -90 to 90."];
+        if (!RangeRules.IsDecimalInRange(Lon, -180, 180)) errors["lon"] = [string.IsNullOrWhiteSpace(Lon) ? "Choose an address result or a point on the map." : "Enter a longitude from -180 to 180."];
         if (!WholeMinutes(EstimatedVisitMinutes)) errors["estimatedVisitMinutes"] = ["Enter a visit duration in whole minutes, 0 or more."];
         if (!string.IsNullOrWhiteSpace(ApproximationMinutes) && !WholeMinutes(ApproximationMinutes)) errors["approximationMinutes"] = ["Enter a duration approximation in whole minutes, 0 or more, or leave it blank."];
         if (!string.IsNullOrWhiteSpace(Rating) && (!decimal.TryParse(Rating, NumberStyles.Float, CultureInfo.InvariantCulture, out var rating) || rating is < 0 or > 5)) errors["rating"] = ["Enter a rating from 0 to 5, or leave it blank."];

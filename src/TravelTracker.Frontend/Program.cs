@@ -6,6 +6,7 @@ using TravelTracker.Frontend.Api.Settings;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
 using TravelTracker.Frontend.Api.Users;
+using TravelTracker.Frontend.Api.Routing;
 using TravelTracker.Frontend.Services;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Components;
@@ -40,6 +41,7 @@ builder.Services.AddScoped<AccommodationsClient>();
 builder.Services.AddScoped<UsersClient>();
 builder.Services.AddScoped<AdminAccessState>();
 builder.Services.AddScoped<SettingsClient>();
+builder.Services.AddScoped<RoutingClient>();
 builder.Services.AddScoped<UserPreferences>();
 
 // ponytail: disposed when the process exits, so the sign-in event handlers can keep logging through it while the app runs

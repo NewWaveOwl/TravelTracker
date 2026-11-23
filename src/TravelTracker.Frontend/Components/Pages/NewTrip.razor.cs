@@ -95,6 +95,8 @@ public partial class NewTrip : IAsyncDisposable
     string searchValue = "";
     string placeName = "";
     string placeAddress = "";
+    int reverseAddressVersion;
+    int addressLookupSequence;
     string openValue = "";
     decimal? latitude;
     decimal? longitude;
@@ -254,13 +256,22 @@ public partial class NewTrip : IAsyncDisposable
         MarkEdited();
     }
 
+    /**
+     * Keeps exact times when a save shortcut commits an unchanged minute field, and normalizes actual edits.
+     * @param change The displayed local date and time.
+     * @param previous The existing time, including saved or confirmed seconds.
+     * @param apply Assigns a changed minute value or clears the field.
+     */
     void SetDateTime(ChangeEventArgs change, DateTime? previous, Action<DateTime?> apply)
     {
         var input = change.Value?.ToString();
         if (string.IsNullOrEmpty(input))
             EditTripValue(previous, null, apply);
         else if (DateTime.TryParseExact(input, LocalDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            if (DateTimeValue(date) == DateTimeValue(previous)) return;
             EditTripValue(previous, new DateTime(date.Ticks - date.Ticks % TimeSpan.TicksPerMinute, date.Kind), apply);
+        }
         else
         {
             errors = ["Enter a valid date and time."];
@@ -272,7 +283,12 @@ public partial class NewTrip : IAsyncDisposable
     long? DisplayedDuration(TripPlannerDraft.Leg connection) =>
         draft.DurationFor(connection) is { } duration ? (long)Math.Ceiling(duration.TotalMinutes) : null;
 
-    /** Updates one duration field and keeps the other part of the connection's elapsed time. */
+    /**
+     * Applies changed whole-minute durations while preserving exact times for an unchanged displayed duration.
+     * @param connection The connection whose duration is being edited.
+     * @param change The displayed hours or minutes.
+     * @param hours Whether the changed field is hours rather than minutes.
+     */
     void SetDurationPart(TripPlannerDraft.Leg connection, ChangeEventArgs change, bool hours)
     {
         var input = change.Value?.ToString();
@@ -294,6 +310,7 @@ public partial class NewTrip : IAsyncDisposable
             return;
         }
 
+        if (minutes == current) return;
         EditTripValue(connection.DurationMinutes, minutes == 0 ? null : (int)minutes,
             value => connection.DurationMinutes = value);
     }
@@ -407,6 +424,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Replaces all trip-specific buffers after an approved new-trip action or navigation. */
     void ResetPlannerDraft()
     {
+        ClearRoutingGeometry();
         browseSaved = false;
         draft = new();
         ResetBrowserDraftTracking();
@@ -707,6 +725,7 @@ public partial class NewTrip : IAsyncDisposable
 
     void MarkEdited()
     {
+        routingRevision++;
         dirty = true;
         savedReview = false;
         notice = null;
@@ -719,12 +738,14 @@ public partial class NewTrip : IAsyncDisposable
     void RememberEdit()
     {
         var restoreDraft = draft.CaptureUndo();
+        var restoreRouting = CaptureRoutingUndo();
         var state = (selected, insertAfter, dirty, markerNumber);
         if (undoHistory.Count == UndoLimit)
             undoHistory.RemoveAt(0);
         undoHistory.Add(() =>
         {
             restoreDraft();
+            restoreRouting();
             (selected, insertAfter, dirty, markerNumber) = state;
         });
     }
@@ -770,6 +791,11 @@ public partial class NewTrip : IAsyncDisposable
 
     void ShowReview()
     {
+        if (!HasUnconfirmedMarkerChanges)
+        {
+            placing = false;
+            ClearMarkerDetails();
+        }
         editorRevealVersion++;
         review = true;
         savedReview = false;
@@ -832,6 +858,8 @@ public partial class NewTrip : IAsyncDisposable
         if (previous.Lat == move.Lat && previous.Lon == move.Lon)
             return;
 
+        var retainEditor = placing && editingMarker is { } active &&
+            ReferenceEquals(active.LocationIdentity, stop.LocationIdentity);
         RememberEdit();
         if (review)
             ShowStops();
@@ -839,9 +867,11 @@ public partial class NewTrip : IAsyncDisposable
         draft.UpdatePlace(stop, updated);
         selected = move.Index;
         CancelConnection();
-        if (ReferenceEquals(editingMarker?.Place, updated))
+        if (retainEditor)
             (latitude, longitude, placeAddress) = (move.Lat, move.Lon, "");
         MarkEdited();
+        if (!retainEditor) EditSelectedStop();
+        reverseAddressVersion = ++addressLookupSequence;
     }
 
     void RemoveStop(int index)
@@ -961,6 +991,7 @@ public partial class NewTrip : IAsyncDisposable
 
     void ClearMarkerDetails()
     {
+        reverseAddressVersion = 0;
         editingMarker = null;
         editingStopDetails = false;
         placeName = "";
@@ -972,6 +1003,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Opens an isolated edit buffer for the selected stop without moving the map. */
     void EditSelectedStop()
     {
+        reverseAddressVersion = 0;
         var marker = draft.Stops[selected];
         editingMarker = marker;
         editingStopDetails = true;
@@ -1025,6 +1057,7 @@ public partial class NewTrip : IAsyncDisposable
         placeName = name;
         placeAddress = address;
         (latitude, longitude) = position;
+        reverseAddressVersion = ++addressLookupSequence;
     }
 
     /**
@@ -1050,11 +1083,11 @@ public partial class NewTrip : IAsyncDisposable
         if (markerType is not { } type || string.IsNullOrWhiteSpace(placeName) || PickedCoordinates is not { } position ||
             position.Lat is < -90 or > 90 || position.Lon is < -180 or > 180)
         {
-            errors = ["Enter a place name and valid map coordinates."];
+            errors = ["Enter a place name and choose an address result or a point on the map."];
             actionFailed = false;
             return;
         }
-        if (showMap && editingMarker is { } marker)
+        if (editingMarker is { } marker)
         {
             var place = marker.Place with { Name = placeName.Trim(), Address = placeAddress.Trim(), Lat = position.Lat, Lon = position.Lon };
             if (place != marker.Place)
@@ -1111,6 +1144,7 @@ public partial class NewTrip : IAsyncDisposable
                 return;
             var saved = revision.Trip;
             draft = TripPlannerDraft.FromSaved(revision);
+            ClearRoutingGeometry();
             availableModeCodes = null;
             browseSaved = false;
             ResetBrowserDraftTracking();
@@ -1206,7 +1240,7 @@ public partial class NewTrip : IAsyncDisposable
             }
             var saved = revision.Trip;
             var checkpoint = draft.Id is null ? newBrowserDraft : null;
-            draft = TripPlannerDraft.FromSaved(revision);
+            draft = RebindRoutingGeometry(TripPlannerDraft.FromSaved(revision));
             availableModeCodes = null;
             ResetBrowserDraftTracking();
             undoHistory.Clear();

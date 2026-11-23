@@ -59,6 +59,9 @@
 
 .route-line { stroke: #265873; stroke-width: 5; }
 .route-halo { stroke: white; stroke-width: 9; }
+.route-line.provider-route { stroke: #a04186; stroke-width: 6; stroke-dasharray: none; }
+.address-preview-marker circle { fill: #fffdf5; stroke: #a04186; stroke-width: 3; stroke-dasharray: 3 2; }
+.address-preview-marker path { fill: none; stroke: #a04186; stroke-width: 2; }
 .trip-marker { cursor: pointer; }
 
 .marker-body { fill: transparent; }

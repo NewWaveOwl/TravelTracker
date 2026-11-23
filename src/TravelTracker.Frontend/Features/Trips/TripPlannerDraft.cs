@@ -358,6 +358,15 @@ internal sealed class TripPlannerDraft
     }
 
     /**
+     * Resolves an explicitly entered departure using the same zone and ambiguity rules as saving.
+     * @param leg The connection to preview.
+     * @return A chosen departure instant, or null until its time and offset are unambiguous.
+     */
+    internal DateTimeOffset? DepartureFor(Leg leg) =>
+        TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone)
+            ? ResolveLocal(leg.Departure, leg.SavedDeparture, leg.DepartureOffset, zone) : null;
+
+    /**
      * Calculates the time at an intermediate stop between its inbound and outbound connections.
      * @param index The visit's index in the ordered itinerary; note this creates empty legs for pairs not yet read.
      * @return Elapsed time when both boundaries are known and in order.

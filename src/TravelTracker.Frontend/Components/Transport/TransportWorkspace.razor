@@ -142,12 +142,21 @@
                         }
                         </select></label><TransportFieldError Errors="fieldErrors" Field="type" Id="new-point-type-error" />
                         <label class="location-address" for="new-point-address">Street address (optional)<input id="new-point-address" aria-describedby="@Described("address", "new-point-address-error")" @bind="address" /></label><TransportFieldError Errors="fieldErrors" Field="address" Id="new-point-address-error" />
+                        <LocationCoordinates Latitude="@latitudeInput" Longitude="@longitudeInput" />
+                        <button type="button" class="secondary" @onclick="() => pickingPoint = true">Choose location on map</button>
+                        @if (pickingPoint)
+                        {
+                            <LocationPicker Name="@pointName" Address="@address" Latitude="@latitudeInput" Longitude="@longitudeInput" PlaceType="@newType"
+                                            Embedded="true" AddressChanged="value => address = value" UseLocation="UsePointLocation" Cancel="() => pickingPoint = false" />
+                        }
+                        <details class="location-coordinate-details"><summary>Advanced map position (optional)</summary>
                         <div class="location-coordinates">
-                            <div><label for="new-point-lat">Latitude *<input id="new-point-lat" aria-describedby="@Described("lat", "new-point-lat-error")" @bind="latitudeInput" inputmode="decimal" required /></label><TransportFieldError Errors="fieldErrors" Field="lat" Id="new-point-lat-error" /></div>
-                            <div><label for="new-point-lon">Longitude *<input id="new-point-lon" aria-describedby="@Described("lon", "new-point-lon-error")" @bind="longitudeInput" inputmode="decimal" required /></label><TransportFieldError Errors="fieldErrors" Field="lon" Id="new-point-lon-error" /></div>
+                            <div><label for="new-point-lat">Latitude<input id="new-point-lat" aria-describedby="@Described("lat", "new-point-lat-error")" @bind="latitudeInput" inputmode="decimal" /></label><TransportFieldError Errors="fieldErrors" Field="lat" Id="new-point-lat-error" /></div>
+                            <div><label for="new-point-lon">Longitude<input id="new-point-lon" aria-describedby="@Described("lon", "new-point-lon-error")" @bind="longitudeInput" inputmode="decimal" /></label><TransportFieldError Errors="fieldErrors" Field="lon" Id="new-point-lon-error" /></div>
                         </div>
+                        </details>
                         <label for="new-point-source">Source public ID (optional)<input id="new-point-source" aria-describedby="@Described("sourceId", "new-point-source-error")" @bind="sourceId" /></label><TransportFieldError Errors="fieldErrors" Field="sourceId" Id="new-point-source-error" />
-                        <small>Saving creates a catalogue location for the selected endpoint before it can be added to your draft.</small><button type="submit" class="secondary">Save @(choosingDeparture ? "departure" : "destination") location</button>
+                        <small>Saving creates a catalogue location for the selected endpoint before it can be added to your draft.</small><button type="submit" class="secondary" disabled="@pickingPoint">Save @(choosingDeparture ? "departure" : "destination") location</button>
                     </fieldset></form></details>
                 }
                 else

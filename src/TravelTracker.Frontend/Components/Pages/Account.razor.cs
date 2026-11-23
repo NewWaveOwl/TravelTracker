@@ -36,6 +36,7 @@ public partial class Account : IDisposable
     CancellationTokenSource? request;
     ITimer? expiryTimer;
     string? sessionMessage, loadFailure, saveError, statusMessage;
+    string? signInEmail;
     string loadFailureTitle = "Unable to load your profile";
     FeedbackKind loadFailureKind = FeedbackKind.Unexpected;
     bool loaded, loadingProfile, signedIn, editing, busy, writeDenied, disposed, noAccount;
@@ -86,6 +87,7 @@ public partial class Account : IDisposable
         expiryTimer = null;
         var previouslySignedIn = signedIn;
         signedIn = AccessTokenClaims.IsSignedIn(user, Sessions, Clock.GetUtcNow());
+        signInEmail = signedIn ? user.FindFirstValue("email") ?? user.FindFirstValue(ClaimTypes.Email) : null;
         grantedScopes = AccessTokenClaims.GrantedScopes(user);
         request?.Cancel();
         profile = null;

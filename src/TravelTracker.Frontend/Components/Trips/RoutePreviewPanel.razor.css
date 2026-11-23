@@ -1,0 +1,10 @@
+.route-previews { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid #c9d2c2; }
+.route-previews h3 { font-size: 1.1rem; margin: 0 0 .4rem; }
+.route-previews p { font-size: .9rem; line-height: 1.4; }
+.route-options { padding: 0; list-style: none; display: grid; gap: .5rem; max-height: 18rem; overflow: auto; }
+.route-options button { display: grid; width: 100%; gap: .25rem; text-align: left; }
+.route-options button[aria-pressed=true] { outline: 3px solid #286048; outline-offset: -3px; }
+.route-options span { font-size: .85rem; overflow-wrap: anywhere; }
+.route-leg-details { padding: .5rem; font-size: .85rem; }
+.route-leg-details li { margin: .5rem 0; }
+.route-leg-details span, .route-leg-details small { display: block; }

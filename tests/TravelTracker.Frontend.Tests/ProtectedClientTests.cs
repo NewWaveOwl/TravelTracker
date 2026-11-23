@@ -97,6 +97,31 @@ public sealed class ProtectedClientTests
         var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(StubHandler.Status(401)).GetJsonAsync<object>("Transport", TransportPath));
 
         Assert.Equal((FailureKind.Permission, 401), (error.Kind, error.Status));
+        Assert.False(authentication.Sessions.IsActive(authentication.User));
+    }
+
+    [Fact]
+    public async Task OptionalRoutingRejectionKeepsTheValidTravelTrackerSession()
+    {
+        authentication.SignIn("valid-traveltracker-token", clock.GetUtcNow().AddMinutes(5));
+        var handler = new StubHandler((request, _) => Task.FromResult(
+            request.RequestUri!.AbsolutePath.StartsWith("/v1/")
+                ? new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized)
+                : new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("{}") }));
+        var client = new ProtectedClient(authentication, new(new Dictionary<string, string>
+        {
+            ["Routing"] = "https://routing.example",
+            ["Transport"] = "http://localhost:5105",
+        }), new(new HttpClient(handler), NullLogger<ServiceClient>.Instance), clock,
+            NullLogger<ProtectedClient>.Instance, authentication.Sessions);
+
+        var error = await Assert.ThrowsAsync<ApiError>(() => client.GetJsonAsync<object>("Routing", "/v1/places/search?q=test"));
+
+        Assert.Equal((FailureKind.Unavailable, 401), (error.Kind, error.Status));
+        Assert.Contains("TravelTracker project settings", error.Message);
+        Assert.True(authentication.Sessions.IsActive(authentication.User));
+        Assert.Equal("valid-traveltracker-token", AccessTokenClaims.ActiveToken(authentication.User, clock.GetUtcNow()));
+        Assert.NotNull(await client.GetJsonAsync<object>("Transport", TransportPath));
     }
 
     [Fact]

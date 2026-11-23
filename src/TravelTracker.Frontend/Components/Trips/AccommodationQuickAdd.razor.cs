@@ -26,10 +26,11 @@ public partial class AccommodationQuickAdd : IDisposable
     IReadOnlyDictionary<string, string[]> errors = new Dictionary<string, string[]>();
     string? failure;
     bool saving;
+    bool pickingLocation;
 
     async Task SaveAsync()
     {
-        if (saving) return;
+        if (saving || pickingLocation) return;
         failure = null;
         errors = draft.Validate();
         if (errors.Count != 0) return;

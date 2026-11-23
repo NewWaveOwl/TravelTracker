@@ -1,4 +1,5 @@
 using System.Net;
+using System.Buffers.Binary;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -98,6 +99,74 @@ public sealed class ProfilePictureClientTests
         var handler = StubHandler.Status(204);
         await Client(handler).ReplacePictureAsync(new byte[UsersClient.MaxPictureUploadBytes], "image/png");
         Assert.Equal(UsersClient.MaxPictureUploadBytes, handler.LastRequest!.Content!.Headers.ContentLength);
+    }
+
+    [Theory]
+    [InlineData("image/png", 513, 1)]
+    [InlineData("image/png", 1, 513)]
+    [InlineData("image/png", int.MaxValue, 1)]
+    [InlineData("image/jpeg", 513, 1)]
+    [InlineData("image/jpeg", 1, 513)]
+    public async Task KnownOversizedDimensionsRejectBeforeSendingEvenWhenFileBytesAreSmall(string type, int width, int height)
+    {
+        var handler = StubHandler.Status(204);
+        var bytes = Header(type, width, height);
+
+        var failure = await Assert.ThrowsAsync<ApiError>(() => Client(handler).ReplacePictureAsync(bytes, type));
+
+        Assert.Equal((FailureKind.Validation, 413), (failure.Kind, failure.Status));
+        Assert.Contains("512 pixels", failure.Message);
+        Assert.Null(handler.LastRequest);
+    }
+
+    [Theory]
+    [InlineData("image/png")]
+    [InlineData("image/jpeg")]
+    public async Task MaximumHeaderDimensionsStillReachAuthoritativeApiUnchanged(string type)
+    {
+        var bytes = Header(type, 512, 512);
+        var handler = new StubHandler(async (request, token) =>
+        {
+            Assert.Equal(bytes, await request.Content!.ReadAsByteArrayAsync(token));
+            return new(HttpStatusCode.NoContent);
+        });
+
+        await Client(handler).ReplacePictureAsync(bytes, type);
+
+        Assert.NotNull(handler.LastRequest);
+    }
+
+    [Fact]
+    public async Task TruncatedJpegSegmentRemainsAnApiValidationDecisionInsteadOfCrashingPreflight()
+    {
+        var handler = StubHandler.Status(400);
+        var failure = await Assert.ThrowsAsync<ApiError>(() => Client(handler).ReplacePictureAsync([255, 216, 255, 225, 255, 255], "image/jpeg"));
+        Assert.Equal(400, failure.Status);
+        Assert.NotNull(handler.LastRequest);
+    }
+
+    /**
+     * Builds synthetic header metadata; complete image decoding deliberately belongs to the stubbed API.
+     * @param type PNG or JPEG header layout.
+     * @param width Header width.
+     * @param height Header height.
+     * @return Bytes sufficient for dimension preflight, without claiming a decodable image.
+     */
+    static byte[] Header(string type, int width, int height)
+    {
+        if (type == "image/png")
+        {
+            var bytes = Png.ToArray();
+            BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(16), (uint)width);
+            BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(20), (uint)height);
+            return bytes;
+        }
+        // APP metadata contains a false frame marker; only the following progressive frame supplies dimensions.
+        byte[] jpeg = [255, 216, 255, 225, 0, 8, 255, 192, 255, 255, 255, 255,
+            255, 194, 0, 11, 8, 0, 0, 0, 0, 1, 1, 17, 0, 255, 217];
+        BinaryPrimitives.WriteUInt16BigEndian(jpeg.AsSpan(17), (ushort)height);
+        BinaryPrimitives.WriteUInt16BigEndian(jpeg.AsSpan(19), (ushort)width);
+        return jpeg;
     }
 
     [Theory]

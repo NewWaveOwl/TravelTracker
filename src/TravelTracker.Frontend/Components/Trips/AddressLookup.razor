@@ -1,0 +1,243 @@
+@using TravelTracker.Frontend.Api.Routing
+@implements IDisposable
+
+@if (!Embedded)
+{
+    <form class="address-search" aria-label="Street address lookup" @onsubmit="SearchAsync" @onsubmit:preventDefault
+          @onkeydown:stopPropagation="@(loading || candidates.Count > 0)">@AddressFields</form>
+}
+else
+{
+    <div class="address-search" role="group" aria-label="Street address and map suggestion"
+         @onkeydown:stopPropagation="@(loading || candidates.Count > 0)">@AddressFields</div>
+}
+
+@code {
+    RenderFragment AddressFields => @<text>
+    <label class="location-address" for="@inputId">Street address (optional)</label>
+    <div class="address-input-box" aria-busy="@(loading ? "true" : "false")">
+        @if (!Embedded)
+        {
+        <input @ref="inputControl" id="@inputId" type="text" value="@text" @oninput="EditAsync" @onkeydown="InputKeyAsync" maxlength="200" autocomplete="off"
+               placeholder="Enter an address, then Search" aria-describedby="@($"{inputId}-status {inputId}-credit")" />
+        }
+        else
+        {
+            <textarea @ref="inputControl" id="@inputId" value="@text" @oninput="EditAsync" @onkeydown="InputKeyAsync" maxlength="200" rows="2"
+                      placeholder="Enter an address or choose the map position" aria-describedby="@($"{inputId}-status {inputId}-credit")"></textarea>
+        }
+        @if (loading)
+        {
+            <span class="address-spinner" aria-hidden="true"></span>
+        }
+    </div>
+    <div class="address-actions">
+        @if (!Embedded)
+        {
+            <button type="submit" class="secondary" disabled="@(loading || text.Trim().Length < 3)">Search address</button>
+        }
+        else
+        {
+            <button type="button" class="secondary" disabled="@(loading || text.Trim().Length < 3)" @onclick="SearchAsync">Search address</button>
+        }
+        @if (loading)
+        {
+            <button type="button" class="secondary" @onclick="CancelLookup">Cancel lookup</button>
+        }
+    </div>
+    <p id="@($"{inputId}-status")" role="status" aria-live="polite">@message</p>
+    @if (candidates.Count > 0)
+    {
+        <ul class="address-candidates" aria-label="Matching addresses">
+            @for (var index = 0; index < candidates.Count; index++)
+            {
+                var candidate = candidates[index];
+                var candidateIndex = index;
+                <li><button @ref="candidateControls[candidateIndex]" type="button" class="secondary" @onclick="() => SelectAsync(candidate)"
+                            @onkeydown="keyboard => CandidateKeyAsync(keyboard, candidateIndex)"><span>@candidate.Label</span><small class="candidate-coordinates">@FormattableString.Invariant($"Latitude {candidate.Lat:0.######}, Longitude {candidate.Lon:0.######}")</small></button></li>
+            }
+        </ul>
+    }
+    <small id="@($"{inputId}-credit")">Address lookup: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a> · Nominatim. Submit searches explicitly. Keep personal or confidential information out of requests.</small>
+    </text>;
+
+    [Parameter] public RoutingClient? Client { get; set; }
+    /** Uses textarea and a Search button inside a parent form, avoiding nested forms and implicit Enter submissions. */
+    [Parameter] public bool Embedded { get; set; }
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public EventCallback<AddressCandidate> CandidateSelected { get; set; }
+    [Parameter] public decimal? Latitude { get; set; }
+    [Parameter] public decimal? Longitude { get; set; }
+    [Parameter] public object? Context { get; set; }
+    [Parameter] public int ReverseVersion { get; set; }
+
+    readonly string inputId = $"address-{Guid.NewGuid():N}";
+    CancellationTokenSource? pending;
+    ElementReference inputControl;
+    ElementReference[] candidateControls = [];
+    IReadOnlyList<AddressCandidate> candidates = [];
+    object? previousContext;
+    (decimal? Lat, decimal? Lon) previousPosition;
+    string previousValue = "";
+    string text = "";
+    string? message;
+    int previousReverseVersion;
+    long version;
+    bool loading;
+    bool disposed;
+
+    /** Cancels obsolete results and suggests an address for a selected pin whose address is still unknown. */
+    protected override async Task OnParametersSetAsync()
+    {
+        var positionChanged = !ReferenceEquals(Context, previousContext) || previousPosition != (Latitude, Longitude);
+        if (positionChanged)
+        {
+            CancelPending();
+            message = null;
+            previousContext = Context;
+            previousPosition = (Latitude, Longitude);
+        }
+        if (Value != previousValue)
+        {
+            CancelPending();
+            text = previousValue = Value;
+        }
+        var reverseRequested = ReverseVersion != previousReverseVersion && ReverseVersion > 0;
+        previousReverseVersion = ReverseVersion;
+        if ((reverseRequested || positionChanged && string.IsNullOrWhiteSpace(Value)) && Latitude is not null && Longitude is not null)
+        {
+            await LookupAsync(reverse: true);
+        }
+    }
+
+    async Task EditAsync(ChangeEventArgs change)
+    {
+        CancelPending();
+        text = previousValue = change.Value?.ToString() ?? "";
+        message = null;
+        await ValueChanged.InvokeAsync(text);
+    }
+
+    Task SearchAsync() => loading ? Task.CompletedTask : LookupAsync(reverse: false);
+
+    async Task InputKeyAsync(KeyboardEventArgs keyboard)
+    {
+        if (keyboard.Key == "ArrowDown" && candidates.Count > 0)
+            await candidateControls[0].FocusAsync();
+        else if (keyboard.Key == "Escape" && (loading || candidates.Count > 0))
+        {
+            CancelLookup();
+            await inputControl.FocusAsync();
+        }
+    }
+
+    async Task CandidateKeyAsync(KeyboardEventArgs keyboard, int index)
+    {
+        if (candidates.Count == 0) return;
+        if (keyboard.Key == "Escape")
+        {
+            CancelLookup();
+            await inputControl.FocusAsync();
+            return;
+        }
+        var next = keyboard.Key switch
+        {
+            "ArrowDown" => (index + 1) % candidates.Count,
+            "ArrowUp" => (index + candidates.Count - 1) % candidates.Count,
+            "Home" => 0,
+            "End" => candidates.Count - 1,
+            _ => -1,
+        };
+        if (next >= 0) await candidateControls[next].FocusAsync();
+    }
+
+    async Task LookupAsync(bool reverse)
+    {
+        CancelPending();
+        if (Client is null)
+        {
+            message = "Address lookup is unavailable. Keep entering the address manually.";
+            return;
+        }
+        pending = new();
+        var token = pending.Token;
+        var requestVersion = version;
+        loading = true;
+        message = "Waiting for address lookup…";
+        try
+        {
+            var result = reverse
+                ? await Client.ReverseAsync(Latitude!.Value, Longitude!.Value, token)
+                : await Client.SearchAsync(text, token);
+            if (disposed || token.IsCancellationRequested || requestVersion != version) return;
+            if (result.Candidates.Count == 0)
+            {
+                message = "No matching address. Your map position and manual address are still available.";
+                return;
+            }
+            if (reverse)
+            {
+                text = previousValue = result.Candidates[0].Label;
+                await ValueChanged.InvokeAsync(text);
+                message = "Suggested address. Review or edit it, then apply your marker details.";
+            }
+            else
+            {
+                candidates = result.Candidates;
+                candidateControls = new ElementReference[candidates.Count];
+                message = $"{candidates.Count} matching addresses. Choose an address to preview its map position. Apply marker details to confirm.";
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (ApiError error)
+        {
+            if (!disposed && !token.IsCancellationRequested && requestVersion == version)
+                message = error.Code == "authentication_unavailable" ? error.Message
+                    : error.Status == 401 && error.Kind == FailureKind.Unavailable ? error.Message
+                    : error.Status == 401 ? "Sign in to look up addresses. Manual entry remains available."
+                    : error.Status == 429 ? "Address lookup is busy. Try again shortly, or enter the address manually."
+                    : error.Kind == FailureKind.Validation ? error.Message
+                    : error.Kind == FailureKind.Network ? "The routing server or dev tunnel could not be reached, or did not respond in time. Check its address and connection, then try Search again. Your map position and manual address are still available."
+                    : error.Status == 503 ? "Address lookup is unavailable. Check the shared routing server, its address provider and TravelTracker settings. Manual entry remains available."
+                    : "Address lookup is unavailable. Your map position and manual address are still available.";
+        }
+        finally
+        {
+            if (!disposed && requestVersion == version) loading = false;
+        }
+    }
+
+    async Task SelectAsync(AddressCandidate candidate)
+    {
+        CancelPending();
+        text = previousValue = candidate.Label;
+        await ValueChanged.InvokeAsync(text);
+        await CandidateSelected.InvokeAsync(candidate);
+        message = "Address selected for preview. Apply marker details to confirm.";
+    }
+
+    void CancelLookup()
+    {
+        CancelPending();
+        message = "Address lookup cancelled. You can enter the address manually.";
+    }
+
+    void CancelPending()
+    {
+        version++;
+        pending?.Cancel();
+        pending?.Dispose();
+        pending = null;
+        loading = false;
+        candidates = [];
+        candidateControls = [];
+    }
+
+    /** Cancels queued or running work as soon as the address editor leaves the page. */
+    public void Dispose()
+    {
+        disposed = true;
+        CancelPending();
+    }
+}

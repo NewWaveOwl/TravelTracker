@@ -11,19 +11,30 @@ with `--apply-migrations` and disables example seeding. The legacy
 
 | Database | Port | Committed migrations in order |
 | --- | ---: | --- |
-| `traveltracker_users` | 5101 HTTPS | `20261104170259_InitialUsersBootstrap`, `20261104171950_AdministratorRoleAudit`, `20261105140414_UserProfilePersistence`, `20261105152600_SeparateVerifiedEmail`, `20261105175417_StatusConcurrencyToken` |
+| `traveltracker_users` | 5101 HTTPS | `20261104170259_InitialUsersBootstrap`, `20261104171950_AdministratorRoleAudit`, `20261105140414_UserProfilePersistence`, `20261105152600_SeparateVerifiedEmail`, `20261105175417_StatusConcurrencyToken`, `20261122215928_ProfilePicture` |
 | `traveltracker_attractions` | 5104 | `20261028152611_InitialAttractions` |
 | `traveltracker_transport` | 5105 | `20261104184119_InitialTransport` |
 | `traveltracker_accommodations` | 5106 | `20261105185817_InitialAccommodations` |
 | `traveltracker_settings` | 5107 | `20261106165131_InitialSettings` |
-| `traveltracker_trips` | 5108 | `20261106194443_InitialTrips`, `20261109022113_TripRevision`, `20261109120000_TripRevisionCheck` |
+| `traveltracker_trips` | 5108 | `20261106194443_InitialTrips`, `20261109022113_TripRevision`, `20261109120000_TripRevisionCheck`, `20261123004432_TripStops` |
 
-All six migration chains and model snapshots are present. Whether the six target
-databases exist and match the table is pending a live inventory. The bootstrap
-SQL does not provision runtime grants. The launcher supplies the same configured
+All six migration chains and model snapshots are present. A read-only database
+catalog query on 2026-11-23 confirmed the six service database names exist; their
+complete applied migration histories still need a per-database inventory. The
+bootstrap SQL does not provision runtime grants. The launcher supplies the same configured
 database role to every service, so its normal path can verify a limited stack
 role, but cannot demonstrate one-role-per-service isolation. Hosts already
 accept separate `ConnectionStrings:<Service>` values when run independently.
+
+The source inventory above includes the profile-picture and ordered-stop
+migrations as of 2026-11-23. During that day's error investigation, the project's
+PostgreSQL logs reported `relation "UserPictures" does not exist` and
+`relation "TripStops" does not exist`. Those failures establish missing tables,
+not a verified migration history or completed repair. Follow the inventory steps
+below and the [recovery commands](milestone-4/startup-error-recovery.md); do not
+recreate the service databases. The Supabase SQL Editor/MCP connection to the
+default `postgres` database is not an inventory of the six separate service
+databases.
 
 ## Inventory and migration
 

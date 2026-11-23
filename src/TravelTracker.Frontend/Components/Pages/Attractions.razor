@@ -6,7 +6,7 @@
 <div class="attractions-page">
 @if (pickingLocation && canWrite)
 {
-    <LocationPicker Name="@draft.Name" Address="@draft.Address" Latitude="@draft.Lat" Longitude="@draft.Lon" UseLocation="UseLocation" Cancel="CloseLocation" />
+    <LocationPicker Name="@draft.Name" Address="@draft.Address" Latitude="@draft.Lat" Longitude="@draft.Lon" AddressChanged="value => draft.Address = value" UseLocation="UseLocation" Cancel="CloseLocation" />
 }
 else
 {
@@ -84,11 +84,14 @@ else
                             <div><AttractionField Id="attraction-name" Label="Name *" @bind-Value="draft.Name" Error="@FieldError("name")" /></div>
                             <div class="location-address"><AttractionField Id="attraction-address" Label="Street address (optional)" @bind-Value="draft.Address" Error="@FieldError("address")" /></div>
                         </div>
+                        <LocationCoordinates Latitude="@draft.Lat" Longitude="@draft.Lon" />
+                        <div class="attraction-map-action"><button type="button" class="secondary" @onclick="OpenLocation" @ref="locationEntry">Choose address or map location</button><small>Search for an address or pick the exact map position.</small></div>
+                        <details class="location-coordinate-details"><summary>Advanced map position (optional)</summary>
                         <div class="attraction-field-row location-coordinates">
-                            <div><AttractionField Id="attraction-lat" Label="Latitude * (-90 to 90)" @bind-Value="draft.Lat" InputMode="decimal" Error="@FieldError("lat")" /></div>
-                            <div><AttractionField Id="attraction-lon" Label="Longitude * (-180 to 180)" @bind-Value="draft.Lon" InputMode="decimal" Error="@FieldError("lon")" /></div>
+                            <div><AttractionField Id="attraction-lat" Label="Latitude" @bind-Value="draft.Lat" InputMode="decimal" Error="@FieldError("lat")" /></div>
+                            <div><AttractionField Id="attraction-lon" Label="Longitude" @bind-Value="draft.Lon" InputMode="decimal" Error="@FieldError("lon")" /></div>
                         </div>
-                        <div class="attraction-map-action"><button type="button" class="secondary" @onclick="OpenLocation" @ref="locationEntry">Choose on map</button><small>Or enter coordinates above.</small></div>
+                        </details>
                         <div class="attraction-field-row visit-fields">
                             <div><AttractionField Id="attraction-estimatedVisitMinutes" Label="Visit duration * (min)" @bind-Value="draft.EstimatedVisitMinutes" InputMode="numeric" Error="@FieldError("estimatedVisitMinutes")" /></div>
                             <div><AttractionField Id="attraction-approximationMinutes" Label="Visit duration ± (min)" @bind-Value="draft.ApproximationMinutes" InputMode="numeric" Error="@FieldError("approximationMinutes")" /></div>

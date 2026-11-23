@@ -84,8 +84,11 @@ session cookie rather than browser local/session storage. Session revocation and
 expiry continue to invalidate open application circuits. No automatic session
 renewal is provided; sign in again after expiry or restarting the frontend.
 
-In **Your profile**, the contact email is saved by the Users API with the
-username and address. **Sign-in credentials** uses Supabase. Each request checks
+In **Your profile**, the displayed email is the current verified Supabase sign-in
+email. There is one email-change flow under **Sign-in credentials**, linked from
+the profile editor. Username and address remain editable through the Users API;
+its legacy contact-email field remains compatible but is not edited by the
+Supabase profile UI. Each credential request checks
 live account standing, reauthenticates with the current sign-in email and
 password, and checks that the new session belongs to the same provider subject.
 Supabase applies its password policy and confirms login-email changes through
@@ -93,6 +96,11 @@ its email links. A successful request ends the current TravelTracker session,
 including other tabs sharing that session. Separate device sessions follow
 provider policy, and issued access tokens remain subject to their expiry.
 Credential changes never write to the Users profile.
+
+While the profile editor is open or saving, both credential forms are disabled.
+Save or cancel the profile edits before requesting an email or password change.
+A rejected profile save keeps the typed username/address and the credential
+forms disabled, so a credential redirect cannot discard the profile draft.
 
 For frontend-only development, configure `Authentication:Provider=Supabase`,
 `Supabase:Url` and `Supabase:PublishableKey` through .NET user-secrets or the matching

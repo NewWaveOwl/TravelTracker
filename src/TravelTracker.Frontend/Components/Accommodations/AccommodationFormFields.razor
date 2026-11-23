@@ -10,20 +10,33 @@
 {
     <small class="field-error" id="@(Prefix)-address-error">@addressError</small>
 }
+<LocationCoordinates Latitude="@Draft.Lat" Longitude="@Draft.Lon" />
+@if (Message("lat") is not null || Message("lon") is not null)
+{
+    <small class="field-error">Choose a location on the map, then use that location.</small>
+}
+<button type="button" class="secondary" @onclick="() => TogglePickerAsync(true)">Choose location on map</button>
+@if (picking)
+{
+    <LocationPicker Name="@Draft.Name" Address="@Draft.Address" Latitude="@Draft.Lat" Longitude="@Draft.Lon" PlaceType="accommodation"
+                    Embedded="true" AddressChanged="value => Draft.Address = value" UseLocation="UseLocationAsync" Cancel="() => TogglePickerAsync(false)" />
+}
+<details class="location-coordinate-details"><summary>Advanced map position (optional)</summary>
 <div class="accommodation-coordinate-grid location-coordinates">
-    <div><label for="@(Prefix)-lat">Latitude *<input id="@(Prefix)-lat" @bind="Draft.Lat" inputmode="decimal" required aria-invalid="@(Message("lat") is null ? null : "true")" aria-describedby="@(Message("lat") is null ? null : Prefix + "-lat-error")" /></label>
+    <div><label for="@(Prefix)-lat">Latitude<input id="@(Prefix)-lat" @bind="Draft.Lat" inputmode="decimal" aria-invalid="@(Message("lat") is null ? null : "true")" aria-describedby="@(Message("lat") is null ? null : Prefix + "-lat-error")" /></label>
     @if (Message("lat") is { } latError)
     {
         <small class="field-error" id="@(Prefix)-lat-error">@latError</small>
     }
     </div>
-    <div><label for="@(Prefix)-lon">Longitude *<input id="@(Prefix)-lon" @bind="Draft.Lon" inputmode="decimal" required aria-invalid="@(Message("lon") is null ? null : "true")" aria-describedby="@(Message("lon") is null ? null : Prefix + "-lon-error")" /></label>
+    <div><label for="@(Prefix)-lon">Longitude<input id="@(Prefix)-lon" @bind="Draft.Lon" inputmode="decimal" aria-invalid="@(Message("lon") is null ? null : "true")" aria-describedby="@(Message("lon") is null ? null : Prefix + "-lon-error")" /></label>
     @if (Message("lon") is { } lonError)
     {
         <small class="field-error" id="@(Prefix)-lon-error">@lonError</small>
     }
     </div>
 </div>
+</details>
 @if (CanShare)
 {
     <label for="@(Prefix)-visibility">Visibility<select id="@(Prefix)-visibility" @bind="Draft.Visibility" aria-invalid="@(Message("visibility") is null ? null : "true")" aria-describedby="@(Message("visibility") is null ? null : Prefix + "-visibility-error")"><option value="@AccommodationDraft.PrivateVisibility">Private</option><option value="@AccommodationDraft.SharedVisibility">Shared catalogue</option></select></label>
@@ -36,10 +49,24 @@ else
 {
     <p class="accommodation-private-note">Private place · visible only to you.</p>
 }
-<small>Fields marked * are required. Enter coordinates for the place you want to stay.</small>
+<small>Fields marked * are required. Choose the place on the map; numeric entry is optional.</small>
 
 @code {
     ElementReference firstControl;
+    bool picking;
+    [Parameter] public EventCallback<bool> PickingChanged { get; set; }
+
+    async Task TogglePickerAsync(bool show)
+    {
+        picking = show;
+        await PickingChanged.InvokeAsync(show);
+    }
+
+    async Task UseLocationAsync((string Lat, string Lon) location)
+    {
+        (Draft.Lat, Draft.Lon) = location;
+        await TogglePickerAsync(false);
+    }
 
     /** The values being edited. */
     [Parameter, EditorRequired] public AccommodationDraft Draft { get; set; } = default!;

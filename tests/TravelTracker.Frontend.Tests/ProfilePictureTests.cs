@@ -1,4 +1,5 @@
 using System.Net;
+using System.Buffers.Binary;
 using System.Net.Http.Headers;
 using Bunit;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -176,6 +177,30 @@ public sealed class ProfilePictureTests : BunitContext
         Assert.Equal(0, writes);
         Assert.Equal(oldSource, panel.Find("img").GetAttribute("src"));
         Assert.NotEmpty(panel.Find("[role=alert]").TextContent);
+    }
+
+    [Fact]
+    public async Task OversizedPixelPhotoExplainsLocalResizeWithoutUploadingOrDiscardingConfirmedPicture()
+    {
+        var writes = 0;
+        Configure((request, _) =>
+        {
+            if (request.Method == HttpMethod.Put) writes++;
+            return Task.FromResult(Picture(OldPicture));
+        });
+        var panel = RenderPicture();
+        var prior = panel.Find("img").GetAttribute("src");
+        var oversized = NewPicture.ToArray();
+        BinaryPrimitives.WriteUInt32BigEndian(oversized.AsSpan(16), 1024);
+
+        await SelectAsync(panel, new BrowserFile(oversized));
+
+        Assert.Equal(0, writes);
+        Assert.Equal(prior, panel.Find("img").GetAttribute("src"));
+        Assert.Contains("512 pixels", panel.Find("[role=alert]").TextContent);
+        Assert.Contains("Resize the photo", panel.Find("[role=alert]").TextContent);
+        Assert.False(panel.Find("input[type=file]").HasAttribute("disabled"));
+        Assert.DoesNotContain("Photo saved.", panel.Markup);
     }
 
     [Fact]

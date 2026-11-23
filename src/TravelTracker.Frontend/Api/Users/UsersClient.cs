@@ -27,7 +27,7 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
 
     /**
      * Replaces only the current active owner's photo using raw PNG/JPEG bytes; no multipart filename is sent.
-     * @param picture Bounded input bytes. The server verifies pixels, dimensions and static format.
+     * @param picture Bounded input bytes. Known oversized header dimensions are rejected early; the server verifies decoded pixels and static format.
      * @param contentType The file's PNG or JPEG media type.
      * @param expectedSessionId Optional rendered-owner session guard.
      * @param cancellationToken Cancels a closed or superseded view.
@@ -39,6 +39,8 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
             throw new ApiError(FailureKind.Validation, "Choose a photo no larger than 1 MiB (1,048,576 bytes).", 413);
         if (!string.Equals(contentType, "image/png", StringComparison.OrdinalIgnoreCase) && !string.Equals(contentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
             throw new ApiError(FailureKind.Validation, "Choose one static PNG or JPEG photo.", 415);
+        if (PictureDimensions.ExceedsLimit(picture, contentType, MaxPictureSide))
+            throw new ApiError(FailureKind.Validation, "Choose a photo with width and height no greater than 512 pixels. Resize the photo before selecting it again.", 413);
         try
         {
             await client.SendImageAsync("Users", HttpMethod.Put, PicturePath, picture, contentType.ToLowerInvariant(), MaxPictureReadBytes, expectedSessionId, cancellationToken);

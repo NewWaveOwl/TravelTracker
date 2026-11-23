@@ -26,6 +26,7 @@ public sealed class FakeSupabaseAuth : HttpMessageHandler
     public bool ConfirmationRejected { get; set; }
     public bool CredentialChangeRejected { get; set; }
     public string CurrentSubject { get; set; } = Subject;
+    public string? CurrentEmail { get; set; } = "traveller@example.test";
     public string? CredentialField { get; private set; }
     public string Scope { get; set; } = "users.read users.write catalogue.read trips.read trips.write";
     public int PasswordRequests { get; private set; }
@@ -64,7 +65,7 @@ public sealed class FakeSupabaseAuth : HttpMessageHandler
                     CredentialField = Assert.Single(change).Key;
                     return Json(new { id = CurrentSubject }, CredentialChangeRejected ? HttpStatusCode.BadRequest : HttpStatusCode.OK);
                 }
-                return Json(new { id = CurrentSubject, email = "traveller@example.test", email_confirmed_at = Verified ? "2026-01-01T00:00:00Z" : null, is_anonymous = false });
+                return Json(new { id = CurrentSubject, email = CurrentEmail, email_confirmed_at = Verified ? "2026-01-01T00:00:00Z" : null, is_anonymous = false });
             case "/auth/v1/signup":
                 SignupRequests++;
                 return Json(new { user = new { id = Subject }, session = (object?)null });

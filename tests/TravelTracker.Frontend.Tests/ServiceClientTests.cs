@@ -1,4 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Tests.Support;
 
@@ -49,6 +52,84 @@ public sealed class ServiceClientTests
         var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(handler).GetJsonAsync<object>("http://service/health"));
 
         Assert.Equal(FailureKind.Network, error.Kind);
+    }
+
+    [Theory]
+    [InlineData("/v1/places/search?q=private-address")]
+    [InlineData("/v1/places/reverse?lat=45&lon=-73")]
+    [InlineData("/v1/routes/capabilities")]
+    [InlineData("/v1/routes/plan")]
+    public async Task KnownRoutingSetupFailureUsesFixedGuidanceWithoutExposingOrLoggingBackendMessage(string path)
+    {
+        var (client, logger) = RecordedClientFor(new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        { Content = JsonContent.Create(new { status = "authentication_unavailable", message = "private-diagnostic-sentinel" }) })));
+
+        var failure = await Assert.ThrowsAsync<ApiError>(() => client.GetJsonAsync<object>("https://routing.example" + path));
+
+        Assert.Equal((FailureKind.Unavailable, 503, "authentication_unavailable"), (failure.Kind, failure.Status, failure.Code));
+        Assert.Contains("TravelTracker Supabase URL and key", failure.Message);
+        Assert.DoesNotContain("private-diagnostic-sentinel", failure.Message);
+        Assert.All(logger.Entries, entry =>
+        {
+            Assert.DoesNotContain("private-diagnostic-sentinel", entry.Message);
+            Assert.DoesNotContain("private-address", entry.Message);
+        });
+    }
+
+    [Fact]
+    public async Task RoutingSetupCodeDoesNotChangeCoreServiceFailures()
+    {
+        var client = ClientFor(new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        { Content = JsonContent.Create(new { status = "authentication_unavailable" }) })));
+
+        var failure = await Assert.ThrowsAsync<ApiError>(() => client.GetJsonAsync<object>("https://users.example/api/v1/users/me"));
+
+        Assert.Null(failure.Code);
+        Assert.DoesNotContain("Supabase", failure.Message);
+        Assert.Equal(503, failure.Status);
+    }
+
+    [Fact]
+    public async Task OversizedStreamedRoutingFailureIsBoundedAndKeepsThe503Status()
+    {
+        using var stream = new FailureStream(Encoding.UTF8.GetBytes("{\"status\":\"authentication_unavailable\",\"message\":\"" + new string('x', 5000) + "\"}"));
+        var content = new StreamContent(stream);
+        content.Headers.ContentType = new("application/json");
+        var client = ClientFor(new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = content })));
+
+        var failure = await Assert.ThrowsAsync<ApiError>(() => client.GetJsonAsync<object>("https://routing.example/v1/routes/capabilities"));
+
+        Assert.Equal(503, failure.Status);
+        Assert.Null(failure.Code);
+        Assert.Equal(4097, stream.BytesRead);
+    }
+
+    [Theory]
+    [InlineData("not-json")]
+    [InlineData("{\"status\":\"other_failure\",\"message\":\"private-diagnostic-sentinel\"}")]
+    public async Task UnknownOrMalformedRoutingFailureKeepsSafeStatusGuidance(string body)
+    {
+        var client = ClientFor(new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        { Content = new StringContent(body, Encoding.UTF8, "application/json") })));
+
+        var failure = await Assert.ThrowsAsync<ApiError>(() => client.GetJsonAsync<object>("https://routing.example/v1/routes/capabilities"));
+
+        Assert.Null(failure.Code);
+        Assert.Equal(503, failure.Status);
+        Assert.DoesNotContain("private-diagnostic-sentinel", failure.Message);
+    }
+
+    /** A non-seekable failure body that records the actual bounded read rather than advertising its length. */
+    sealed class FailureStream(byte[] bytes) : MemoryStream(bytes)
+    {
+        public int BytesRead { get; private set; }
+        public override bool CanSeek => false;
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var count = await base.ReadAsync(buffer, cancellationToken);
+            BytesRead += count;
+            return count;
+        }
     }
 
     [Fact]
