@@ -58,9 +58,51 @@ public sealed class AccountTests : BunitContext
         page.Find(".profile-editor form button[type=submit]").Click();
 
         page.WaitForAssertion(() => Assert.Contains("Your profile has been updated", page.Markup));
+        Assert.All(page.FindAll(".credential-fields"), fields => Assert.False(fields.HasAttribute("disabled")));
         using var patch = JsonDocument.Parse(handler.LastRequestBody!);
         Assert.Equal("updated_name", patch.RootElement.GetProperty("username").GetString());
         Assert.False(patch.RootElement.TryGetProperty("email", out _));
+    }
+
+    [Fact]
+    public void ProfileEditingLocksCredentialFormsBeforeAnyDraftFieldChangesAndCancelUnlocksThem()
+    {
+        Configure(supabase: true);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        Assert.All(page.FindAll(".credential-fields"), fields => Assert.False(fields.HasAttribute("disabled")));
+
+        page.FindAll("button").Single(button => button.TextContent == "Edit profile").Click();
+
+        Assert.Equal(2, page.FindAll(".credential-fields[disabled]").Count);
+        Assert.Contains("Save or cancel your profile edits", page.Find("#credential-edit-hint").TextContent);
+        page.Find("#profile-username").Change("unsaved_name");
+        page.FindAll("button").Single(button => button.TextContent == "Cancel").Click();
+        Assert.All(page.FindAll(".credential-fields"), fields => Assert.False(fields.HasAttribute("disabled")));
+        Assert.DoesNotContain("unsaved_name", page.Markup);
+    }
+
+    [Theory]
+    [InlineData(400)]
+    [InlineData(503)]
+    public void FailedProfileSaveRetainsTheDraftAndKeepsCredentialNavigationUnavailable(int status)
+    {
+        Configure(supabase: true, handler: new StubHandler((request, _) => Task.FromResult(request.Method == HttpMethod.Patch
+            ? new HttpResponseMessage((HttpStatusCode)status)
+            : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile, System.Text.Encoding.UTF8, "application/json") })));
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.FindAll("button").Single(button => button.TextContent == "Edit profile").Click();
+        page.Find("#profile-username").Change("unsaved_name");
+        page.Find("#profile-address").Change("Unsaved address");
+
+        page.Find(".profile-editor form button[type=submit]").Click();
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".profile-error[role=alert]")));
+        Assert.Equal("unsaved_name", page.Find("#profile-username").GetAttribute("value"));
+        Assert.Equal("Unsaved address", page.Find("#profile-address").GetAttribute("value"));
+        Assert.Equal(2, page.FindAll(".credential-fields[disabled]").Count);
+        Assert.DoesNotContain("Your profile has been updated", page.Markup);
     }
 
     [Fact]

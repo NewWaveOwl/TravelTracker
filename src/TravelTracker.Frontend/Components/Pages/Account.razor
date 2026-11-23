@@ -152,10 +152,15 @@ else
         {
             <section class="profile-card" aria-labelledby="profile-credentials">
                 <h2 id="profile-credentials">Sign-in credentials</h2>
+                @if (editing || busy)
+                {
+                    <p id="credential-edit-hint" role="status">Save or cancel your profile edits before changing sign-in details. Your edits stay here while you finish.</p>
+                }
                 <details>
                     <summary>Change sign-in email</summary>
                     <form method="post" action="/auth/change-credential" class="profile-editor">
                         <AntiforgeryToken />
+                        <fieldset class="credential-fields" disabled="@(editing || busy)" aria-describedby="@(editing || busy ? "credential-edit-hint" : null)">
                         <input type="hidden" name="operation" value="email" />
                         <label for="email-change-current">Current sign-in email</label>
                         <input id="email-change-current" type="email" name="loginEmail" value="@signInEmail" readonly="@(signInEmail is not null)" autocomplete="username" maxlength="254" required />
@@ -164,12 +169,14 @@ else
                         <label for="email-change-new">New sign-in email</label>
                         <input id="email-change-new" type="email" name="newEmail" autocomplete="email" maxlength="254" required />
                         <button type="submit">Request email change</button>
+                        </fieldset>
                     </form>
                 </details>
                 <details>
                     <summary>Change password</summary>
                     <form method="post" action="/auth/change-credential" class="profile-editor">
                         <AntiforgeryToken />
+                        <fieldset class="credential-fields" disabled="@(editing || busy)" aria-describedby="@(editing || busy ? "credential-edit-hint" : null)">
                         <input type="hidden" name="operation" value="password" />
                         <label for="password-change-email">Current sign-in email</label>
                         <input id="password-change-email" type="email" name="loginEmail" value="@signInEmail" readonly="@(signInEmail is not null)" autocomplete="username" maxlength="254" required />
@@ -180,6 +187,7 @@ else
                         <label for="password-change-confirm">Confirm new password</label>
                         <input id="password-change-confirm" type="password" name="passwordConfirmation" autocomplete="new-password" minlength="8" maxlength="128" required />
                         <button type="submit">Change password</button>
+                        </fieldset>
                     </form>
                 </details>
             </section>

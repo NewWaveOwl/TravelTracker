@@ -97,6 +97,11 @@ including other tabs sharing that session. Separate device sessions follow
 provider policy, and issued access tokens remain subject to their expiry.
 Credential changes never write to the Users profile.
 
+While the profile editor is open or saving, both credential forms are disabled.
+Save or cancel the profile edits before requesting an email or password change.
+A rejected profile save keeps the typed username/address and the credential
+forms disabled, so a credential redirect cannot discard the profile draft.
+
 For frontend-only development, configure `Authentication:Provider=Supabase`,
 `Supabase:Url` and `Supabase:PublishableKey` through .NET user-secrets or the matching
 environment variables (`Authentication__Provider`, `Supabase__Url`,

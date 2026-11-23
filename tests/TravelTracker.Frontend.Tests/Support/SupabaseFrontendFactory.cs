@@ -8,7 +8,8 @@ using TravelTracker.Frontend.Auth;
 namespace TravelTracker.Frontend.Tests.Support;
 
 /** Hosts the production Supabase forms, token verification and cookie middleware against a fake provider. */
-public sealed class SupabaseFrontendFactory(string? provider = "Supabase", bool validSettings = true) : WebApplicationFactory<Program>
+public sealed class SupabaseFrontendFactory(string? provider = "Supabase", bool validSettings = true,
+    AccountWorkflowBackend? accountBackend = null) : WebApplicationFactory<Program>
 {
     public FakeSupabaseAuth Provider { get; } = new();
 
@@ -24,7 +25,7 @@ public sealed class SupabaseFrontendFactory(string? provider = "Supabase", bool 
         builder.ConfigureServices(services =>
         {
             services.AddHttpClient<SupabaseAuthClient>().ConfigurePrimaryHttpMessageHandler(() => Provider);
-            services.AddHttpClient<ServiceClient>().ConfigurePrimaryHttpMessageHandler(() => new StubHandler((_, _) =>
+            services.AddHttpClient<ServiceClient>().ConfigurePrimaryHttpMessageHandler(() => (HttpMessageHandler?)accountBackend ?? new StubHandler((_, _) =>
                 Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(FrontendFactory.SelfProfileJson) })));
         });
     }

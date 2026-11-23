@@ -19,8 +19,9 @@ which implements the backend for [UI issue #126](https://github.com/NewWaveOwl/T
 The owner chose to keep that backend PR separate from the frontend implementation.
 It has since merged into `milestone_4` at `7b48321`, including the final image
 orientation/sampling fixes through `5953312`, and is now included by the base
-pull. Deployment still requires the Users API and database migration; live
-authenticated picture reads/uploads have not been verified.
+pull. Deployment requires the Users API and database migration. After applying
+the existing migration, the operator reported that picture loading works;
+a live upload/replace journey has not been observed by the agent.
 
 | Operation | Protected Users contract |
 | --- | --- |
@@ -66,6 +67,15 @@ Accepted `/account` and `/account/` responses are non-cacheable and use
 PNG data URI, without a bearer token, filename or persistent storage reference.
 
 ## Verification
+
+The latest follow-up adds an HTTP integration check using the production
+sign-in forms, JWT verification and cookie middleware with simulated Supabase
+and Users responses. A second independent browser session reads the stored
+picture, retains access after the first session signs out, and a different
+account receives no picture. This supplements component/session tests; it does
+not establish a physical-device journey or real provider/database persistence.
+Fresh keyboard and mobile checks remain unverified: the browser tool stopped
+because it could not confidently identify the current Opera URL.
 
 After integrating `milestone_4`, the baseline Release solution build passed
 with zero warnings and errors. All 1,364 application tests passed, including
