@@ -8,7 +8,7 @@
 export function attach(panel, handle, header = handle) {
     let x = 0, y = 0, drag = null, moved = false, lastTap = null, tapTimer = null;
     const body = panel.querySelector?.(".movable-panel-body");
-    const narrow = window.matchMedia?.("(max-width: 700px)");
+    const narrow = window.matchMedia?.("(max-width: 700px), (max-height: 500px) and (pointer: coarse)");
     let collapsed = false;
     const clearTap = () => { clearTimeout(tapTimer); tapTimer = null; lastTap = null; };
     const collapse = value => {
