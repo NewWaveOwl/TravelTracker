@@ -148,7 +148,7 @@ dotnet test TravelTracker.Tests.slnx --configuration Release --filter "Category!
 
 For PostgreSQL tests, set `TRAVELTRACKER_TEST_POSTGRES` to an isolated PostgreSQL instance with `CREATEDB` and use `--filter "Category=PostgreSQL"`.
 
-`dotnet run --file scripts/TestDatabase.cs -- up` starts a disposable PostgreSQL 17 container (podman if installed, otherwise docker; override with `TRAVELTRACKER_CONTAINER_RUNTIME`) and prints the `TRAVELTRACKER_TEST_POSTGRES` value to use. `-- env` prints only the connection string and `-- down` removes the container. CI uses its own service container and does not run this script. See the [journey test guide](docs/milestone-3/critical-journey.md).
+`dotnet run --file scripts/TestDatabase.cs` runs the whole test suite against a disposable PostgreSQL container that exists only while it runs (it starts `scripts/StartLocalDb.cs` as a child, so podman or docker is chosen the same way). Pass `dotnet test` arguments after `--`, for example `-- TravelTracker.Tests.slnx --filter "Category=PostgreSQL"`. CI uses its own service container and does not run this script.
 
 - [API authentication](docs/authentication.md)
 - [Supabase as the database](docs/supabase.md)
