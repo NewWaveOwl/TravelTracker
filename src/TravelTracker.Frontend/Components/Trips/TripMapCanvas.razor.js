@@ -60,14 +60,14 @@ function loadMapLibre() {
 }
 
 // low quality: one pixel per point, no antialiasing and no fades; 3D layers are hidden once the style loads.
-const lowQualityOptions = {
+export const lowQualityOptions = {
     pixelRatio: 1,
     fadeDuration: 0,
     maxPitch: 0,
     canvasContextAttributes: { antialias: false, powerPreference: "low-power" }
 };
 
-function hideExtrusions(map) {
+export function hideExtrusions(map) {
     map.setTerrain(null);
     for (const layer of map.getStyle().layers) {
         if (layer.type === "fill-extrusion") map.setLayoutProperty(layer.id, "visibility", "none");
@@ -85,6 +85,18 @@ export function mapCapabilities() {
         logicalCores: navigator.hardwareConcurrency ?? null,
         coarsePointer: matchMedia("(pointer: coarse)").matches
     };
+}
+
+/**
+ * a lost WebGL context leaves a blank canvas; onLost shows the retry state instead of waiting for the timeout.
+ * @param canvas The MapLibre canvas element.
+ * @param onLost Called once when the browser drops the context.
+ */
+export function watchContextLoss(canvas, onLost) {
+    canvas.addEventListener("webglcontextlost", () => {
+        console.error("TripMapCanvas: WebGL context lost");
+        onLost();
+    }, { once: true });
 }
 
 function attachBasemap(container, planner, initialCamera, initialQuality) {
@@ -136,12 +148,9 @@ function attachBasemap(container, planner, initialCamera, initialQuality) {
             const canvas = basemap.getCanvas();
             canvas.tabIndex = -1;
             canvas.setAttribute("aria-hidden", "true");
-            // a lost WebGL context leaves a blank canvas; show the retry state instead of waiting for the timeout.
-            canvas.addEventListener("webglcontextlost", () => {
-                if (generation !== attempt) return;
-                console.error("TripMapCanvas: WebGL context lost");
-                fail();
-            }, { once: true });
+            watchContextLoss(canvas, () => {
+                if (generation === attempt) fail();
+            });
             if (quality === "low") basemap.once("style.load", () => hideExtrusions(basemap));
             basemap.once("load", () => {
                 if (generation !== attempt) return;
