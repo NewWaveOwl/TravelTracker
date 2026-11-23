@@ -161,6 +161,82 @@ public sealed class RoutePreviewTests : BunitContext
     }
 
     [Fact]
+    public async Task ConfirmedGeometryReplacesOnlyItsConnectionAndKeepsTheEditControlOnTheRoute()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var origin = new TripPlaceDto(Guid.Empty, "attraction", "Start", "", 38.5m, -120.2m);
+        var destination = origin with { Name = "End", Lat = 43.252m, Lon = -126.453m };
+        var third = destination with { Name = "Next", Lat = 44m };
+        (int Destination, bool FromKeyboard)? edited = null;
+        var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, [origin, destination, third])
+            .Add(component => component.Legs, [("bus", "Bus"), ("car", "Car")])
+            .Add(component => component.ConnectionSelected, value => edited = value));
+        var originalLabel = map.Find(".map-leg-label").GetAttribute("x");
+        var generated = Candidate with { Legs = [Candidate.Legs[0] with { Geometry = "_p~iF~ps|U_ulLnnqC_mqNvxq\u0060@" }] };
+
+        map.Render(parameters => parameters.Add(component => component.RoutedConnections,
+            new Dictionary<int, RouteItinerary> { [1] = generated }));
+
+        Assert.Single(map.FindAll(".route-line.bus.confirmed-route"));
+        Assert.DoesNotContain("Q", map.Find(".route-line.bus").GetAttribute("d"));
+        Assert.Contains("L", map.Find(".route-line.bus").GetAttribute("d"));
+        Assert.Single(map.FindAll(".route-line.car:not(.provider-route)"));
+        Assert.NotEqual(originalLabel, map.Find(".map-leg-label").GetAttribute("x"));
+        await map.Find("button[aria-label^='Edit connection 1:']").ClickAsync(new());
+        Assert.Equal(1, edited!.Value.Destination);
+        Assert.Contains("Confirmed routes replace their straight connections", map.Markup);
+
+        map.Render(parameters => parameters.Add(component => component.RoutedConnections, new Dictionary<int, RouteItinerary>()));
+        Assert.Empty(map.FindAll(".confirmed-route"));
+        Assert.Contains("Q", map.Find(".route-line.bus").GetAttribute("d"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfirmedOutboundAndReturnRoutesKeepBothEditControlsReachable(bool compact)
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var origin = new TripPlaceDto(Guid.Empty, "attraction", "Start", "", 45.5m, -73.6m);
+        var destination = origin with { Name = "End", Lat = 45.6m, Lon = -73.7m };
+        var edited = new List<int>();
+        var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, [origin, destination, origin])
+            .Add(component => component.Legs, [("bus", "Out"), ("bus", "Return")])
+            .Add(component => component.ConnectionSelected, value => edited.Add(value.Item1))
+            .Add(component => component.RoutedConnections, new Dictionary<int, RouteItinerary> { [1] = Candidate, [2] = Candidate }));
+
+        if (compact)
+            for (var zoomStep = 0; zoomStep < 4; zoomStep++) map.Find("button[aria-label='Zoom out']").Click();
+        var controls = map.FindAll(".map-leg-label");
+        Assert.Equal(2, controls.Count);
+        Assert.Equal(compact, map.FindAll(".map-leg-badge").Count > 0);
+        Assert.True(Math.Abs(double.Parse(controls[0].GetAttribute("y")!, System.Globalization.CultureInfo.InvariantCulture) -
+            double.Parse(controls[1].GetAttribute("y")!, System.Globalization.CultureInfo.InvariantCulture)) >= 38);
+        Assert.Equal(map.FindAll(".confirmed-route")[0].GetAttribute("d"), map.FindAll(".confirmed-route")[1].GetAttribute("d"));
+        await map.Find("button[aria-label^='Edit connection 1:']").ClickAsync(new());
+        await map.Find("button[aria-label^='Edit connection 2:']").ClickAsync(new());
+        Assert.Equal(new[] { 1, 2 }, edited);
+    }
+
+    [Fact]
+    public void AReturnVisitDoesNotReplaceTheOppositeDirectionOrHideMalformedGeometry()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var origin = new TripPlaceDto(Guid.Empty, "attraction", "Start", "", 45.5m, -73.6m);
+        var destination = origin with { Name = "End", Lat = 45.6m, Lon = -73.7m };
+        var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, [origin, destination, origin])
+            .Add(component => component.Legs, [("bus", "Out"), ("bus", "Return")])
+            .Add(component => component.RoutedConnections, new Dictionary<int, RouteItinerary> { [1] = Candidate }));
+        Assert.Single(map.FindAll(".confirmed-route"));
+        Assert.Single(map.FindAll(".route-line.bus:not(.provider-route)"));
+
+        map.Render(parameters => parameters.Add(component => component.RoutedConnections,
+            new Dictionary<int, RouteItinerary> { [1] = Candidate with { Legs = [Candidate.Legs[0] with { Geometry = "_" }] } }));
+        Assert.Empty(map.FindAll(".confirmed-route"));
+        Assert.Equal(2, map.FindAll(".route-line.bus:not(.provider-route)").Count);
+    }
+
+    [Fact]
     public void SelectingADistantAddressCentersItsUnconfirmedPreviewWithoutMovingSavedStops()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;

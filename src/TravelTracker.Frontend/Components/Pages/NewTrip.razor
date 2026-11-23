@@ -76,7 +76,7 @@ else
     {
         <div class="map-surface">
             <TripMapCanvas TripId="draft.Id" Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())" SelectedIndex="selected"
-                           Legs="MapLegs" PreviewRoute="MapRoutePreview" PreviewLocation="@(placing ? PickedCoordinates : null)" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<(int, bool)>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
+                           Legs="MapLegs" RoutedConnections="MapConfirmedRoutes" PreviewRoute="MapRoutePreview" PreviewLocation="@(placing ? PickedCoordinates : null)" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<(int, bool)>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
                            CanPick="@(!review && !busy && mapTool == MapTool.Markers && placing && !editingStopDetails)"
                            StopMoved="@(!busy && (showMap || !review) ? EventCallback.Factory.Create<(int, decimal, decimal)>(this, MoveMarker) : default)"
                            StopRemoved="@(!review && !busy ? EventCallback.Factory.Create<int>(this, RemoveStop) : default)" AllowMarkerDrop="@(showMap && !review && !busy)" MarkerDropped="PlaceDroppedMarker" FullScreen="true" />

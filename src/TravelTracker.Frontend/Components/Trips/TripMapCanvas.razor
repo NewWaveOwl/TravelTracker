@@ -33,7 +33,7 @@
             @foreach (var connection in connections)
             {
                 <path class="route-halo" d="@connection.Path" pointer-events="none" aria-hidden="true" />
-                <path class="route-line @connection.Code" d="@connection.Path" pointer-events="none" aria-hidden="true" />
+                <path class="route-line @connection.Code @(connection.Routed ? "provider-route confirmed-route" : null)" d="@connection.Path" pointer-events="none" aria-hidden="true" />
             }
             @if (PreviewRoute is { } preview)
             {
@@ -137,9 +137,13 @@
     {
         <p>Click the map or choose Pick map center to place a marker.</p>
     }
-    @if (connections.Count > 0)
+    @if (connections.Any(connection => !connection.Routed))
     {
         <p>Lines show approximate connections between stops.</p>
+    }
+    @if (connections.Any(connection => connection.Routed))
+    {
+        <p>Confirmed routes replace their straight connections. Their geometry is kept for this session.</p>
     }
     @if (PreviewRoute is not null)
     {
@@ -162,6 +166,8 @@
     [Parameter] public EventCallback<(string Type, decimal Lat, decimal Lon)> MarkerDropped { get; set; }
     [Parameter] public IReadOnlyList<(string Code, string Label)> Legs { get; set; } = [];
     [Parameter] public RouteItinerary? PreviewRoute { get; set; }
+    /** Confirmed provider routes keyed by the destination stop occurrence in the ordered itinerary. */
+    [Parameter] public IReadOnlyDictionary<int, RouteItinerary> RoutedConnections { get; set; } = new Dictionary<int, RouteItinerary>();
     [Parameter] public (decimal Lat, decimal Lon)? PreviewLocation { get; set; }
 
     int ViewportWidth = 768;
@@ -351,9 +357,9 @@
     }
 
     /** Separates repeated connections and sizes their labels according to the space between projected stops. */
-    List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY, int BadgeSize)> ScreenConnections()
+    List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY, int BadgeSize, bool Routed)> ScreenConnections()
     {
-        var result = new List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY, int BadgeSize)>();
+        var result = new List<(int Destination, string Code, string Label, string Path, double LabelX, double LabelY, int BadgeSize, bool Routed)>();
         var groups = Enumerable.Range(0, Math.Min(Legs.Count, Math.Max(0, Stops.Count - 1)))
             .Where(index => !string.IsNullOrEmpty(Legs[index].Code))
             .GroupBy(index =>
@@ -398,13 +404,56 @@
                     labelX = (x + curveX) / 2 - badgeSize / 2d;
                     labelY = (y + curveY) / 2 - badgeSize / 2d;
                 }
-                result.Add((index + 1, leg.Code, leg.Label, path, labelX, labelY, badgeSize));
+                var routed = RoutedPath(index + 1);
+                if (routed is { } generated)
+                {
+                    path = generated.Path;
+                    labelX = generated.X - (badgeSize > 0 ? badgeSize / 2d : -10);
+                    labelY = generated.Y - (badgeSize > 0 ? badgeSize / 2d : 36) + 38 * slot;
+                }
+                result.Add((index + 1, leg.Code, leg.Label, path, labelX, labelY, badgeSize, routed is not null));
                 slot++;
             }
         }
 
         result.Sort((first, second) => first.Destination.CompareTo(second.Destination));
         return result;
+    }
+
+    /**
+     * Replaces one connection with its complete provider geometry and anchors its edit control on that path.
+     * @param destination The destination stop occurrence, keeping return visits distinct.
+     * @return The generated path and its midpoint, or null to retain the manual connector for missing or malformed geometry.
+     */
+    (string Path, double X, double Y)? RoutedPath(int destination)
+    {
+        if (!RoutedConnections.TryGetValue(destination, out var route) || route.Legs.Count == 0) return null;
+        var paths = new List<string>();
+        var sections = new List<((double X, double Y) From, (double X, double Y) To, double Length)>();
+        foreach (var leg in route.Legs)
+        {
+            var points = RouteGeometry.Decode(leg.Geometry).Select(point => ScreenPoint(point.Lat, point.Lon)).ToArray();
+            if (points.Length < 2) return null;
+            paths.Add(string.Join(" ", points.Select((point, index) => $"{(index == 0 ? "M" : "L")} {Number(point.X)} {Number(point.Y)}")));
+            for (var index = 1; index < points.Length; index++)
+            {
+                var from = points[index - 1];
+                var to = points[index];
+                sections.Add((from, to, Math.Sqrt(Math.Pow(to.X - from.X, 2) + Math.Pow(to.Y - from.Y, 2))));
+            }
+        }
+        var remaining = sections.Sum(section => section.Length) / 2;
+        foreach (var section in sections)
+        {
+            if (section.Length > 0 && remaining <= section.Length)
+            {
+                var fraction = remaining / section.Length;
+                return (string.Join(" ", paths), section.From.X + fraction * (section.To.X - section.From.X),
+                    section.From.Y + fraction * (section.To.Y - section.From.Y));
+            }
+            remaining -= section.Length;
+        }
+        return null;
     }
 
     /**

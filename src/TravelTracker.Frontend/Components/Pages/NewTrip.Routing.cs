@@ -33,22 +33,17 @@ public partial class NewTrip
         ? new(new(draft.Stops[selected - 1].Place.Lat, draft.Stops[selected - 1].Place.Lon),
             new(draft.Stops[selected].Place.Lat, draft.Stops[selected].Place.Lon), mode.Code, departure, RouteLocalTime.RouterZone(draft.TimeZone)) : null;
 
-    RouteItinerary? MapRoutePreview
+    IReadOnlyDictionary<int, RouteItinerary> MapConfirmedRoutes
     {
         get
         {
-            var active = previewSelection is { } selectedRoute && PreviewStillCurrent(selectedRoute) ? selectedRoute : null;
-            var routes = confirmedGeometry.Where(pair => GeometryMatches(draft, pair.Key.From, pair.Key.To, pair.Value) &&
-                !(active is not null && ReferenceEquals(pair.Key.From, draft.Stops[active.OriginIndex]) &&
-                    ReferenceEquals(pair.Key.To, draft.Stops[active.DestinationIndex])))
-                .Select(pair => pair.Value.Itinerary).ToList();
-            if (active is not null)
-                routes.Add(active.Itinerary);
-            if (routes.Count == 0) return null;
-            return new("session-routes", routes.Sum(route => route.DurationSeconds), routes.Sum(route => route.DistanceMeters),
-                "estimated", routes.SelectMany(route => route.Legs).ToArray());
+            return confirmedGeometry.Where(pair => GeometryMatches(draft, pair.Key.From, pair.Key.To, pair.Value))
+                .ToDictionary(pair => draft.Stops.ToList().IndexOf(pair.Key.To), pair => pair.Value.Itinerary);
         }
     }
+
+    RouteItinerary? MapRoutePreview => previewSelection is { } selectedRoute && PreviewStillCurrent(selectedRoute)
+        ? selectedRoute.Itinerary : null;
 
     void SelectRoutePreview(RouteSelection? selection)
     {

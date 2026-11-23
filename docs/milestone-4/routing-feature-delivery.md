@@ -110,6 +110,14 @@ unconfirmed markers and the exact saved-mode ID, updates the parent immediately,
 and participates in Undo. Geometry stays within the circuit/session, is cleared
 for a different account/trip and is not a new persistence field.
 
+Confirmed provider geometry replaces the matching leg's approximate connection,
+and its edit control follows the midpoint of the generated path. Other legs
+keep their existing connections. Return visits are matched by stop occurrence;
+missing or malformed geometry falls back to the approximate connection. Undo
+or a changed route context restores that connection. Component regressions cover
+replacement, edit selection, return visits, malformed geometry and Save/Undo;
+the latest replacement has not received a fresh rendered browser check.
+
 Validation: 702 frontend tests and 1,756 ordinary application tests passed, with
 zero failures/skips and zero build warnings/errors. The 22 added cases include
 Windows/no-slash IANA zone compatibility, DST choices, options gating, stale and

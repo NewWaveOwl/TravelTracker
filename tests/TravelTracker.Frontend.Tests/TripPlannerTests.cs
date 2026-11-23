@@ -2466,7 +2466,8 @@ public sealed class TripPlannerTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("Selected route applied", page.Markup));
         Assert.Equal(RoutingFixtures.Departure, page.FindComponent<TravelTracker.Frontend.Components.Trips.RoutePlannerPanel>().Instance.InitialRequest!.DepartureTime);
         Assert.Contains("10:07:37", page.Find(".trip-message.success").TextContent);
-        Assert.Equal(2, page.FindAll(".provider-route").Count);
+        Assert.Single(page.FindAll(".confirmed-route"));
+        Assert.Empty(page.FindAll(".route-line:not(.provider-route)"));
         page.Find("[data-trip-undo]").Click();
         Assert.StartsWith("2026-11-14T10:00", page.FindAll(".leg-fields input[type=datetime-local]")[0].GetAttribute("value"));
         Assert.Empty(page.FindAll(".provider-route"));
@@ -2483,7 +2484,8 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal(timeZone, savedRequest.TimeZone);
         Assert.Equal(Train.TransportModeId, savedRequest.Legs[0].TransportModeId);
         Assert.Equal(0, catalogueWrites);
-        Assert.Equal(2, page.FindAll(".provider-route").Count);
+        Assert.Single(page.FindAll(".confirmed-route"));
+        Assert.Empty(page.FindAll(".route-line:not(.provider-route)"));
         Assert.Equal(new[] { "Hotel", "Museum" }, page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>().Instance.Stops.Select(stop => stop.Name));
     }
 
@@ -2557,7 +2559,8 @@ public sealed class TripPlannerTests : BunitContext
         page.WaitForAssertion(() => Assert.NotNull(savedRequest));
         Assert.Equal(RoutingFixtures.Departure, savedRequest!.Legs[0].Departure);
         Assert.Equal(RoutingFixtures.Arrival, savedRequest.Legs[0].Arrival);
-        Assert.Equal(2, page.FindAll(".provider-route").Count);
+        Assert.Single(page.FindAll(".confirmed-route"));
+        Assert.Empty(page.FindAll(".route-line:not(.provider-route)"));
     }
 
     [Fact]
