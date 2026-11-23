@@ -52,6 +52,22 @@ public sealed class PasswordAuthTests : IDisposable
     }
 
     [Theory]
+    [InlineData(UserRole.User, false)]
+    [InlineData(UserRole.Administrator, true)]
+    public async Task OnlyAdministratorsReceiveTheUsersAdminScope(UserRole role, bool expected)
+    {
+        using var client = Client();
+        await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "scoped", password = "correct horse" });
+        store.SetRole("scoped", role);
+
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { username = "scoped", password = "correct horse" });
+
+        var scopes = new JsonWebTokenHandler().ReadJsonWebToken((await Body(login)).GetProperty("accessToken").GetString()).GetClaim("scope").Value.Split(' ');
+        Assert.Equal(expected, scopes.Contains("users.admin"));
+        Assert.Contains("users.write", scopes);
+    }
+
+    [Theory]
     [InlineData("abcde", HttpStatusCode.BadRequest)]
     [InlineData("abcdef", HttpStatusCode.Created)]
     public async Task Register_RequiresOnlyAMinimumPasswordLengthOfSix(string password, HttpStatusCode expected)

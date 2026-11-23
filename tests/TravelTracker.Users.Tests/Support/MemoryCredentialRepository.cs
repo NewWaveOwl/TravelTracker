@@ -28,6 +28,13 @@ public sealed class MemoryCredentialRepository : ICredentialRepository
         entries[index] = (entries[index].Login, entries[index].Credential with { Account = entries[index].Credential.Account with { Status = status } });
     }
 
+    /** Changes the role for a login. */
+    public void SetRole(string login, UserRole role)
+    {
+        var index = entries.FindIndex(entry => entry.Login.Equals(login, StringComparison.OrdinalIgnoreCase));
+        entries[index] = (entries[index].Login, entries[index].Credential with { Account = entries[index].Credential.Account with { Role = role } });
+    }
+
     public Task<UserAccount?> RegisterAsync(string issuer, string login, string passwordHash, DateTimeOffset createdAt, CancellationToken cancellationToken)
     {
         Calls++;

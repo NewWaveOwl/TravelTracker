@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using TravelTracker.Security.Authentication;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Domain.Models;
 
@@ -18,7 +19,7 @@ public sealed class TokenIssuer(IConfiguration configuration, TimeProvider timeP
 
     private static readonly string[] TravellerScopes =
     [
-        "catalogue.read", "catalogue.write", "users.read", "users.write", "users.admin",
+        "catalogue.read", "catalogue.write", "users.read", "users.write",
         "settings.read", "settings.write", "trips.read", "trips.write"
     ];
 
@@ -40,7 +41,15 @@ public sealed class TokenIssuer(IConfiguration configuration, TimeProvider timeP
      * @return The token, or null when the account is not active.
      */
     public TokenResponse? ForAccount(UserAccount account) => account.Status != UserStatus.Active ? null
-        : Issue(account.ProviderIdentity.Subject, string.Join(' ', TravellerScopes), configuration.GetValue("Authentication:Issuer:LifetimeMinutes", 60));
+        : Issue(account.ProviderIdentity.Subject, string.Join(' ', ScopesFor(account)), configuration.GetValue("Authentication:Issuer:LifetimeMinutes", 60));
+
+    /**
+     * Chooses the scopes for an account; only administrators receive users.admin.
+     * @param account The signed-in account.
+     * @return The scope names to put in the token.
+     */
+    private static IEnumerable<string> ScopesFor(UserAccount account) =>
+        account.Role == UserRole.Administrator ? [.. TravellerScopes, ScopePolicies.UsersAdmin] : TravellerScopes;
 
     /**
      * Issues the backend-only token that carries users.access and nothing else.
