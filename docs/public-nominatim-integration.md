@@ -62,6 +62,13 @@ Leaving both TravelTracker fields blank selects the existing RND project; partia
 configuration is rejected. Unconfigured authentication fails closed. A dependency
 outage returns 503 rather than being misreported as a missing address or route.
 
+Missing routing Auth configuration, or a session issued by another Auth project,
+returns `503 authentication_unavailable` with setup guidance. An unverified JWT
+issuer can only reject the request; a matching issuer still requires the configured
+Supabase `/auth/v1/user` verification. A Routing-only 401 no longer revokes the app's
+session. Expired/missing local sessions still require sign-in, and a 401 from the
+app's own APIs retains the existing session-revocation behavior.
+
 | Route | Request | Result |
 | --- | --- | --- |
 | `GET /v1/places/search` | One `q`, 3–200 characters, explicitly submitted | `status: success` or `no_match`; `candidates` with `label`, numeric `lat`/`lon`, `source`; `attribution` |
@@ -120,6 +127,24 @@ secrets; the normal launcher inherits `Services__Routing`. The default is
 `http://localhost:18088`, which is suitable only when Ktor runs on the same machine.
 Remote URLs require HTTPS. Align backend TravelTracker Auth settings with the
 frontend's Auth project. Do not disable certificate checks to resolve tunnel errors.
+
+If you are signed in but address lookup reports a project/settings error, stop the
+shared server, open **TravelTracker window → TravelTracker settings**, and copy
+**both** public values from the frontend's launch configuration on the development
+PC:
+
+```powershell
+$travelTrackerSettings = Get-Content -Raw .traveltracker-launch.json | ConvertFrom-Json
+$travelTrackerSettings | Select-Object SupabaseUrl, PublishableKey
+```
+
+Use `SupabaseUrl` for the server's TravelTracker Supabase URL and `PublishableKey`
+for its TravelTracker publishable key. Keep the existing RNDTransit project
+settings. Restart the shared server after saving; restart the frontend after code
+updates. Sign out and back in once if an older Routing401 already revoked the local
+session. The public key is not a service-role key, database password or service
+account password. Environment overrides of the frontend's Auth project must match
+the server too.
 
 The server stores `nominatimUrl` and `nominatimUserAgent` in its existing local
 `server.properties`; the launcher passes `NOMINATIM_URL` and `NOMINATIM_USER_AGENT`.

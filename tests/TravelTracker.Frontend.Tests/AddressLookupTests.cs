@@ -13,11 +13,11 @@ namespace TravelTracker.Frontend.Tests;
 /** Exercises address loading, manual edits and stale-response rejection through the real HTTP client. */
 public sealed class AddressLookupTests : BunitContext
 {
-    RoutingClient Client(StubHandler handler)
+    RoutingClient Client(StubHandler handler, bool signedIn = true)
     {
         var clock = new FakeTimeProvider(DateTimeOffset.Parse("2026-11-22T12:00:00Z"));
         var authentication = new SwitchableAuthentication(new(clock));
-        authentication.SignIn("routing-session", clock.GetUtcNow().AddMinutes(10));
+        if (signedIn) authentication.SignIn("routing-session", clock.GetUtcNow().AddMinutes(10));
         return new(new ProtectedClient(authentication, new(new Dictionary<string, string> { ["Routing"] = "https://routing.example" }),
             new(new HttpClient(handler), NullLogger<ServiceClient>.Instance), clock, NullLogger<ProtectedClient>.Instance, authentication.Sessions));
     }
@@ -110,7 +110,7 @@ public sealed class AddressLookupTests : BunitContext
     [Theory]
     [InlineData(429, "busy")]
     [InlineData(503, "unavailable")]
-    [InlineData(401, "Sign in")]
+    [InlineData(401, "TravelTracker project settings")]
     public async Task FailedSearchPreservesManualAddressAndClearsSpinner(int status, string feedback)
     {
         var field = Render<AddressLookup>(parameters => parameters.Add(component => component.Client, Client(StubHandler.Status(status))));
@@ -120,6 +120,17 @@ public sealed class AddressLookupTests : BunitContext
         Assert.Equal("My manual address", field.Find("input").GetAttribute("value"));
         Assert.Empty(field.FindAll(".address-spinner"));
         Assert.Single(field.FindAll("a[href='https://www.openstreetmap.org/copyright']"));
+    }
+
+    [Fact]
+    public async Task MissingLocalSessionAsksForSignInWithoutCallingTheRoutingServer()
+    {
+        var handler = new StubHandler((_, _) => throw new InvalidOperationException("Anonymous address lookup must not send a request."));
+        var field = Render<AddressLookup>(parameters => parameters.Add(component => component.Client, Client(handler, signedIn: false)));
+        field.Find("input").Input("Rue Test");
+        await field.Find("form").TriggerEventAsync("onsubmit", EventArgs.Empty);
+        Assert.Contains("Sign in to look up addresses", field.Find("[role=status]").TextContent);
+        Assert.Null(handler.LastRequest);
     }
 
     [Fact]

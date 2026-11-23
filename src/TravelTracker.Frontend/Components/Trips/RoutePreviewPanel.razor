@@ -83,7 +83,9 @@
         catch (ApiError error)
         {
             if (!disposed && !token.IsCancellationRequested && requestVersion == version)
-                message = error.Status == 401 ? "Sign in to preview routes. Your entered times are unchanged."
+                message = error.Status == 401 && error.Kind == FailureKind.Unavailable ? error.Message
+                    : error.Status == 401 ? "Sign in to preview routes. Your entered times are unchanged."
+                    : error.Status == 503 ? "Route preview is unavailable. Check the routing server and its TravelTracker project settings. Your entered times are unchanged."
                     : "Route preview is unavailable. Keep planning with your entered times.";
         }
         finally

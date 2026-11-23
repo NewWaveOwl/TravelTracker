@@ -87,6 +87,17 @@ public sealed class RoutePreviewTests : BunitContext
     }
 
     [Fact]
+    public async Task RoutingServerRejectionReportsItsProjectSettingsWithoutClaimingLocalSignOut()
+    {
+        var panel = Render<RoutePreviewPanel>(parameters => parameters.Add(component => component.Request, Request)
+            .Add(component => component.Client, Client(StubHandler.Status(401))));
+        await panel.Find("button").ClickAsync(new());
+        Assert.Contains("TravelTracker project settings", panel.Find("[role=status]").TextContent);
+        Assert.DoesNotContain("Sign in to preview routes", panel.Find("[role=status]").TextContent);
+        Assert.Equal(Request, panel.Instance.Request);
+    }
+
+    [Fact]
     public void GeometryDecoderProducesCompleteCoordinates()
     {
         Assert.Equal(new[] { (38.5m, -120.2m), (40.7m, -120.95m), (43.252m, -126.453m) }, RouteGeometry.Decode(Candidate.Legs[0].Geometry));

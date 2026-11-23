@@ -1,0 +1,35 @@
+# Routing and address feature delivery
+
+The owner requested #106, #107, #108, #113, #120 and #127 on 2026-11-22, with a
+commit after each feature and Windows server update instructions. Existing
+Public Nominatim integration is the foundation. The owner's explicit Search/Enter
+choice overrides #113's original typing/autocomplete wording because the public
+provider forbids autocomplete.
+
+| Work | Acceptance and owning layer |
+| --- | --- |
+| Sign-in defect | Distinguish local sign-out from routing Auth configuration/rejection; optional routing failures preserve the app session. |
+| #106 | Reproducible pinned OTP/Java/data setup, live mode/GTFS coverage evidence, additive capabilities and error contract; Kotlin integration. |
+| #107 | Distinct walking/cycling requests and real geometry; selected endpoints/order; explicit acceptance and outage retention; Kotlin adapter and frontend HTTP contract. |
+| #108 | Verified car capability or explicit unsupported; scheduled transit with stops/transfers, trip zone/date and coverage errors; Kotlin adapter. |
+| #113 | Explicit address search, readable ambiguous candidates, keyboard selection, ghost marker, confirm/cancel without duplication; frontend. |
+| #120 | Address/map entry in ordinary forms, small gray coordinates underneath, existing coordinates preserved, unknown-location fallback; frontend. |
+| #127 | Origin/destination/date/time/mode selectors, available capabilities, alternatives, transit detail and explicit route confirmation/cancel; frontend. |
+
+All integration stays outside pure Domain models. Preview calls do not save.
+Provider attribution, public Nominatim's global one-request-per-second queue and
+manual planning remain in effect. There are no schema changes in this scope.
+
+Validation uses deterministic adapter/HTTP/UI success and failure cases, a full
+.NET application suite, Kotlin backend/launcher suites and isolated updater checks.
+Live OTP proof uses existing local Montreal OSM/GTFS assets and temporary private
+ports; it does not alter the installed server or call Public Nominatim. Real
+target-PC deployment, Dev Tunnel authentication and database/physical-device
+checks must be reported separately from fixture verification.
+
+Baseline: .NET Release build zero warnings/errors, 1,716 application tests passed;
+Kotlin backend 73 and launcher 60 tests passed. The isolated PostgreSQL test
+connection is not configured, so relational validation is unavailable; no
+persistence change relies on an in-memory substitute.
+
+Feature commits and final verification evidence are recorded below as delivered.

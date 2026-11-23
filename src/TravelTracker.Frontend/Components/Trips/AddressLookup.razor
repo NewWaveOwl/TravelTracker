@@ -127,8 +127,10 @@
         catch (ApiError error)
         {
             if (!disposed && !token.IsCancellationRequested && requestVersion == version)
-                message = error.Status == 401 ? "Sign in to look up addresses. Manual entry remains available."
+                message = error.Status == 401 && error.Kind == FailureKind.Unavailable ? error.Message
+                    : error.Status == 401 ? "Sign in to look up addresses. Manual entry remains available."
                     : error.Status == 429 ? "Address lookup is busy. Try again shortly, or enter the address manually."
+                    : error.Status == 503 ? "Address lookup is unavailable. Check the routing server and its TravelTracker project settings. Manual entry remains available."
                     : "Address lookup is unavailable. Your map position and manual address are still available.";
         }
         finally
