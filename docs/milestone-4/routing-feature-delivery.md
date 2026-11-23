@@ -80,3 +80,20 @@ suite passed, with zero failures/skips and zero Release build warnings/errors.
 The twelve added cases cover unknown positions, map/search confirmation, cancel,
 failed reverse lookup retaining manual text, embedded form isolation and compact
 trip-map entry. Read-only source review found no remaining actionable issues.
+
+## Walking/cycling previews (#107)
+
+The shared adapter preserves chosen endpoint order, requests actual WALK or
+BICYCLE paths and returns the provider's geometry, distance and duration. Its
+optional IANA zone validates the supplied offset against that date's daylight
+saving rules; absent/null zone remains compatible with old requests. The response
+keeps the requested departure and zone. Geometry point counts, connected times and
+duration spans are validated, including waiting time rather than only movement.
+No-route, malformed provider data, timeout and outage have separate recoverable
+outcomes. Confirmation remains an explicit frontend action in #127.
+
+Validation: the complete Kotlin gate passed 111 backend and 60 launcher tests
+without compiler warnings. The 23 new adapter/HTTP cases cover zone compatibility,
+DST ambiguity/gaps, endpoint and geometry consistency, realtime delays, no-route,
+timeout/cancellation cleanup and sanitized outages. Actual five-mode raw responses
+also passed the new declared-point-count and scheduled timing invariants.

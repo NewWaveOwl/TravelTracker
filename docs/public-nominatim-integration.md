@@ -83,7 +83,7 @@ app's own APIs retains the existing session-revocation behavior.
 | `GET /v1/places/search` | One `q`, 3–200 characters, explicitly submitted | `status: success` or `no_match`; `candidates` with `label`, numeric `lat`/`lon`, `source`; `attribution` |
 | `GET /v1/places/reverse` | One finite `lat` (-90..90) and `lon` (-180..180) | Same candidate shape; marker coordinates are preserved by the client |
 | `GET /v1/routes/capabilities` | No query parameters; same protected session | Router version when known, loaded feeds/global service range, per-mode support and attribution |
-| `POST /v1/routes/plan` | JSON `origin: {lat, lon}`, `destination: {lat, lon}`, `mode`, `departureTime` with UTC offset | `success`, `no_route` or `unsupported`, plus `itineraries` |
+| `POST /v1/routes/plan` | JSON `origin: {lat, lon}`, `destination: {lat, lon}`, `mode`, `departureTime` with UTC offset, optional IANA `timeZone` | `success`, `no_route` or `unsupported`, plus `itineraries`, normalized `timeZone` and `requestedDepartureTime` |
 
 Errors: 400 invalid fields/duplicate parameters; 401 rejected session; 503 dependency
 failure, timeout or capacity. Known backoff/capacity responses contain
@@ -109,6 +109,22 @@ bounds remain null when the router does not expose them. Missing version/time-zo
 metadata stays unknown. No public provider request or route calculation is made
 by this metadata operation. See [real five-mode verification](milestone-4/otp-mode-verification.md)
 for exact local OTP/Java/data hashes and sampled journeys.
+
+Walking/cycling previews (#107) retain the selected endpoint order and actual OTP
+WALK/BICYCLE geometry, distances and durations. A supplied `timeZone` must be a
+recognized IANA ID whose valid offset at the requested local departure matches
+`departureTime`. Impossible daylight-saving times are rejected; either explicit
+valid offset can resolve a repeated time. Omitted or JSON-null zone preserves
+the original four-field caller contract. Requests never fall back to the server's
+local zone. The response keeps the requested offset-aware departure and zone;
+provider timestamps retain their actual instants.
+
+Invalid points fail before provider I/O. Returned paths must reach the selected
+endpoints in order, contain valid geometry/counts and connected timestamps, and
+have finite distances and durations consistent with those timestamps. Waiting
+between transit legs belongs to the itinerary span. Known no-route outcomes
+remain distinct from malformed-provider, timeout and outage failures. No fallback
+straight line or invented travel time replaces a failed route.
 
 Itineraries contain `id`, `durationSeconds`, `distanceMeters`, `timingBasis`
 (`estimated`, `scheduled`, `realtime`) and `legs`. Legs contain `mode`,
