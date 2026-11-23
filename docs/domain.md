@@ -1,5 +1,7 @@
 # Domain Model
 
+PDF ticket extraction (#109) produces an API draft, not a `Trip` or persisted domain aggregate. Missing and uncertain values stay explicit; extraction and finishing review do not change trip legs, catalogue references or revisions. The [ticket-import contract](ticket-import.md) lists the supported fields and temporary original lifecycle.
+
 [TravelTracker.Domain](../src/TravelTracker.Domain) owns the shared business models used by the API and Data projects. Existing names, property types and identifiers are preserved. Trip models live in the independent [TravelTracker.Trips.Domain](../src/TravelTracker.Trips.Domain) project, which has no project or package references, matching the other services' Domain projects.
 
 Bearer validation belongs to the API, not Domain. The authenticated identity is the validated `(iss, sub)` pair. The independent Users service now maps that identity to a public UUIDv7 account and enforces live standing; the original shared `User` model below remains unchanged. See [authentication boundaries](authentication.md) and [Users setup](first-administrator-setup.md).

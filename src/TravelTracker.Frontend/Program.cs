@@ -1,4 +1,5 @@
 using TravelTracker.Frontend.Api;
+using TravelTracker.Frontend.Api.TicketImports;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Components;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -16,6 +17,7 @@ builder.Services.AddSingleton<SessionRegistry>();
 builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationStateProvider>();
 builder.Services.AddScoped<ProtectedClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Trips.TripsClient>();
+builder.Services.AddScoped<TravelTracker.Frontend.Api.TicketImports.TicketImportsClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Trips.TripPlacesClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Transport.TransportClient>();
 builder.Services.AddScoped<TravelTracker.Frontend.Api.Attractions.AttractionsClient>();
@@ -58,6 +60,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 app.MapStaticAssets();
+app.MapTicketDocument();
 if (auth0 is not null)
     app.MapAuthEndpoints();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();

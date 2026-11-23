@@ -108,5 +108,6 @@ For PostgreSQL tests, set `TRAVELTRACKER_TEST_POSTGRES` to an isolated PostgreSQ
 
 - [API contracts and service URLs](docs/api.md)
 - [Trips API and persistence](docs/trips-service.md)
+- [PDF ticket drafts, supported limits and private temporary storage](docs/ticket-import.md)
 - [First administrator setup](docs/first-administrator-setup.md)
 - [Contribution workflow](CONTRIBUTING.md)

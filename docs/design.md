@@ -159,6 +159,8 @@ What each part of the system lets people create, read, update and delete.
 
 Travellers can upload a ticket or booking (PDF or image) to pre-fill a draft: Upload, Validate, Extract, Review, Confirm, then save through the normal editor.
 
+**Implemented PDF slice (#109).** Saved-trip details offer **Tickets & bookings → Import tickets**. The upload, extracting, editable review, reviewed-draft and failure screens follow Figma 02.8–02.12. This slice accepts text-bearing PDFs up to 10 MiB and 10 pages; originals are private, held in server memory for at most 15 minutes, and discarded on restart. No trip is saved or changed by extraction or finishing draft review. Permanent attachments, itinerary insertion and pasted-text input remain with #122/#110; images and OCR remain future work. See the [supported fields, access rules, limits and verification](ticket-import.md).
+
 - Extraction only proposes values. The traveller sees the original beside the extracted fields, with missing or uncertain ones flagged, and confirms before anything reaches an itinerary.
 - Unknown fields stay empty; nothing is guessed.
 - Airports and stations are only ticket details in this version. The traveller picks the matching accommodation or attraction.

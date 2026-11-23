@@ -1,0 +1,6 @@
+.trip-ticket-entry { display:flex; align-items:center; gap:16px; background:white; border-radius:5px; padding:24px; margin:24px 0; }
+.trip-ticket-entry > div { flex:1; min-width:0; }
+.trip-ticket-entry h2 { font:24px/31px 'Atkinson Hyperlegible',sans-serif; }
+.trip-ticket-entry p { font-size:20px; line-height:26px; color:#586557; margin:8px 0 0; }
+.trip-ticket-entry a { flex-shrink:0; }
+@media(max-width:700px) { .trip-ticket-entry { flex-direction:column; align-items:stretch; } }

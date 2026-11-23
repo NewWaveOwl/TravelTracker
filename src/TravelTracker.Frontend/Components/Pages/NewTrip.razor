@@ -23,6 +23,10 @@ else
         <button type="button" disabled="@busy" @onclick="CreateNewAsync">Create new</button>
         <button type="button" class="secondary" disabled="@busy" aria-expanded="@Pressed(browseSaved)"
                 aria-controls="saved-trip-browser" @onclick="() => browseSaved = !browseSaved">Open saved</button>
+        @if (draft.Id is { } ticketTripId)
+        {
+            <a class="button secondary" href="@($"trips/{ticketTripId:D}")">Tickets &amp; bookings</a>
+        }
     </div>
     @if (browseSaved)
     {

@@ -31,6 +31,14 @@ else if (trip is not null)
             </li>
         }
     </ol>
+    <section class="trip-ticket-entry" aria-labelledby="tickets-heading">
+        <div><h2 id="tickets-heading">Tickets &amp; bookings</h2><p>Import a PDF and review its travel details.</p></div>
+        @if (canImport)
+        {
+            <a class="button" href="@($"trips/{trip.TripId:D}/ticket-import")">Import tickets</a>
+        }
+        else { <small>Read-only access. Importing tickets requires trips.write.</small> }
+    </section>
     <div class="trip-actions"><a class="button secondary" href="@($"new-trip/{trip.TripId:D}")">Edit trip</a><a class="button secondary" href="new-trip">Plan another trip</a></div>
 }
 </div>

@@ -92,6 +92,93 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
         }
     }
 
+    /**
+     * Uploads one PDF directly, without multipart buffering or retrying an uncertain upload.
+     * @param url Validated Trips destination.
+     * @param content The caller-owned PDF stream.
+     * @param fileName A display filename, never a server path.
+     * @param cancellationToken Cancels a closed import view.
+     * @param accessToken Session bearer supplied by ProtectedClient.
+     * @return The extraction draft returned by the service.
+     */
+    public Task<T?> UploadPdfAsync<T>(string url, Stream content, string fileName, CancellationToken cancellationToken, string accessToken)
+    {
+        var body = new StreamContent(content);
+        body.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        return SendTicketAsync(HttpMethod.Post, url, body, fileName, cancellationToken, accessToken,
+            (response, token) => response.Content.ReadFromJsonAsync<T>(token));
+    }
+
+    /**
+     * Reads a bounded private PDF for the authenticated frontend download endpoint.
+     * @param url Validated Trips destination.
+     * @param cancellationToken Cancels a closed download.
+     * @param accessToken Session bearer supplied by ProtectedClient.
+     * @return At most ten MiB of PDF bytes, or a categorized failure.
+     */
+    public Task<byte[]> GetPdfAsync(string url, CancellationToken cancellationToken, string accessToken) =>
+        SendTicketAsync(HttpMethod.Get, url, null, null, cancellationToken, accessToken, async (response, token) =>
+        {
+            const int maximum = 10 * 1024 * 1024;
+            if (response.Content.Headers.ContentType?.MediaType != "application/pdf" || response.Content.Headers.ContentLength > maximum)
+                throw new ApiError(FailureKind.Unexpected, "The service returned an unsupported document.");
+            await using var source = await response.Content.ReadAsStreamAsync(token);
+            using var buffer = new MemoryStream();
+            var block = new byte[16384];
+            try
+            {
+                int count;
+                while ((count = await source.ReadAsync(block.AsMemory(0, Math.Min(block.Length, maximum + 1 - (int)buffer.Length)), token)) != 0)
+                {
+                    await buffer.WriteAsync(block.AsMemory(0, count), token);
+                    if (buffer.Length > maximum) throw new ApiError(FailureKind.Unexpected, "The service returned an oversized document.");
+                }
+                return buffer.ToArray();
+            }
+            finally
+            {
+                Array.Clear(block);
+                if (buffer.TryGetBuffer(out var retained)) Array.Clear(retained.Array!, retained.Offset, retained.Count);
+            }
+        });
+
+    /**
+     * Removes an owner's temporary import without trying to parse a no-content response.
+     * @param url Validated Trips destination.
+     * @param cancellationToken Cancels cleanup.
+     * @param accessToken Session bearer supplied by ProtectedClient.
+     * @return Completion after the service acknowledges removal.
+     */
+    public async Task DeleteTicketAsync(string url, CancellationToken cancellationToken, string accessToken) =>
+        _ = await SendTicketAsync(HttpMethod.Delete, url, null, null, cancellationToken, accessToken, (_, _) => Task.FromResult(true));
+
+    async Task<T> SendTicketAsync<T>(HttpMethod method, string url, HttpContent? content, string? fileName,
+        CancellationToken cancellationToken, string accessToken, Func<HttpResponseMessage, CancellationToken, Task<T>> read)
+    {
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        bounded.CancelAfter(TimeSpan.FromSeconds(30));
+        using var request = new HttpRequestMessage(method, url) { Content = content };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(method == HttpMethod.Get ? "application/pdf" : "application/json"));
+        if (fileName is not null)
+            request.Headers.Add("X-Ticket-File-Name", Uri.EscapeDataString(fileName));
+        try
+        {
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, bounded.Token);
+            if (!response.IsSuccessStatusCode) throw Fail(Classify((int)response.StatusCode), MessageFor((int)response.StatusCode), method, (int)response.StatusCode);
+            return await read(response, bounded.Token);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException)
+        {
+            throw Fail(FailureKind.Network, "The ticket service could not be reached. Your trip is unchanged.", method);
+        }
+        catch (JsonException)
+        {
+            throw Fail(FailureKind.Unexpected, "The ticket response could not be read. Your trip is unchanged.", method);
+        }
+    }
+
     static async Task<IReadOnlyDictionary<string, string[]>> FieldErrorsAsync(HttpResponseMessage response, bool trips, CancellationToken token)
     {
         var result = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);

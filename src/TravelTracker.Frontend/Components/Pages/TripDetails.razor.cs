@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Trips;
 using TravelTracker.Frontend.Components.Shared;
+using TravelTracker.Frontend.Auth;
 
 namespace TravelTracker.Frontend.Components.Pages;
 
@@ -21,7 +22,7 @@ public sealed partial class TripDetails : IDisposable
 
     TripDto? trip;
     ApiError? failure;
-    bool loading = true, justSaved;
+    bool loading = true, justSaved, canImport;
     Guid loadedId;
     CancellationTokenSource? request;
 
@@ -67,6 +68,9 @@ public sealed partial class TripDetails : IDisposable
         failure = null;
         try
         {
+            var user = (await Authentication.GetAuthenticationStateAsync()).User;
+            canImport = user.FindAll(AccessTokenClaims.GrantedScope).SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                .Contains("trips.write", StringComparer.Ordinal);
             var loaded = await Trips.GetAsync(TripId, current.Token);
             if (current != request) return;
             trip = loaded;

@@ -58,15 +58,53 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
     public async Task<T?> BootstrapFirstAdministratorAsync<T>(string secret, CancellationToken cancellationToken = default) =>
         (await SendCoreAsync<T>("Users", HttpMethod.Post, "/api/v1/users/bootstrap-first-administrator", new { }, cancellationToken, secret)).Body;
 
+    /**
+     * Sends a PDF using the same session and destination safeguards as JSON contracts.
+     * @param path Versioned Trips import path.
+     * @param content Caller-owned PDF stream.
+     * @param fileName Display filename supplied by the file picker.
+     * @param cancellationToken Cancels the import.
+     * @return The owner's reviewable extraction draft.
+     */
+    public Task<T?> UploadPdfAsync<T>(string path, Stream content, string fileName, CancellationToken cancellationToken) =>
+        WithSessionAsync("Trips", path, cancellationToken,
+            (url, token) => client.UploadPdfAsync<T>(url, content, fileName, cancellationToken, token));
+
+    /**
+     * Retrieves a PDF only while the requesting session remains active.
+     * @param path Versioned Trips document path.
+     * @param cancellationToken Cancels the download.
+     * @return The owner's temporary source document.
+     */
+    public Task<byte[]> GetPdfAsync(string path, CancellationToken cancellationToken) =>
+        WithSessionAsync("Trips", path, cancellationToken, (url, token) => client.GetPdfAsync(url, cancellationToken, token));
+
+    /**
+     * Cancels one temporary import through its owner-scoped HTTP contract.
+     * @param path Versioned Trips import path.
+     * @param cancellationToken Cancels cleanup.
+     * @return Completion after acknowledged removal.
+     */
+    public async Task DeleteTicketAsync(string path, CancellationToken cancellationToken) =>
+        _ = await WithSessionAsync("Trips", path, cancellationToken, async (url, token) =>
+        {
+            await client.DeleteTicketAsync(url, cancellationToken, token);
+            return true;
+        });
+
     async Task<ServiceResponse<T>> SendCoreAsync<T>(string service, HttpMethod method, string path, object? body, CancellationToken cancellationToken, string? bootstrapSecret = null, string? ifMatch = null)
+        => await WithSessionAsync(service, path, cancellationToken,
+            (url, token) => client.SendAsync<T>(method, url, body, cancellationToken, token, bootstrapSecret, ifMatch));
+
+    async Task<T> WithSessionAsync<T>(string service, string path, CancellationToken cancellationToken, Func<string, string, Task<T>> send)
     {
         var url = directory.ProtectedUrlFor(service, path);
         var user = (await authentication.GetAuthenticationStateAsync()).User;
         var sessionId = SessionRegistry.IdFor(user);
         var token = sessions.IsActive(user) ? AccessTokenClaims.ActiveToken(user, timeProvider.GetUtcNow()) : null;
         if (token is null) throw SignedOut();
-        ServiceResponse<T> result;
-        try { result = await client.SendAsync<T>(method, url, body, cancellationToken, token, bootstrapSecret, ifMatch); }
+        T result;
+        try { result = await send(url, token); }
         catch (ApiError error) when (error.Status == 401)
         {
             sessions.Revoke(sessionId);
@@ -77,10 +115,18 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
         {
             throw new ApiError(FailureKind.Permission, "You do not have permission for this action.", 403);
         }
-        cancellationToken.ThrowIfCancellationRequested();
-        var current = (await authentication.GetAuthenticationStateAsync()).User;
-        if (!sessions.IsActive(user) || !sessions.IsActive(current) || SessionRegistry.IdFor(current) != sessionId)
-            throw SignedOut();
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var current = (await authentication.GetAuthenticationStateAsync()).User;
+            if (!sessions.IsActive(user) || !sessions.IsActive(current) || SessionRegistry.IdFor(current) != sessionId)
+                throw SignedOut();
+        }
+        catch
+        {
+            if (result is byte[] bytes) Array.Clear(bytes);
+            throw;
+        }
         return result;
     }
 

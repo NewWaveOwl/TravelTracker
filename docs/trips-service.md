@@ -50,8 +50,13 @@ Swagger is available at `/swagger` in the Development environment.
 | `GET /api/v1/trips` | `trips.read` | `200` with an array of the caller's trip summaries (`tripId`, `name`, `start`, `end`), ordered by latest start first. |
 | `GET /api/v1/trips/{tripId}` | `trips.read` | `200` for the caller's own trip. |
 | `PUT /api/v1/trips/{tripId}` | `trips.write` and `catalogue.read` | `200` with the updated trip. The identifier and owner are preserved. |
+| `POST /api/v1/trips/{tripId}/ticket-imports` | `trips.write` | Proposes editable PDF ticket fields for the active owner; no trip write. |
+| `GET /api/v1/trips/{tripId}/ticket-imports/{importId}/document` | `trips.read` | Returns the owner's private, unexpired original PDF. |
+| `DELETE /api/v1/trips/{tripId}/ticket-imports/{importId}` | `trips.write` | Removes the active owner's temporary original. |
 
 Requests and responses use camelCase JSON and public GUIDs only. The owner comes from the validated token (`iss` and `sub`); the body cannot name an owner, and unknown properties are refused with `400`.
+
+Ticket imports use a raw `application/pdf` body with an optional display-only `X-Ticket-File-Name` header. They are bounded to 10 MiB and 10 pages, parsed on the Trips server, and retained only in private process memory for 15 minutes. The saved-trip **Tickets & bookings** entry opens `/trips/{tripId}/ticket-import` for editable review. This draft-only flow does not persist attachments or replace an itinerary. See [PDF ticket drafts](ticket-import.md) for its exact contract, supported input and security boundaries.
 
 ### Create and replace body
 

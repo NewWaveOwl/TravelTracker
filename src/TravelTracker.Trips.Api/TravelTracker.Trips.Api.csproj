@@ -9,4 +9,7 @@
     <ProjectReference Include="../TravelTracker.Trips.Data/TravelTracker.Trips.Data.csproj" />
     <ProjectReference Include="../TravelTracker.Security/TravelTracker.Security.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+  </ItemGroup>
 </Project>

@@ -105,6 +105,12 @@ The Blazor `/attractions` view consumes these public HTTP DTOs and sends the cur
 
 The frontend's optional duration ± field is a local preview and has no HTTP or persistence field. The map is the user-supplied static placeholder; choosing a location currently means confirming manually entered coordinates. No endpoint or database change is included in #43.
 
+## PDF ticket-import contracts (#109)
+
+The Trips host accepts a raw `application/pdf` upload at `POST /api/v1/trips/{tripId}/ticket-imports` with `trips.write`. It checks live active standing and saved-trip ownership before reading or parsing the body. The maximum is 10 MiB and 10 pages. A successful response proposes only supported ticket fields with `extracted`, `missing` or `uncertain` status; it never writes a trip.
+
+The original is available to its owner at `GET /api/v1/trips/{tripId}/ticket-imports/{importId}/document` with `trips.read`; `DELETE /api/v1/trips/{tripId}/ticket-imports/{importId}` with `trips.write` removes it. Temporary content expires after 15 minutes, is process-local and has no public URL. Another owner's trip or import appears absent, including to administrators. See the [full upload, response, privacy and input contract](ticket-import.md).
+
 ## Users contracts
 
 The independent Users service runs on HTTPS port 5101 locally and owns its PostgreSQL database. The following profile routes identify the caller from the validated token issuer and subject.

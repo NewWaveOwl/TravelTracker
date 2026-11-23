@@ -63,6 +63,10 @@ Attractions owns its EF context, mappings and migration history. Accommodations 
 
 Historical in-memory repositories in `TravelTracker.Data` remain unused by runnable hosts. Trip domain tests live in `tests/TravelTracker.Trips.Domain.Tests`. They do not represent production persistence.
 
+## Private ticket-import originals (#109)
+
+`TravelTracker.Trips.Data/TicketImports` implements owner-and-trip-scoped temporary storage in bounded server memory, separate from PostgreSQL trip persistence. It retains at most five 10 MiB PDFs per validated issuer/subject, 100 MiB of original bytes and 1,000 documents per process, for at most 15 minutes. Random import identifiers do not replace owner checks. Reads return copies; deletion, expiry and disposal clear retained bytes. There are no ticket tables, temporary disk files, public storage objects or migrations for this feature. Restarts discard originals; multiple instances require session affinity. See [ticket-import lifecycle and limitations](ticket-import.md).
+
 ## Planned trip-point and route persistence
 
 The [relationship design](trip-points-and-routes.md) separates reusable locations and transport entries from scheduled journeys and ordered trip occurrences. Scheduled routes with start/end point references and separate stop occurrences remain future work. Stops need their own arrival/departure data because the same physical point can occur on many journeys. Today the Trips store commits each itinerary and its leg snapshots atomically.
