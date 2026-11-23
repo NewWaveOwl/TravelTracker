@@ -109,6 +109,46 @@ public sealed class RoutePlannerPanelTests : BunitContext
         Assert.True(panel.FindAll("button").Single(button => button.TextContent == "Confirm selected route").HasAttribute("disabled"));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CapabilityFailuresExplainTimeoutOrProviderOutageAndAllowAnExplicitReload(bool timeout)
+    {
+        var failing = true;
+        var requests = 0;
+        var panel = Panel(new StubHandler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath != "/v1/routes/capabilities") return Task.FromResult(Read(request));
+            requests++;
+            if (failing && timeout) throw new TaskCanceledException("private-network-diagnostic");
+            return Task.FromResult(failing ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : Read(request));
+        }));
+        panel.FindAll("button").Single(button => button.TextContent == "Load routing options").Click();
+
+        panel.WaitForAssertion(() => Assert.Contains(timeout ? "dev tunnel" : "OpenTripPlanner", panel.Markup));
+        Assert.Equal(1, requests);
+        Assert.True(panel.Find("#route-mode option[value=train]").HasAttribute("disabled"));
+        Assert.True(panel.FindAll("button").Single(button => button.TextContent == "Confirm selected route").HasAttribute("disabled"));
+        Assert.DoesNotContain("private-network-diagnostic", panel.Markup);
+        failing = false;
+        panel.FindAll("button").Single(button => button.TextContent == "Load routing options").Click();
+        panel.WaitForAssertion(() => Assert.False(panel.Find("#route-mode option[value=train]").HasAttribute("disabled")));
+        Assert.Equal(2, requests);
+    }
+
+    [Fact]
+    public void RoutingAuthenticationSetupFailureShowsSpecificSafeProjectGuidance()
+    {
+        var panel = Panel(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath == "/v1/routes/capabilities"
+            ? Json(new { status = "authentication_unavailable", message = "private-project-diagnostic" }, HttpStatusCode.ServiceUnavailable) : Read(request))));
+
+        panel.FindAll("button").Single(button => button.TextContent == "Load routing options").Click();
+
+        panel.WaitForAssertion(() => Assert.Contains("TravelTracker Supabase URL and key", panel.Markup));
+        Assert.DoesNotContain("private-project-diagnostic", panel.Markup);
+        Assert.True(panel.FindAll("button").Single(button => button.TextContent == "Confirm selected route").HasAttribute("disabled"));
+    }
+
     [Fact]
     public void ChangedDepartureOrUnconfirmedMarkerDetailsDisableAnOldSelection()
     {

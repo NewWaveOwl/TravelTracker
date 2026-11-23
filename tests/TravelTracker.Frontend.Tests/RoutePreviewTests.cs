@@ -98,6 +98,43 @@ public sealed class RoutePreviewTests : BunitContext
     }
 
     [Fact]
+    public async Task TimedOutPreviewPreservesRequestAndRetriesOnlyAfterExplicitFindRoutes()
+    {
+        var requests = 0;
+        var handler = new StubHandler((_, _) => ++requests == 1
+            ? throw new TaskCanceledException("private-network-diagnostic") : Task.FromResult(Success()));
+        var panel = Render<RoutePreviewPanel>(parameters => parameters.Add(component => component.Request, Request)
+            .Add(component => component.Client, Client(handler)));
+
+        await panel.Find("button").ClickAsync(new());
+
+        Assert.Contains("dev tunnel", panel.Find("[role=status]").TextContent);
+        Assert.Contains("entered times are unchanged", panel.Find("[role=status]").TextContent);
+        Assert.Equal(Request, panel.Instance.Request);
+        Assert.Equal(1, requests);
+        Assert.False(panel.Find("button").HasAttribute("disabled"));
+        Assert.DoesNotContain("private-network-diagnostic", panel.Markup);
+        await panel.Find("button").ClickAsync(new());
+        Assert.Single(panel.FindAll(".route-options > li"));
+        Assert.Equal(2, requests);
+    }
+
+    [Fact]
+    public async Task RoutingAuthenticationSetupFailureShowsSpecificSafeProjectGuidance()
+    {
+        var handler = new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        { Content = JsonContent.Create(new { status = "authentication_unavailable", message = "private-project-diagnostic" }) }));
+        var panel = Render<RoutePreviewPanel>(parameters => parameters.Add(component => component.Request, Request)
+            .Add(component => component.Client, Client(handler)));
+
+        await panel.Find("button").ClickAsync(new());
+
+        Assert.Contains("TravelTracker Supabase URL and key", panel.Find("[role=status]").TextContent);
+        Assert.DoesNotContain("private-project-diagnostic", panel.Markup);
+        Assert.Equal(Request, panel.Instance.Request);
+    }
+
+    [Fact]
     public void GeometryDecoderProducesCompleteCoordinates()
     {
         Assert.Equal(new[] { (38.5m, -120.2m), (40.7m, -120.95m), (43.252m, -126.453m) }, RouteGeometry.Decode("_p~iF~ps|U_ulLnnqC_mqNvxq\u0060@"));

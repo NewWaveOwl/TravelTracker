@@ -118,9 +118,11 @@
         catch (ApiError error)
         {
             if (!disposed && !token.IsCancellationRequested && requestVersion == version)
-                message = error.Status == 401 && error.Kind == FailureKind.Unavailable ? error.Message
+                message = error.Code == "authentication_unavailable" ? error.Message
+                    : error.Status == 401 && error.Kind == FailureKind.Unavailable ? error.Message
                     : error.Status == 401 ? "Sign in to preview routes. Your entered times are unchanged."
-                    : error.Status == 503 ? "Route preview is unavailable. Check the routing server and its TravelTracker project settings. Your entered times are unchanged."
+                    : error.Kind == FailureKind.Network ? "The routing server or dev tunnel could not be reached, or did not respond in time. Check its address and connection, then try Find routes again. Your entered times are unchanged."
+                    : error.Status == 503 ? "Route preview is unavailable. Check the shared routing server, OpenTripPlanner and TravelTracker settings. Your entered times are unchanged."
                     : "Route preview is unavailable. Keep planning with your entered times.";
         }
         finally

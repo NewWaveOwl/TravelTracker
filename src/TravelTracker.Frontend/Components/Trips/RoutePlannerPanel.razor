@@ -164,9 +164,11 @@
             if (!disposed && requestGeneration == generation)
             {
                 capabilities = null; transports = [];
-                message = error.Status == 401 && error.Kind == FailureKind.Unavailable ? error.Message
+                message = error.Code == "authentication_unavailable" ? error.Message
+                    : error.Status == 401 && error.Kind == FailureKind.Unavailable ? error.Message
                     : error.Status == 401 ? "Sign in to load routing options. Manual planning remains available."
-                    : "Routing options are unavailable. Check the shared server and transport catalogue; manual planning remains available.";
+                    : error.Kind == FailureKind.Network ? "The routing server or transport catalogue could not be reached, or did not respond in time. Check the service addresses and dev tunnel, then load routing options again. Manual planning remains available."
+                    : "Routing options are unavailable. Check the shared routing server, OpenTripPlanner and saved transport catalogue. Manual planning remains available.";
             }
         }
         finally { if (!disposed && requestGeneration == generation) loadingOptions = false; }

@@ -78,6 +78,14 @@ Supabase `/auth/v1/user` verification. A Routing-only 401 no longer revokes the 
 session. Expired/missing local sessions still require sign-in, and a 401 from the
 app's own APIs retains the existing session-revocation behavior.
 
+For the four routing/address paths, the frontend recognizes only the
+`authentication_unavailable` code from a bounded 4 KiB JSON 503 body and shows its
+own fixed setup guidance. Backend diagnostic messages are never forwarded.
+Connection/time-limit failures explain the service/tunnel checks and re-enable
+retry; provider failures keep manual planning available. The eight-second client
+deadline is unchanged. See [startup error recovery](milestone-4/startup-error-recovery.md)
+for the separate database migrations and server Auth settings.
+
 | Route | Request | Result |
 | --- | --- | --- |
 | `GET /v1/places/search` | One `q`, 3–200 characters, explicitly submitted | `status: success` or `no_match`; `candidates` with `label`, numeric `lat`/`lon`, `source`; `attribution` |

@@ -64,8 +64,12 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
                 var trips = request.RequestUri!.AbsolutePath.StartsWith("/api/v1/trips", StringComparison.Ordinal);
                 var errors = status is 400 or 422 || (trips && status == 404)
                     ? await FieldErrorsAsync(response, trips, bounded.Token) : null;
-                var message = trips && status == 404 ? "This trip is no longer available. Refresh your trips." : MessageFor(status);
-                throw Fail(Classify(status), message, method, status, errors, ResourceOf(request));
+                var code = status == 503 && (request.RequestUri.AbsolutePath is "/v1/places/search" or "/v1/places/reverse" or "/v1/routes/plan" or "/v1/routes/capabilities")
+                    ? await RoutingFailureCodeAsync(response, bounded.Token, cancellationToken) : null;
+                var message = code == "authentication_unavailable"
+                    ? "TravelTracker authentication is unavailable on the routing server. Check that its TravelTracker Supabase URL and key match this app. Manual planning remains available."
+                    : trips && status == 404 ? "This trip is no longer available. Refresh your trips." : MessageFor(status);
+                throw Fail(Classify(status), message, method, status, errors, ResourceOf(request), code: code);
             }
             return new ServiceResponse<T>(await response.Content.ReadFromJsonAsync<T>(bounded.Token), response.Headers.ETag?.Tag);
         }
@@ -258,6 +262,32 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
         return result;
     }
 
+    /**
+     * Recognizes one public routing setup code in a small JSON failure without forwarding response messages.
+     * @param response The routing endpoint's known 503 response.
+     * @param token The existing request deadline, also bounding failure-body reads.
+     * @param cancellationToken The caller cancellation which must remain observable.
+     * @return The allowlisted code, or null for oversized, malformed, unreadable or unrecognized bodies.
+     */
+    static async Task<string?> RoutingFailureCodeAsync(HttpResponseMessage response, CancellationToken token, CancellationToken cancellationToken)
+    {
+        const int maximum = 4096;
+        if (response.Content.Headers.ContentLength > maximum ||
+            !string.Equals(response.Content.Headers.ContentType?.MediaType, "application/json", StringComparison.OrdinalIgnoreCase)) return null;
+        try
+        {
+            var bytes = new byte[maximum + 1];
+            await using var stream = await response.Content.ReadAsStreamAsync(token);
+            var count = await stream.ReadAtLeastAsync(bytes, bytes.Length, false, token);
+            if (count > maximum) return null;
+            using var body = JsonDocument.Parse(bytes.AsMemory(0, count), new JsonDocumentOptions { MaxDepth = 4 });
+            return body.RootElement.ValueKind == JsonValueKind.Object && body.RootElement.TryGetProperty("status", out var status) &&
+                status.ValueKind == JsonValueKind.String && status.GetString() == "authentication_unavailable" ? "authentication_unavailable" : null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return null; }
+        catch (Exception exception) when (exception is JsonException or HttpRequestException or IOException) { return null; }
+    }
+
     [GeneratedRegex(@"\A(?:start|end|isRoundTrip|stops(?:\[\d+\](?:\.(?:type|placeId))?)?|legs(?:\[\d+\](?:\.(?:sequence|from(?:\.(?:type|placeId))?|to(?:\.(?:type|placeId))?|transport(?:ModeId)?|departure|arrival))?)?)\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TripField();
 
@@ -290,14 +320,15 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
      * @param errors Field errors the server listed, when present.
      * @param resource The route-only resource name, never record identifiers.
      * @param exception The underlying cause, represented in the log only by its type.
+     * @param code Optional allowlisted machine code used for fixed recovery guidance.
      * @return The error to throw.
      */
-    ApiError Fail(FailureKind kind, string message, HttpMethod method, int? status = null, IReadOnlyDictionary<string, string[]>? errors = null, string? resource = null, Exception? exception = null)
+    ApiError Fail(FailureKind kind, string message, HttpMethod method, int? status = null, IReadOnlyDictionary<string, string[]>? errors = null, string? resource = null, Exception? exception = null, string? code = null)
     {
         // a 404 is an expected answer for lookups (for example a first sign-in with no account yet), so it is not a warning
         logger.Log(status == 404 ? LogLevel.Information : LogLevel.Warning,
             "{Method} service request to {Resource} failed as {Kind} (status {Status}, failure type {FailureType})",
             method, resource, kind, status, exception?.GetType().Name);
-        return new ApiError(kind, message, status, errors);
+        return new ApiError(kind, message, status, errors, code);
     }
 }

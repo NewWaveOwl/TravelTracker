@@ -122,6 +122,42 @@ public sealed class AddressLookupTests : BunitContext
         Assert.Single(field.FindAll("a[href='https://www.openstreetmap.org/copyright']"));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TimedOutSearchOrReverseKeepsManualInputAndAllowsAnExplicitRetry(bool reverse)
+    {
+        var requests = 0;
+        var handler = new StubHandler((_, _) => { requests++; throw new TaskCanceledException("private-network-diagnostic"); });
+        var field = Render<AddressLookup>(parameters => parameters.Add(component => component.Client, Client(handler))
+            .Add(component => component.Value, "My manual address").Add(component => component.Latitude, 45.5m)
+            .Add(component => component.Longitude, -73.6m).Add(component => component.ReverseVersion, reverse ? 1 : 0));
+        if (!reverse) await field.Find("form").TriggerEventAsync("onsubmit", EventArgs.Empty);
+
+        field.WaitForAssertion(() => Assert.Contains("dev tunnel", field.Find("[role=status]").TextContent));
+        Assert.Equal("My manual address", field.Find("input").GetAttribute("value"));
+        Assert.Empty(field.FindAll(".address-spinner"));
+        Assert.False(field.Find("button").HasAttribute("disabled"));
+        Assert.Equal(1, requests);
+        Assert.DoesNotContain("private-network-diagnostic", field.Markup);
+    }
+
+    [Fact]
+    public async Task RoutingAuthenticationSetupFailureShowsSpecificSafeProjectGuidance()
+    {
+        var handler = new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        { Content = JsonContent.Create(new { status = "authentication_unavailable", message = "private-project-diagnostic" }) }));
+        var field = Render<AddressLookup>(parameters => parameters.Add(component => component.Client, Client(handler)));
+        field.Find("input").Input("My manual address");
+
+        await field.Find("form").TriggerEventAsync("onsubmit", EventArgs.Empty);
+
+        Assert.Contains("TravelTracker Supabase URL and key", field.Find("[role=status]").TextContent);
+        Assert.Equal("My manual address", field.Find("input").GetAttribute("value"));
+        Assert.DoesNotContain("private-project-diagnostic", field.Markup);
+        Assert.Empty(field.FindAll(".address-spinner"));
+    }
+
     [Fact]
     public async Task MissingLocalSessionAsksForSignInWithoutCallingTheRoutingServer()
     {
