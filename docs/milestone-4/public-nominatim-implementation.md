@@ -1,9 +1,16 @@
 # Public Nominatim and shared routing implementation — 2026-11-22
 
-Implemented in the local `feature/public-nominatim` TravelTracker branch and
-`backedn-for-TravelTracker` RNDbackend branch. Source changes remain uncommitted
-and have not been pushed. The earlier empty backend branch is published, but
-does not yet contain this implementation. No live server was updated.
+This records the initial integration and updater correction. Subsequent committed
+authentication fixes and six routing/address features are recorded in
+[feature delivery](routing-feature-delivery.md). Use the newer [verified package
+and update commands](server-routing-update.md); that ZIP supersedes the initial
+packages listed below.
+
+The initial integration was implemented in the local `feature/public-nominatim`
+TravelTracker branch and `backedn-for-TravelTracker` RNDbackend branch. At that
+point, source changes were uncommitted and only the earlier empty backend branch
+was published. The later feature work is committed locally; no source push or
+live server update is claimed by this record.
 
 The [integration guide](../public-nominatim-integration.md) defines contracts,
 provider policy, Dev Tunnel configuration and target-server checks. The previous

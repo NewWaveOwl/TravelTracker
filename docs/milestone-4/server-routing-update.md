@@ -6,6 +6,27 @@ application JARs and restarting the frontend. The server remains one
 graph, Java runtimes, tunnel and external configuration are preserved by the
 verified update helper. No PostgreSQL schema migration is part of these features.
 
+## Verified package
+
+Use the new `RNDTransitServer-TravelTracker-Update.zip` in RNDbackend:
+
+```text
+backend/launcher/build/updates/TravelTracker-Routing-M4-20261122/
+```
+
+- Runtime source commit: `58d68ff4f66e56479944d8c1acfe073c2d922ab0`.
+- ZIP size: 15,228,905 bytes; 34 launcher/backend JARs plus the updater,
+  manifest and instructions.
+- SHA-256: `68415AB3152B52D91D36EFFB889D15685DDCEB74B38D7741ED5890127AC9DECF`.
+
+This supersedes the earlier Nominatim-only and PowerShell-fix ZIPs. Archive JAR
+hashes/sizes and the bundled TravelTracker query/auth classes were checked against
+the manifest; both distributions built without warnings. Eight isolated updater
+checks passed, and packaged CheckOnly succeeded with the genuine prior portable
+JARs copied to an isolated fixture. The actual remote server was not changed by
+these checks. `package-evidence.json` and `SOURCE-COMMIT.txt` sit beside the ZIP;
+the source commit is also recorded in its README.
+
 ## Match the sign-in project
 
 On the development PC:

@@ -141,3 +141,56 @@ failures/errors or skips. The 21 new cases cover car fallback, missing rail data
 service dates, multi-vehicle/interline transfers, stop metadata, incomplete
 realtime, no-route and outages. The opt-in offline replay normalized all 11 real
 alternatives across the five modes through the current production adapter.
+
+## Responsive browser verification and follow-up
+
+An isolated Edge fixture rendered the actual Blazor components at desktop
+1440×1000 and phone 390×844 with touch/reduced-motion emulation. Its authentication,
+address, catalogue and routing HTTP responses were simulated; the normal public
+basemap tiles loaded. This verifies browser interaction/layout, not live provider
+authentication or a physical device.
+
+All 31 UI assertions passed with zero application page errors. Normal keyboard
+and pointer interactions verified explicit search/no typing requests, in-input
+spinner, reduced-motion behavior, candidate focus/Escape, manual/cancel retention,
+ghost selection, Apply once, Undo, transit detail, route Cancel/Confirm and an
+explicit Save preserving `10:00:05`/`10:07:37` seconds. Both viewports fit
+horizontally. No forced or evaluated clicks were used.
+
+The phone run found a real overlay defect: Save/status controls intercepted
+Transport and covered address input. A narrow-screen-only `NewTrip.razor.css`
+follow-up puts that container in normal flow above the movable panels. The same
+real click sequence then reached Map tools → Transport → Train; desktop styling
+is unchanged. The affected frontend still passed all 702 tests and built with
+zero warnings/errors. The fixture host and owned browser processes were stopped.
+
+Local reports/screenshots remain in the ignored
+`tests/TravelTracker.Frontend.Tests/TestResults/browser-qa/` directory, including
+`report.md`, `report.json`, `desktop-address-spinner.png`, `phone-tools.png`,
+`phone-address-spinner.png`, `phone-route-confirmed.png` and `phone-saved.png`.
+The primary agent also inspected representative desktop and phone screenshots.
+
+## Feature commits
+
+| Issue | Repository | Feature commit |
+| --- | --- | --- |
+| #106 | RNDbackend | `e69cc47` |
+| #107 | RNDbackend | `99f48e0` |
+| #108 | RNDbackend | `58d68ff` |
+| #113 | TravelTracker | `e4a1b60` |
+| #120 | TravelTracker | `8ce3841` |
+| #127 | TravelTracker | `399732b` |
+
+The sign-in correction is `7fc6515` in TravelTracker and `28a0da1` in RNDbackend.
+The mobile layout correction is `ea071f2`; delivery evidence is a separate follow-up. All
+commits are local; the earlier empty backend branch remains the only published
+work from this session. The prior Auth0 README edit remains preserved in its named
+stash. See [the verified ZIP and exact server/app commands](server-routing-update.md).
+
+Final post-CSS gate: Release solution build zero warnings/errors; all 1,756
+ordinary application tests passed again with zero failures/skips. PostgreSQL's
+marked group was not run because no isolated connection was configured; these
+features have no schema or persistence edits. The real server/tunnel, public
+geocoder response quality, physical devices and live realtime feeds were not
+validated by the local fixture/artifact checks. Source worktrees are committed
+locally; no push, PR or actual server update is part of this delivery.
