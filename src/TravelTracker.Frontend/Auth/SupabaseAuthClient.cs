@@ -58,9 +58,14 @@ public sealed class SupabaseAuthClient(HttpClient http, SupabaseSettings setting
         using var userBody = await JsonDocument.ParseAsync(await userResponse.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
         var user = userBody.RootElement;
         if (!user.TryGetProperty("id", out var id) || id.GetString() != subjects[0].Value ||
+            !user.TryGetProperty("email", out var verifiedEmail) || verifiedEmail.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(verifiedEmail.GetString()) ||
             !user.TryGetProperty("email_confirmed_at", out var confirmed) || confirmed.ValueKind != JsonValueKind.String ||
             !DateTimeOffset.TryParse(confirmed.GetString(), out _) ||
             user.TryGetProperty("is_anonymous", out var anonymous) && anonymous.ValueKind == JsonValueKind.True) return null;
+        // The current verified provider email wins over any earlier signed token email.
+        foreach (var claim in identity.FindAll("email").ToArray()) identity.RemoveClaim(claim);
+        identity.AddClaim(new Claim("email", verifiedEmail.GetString()!));
         var expiry = new DateTimeOffset(validation.SecurityToken.ValidTo, TimeSpan.Zero);
         // Only the signed scope claim controls API access; user_metadata can never grant permissions.
         return new(principal, token, expiry);

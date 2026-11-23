@@ -95,7 +95,7 @@ else
             <ProfilePicture @key="generation" Profile="profile" Editable="CanEdit" Editing="editing" Disabled="busy" />
             @if (editing && editModel is not null && editContext is not null)
             {
-                <p class="profile-help">Email is contact information and does not change your sign-in email or password.</p>
+                <p class="profile-help">@(Setup.Supabase is not null ? "Your email is the verified email you use to sign in. Change it below with email verification." : "Email is contact information and does not change your sign-in email or password.")</p>
                 @if (saveError is not null && !writeDenied)
                 {
                     <p class="profile-error" role="alert">@saveError</p>
@@ -110,10 +110,19 @@ else
                         <ValidationMessage For="() => editModel.Username" />
                     </div>
                     <div class="profile-field">
+                        @if (Setup.Supabase is not null)
+                        {
+                            <label for="profile-email">Email</label>
+                            <input id="profile-email" type="email" value="@signInEmail" readonly aria-describedby="profile-email-help" />
+                            <small id="profile-email-help"><a href="#profile-credentials">Change email with verification</a></small>
+                        }
+                        else
+                        {
                         <label for="profile-email">Contact email</label>
                         <InputText id="profile-email" type="email" @bind-Value="editModel.Email" autocomplete="email" maxlength="254" aria-describedby="profile-email-help" disabled="@(busy || writeDenied)" />
                         <small id="profile-email-help">You can’t remove a contact email here. This is not your verified sign-in email.</small>
                         <ValidationMessage For="() => editModel.Email" />
+                        }
                     </div>
                     <div class="profile-field">
                         <label for="profile-address">Address <span class="profile-optional">(optional)</span></label>
@@ -131,7 +140,7 @@ else
             {
                 <dl class="profile-details">
                     <dt>Username</dt><dd>@Display(profile.Username)</dd>
-                    <dt>Contact email</dt><dd>@Display(profile.Email)</dd>
+                    <dt>@(Setup.Supabase is not null ? "Email" : "Contact email")</dt><dd>@Display(Setup.Supabase is not null ? signInEmail : profile.Email)</dd>
                     <dt>Address</dt><dd>@Display(profile.Address)</dd>
                     <dt>Account type</dt><dd>@RoleLabel(profile.Role)</dd>
                     <dt>Account status</dt><dd>@StatusLabel(profile.Status)</dd>
@@ -149,7 +158,7 @@ else
                         <AntiforgeryToken />
                         <input type="hidden" name="operation" value="email" />
                         <label for="email-change-current">Current sign-in email</label>
-                        <input id="email-change-current" type="email" name="loginEmail" autocomplete="username" maxlength="254" required />
+                        <input id="email-change-current" type="email" name="loginEmail" value="@signInEmail" readonly="@(signInEmail is not null)" autocomplete="username" maxlength="254" required />
                         <label for="email-change-password">Current password</label>
                         <input id="email-change-password" type="password" name="currentPassword" autocomplete="current-password" maxlength="128" required />
                         <label for="email-change-new">New sign-in email</label>
@@ -163,7 +172,7 @@ else
                         <AntiforgeryToken />
                         <input type="hidden" name="operation" value="password" />
                         <label for="password-change-email">Current sign-in email</label>
-                        <input id="password-change-email" type="email" name="loginEmail" autocomplete="username" maxlength="254" required />
+                        <input id="password-change-email" type="email" name="loginEmail" value="@signInEmail" readonly="@(signInEmail is not null)" autocomplete="username" maxlength="254" required />
                         <label for="password-change-current">Current password</label>
                         <input id="password-change-current" type="password" name="currentPassword" autocomplete="current-password" maxlength="128" required />
                         <label for="password-change-new">New password</label>

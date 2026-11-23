@@ -11,6 +11,36 @@ namespace TravelTracker.Frontend.Tests;
 /** Exercises Supabase authentication through real forms, JWT validation and revocable cookie middleware. */
 public sealed class SupabaseSignInTests
 {
+    [Fact]
+    public async Task ProfileAndCredentialFormsUseTheCurrentVerifiedEmailInsteadOfAnOlderTokenOrContactEmail()
+    {
+        using var host = new SupabaseFrontendFactory();
+        host.Provider.CurrentEmail = "verified-new@example.test";
+        using var browser = host.CreateBrowser();
+
+        using var login = await LoginAsync(browser);
+        Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
+        var page = await browser.GetStringAsync("/account");
+
+        Assert.Contains("verified-new@example.test", page);
+        Assert.DoesNotContain("traveller@example.test", page);
+        Assert.DoesNotContain("Contact email", page);
+        Assert.Contains("Request email change", page);
+    }
+
+    [Fact]
+    public async Task MissingVerifiedProviderEmailCannotStartASession()
+    {
+        using var host = new SupabaseFrontendFactory();
+        host.Provider.CurrentEmail = null;
+        using var browser = host.CreateBrowser();
+
+        using var login = await LoginAsync(browser);
+
+        Assert.Equal("/sign-in?error=credentials", login.Headers.Location?.OriginalString);
+        Assert.Contains("Sign in to view your profile", await browser.GetStringAsync("/account"));
+    }
+
     [Theory]
     [InlineData("/account", false)]
     [InlineData("/account/", false)]
