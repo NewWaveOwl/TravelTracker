@@ -6,6 +6,11 @@ application JARs and restarting the frontend. The server remains one
 graph, Java runtimes, tunnel and external configuration are preserved by the
 verified update helper. No PostgreSQL schema migration is part of these features.
 
+Independent profile-picture and trip-stop features do require their existing
+Users/Trips migrations when upgrading the local app. The Windows routing update
+ZIP does not apply those migrations. For missing-table, upload-size or routing
+errors, follow [startup error recovery](startup-error-recovery.md).
+
 ## Verified package
 
 Use the new `RNDTransitServer-TravelTracker-Update.zip` in RNDbackend:

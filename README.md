@@ -138,6 +138,21 @@ app commands](docs/milestone-4/server-routing-update.md).
 
 `28P01: password authentication failed` is a PostgreSQL credential error, even after moving sign-in to Supabase Auth. Check that the pooler host, suffixed database username and database password belong to the same project and role. Do not enter a Supabase website password or Auth user password at the database prompt. Stop and restart the launcher to re-enter the password. Changing authentication providers does not repair database passwords.
 
+If profile-picture reads/uploads or trip saves return 503 after an update, check
+the database error before retrying. Missing `UserPictures` or `TripStops` tables
+mean the existing service databases need the committed EF migrations. Preserve
+unsaved work with **Browser draft → Save map draft**, then stop the local stack
+with Ctrl+C and run once with a migration-capable database role:
+
+```sh
+dotnet run --file scripts/StartSupabaseDev.cs -- --apply-migrations
+```
+
+Wait for the Users and Trips migration-success messages. Later launches use the
+normal command without the flag. This updates the existing databases; do not run
+the database bootstrap again. See [startup error recovery](docs/milestone-4/startup-error-recovery.md)
+for the separate image-size and routing/tunnel failures.
+
 ### Initialize a new Supabase project (maintainer)
 
 Create the service databases with [the bootstrap SQL](src/Database/supabase-bootstrap.sql), using the project's default `postgres` database and a role with `CREATEDB`. With PostgreSQL client tools installed:
