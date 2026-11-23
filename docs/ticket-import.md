@@ -17,6 +17,9 @@ All routes are served by Trips on port 5108. Send the ordinary validated bearer 
 | `POST /api/v1/trips/{tripId}/ticket-imports` | `trips.write` | A reviewable draft and private document location after successful extraction. Active owner only. |
 | `GET /api/v1/trips/{tripId}/ticket-imports/{importId}/document` | `trips.read` | The owner's unexpired original PDF. Banned owners retain read access. |
 | `DELETE /api/v1/trips/{tripId}/ticket-imports/{importId}` | `trips.write` | Removes the owner's temporary original. Active owner only. |
+| `POST /api/v1/trips/{tripId}/ticket-imports/text` | `trips.write` | A `200` proposed-field draft from pasted plain text. Nothing is stored. Active owner only. |
+
+The text route takes a **`text/plain` body in UTF-8** (no other charset) of at most **12,000 bytes**, which holds the 4,000-character and 60-line paste limits. Its response is `{ tripId, fields }` with the same field names and `extracted` / `missing` / `uncertain` statuses as the PDF draft. It returns `400` for blank, NUL-containing, invalid UTF-8, overlong or over-line input, `413` over the byte bound and `415` for other media types. Pasted markup is only ever JSON string content. It is never rendered or interpreted as HTML. Traveller, operator and seat are not read from pasted text, so they are omitted rather than reported as missing.
 
 Upload a **raw `application/pdf` request body**, not multipart form data. The optional URI-encoded `X-Ticket-File-Name` header is display metadata only and never selects a storage path. Raw streaming and disabled form value providers avoid the framework's multipart temporary-file spooling. No endpoint accepts an owner, account status or role from the client.
 
