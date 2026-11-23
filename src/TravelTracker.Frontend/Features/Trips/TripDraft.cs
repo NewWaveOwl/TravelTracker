@@ -23,7 +23,7 @@ public sealed class TripDraft
     /** Local trip end as a datetime-local value. */
     public string End { get; set; } = "";
 
-    /** True when the trip returns to where it started. */
+    /** The traveller's round-trip intent; saving does not require a return leg. */
     public bool IsRoundTrip { get; set; }
 
     /** Ordered legs. */
@@ -58,11 +58,6 @@ public sealed class TripDraft
         var zone = FindZone();
         var start = Read(Start, zone, null, errors);
         var end = Read(End, zone, null, errors);
-        if (Legs.Count == 0)
-        {
-            errors.Add("legs", "Add at least one leg.");
-            return errors.ToDictionary();
-        }
         DateTimeOffset? previousArrival = null;
         for (var index = 0; index < Legs.Count; index++)
         {
@@ -86,16 +81,6 @@ public sealed class TripDraft
             }
             previousArrival = arrival;
         }
-        var first = Legs[0];
-        var last = Legs[^1];
-        var lastPath = $"legs[{Legs.Count - 1}].to";
-        if (first.From is not null && first.From.Type != "accommodation") errors.Add("legs[0].from", "A trip must start at an accommodation.");
-        if (IsRoundTrip)
-        {
-            if (last.To is not null && first.From is not null && !SamePlace(last.To, first.From)) errors.Add(lastPath, "A round trip must return to where it started.");
-            if (!Legs.Any(leg => leg.To?.Type == "attraction")) errors.Add("legs", "A round trip must include at least one attraction.");
-        }
-        else if (last.To is not null && last.To.Type != "attraction") errors.Add(lastPath, "A one-way trip must end at an attraction.");
         return errors.ToDictionary();
     }
 

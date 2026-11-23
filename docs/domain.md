@@ -1,5 +1,7 @@
 # Domain Model
 
+PDF ticket extraction (#109) produces an API draft, not a `Trip` or persisted domain aggregate. Missing and uncertain values stay explicit; extraction and finishing review do not change trip legs, catalogue references or revisions. The [ticket-import contract](ticket-import.md) lists the supported fields and temporary original lifecycle.
+
 [TravelTracker.Domain](../src/TravelTracker.Domain) owns the shared business models used by the API and Data projects. Existing names, property types and identifiers are preserved. Trip models live in the independent [TravelTracker.Trips.Domain](../src/TravelTracker.Trips.Domain) project, which has no project or package references, matching the other services' Domain projects.
 
 Bearer validation belongs to the API, not Domain. The authenticated identity is the validated `(iss, sub)` pair. The independent Users service now maps that identity to a public UUIDv7 account and enforces live standing; the original shared `User` model has been removed from `TravelTracker.Domain`. See [authentication boundaries](authentication.md) and [Users setup](first-administrator-setup.md).
@@ -37,7 +39,11 @@ The independent [Settings domain](../src/TravelTracker.Settings.Domain/Models/Us
 
 ## Trip rules (implemented, pure domain in TravelTracker.Trips.Domain)
 
-[Trip](../src/TravelTracker.Trips.Domain/Models/Trip.cs) and [TripLeg](../src/TravelTracker.Trips.Domain/Models/TripLeg.cs) are immutable. `Trip.Create` / `WithLegs` throw [TripValidationException](../src/TravelTracker.Trips.Domain/Models/TripValidationException.cs) listing every [TripError](../src/TravelTracker.Trips.Domain/Models/TripError.cs) (field path plus message), so a rejected edit leaves the old trip unchanged. Enforced: first leg starts at an accommodation; one-way ends at an attraction; round trip returns to its start and visits an attraction; legs are sequenced 1..n, connected, arrive after departing, do not overlap, and sit inside the trip start/end. Leg times carry an offset that must match the trip time zone; [TripTime.Resolve](../src/TravelTracker.Trips.Domain/Models/TripTime.cs) rejects impossible local times and requires an explicit offset for ambiguous ones. Nothing is corrected silently. Trip ownership, ids and persistence are not part of this layer.
+[Trip](../src/TravelTracker.Trips.Domain/Models/Trip.cs) and [TripLeg](../src/TravelTracker.Trips.Domain/Models/TripLeg.cs) are immutable. `Trip.Create` / `WithLegs` throw [TripValidationException](../src/TravelTracker.Trips.Domain/Models/TripValidationException.cs) listing every [TripError](../src/TravelTracker.Trips.Domain/Models/TripError.cs) (field path plus message), so a rejected edit leaves the old trip unchanged.
+
+Under #105 a trip needs a nonblank name, a recognized time zone and valid start/end boundaries, but may contain no stops or a single stop without a leg. `Trip.Stops` retains ordered place snapshots; omitted stops are derived from the first leg's departure and each leg's destination. An explicit list must match that itinerary; more than one stop needs connecting legs. `IsRoundTrip` stores traveller intent without requiring a closed loop. There is no required accommodation, attraction or visit, and every supported category can appear at either endpoint or as the only stop.
+
+Legs remain sequenced 1..n, connected by place ID and type, arrive after departing, do not overlap, and sit inside the trip start/end. Place snapshots need public IDs, supported types, names, addresses and valid coordinates (latitude -90..90, longitude -180..180). Trip boundaries preserve their entered offsets and are compared as instants, so earlier valid saves with UTC boundaries remain readable. Leg times must carry offsets valid for the trip zone; [TripTime.Resolve](../src/TravelTracker.Trips.Domain/Models/TripTime.cs) rejects impossible local times and requires an explicit offset for ambiguous ones. Nothing is corrected silently. Authentication, ownership and persistence remain outside this layer. See [the exact save contract](trips-service.md#minimal-draft-and-save-fields-105).
 
 ## Trip snapshots and ownership
 

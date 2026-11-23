@@ -6,7 +6,7 @@ TravelTracker puts a traveller's journeys, accommodation stays and attraction vi
 
 This document says what the product does and how it is organized. It leaves technology choices to implementation.
 
-The release labels below describe the product roadmap. The current runnable demonstration implements only Attractions, Transport entries and Route Points; the remaining capabilities are planned.
+The release labels below describe the product roadmap. The current app runs six independent service APIs and a Blazor frontend, including owner-scoped trip create, read, history and replacement. Capabilities marked later or planned below remain roadmap work; the [Trips service contract](trips-service.md) describes its implemented slice.
 
 **Goals**
 
@@ -77,7 +77,7 @@ Every account is a traveller or an administrator, and is active, banned or deact
 | Route point | A reusable accommodation, attraction or transport-stop location snapshot |
 | Trip point | One ordered occurrence of a route point in a trip; the same location may be used more than once |
 | Scheduled transport route | One transport entry travelling between route points at supplied departure/arrival times, with preparation and optional intermediate stop timings |
-| Trip | A named, dated journey, one way or round trip, shown in a chosen time zone |
+| Trip | A named, dated plan in a chosen time zone; it may have no stops, one stop, or connected journeys |
 | Leg | One ordered trip journey selecting a scheduled transport route between trip-point occurrences |
 | Stay | A booking at an accommodation, with check-in and check-out |
 | Visit | Time spent at an attraction |
@@ -89,24 +89,28 @@ Every account is a traveller or an administrator, and is active, banned or deact
 - **Trip status** (upcoming, current, past) is worked out from the trip's dates when viewed. It reflects the plan, not proof the traveller went.
 - **Concurrent edits.** If two people or two tabs change the same record, the later save is refused and the user can reload or review their changes rather than overwriting.
 
-**Local service demonstration.** Independent Attractions exposes create/detail/list/search/PATCH on 5104 with PostgreSQL, private/shared ownership and live Users access checks. Accommodations exposes create/detail/list/name search on 5106 with PostgreSQL, private/shared ownership and live Users checks. Transport entries and Route Points run independently on 5105 with PostgreSQL. Each host has Development Swagger and public GUID DTOs. See [Attractions startup and access boundaries](attractions-service.md) and [Accommodations startup and access rules](accommodations-service.md). Trips, Settings and scheduled-route work remain future capabilities. Route-point source IDs are optional unverified metadata. The scheduled-route concept above and the trip rules below describe future product design; schedules, boarding/dwell calculations and attraction suggestions are not implemented in the reduced demonstration. See the [current specification](https://github.com/NewWaveOwl/TravelTracker/blob/milestone_2_AI_and_development_resource/devlopmet_flow/atiom_developmet_flow/implementation/specification.md).
+**Local service demonstration.** Independent Attractions exposes create/detail/list/search/PATCH on 5104 with PostgreSQL, private/shared ownership and live Users access checks. Accommodations exposes create/detail/list/name search on 5106 with PostgreSQL, private/shared ownership and live Users checks. Transport entries and Route Points run independently on 5105 with PostgreSQL. Each host has Development Swagger and public GUID DTOs. See [Attractions startup and access boundaries](attractions-service.md) and [Accommodations startup and access rules](accommodations-service.md). [Trips](trips-service.md) runs on 5108 with atomic itinerary saves, ordered stop snapshots and owner-scoped reads and replacements; [Settings](settings-service.md) runs on 5107. Route-point source IDs are optional unverified metadata. Schedules, boarding/dwell calculations, stays, visits and attraction suggestions remain future work.
 
-**Trip-point and route relationship.** A route point stores a reusable location. A trip point represents one use of that location in an itinerary. A transport entry stores the mode, name and description; a future scheduled route adds the start/end points, departure/arrival, preparation and ordered intermediate stops. Trip legs select those routes and retain snapshots. Station/airport points can be route endpoints or intermediate stops while the whole trip still follows the accommodation/attraction rules below. The [relationship diagram and timing design](trip-points-and-routes.md) explain this planned integration.
+**Trip-point and route relationship.** A route point stores a reusable location. A trip point represents one use of that location in an itinerary. A transport entry stores the mode, name and description; a future scheduled route adds the start/end points, departure/arrival, preparation and ordered intermediate stops. Current trip legs use direct journeys and retain snapshots. Any supported place type can be a trip's start, destination or only stop. The [relationship diagram and timing design](trip-points-and-routes.md) explain the planned scheduling integration.
 
 ## 5. Trip rules
 
-The app only saves a trip that makes sense as a real journey. In plain terms:
+The app saves the traveller's plan without prescribing which kinds of places they must visit (#105):
 
-- **A trip is a connected chain.** Every leg starts where the previous one ended, so the traveller never "teleports" between places.
-- **One way** trips go from a place the traveller stays to an attraction. **Round trips** return to where they started and include at least one attraction.
+- **Minimal saved plan.** A nonblank name, recognized time zone, valid start/end with end at or after start, and an itinerary list are required. An empty itinerary or one catalogue-backed stop is valid. A single stop needs no invented journey, transport, visit or time. Unsaved browser drafts may still be incomplete; service saves enforce these basics.
+- **Places are the traveller's choice.** Accommodation, attraction and transport-stop categories identify the owning catalogue; none is required. The plan can start or end at any supported type and needs no attraction or visit.
+- **Round trip is intent.** The one-way/round-trip choice is stored as entered. Saving never demands a return leg, inserts one, or changes the selected flag.
+- **Journeys form a connected chain.** When there are legs, every leg starts where the previous one ended. Two or more stops require connecting legs; unfinished disconnected maps can remain browser drafts.
 - **Time flows forward.** Journeys happen in order, each takes some time, and the traveller cannot be on two journeys at once.
 - **Visits fit the journey.** A visit happens at a place the traveller has actually reached, before they leave it, and never at the same time as another visit or a journey.
 - **Stays are bookings.** A hotel booking can span the time the traveller is out travelling or sightseeing, so it never conflicts with them.
-- **Everything stays inside the trip's dates.** The app may offer to extend the trip but never changes the dates on its own.
+- **Everything stays inside the trip's dates.** Supplied journey times must have offsets valid for the chosen zone. Trip boundaries keep their entered offsets, including existing plans saved with UTC boundaries. The app may offer to extend the trip but never changes the dates on its own.
 - **Places keep their meaning.** The app never silently reconnects, reorders or corrects the user's choices; it points out the problem and lets the user fix it.
 - **Times are local to the trip.** Users enter times in the trip's time zone, and the app asks for clarification when a local time is ambiguous or impossible.
 
 Every problem is reported next to the field that caused it.
+
+The [save contract](trips-service.md#minimal-draft-and-save-fields-105) defines empty/single-stop requests, compatibility with existing leg payloads, and the checks retained for coordinates, account access and atomic persistence.
 
 **Free time (M3).** Free time is the part of the traveller's available hours (adjustable per trip, with a sensible daily default) that is not taken up by travel, visits or time blocks the traveller has marked. A hotel booking does not count as busy, because otherwise nothing could be suggested while the traveller is at their hotel. The trip summary shows total free time and the individual free windows, explains which hours were counted, and shows "not enough information" for drafts that lack times.
 
@@ -142,10 +146,11 @@ What each part of the system lets people create, read, update and delete.
 
 - In the Map/Trip workspace, **Trip duration** uses one calendar to choose a beginning day and an ending day, including both full days in the trip's time zone. Connection times stay separately editable. Existing saved trip timestamps are preserved until the date range is changed.
 - Map View panel box icons toggle collapse/expand on a single click. Double-click, double-tap or Home restores the panel's original position and expands it without clearing edits. Dragging the header or icon moves a panel; arrow keys provide a keyboard alternative. New trip and Save trip stay at the top right. The Trip tab has no movement controls. Recenter returns to the first trip stop, or the initial map position for an empty trip.
-- A round trip shows an explicit return leg; the app may copy places but never invents times.
+- The traveller can explicitly add a return leg. A round-trip choice alone never inserts a place, reorders a route or invents times.
 - Place search shows shared and private places, with Add Place when nothing matches.
 - Legs can be added, removed and reordered (with a keyboard alternative to dragging). A broken connection is impossible by construction, because each leg's departure is the previous leg's destination. Reordering shows the resulting chain and highlights time clashes but never fixes them silently.
 - Errors appear next to each field and in a summary that jumps to the first problem.
+- **Save trip (#119)** stays prominent in the Map and Trip workspaces on desktop and mobile, including the step-by-step form. Ctrl+S and Cmd+S invoke the same save action while the editor is active; other pages keep the browser shortcut. Saving, saved and failure feedback stays visible beside the action. New catalogue entries still require explicit confirmation before a trip can be saved.
 - Saving works only when the form is valid, cannot be double-submitted, and moves on only after the save is confirmed.
 - If saving fails, nothing typed is lost. Unsaved work is kept only in memory, so leaving the editor asks first.
 
@@ -162,6 +167,8 @@ What each part of the system lets people create, read, update and delete.
 ## 8. Ticket import (M3)
 
 Travellers can upload a ticket or booking (PDF or image) to pre-fill a draft: Upload, Validate, Extract, Review, Confirm, then save through the normal editor.
+
+**Implemented PDF slice (#109).** Saved-trip details offer **Tickets & bookings → Import tickets**. The upload, extracting, editable review, reviewed-draft and failure screens follow Figma 02.8–02.12. This slice accepts text-bearing PDFs up to 10 MiB and 10 pages; originals are private, held in server memory for at most 15 minutes, and discarded on restart. No trip is saved or changed by extraction or finishing draft review. Permanent attachments, itinerary insertion and pasted-text input remain with #122/#110; images and OCR remain future work. See the [supported fields, access rules, limits and verification](ticket-import.md).
 
 - Extraction only proposes values. The traveller sees the original beside the extracted fields, with missing or uncertain ones flagged, and confirms before anything reaches an itinerary.
 - Unknown fields stay empty; nothing is guessed.

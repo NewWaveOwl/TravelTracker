@@ -1,14 +1,13 @@
 @page "/new-trip/form"
 @using TravelTracker.Frontend.Components.Trips
 @using TravelTracker.Frontend.Features.Trips
-@implements IDisposable
 
 <small>TRIP PLANNING / YOUR ITINERARY</small>
 <PageHeading Title="Plan your trip" />
 <p>Build your itinerary, review the route and save when you are ready.</p>
 <p><a class="button secondary" href="new-trip">Open trip editor</a></p>
 <NavigationLock OnBeforeInternalNavigation="ConfirmLeaveAsync" ConfirmExternalNavigation="@Dirty" />
-<div class="trip-page">
+<div @ref="editorElement" class="trip-page">
 @if (!loaded)
 {
     <Feedback Kind="FeedbackKind.Loading">Loading…</Feedback>
@@ -19,6 +18,22 @@ else if (!signedIn)
 }
 else
 {
+    <div class="trip-form-save-controls">
+        <div class="trip-actions" aria-label="Save trip">
+            <button type="button" data-trip-save aria-keyshortcuts="Control+S Meta+S"
+                    @onclick="SaveAsync" disabled="@(saving || !canWrite || completed || pendingTarget is not null)">@(saving ? "Saving…" : "Save trip")</button>
+            <small>Ctrl+S / ⌘S</small>
+        </div>
+        @if (saving) { <p class="trip-status" role="status">Saving trip…</p> }
+        else if (saveError is not null)
+        {
+            <p class="trip-save-error" role="status">Trip not saved. Your entries are still here. <a href="#trip-save-error-heading">Review error</a></p>
+        }
+        else if (errors.Count > 0)
+        {
+            <p class="trip-save-error" role="status">Check trip details before saving. <a href="#trip-errors-heading">Review details</a></p>
+        }
+    </div>
     <ol class="trip-steps" aria-label="Trip progress" tabindex="-1" @ref="progressList">
         @foreach (var (number, title) in Steps)
         {
@@ -43,7 +58,7 @@ else
     @if (saveError is not null)
     {
         <section class="trip-alert @(saveError.Kind == FailureKind.Validation ? "validation" : "failure")" role="alert">
-            <h2>@SaveHeading</h2>
+            <h2 id="trip-save-error-heading">@SaveHeading</h2>
             <p>@saveError.Message</p>
             <p>Everything you entered is still here. Fix what is listed or try the save again.</p>
             @if (SaveMayHaveCreated)
@@ -68,6 +83,7 @@ else
     @if (step == 1)
     {
         <form class="trip-form" aria-label="Trip basics" @onsubmit="NextFromBasics" @onsubmit:preventDefault>
+            <fieldset disabled="@saving" class="trip-form-fields">
             <div class="trip-field">
                 <label for="trip-name">Trip name *</label>
                 <input id="trip-name" required aria-invalid="@Invalid("name")" @bind="draft.Name" @bind:event="oninput" />
@@ -97,17 +113,20 @@ else
             </div>
             <fieldset class="trip-kind">
                 <legend>Trip type *</legend>
-                <label><input type="radio" name="trip-kind" id="trip-one-way" checked="@(!draft.IsRoundTrip)" @onchange="() => draft.IsRoundTrip = false" /> One way: ends at an attraction</label>
-                <label><input type="radio" name="trip-kind" id="trip-round-trip" checked="@draft.IsRoundTrip" @onchange="() => draft.IsRoundTrip = true" /> Round trip: returns to where it started</label>
+                <label><input type="radio" name="trip-kind" id="trip-one-way" checked="@(!draft.IsRoundTrip)" @onchange="() => draft.IsRoundTrip = false" /> One way</label>
+                <label><input type="radio" name="trip-kind" id="trip-round-trip" checked="@draft.IsRoundTrip" @onchange="() => draft.IsRoundTrip = true" /> Round trip</label>
+                <small>This records your plan; no return leg is required to save.</small>
             </fieldset>
             <div class="trip-actions"><button type="submit">Next: itinerary</button><a class="button secondary" href="/">Cancel</a></div>
+            </fieldset>
         </form>
     }
     else if (step == 2)
     {
         <form class="trip-form" aria-label="Itinerary" @onsubmit="NextFromItinerary" @onsubmit:preventDefault>
+            <fieldset disabled="@saving" class="trip-form-fields">
             <h2 id="legs-heading" tabindex="-1" @ref="stepHeading">Itinerary</h2>
-            <p>Add each leg in order. A trip starts at an accommodation and @(draft.IsRoundTrip ? "returns to it, passing at least one attraction." : "ends at an attraction.")</p>
+            <p>Add journeys in order between any supported places, or continue with an empty itinerary.</p>
             @if (modeFailure is not null)
             {
                 <Feedback Kind="FeedbackKind.Unavailable" Retry="LoadModesAsync">@modeFailure</Feedback>
@@ -118,7 +137,7 @@ else
                 var leg = draft.Legs[position];
                 <section class="trip-leg" aria-labelledby="@($"leg-{position}-heading")">
                     <h3 id="@($"leg-{position}-heading")">Leg @(position + 1)</h3>
-                    <PlaceSelector Label="From" Id="@($"leg-{position}-from")" Types="@(position == 0 ? FirstTypes : AllTypes)" Value="leg.From" ValueChanged="place => leg.From = place" Error="@Message($"legs[{position}].from")" />
+                    <PlaceSelector Label="From" Id="@($"leg-{position}-from")" Types="AllTypes" Value="leg.From" ValueChanged="place => leg.From = place" Error="@Message($"legs[{position}].from")" />
                     <PlaceSelector Label="To" Id="@($"leg-{position}-to")" Value="leg.To" ValueChanged="place => leg.To = place" Error="@Message($"legs[{position}].to")" />
                     <div class="trip-field">
                         <label for="@($"leg-{position}-transport")">Transport mode *</label>
@@ -147,6 +166,7 @@ else
             <FieldError Messages="@Messages("legs")" />
             <button type="button" class="secondary" @ref="addLegButton" @onclick="AddLeg">Add leg</button>
             <div class="trip-actions"><button type="button" class="secondary" @onclick="() => GoTo(1)">Back</button><button type="button" @onclick="NextFromItinerary">Next: review</button></div>
+            </fieldset>
         </form>
     }
     else
@@ -166,13 +186,8 @@ else
                     <li>@leg.From?.Name to @leg.To?.Name by @leg.TransportName, @leg.Departure.Replace('T', ' ') to @leg.Arrival.Replace('T', ' ')</li>
                 }
             </ol>
-            @if (saving)
-            {
-                <p class="trip-status" role="status">Saving trip…</p>
-            }
             <div class="trip-actions">
                 <button type="button" class="secondary" @onclick="() => GoTo(2)" disabled="@saving">Back</button>
-                <button type="button" @onclick="SaveAsync" disabled="@(saving || !canWrite)">@(saving ? "Saving…" : "Save trip")</button>
             </div>
         </section>
     }

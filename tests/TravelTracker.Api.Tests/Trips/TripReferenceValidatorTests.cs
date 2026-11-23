@@ -312,13 +312,13 @@ public sealed class TripReferenceValidatorTests
     public async Task Validate_ValidReferencesButBrokenItinerary_ReportsTripRuleWithoutTrip()
     {
         var draft = new TripDraft("loop", TimeZoneInfo.FindSystemTimeZoneById("Europe/Paris"), TripFixture.Start, TripFixture.Start.AddHours(4), false,
-            [new(1, new(TripFixture.Hotel, "accommodation"), new(TripFixture.Hotel, "accommodation"), TripFixture.Train, TripFixture.Start.AddHours(1), TripFixture.Start.AddHours(2))]);
+            [new(1, new(TripFixture.Hotel, "accommodation"), new(TripFixture.Hotel, "accommodation"), TripFixture.Train, TripFixture.Start.AddHours(1), TripFixture.Start)]);
 
         var outcome = await ValidateAsync(TripFixture.HealthyUpstream(), draft);
 
         Assert.Equal(TripReferenceStatus.InvalidTrip, outcome.Status);
         Assert.Null(outcome.Trip);
-        Assert.Contains(outcome.Errors, error => error.Field == "legs[0].to");
+        Assert.Contains(outcome.Errors, error => error.Field == "legs[0].arrival");
     }
 
     /**

@@ -26,11 +26,14 @@ public sealed class CreateTripRequest
     [Required]
     public DateTimeOffset? End { get; init; }
 
-    /** whether the trip returns to its starting accommodation. */
+    /** The traveller's round-trip intent; it does not require a return leg. */
     public bool IsRoundTrip { get; init; }
 
     /** ordered legs, numbered from 1 with no gaps, at most 100. */
     [Required]
     [MaxLength(100)]
     public List<CreateTripLegRequest>? Legs { get; init; }
+
+    /** Optional ordered place references; omitted values are derived from legs. Zero or one may stand without a leg. */
+    public List<CreateTripPlaceRequest>? Stops { get; init; }
 }

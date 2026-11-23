@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using TravelTracker.Trips.Domain.Models;
 using TravelTracker.Trips.Data.Entities;
@@ -5,7 +6,7 @@ using TravelTracker.Trips.Data.Entities;
 namespace TravelTracker.Trips.Data.Repositories;
 
 /**
- * stores trips in the service-owned PostgreSQL database. A save writes the trip, its legs and their snapshots in
+ * Stores trips in the service-owned PostgreSQL database. A save writes the trip, stops, legs and snapshots in
  * one explicit transaction, so a failure at any row leaves nothing behind.
  *
  * @param database the Trips database context for the current request.
@@ -13,7 +14,7 @@ namespace TravelTracker.Trips.Data.Repositories;
 public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
 {
     /**
-     * commits the trip row and every leg row together, or commits nothing.
+     * Commits the trip row, stop snapshots and leg rows together, or commits nothing.
      *
      * @param trip the validated trip to store.
      * @param ownerIssuer the validated token issuer of the owner.
@@ -37,8 +38,8 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
     }
 
     /**
-     * replaces the owned trip and itinerary in one transaction. The revision check and increment
-     * are part of the parent update, before the old leg rows are touched.
+     * Replaces the owned trip and itinerary in one transaction. The revision check and increment
+     * are part of the parent update, before the old stop or leg rows are touched.
      *
      * @param trip the validated replacement with the existing trip identifier.
      * @param ownerIssuer the caller's validated issuer.
@@ -71,7 +72,9 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
                     ? TripReplacementStatus.NotFound : TripReplacementStatus.Stale;
 
             await database.TripLegs.Where(leg => leg.TripId == trip.TripId).ExecuteDeleteAsync(cancellationToken);
+            await database.TripStops.Where(stop => stop.TripId == trip.TripId).ExecuteDeleteAsync(cancellationToken);
             database.TripLegs.AddRange(replacement.Legs);
+            database.TripStops.AddRange(replacement.Stops);
             await database.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return TripReplacementStatus.Replaced;
@@ -96,7 +99,8 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
             .Select(row => (long?)row.Revision).SingleOrDefaultAsync(cancellationToken);
 
     /**
-     * loads a trip with its legs in sequence order, only when the caller owns it.
+     * Loads an owned trip and its ordered snapshots without multiplying sibling collection rows.
+     * A repeatable-read transaction keeps the split queries on the same snapshot if a replacement commits between them.
      *
      * @param tripId the public trip identifier.
      * @param ownerIssuer the caller's validated issuer.
@@ -106,10 +110,14 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
      */
     public async Task<Trip?> GetOwnedByIdAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default)
     {
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
         var row = await database.Trips.AsNoTracking()
             .Include(trip => trip.Legs)
+            .Include(trip => trip.Stops)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(trip => trip.TripId == tripId && trip.OwnerIssuer == ownerIssuer && trip.OwnerSubject == ownerSubject,
                 cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return row is null ? null : ToDomain(row);
     }
 
@@ -146,10 +154,11 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
     }
 
     /**
-     * maps a stored trip and its legs back to the domain, restoring each offset the traveller entered.
+     * Restores a stored trip with its entered offsets and ordered stops. Trips written before the stop migration
+     * derive their stop order from existing leg snapshots without another catalogue lookup.
      *
-     * @param row the stored trip with its legs loaded.
-     * @return the rebuilt trip, which is validated again by the domain.
+     * @param row The stored trip with its legs and stops loaded.
+     * @return The rebuilt trip, which is validated again by the domain.
      */
     private static Trip ToDomain(TripRow row) => Trip.Create(
         row.Name,
@@ -164,16 +173,18 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
             new TripTransport(leg.TransportModeId, leg.TransportCode, leg.TransportName),
             leg.DepartureAt.ToOffset(leg.DepartureOffset),
             leg.ArrivalAt.ToOffset(leg.ArrivalOffset))),
-        row.TripId, row.Revision);
+        row.TripId, row.Revision,
+        row.Stops.Count == 0 ? null : row.Stops.OrderBy(stop => stop.Sequence)
+            .Select(stop => new TripPlace(stop.PlaceId, stop.PlaceType, stop.PlaceName, stop.PlaceAddress, stop.Latitude, stop.Longitude)));
 
     /**
      * maps a validated trip, its owner and its snapshots to persistence rows. Instants are written in UTC because
      * Npgsql refuses a non-zero offset for timestamptz; the entered offsets are stored beside them.
      *
-     * @param trip the validated trip.
-     * @param ownerIssuer the owner's issuer.
-     * @param ownerSubject the owner's subject.
-     * @return a detached trip row with its leg rows attached.
+     * @param trip The validated trip.
+     * @param ownerIssuer The owner's issuer.
+     * @param ownerSubject The owner's subject.
+     * @return A detached trip row with its stop and leg rows attached.
      */
     private static TripRow ToRow(Trip trip, string ownerIssuer, string ownerSubject) => new()
     {
@@ -188,6 +199,17 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
         EndAt = trip.End.ToUniversalTime(),
         EndOffset = trip.End.Offset,
         IsRoundTrip = trip.IsRoundTrip,
+        Stops = trip.Stops.Select((stop, index) => new TripStopRow
+        {
+            TripId = trip.TripId,
+            Sequence = index + 1,
+            PlaceId = stop.PlaceId,
+            PlaceType = stop.Type,
+            PlaceName = stop.Name,
+            PlaceAddress = stop.Address,
+            Latitude = stop.Latitude,
+            Longitude = stop.Longitude
+        }).ToList(),
         Legs = trip.Legs.Select(leg => new TripLegRow
         {
             TripId = trip.TripId,

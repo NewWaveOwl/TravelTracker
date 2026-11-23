@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using TravelTracker.Trips.Domain.Models;
 using TravelTracker.Trips.Data;
@@ -41,6 +43,7 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Empty(await repository.ListOwnedAsync("https://other-issuer.example/", "alice"));
         var migrations = await restarted.Database.GetAppliedMigrationsAsync();
 
+        Assert.False(restarted.Database.HasPendingModelChanges());
         Assert.NotNull(persisted);
         Assert.Equal(expected.TripId, persisted.TripId);
         Assert.Equal("Paris weekend", persisted.Name);
@@ -49,6 +52,7 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Equal(TimeSpan.FromHours(2), persisted.Start.Offset);
         Assert.Equal(TimeSpan.FromHours(2), persisted.End.Offset);
         Assert.True(persisted.IsRoundTrip);
+        Assert.Equal(expected.Stops, persisted.Stops);
         Assert.Equal(2, persisted.Legs.Count);
         var first = persisted.Legs[0];
         Assert.Equal(1, first.Sequence);
@@ -62,6 +66,8 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Equal("Louvre", persisted.Legs[1].From.Name);
         Assert.Equal("Hotel Lumiere", persisted.Legs[1].To.Name);
         Assert.Contains(migrations, migration => migration.EndsWith("_InitialTrips", StringComparison.Ordinal));
+        Assert.Contains("20261109120000_TripRevisionCheck", migrations);
+        Assert.Contains("20261123004432_TripStops", migrations);
     }
 
     [Fact]
@@ -80,6 +86,7 @@ public sealed class TripRepositoryPostgreSqlTests
         await using var check = CreateContext(database.ConnectionString);
         Assert.Equal(0L, await check.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"Trips\"").SingleAsync());
         Assert.Equal(0L, await check.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripLegs\"").SingleAsync());
+        Assert.Equal(0L, await check.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripStops\"").SingleAsync());
     }
 
     [Fact]
@@ -106,6 +113,7 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Equal(original.Revision + 1, saved.Revision);
         Assert.False(saved.IsRoundTrip);
         Assert.Equal(replacement.Legs[0], Assert.Single(saved.Legs));
+        Assert.Equal(replacement.Stops, saved.Stops);
     }
 
     [Fact]
@@ -130,6 +138,7 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Equal(original.Name, saved.Name);
         Assert.Equal(original.Revision, saved.Revision);
         Assert.Equal(original.Legs, saved.Legs);
+        Assert.Equal(original.Stops, saved.Stops);
     }
 
     [Fact]
@@ -163,6 +172,46 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Equal(original.Revision + 1, persisted.Revision);
         Assert.Equal(expected.Name, persisted.Name);
         Assert.Equal(expected.Legs, persisted.Legs);
+        Assert.Equal(expected.Stops, persisted.Stops);
+    }
+
+    [Fact]
+    public async Task Read_ReplacementBetweenParentAndChildren_ReturnsOneCompleteRevision()
+    {
+        await using var database = new PostgresTestDatabase();
+        var original = SampleTrip();
+        var replacement = Trip.Create("Changed while reading", Paris, Start, Start, false, [], original.TripId,
+            stops: [original.Stops[1]]);
+        await using (var setup = CreateContext(database.ConnectionString))
+        {
+            await TripsDatabase.InitializeAsync(setup);
+            await new EfTripRepository(setup).AddAsync(original, OwnerIssuer, "alice");
+        }
+
+        var concurrentWrite = new ReplaceBeforeLegReadInterceptor(async cancellationToken =>
+        {
+            await using var writer = CreateContext(database.ConnectionString);
+            Assert.Equal(TripReplacementStatus.Replaced,
+                await new EfTripRepository(writer).ReplaceOwnedAsync(replacement, OwnerIssuer, "alice", 1, cancellationToken));
+        });
+        await using var reader = new TripsDbContext(new DbContextOptionsBuilder<TripsDbContext>()
+            .UseNpgsql(database.ConnectionString).AddInterceptors(concurrentWrite).Options);
+        var read = await new EfTripRepository(reader).GetOwnedByIdAsync(original.TripId, OwnerIssuer, "alice");
+
+        Assert.True(concurrentWrite.ReplacementCommitted);
+        Assert.NotNull(read);
+        Assert.Equal(original.Revision, read.Revision);
+        Assert.Equal(original.Name, read.Name);
+        Assert.Equal(original.Stops, read.Stops);
+        Assert.Equal(original.Legs, read.Legs);
+
+        await using var fresh = CreateContext(database.ConnectionString);
+        var current = await new EfTripRepository(fresh).GetOwnedByIdAsync(original.TripId, OwnerIssuer, "alice");
+        Assert.NotNull(current);
+        Assert.Equal(2, current.Revision);
+        Assert.Equal(replacement.Name, current.Name);
+        Assert.Equal(replacement.Stops, current.Stops);
+        Assert.Empty(current.Legs);
     }
 
     [Fact]
@@ -197,6 +246,221 @@ public sealed class TripRepositoryPostgreSqlTests
         var endBeforeStart = await Assert.ThrowsAsync<PostgresException>(() => InsertTripAsync(context, ownerSubject: "alice", end: Start.AddHours(-1)));
         Assert.Equal(PostgresErrorCodes.CheckViolation, endBeforeStart.SqlState);
         Assert.Equal("CK_Trips_End", endBeforeStart.ConstraintName);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task EmptyOrSingleStop_SurvivesRestart_WithoutInventingLegs(bool singleStop, bool roundTrip)
+    {
+        await using var database = new PostgresTestDatabase();
+        var expected = Trip.Create("Early plan", Paris, Start, Start, roundTrip, [],
+            stops: singleStop ? [SampleTrip().Legs[0].To] : []);
+        await using (var context = CreateContext(database.ConnectionString))
+        {
+            await TripsDatabase.InitializeAsync(context);
+            await new EfTripRepository(context).AddAsync(expected, OwnerIssuer, "alice");
+        }
+
+        await using var restarted = CreateContext(database.ConnectionString);
+        var repository = new EfTripRepository(restarted);
+        var actual = await repository.GetOwnedByIdAsync(expected.TripId, OwnerIssuer, "alice");
+        Assert.NotNull(actual);
+        Assert.Equal(expected.Stops, actual.Stops);
+        Assert.Empty(actual.Legs);
+        Assert.Equal(roundTrip, actual.IsRoundTrip);
+        Assert.Equal(Start, actual.Start);
+        Assert.Equal(Start.Offset, actual.Start.Offset);
+        Assert.Null(await repository.GetOwnedByIdAsync(expected.TripId, OwnerIssuer, "bob"));
+        Assert.Null(await repository.GetOwnedByIdAsync(expected.TripId, "https://other-issuer.example/", "alice"));
+        Assert.Equal(expected.TripId, Assert.Single(await repository.ListOwnedAsync(OwnerIssuer, "alice")).TripId);
+        Assert.Equal(singleStop ? 1L : 0L,
+            await restarted.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripStops\"").SingleAsync());
+        Assert.Equal(0L, await restarted.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripLegs\"").SingleAsync());
+    }
+
+    [Theory]
+    [InlineData("attraction", "accommodation", false)]
+    [InlineData("transport_stop", "transport_stop", true)]
+    [InlineData("accommodation", "accommodation", true)]
+    public async Task UnrestrictedComposition_SavesSnapshots_WithoutForcedReturnOrAttraction(string fromType, string toType, bool roundTrip)
+    {
+        await using var database = new PostgresTestDatabase();
+        var sample = SampleTrip();
+        var leg = sample.Legs[0] with { From = sample.Legs[0].From with { Type = fromType }, To = sample.Legs[0].To with { Type = toType } };
+        var expected = Trip.Create("Chosen places", Paris, Start, Start.AddHours(4), roundTrip, [leg]);
+        await using (var context = CreateContext(database.ConnectionString))
+        {
+            await TripsDatabase.InitializeAsync(context);
+            await new EfTripRepository(context).AddAsync(expected, OwnerIssuer, "alice");
+        }
+
+        await using var restarted = CreateContext(database.ConnectionString);
+        var actual = await new EfTripRepository(restarted).GetOwnedByIdAsync(expected.TripId, OwnerIssuer, "alice");
+        Assert.NotNull(actual);
+        Assert.Equal(expected.Stops, actual.Stops);
+        Assert.Equal(expected.Legs, actual.Legs);
+        Assert.Equal(roundTrip, actual.IsRoundTrip);
+    }
+
+    [Fact]
+    public async Task ReplaceOwned_TransitionsBetweenLegsSingleStopAndEmpty_WithoutStaleChildren()
+    {
+        await using var database = new PostgresTestDatabase();
+        var original = SampleTrip();
+        await using var context = CreateContext(database.ConnectionString);
+        await TripsDatabase.InitializeAsync(context);
+        var repository = new EfTripRepository(context);
+        await repository.AddAsync(original, OwnerIssuer, "alice");
+        var single = Trip.Create("One place", Paris, Start, Start, true, [], original.TripId, stops: [original.Stops[1]]);
+        Assert.Equal(TripReplacementStatus.NotFound, await repository.ReplaceOwnedAsync(single, OwnerIssuer, "bob", 1));
+        Assert.Equal(TripReplacementStatus.NotFound, await repository.ReplaceOwnedAsync(single, "https://other-issuer.example/", "alice", 1));
+        Assert.Equal(TripReplacementStatus.Replaced, await repository.ReplaceOwnedAsync(single, OwnerIssuer, "alice", 1));
+        Assert.Equal(single.Stops, (await repository.GetOwnedByIdAsync(original.TripId, OwnerIssuer, "alice"))!.Stops);
+        Assert.Equal(0L, await context.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripLegs\"").SingleAsync());
+        Assert.Equal(1L, await context.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripStops\"").SingleAsync());
+
+        var empty = Trip.Create("No places yet", Paris, Start, Start, false, [], original.TripId);
+        Assert.Equal(TripReplacementStatus.Stale, await repository.ReplaceOwnedAsync(empty, OwnerIssuer, "alice", 1));
+        Assert.Equal(single.Stops, (await repository.GetOwnedByIdAsync(original.TripId, OwnerIssuer, "alice"))!.Stops);
+        Assert.Equal(TripReplacementStatus.Replaced, await repository.ReplaceOwnedAsync(empty, OwnerIssuer, "alice", 2));
+        var savedEmpty = await repository.GetOwnedByIdAsync(original.TripId, OwnerIssuer, "alice");
+        Assert.NotNull(savedEmpty);
+        Assert.Equal(3, savedEmpty.Revision);
+        Assert.Empty(savedEmpty.Stops);
+        Assert.Empty(savedEmpty.Legs);
+        Assert.Equal(0L, await context.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripStops\"").SingleAsync());
+
+        Assert.Equal(TripReplacementStatus.Replaced, await repository.ReplaceOwnedAsync(original, OwnerIssuer, "alice", 3));
+        var restored = await repository.GetOwnedByIdAsync(original.TripId, OwnerIssuer, "alice");
+        Assert.NotNull(restored);
+        Assert.Equal(4, restored.Revision);
+        Assert.Equal(original.Stops, restored.Stops);
+        Assert.Equal(original.Legs, restored.Legs);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedStopWrite_RollsBackTripAndAllChildren(bool replacing)
+    {
+        await using var database = new PostgresTestDatabase();
+        var original = SampleTrip();
+        var candidate = Trip.Create("One place", Paris, Start, Start, false, [], original.TripId, stops: [original.Stops[1]]);
+        await using (var context = CreateContext(database.ConnectionString))
+        {
+            await TripsDatabase.InitializeAsync(context);
+            var repository = new EfTripRepository(context);
+            if (replacing) await repository.AddAsync(original, OwnerIssuer, "alice");
+            await context.Database.ExecuteSqlRawAsync("""
+                CREATE FUNCTION reject_test_stop() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN RAISE EXCEPTION 'test stop failure' USING ERRCODE = '23514'; END; $$;
+                CREATE TRIGGER reject_test_stop BEFORE INSERT ON "TripStops"
+                FOR EACH ROW EXECUTE FUNCTION reject_test_stop();
+                """);
+            var exception = await Assert.ThrowsAsync<DbUpdateException>(async () =>
+            {
+                if (replacing) await repository.ReplaceOwnedAsync(candidate, OwnerIssuer, "alice", 1);
+                else await repository.AddAsync(candidate, OwnerIssuer, "alice");
+            });
+            Assert.Equal(PostgresErrorCodes.CheckViolation, Assert.IsType<PostgresException>(exception.InnerException).SqlState);
+        }
+
+        await using var check = CreateContext(database.ConnectionString);
+        var actual = await new EfTripRepository(check).GetOwnedByIdAsync(original.TripId, OwnerIssuer, "alice");
+        if (replacing)
+        {
+            Assert.NotNull(actual);
+            Assert.Equal(original.Name, actual.Name);
+            Assert.Equal(original.Revision, actual.Revision);
+            Assert.Equal(original.Stops, actual.Stops);
+            Assert.Equal(original.Legs, actual.Legs);
+        }
+        else Assert.Null(actual);
+        Assert.Equal(replacing ? 1L : 0L, await check.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"Trips\"").SingleAsync());
+        Assert.Equal(replacing ? 2L : 0L, await check.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripLegs\"").SingleAsync());
+        Assert.Equal(replacing ? 3L : 0L, await check.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripStops\"").SingleAsync());
+    }
+
+    [Theory]
+    [InlineData("20261109022113_TripRevision")]
+    [InlineData("20261109120000_TripRevisionCheck")]
+    public async Task StopMigration_PreservesLegacyTripAndDerivesStopsFromItsLegs(string previousMigration)
+    {
+        await using var database = new PostgresTestDatabase();
+        var sample = SampleTrip();
+        var original = Trip.Create(sample.Name, Paris, sample.Start.ToUniversalTime(), sample.End.ToUniversalTime(),
+            sample.IsRoundTrip, sample.Legs, sample.TripId);
+        await using (var context = CreateContext(database.ConnectionString))
+        {
+            await context.GetService<IMigrator>().MigrateAsync(previousMigration);
+            await InsertLegacyTripAsync(context, original);
+            await TripsDatabase.InitializeAsync(context);
+            Assert.False(context.Database.HasPendingModelChanges());
+            var invalidRevision = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE \"Trips\" SET \"Revision\" = {0L} WHERE \"TripId\" = {original.TripId}"));
+            Assert.Equal(PostgresErrorCodes.CheckViolation, invalidRevision.SqlState);
+            Assert.Equal("CK_Trips_Revision", invalidRevision.ConstraintName);
+        }
+
+        await using var restarted = CreateContext(database.ConnectionString);
+        var repository = new EfTripRepository(restarted);
+        var actual = await repository.GetOwnedByIdAsync(original.TripId, OwnerIssuer, "alice");
+        Assert.NotNull(actual);
+        Assert.Equal(original.Name, actual.Name);
+        Assert.Equal(original.Start, actual.Start);
+        Assert.Equal(original.End, actual.End);
+        Assert.Equal(original.TripId, actual.TripId);
+        Assert.Equal(original.Revision, actual.Revision);
+        Assert.Equal(TimeSpan.Zero, actual.Start.Offset);
+        Assert.Equal(TimeSpan.Zero, actual.End.Offset);
+        Assert.Equal(TimeSpan.FromHours(2), actual.Legs[0].Departure.Offset);
+        Assert.Equal(original.Stops, actual.Stops);
+        Assert.Equal(original.Legs, actual.Legs);
+        Assert.Equal(0L, await restarted.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripStops\"").SingleAsync());
+        Assert.Equal(TripReplacementStatus.Replaced, await repository.ReplaceOwnedAsync(actual, OwnerIssuer, "alice", 1));
+        Assert.Equal(3L, await restarted.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripStops\"").SingleAsync());
+    }
+
+    [Theory]
+    [InlineData(91, 0, "attraction", 1, "CK_TripStops_Latitude")]
+    [InlineData(0, -181, "transport_stop", 1, "CK_TripStops_Longitude")]
+    [InlineData(0, 0, "unknown", 1, "CK_TripStops_Type")]
+    [InlineData(0, 0, "accommodation", 0, "CK_TripStops_Sequence")]
+    public async Task StopConstraints_RejectInvalidSnapshots(decimal latitude, decimal longitude, string type, int sequence, string constraint)
+    {
+        await using var database = new PostgresTestDatabase();
+        await using var context = CreateContext(database.ConnectionString);
+        await TripsDatabase.InitializeAsync(context);
+        var trip = Trip.Create("Empty", Paris, Start, Start, false, []);
+        await new EfTripRepository(context).AddAsync(trip, OwnerIssuer, "alice");
+        var exception = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "TripStops" ("TripId", "Sequence", "PlaceId", "PlaceType", "PlaceName", "PlaceAddress", "Latitude", "Longitude")
+            VALUES ({trip.TripId}, {sequence}, {Guid.NewGuid()}, {type}, {"Chosen place"}, {""}, {latitude}, {longitude})
+            """));
+        Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);
+        Assert.Equal(constraint, exception.ConstraintName);
+    }
+
+    /**
+     * Seeds the old schema directly so migration preservation is tested without the new stop mapping.
+     * @param context Context migrated before the stop snapshot table.
+     * @param trip Existing complete itinerary to copy.
+     * @return Completion once its old-schema rows have been written.
+     */
+    private static async Task InsertLegacyTripAsync(TripsDbContext context, Trip trip)
+    {
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Trips" ("TripId", "OwnerIssuer", "OwnerSubject", "Name", "TimeZoneId", "StartAt", "StartOffset", "EndAt", "EndOffset", "IsRoundTrip")
+            VALUES ({trip.TripId}, {OwnerIssuer}, {"alice"}, {trip.Name}, {trip.TimeZone.Id}, {trip.Start.ToUniversalTime()}, {trip.Start.Offset}, {trip.End.ToUniversalTime()}, {trip.End.Offset}, {trip.IsRoundTrip})
+            """);
+        foreach (var leg in trip.Legs)
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "TripLegs" ("TripId", "Sequence", "FromPlaceId", "FromPlaceType", "FromPlaceName", "FromPlaceAddress", "FromLatitude", "FromLongitude", "ToPlaceId", "ToPlaceType", "ToPlaceName", "ToPlaceAddress", "ToLatitude", "ToLongitude", "TransportModeId", "TransportCode", "TransportName", "DepartureAt", "DepartureOffset", "ArrivalAt", "ArrivalOffset")
+                VALUES ({trip.TripId}, {leg.Sequence}, {leg.From.PlaceId}, {leg.From.Type}, {leg.From.Name}, {leg.From.Address}, {leg.From.Latitude}, {leg.From.Longitude}, {leg.To.PlaceId}, {leg.To.Type}, {leg.To.Name}, {leg.To.Address}, {leg.To.Latitude}, {leg.To.Longitude}, {leg.Transport.TransportModeId}, {leg.Transport.Code}, {leg.Transport.Name}, {leg.Departure.ToUniversalTime()}, {leg.Departure.Offset}, {leg.Arrival.ToUniversalTime()}, {leg.Arrival.Offset})
+                """);
     }
 
     /**

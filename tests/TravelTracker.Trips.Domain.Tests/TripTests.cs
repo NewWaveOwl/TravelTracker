@@ -47,16 +47,27 @@ public sealed class TripTests
     }
 
     /**
-     * Rejects endpoint mistakes for one-way and round trips.
+     * Accepts every supported endpoint composition without requiring particular place categories.
      */
-    [Fact]
-    public void Create_WrongEndpoints_Rejected()
-    {
-        TripPlace hotel = Point("accommodation");
-        TripPlace museum = Point("attraction");
-        Assert.Contains("legs[0].to", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(10), false, [Leg(1, hotel, hotel, 1, 2)])));
-        Assert.Contains("legs[0].to", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(10), true, [Leg(1, hotel, museum, 1, 2)])));
-        Assert.Contains("legs[0].from", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(10), false, [Leg(1, museum, museum, 1, 2)])));
+    [Theory]
+    [InlineData("accommodation", "accommodation")]
+    [InlineData("accommodation", "attraction")]
+    [InlineData("accommodation", "transport_stop")]
+    [InlineData("attraction", "accommodation")]
+    [InlineData("attraction", "attraction")]
+    [InlineData("attraction", "transport_stop")]
+    [InlineData("transport_stop", "accommodation")]
+    [InlineData("transport_stop", "attraction")]
+    [InlineData("transport_stop", "transport_stop")]
+    public void Create_AnySupportedEndpointComposition_Accepted(string fromType, string toType) {
+        var from = Point(fromType);
+        var to = Point(toType) with { PlaceId = Stable($"destination-{toType}") };
+
+        var trip = Trip.Create("t", Zone, Day, Day.AddHours(10), false, [Leg(1, from, to, 1, 2)]);
+
+        Assert.Equal(from, Assert.Single(trip.Legs).From);
+        Assert.Equal(to, trip.Legs[0].To);
+        Assert.Equal(new[] { from, to }, trip.Stops);
     }
 
     /**
@@ -77,7 +88,7 @@ public sealed class TripTests
     }
 
     /**
-     * Rejects legs outside the trip bounds, a missing transport mode and empty trips.
+     * Rejects legs outside the trip bounds and a missing transport mode.
      */
     [Fact]
     public void Create_OutsideBoundsOrMissingMode_Rejected()
@@ -89,7 +100,215 @@ public sealed class TripTests
         Assert.Contains("legs[0].departure", fields);
         Assert.Contains("legs[0].arrival", fields);
         Assert.Contains("legs[0].transport", fields);
-        Assert.Contains("legs", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(4), false, [])));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Create_EmptyItinerary_AcceptsValidBasicsWithoutInventingStops(bool roundTrip) {
+        var trip = Trip.Create("A plan", Zone, Day, Day, roundTrip, []);
+
+        Assert.Empty(trip.Legs);
+        Assert.Empty(trip.Stops);
+        Assert.Equal(roundTrip, trip.IsRoundTrip);
+        Assert.Equal(Day, trip.Start);
+        Assert.Equal(Day, trip.End);
+    }
+
+    [Theory]
+    [InlineData("accommodation", false)]
+    [InlineData("attraction", false)]
+    [InlineData("transport_stop", false)]
+    [InlineData("accommodation", true)]
+    [InlineData("attraction", true)]
+    [InlineData("transport_stop", true)]
+    public void Create_SingleStop_AcceptsEachSupportedTypeWithoutAVisitOrJourney(string type, bool roundTrip) {
+        var place = Point(type);
+
+        var trip = Trip.Create("One stop", Zone, Day, Day.AddHours(1), roundTrip, [], stops: [place]);
+
+        Assert.Equal(place, Assert.Single(trip.Stops));
+        Assert.Empty(trip.Legs);
+        Assert.Equal(roundTrip, trip.IsRoundTrip);
+    }
+
+    [Fact]
+    public void Create_RoundTripIntent_DoesNotRequireReturnLegOrAttraction() {
+        var first = Point("transport_stop");
+        var last = Point("accommodation");
+
+        var trip = Trip.Create("Still planning", Zone, Day, Day.AddHours(10), true, [Leg(1, first, last, 1, 2)]);
+
+        Assert.True(trip.IsRoundTrip);
+        Assert.Equal(last, trip.Stops[^1]);
+        Assert.NotEqual(first.PlaceId, trip.Stops[^1].PlaceId);
+    }
+
+    [Fact]
+    public void Create_MultipleStopsWithoutLegs_ReportsMissingConnections() {
+        Assert.Contains("stops", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(10), false, [],
+            stops: [Point("attraction"), Point("transport_stop")])));
+    }
+
+    [Theory]
+    [InlineData("empty")]
+    [InlineData("reversed")]
+    [InlineData("different")]
+    public void Create_ExplicitStopsDisagreeWithLegs_Rejected(string mismatch) {
+        var from = Point("attraction");
+        var to = Point("transport_stop");
+        TripPlace[] stops = mismatch switch {
+            "empty" => [],
+            "reversed" => [to, from],
+            _ => [from, Point("accommodation")]
+        };
+
+        Assert.Contains("stops", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(10), false,
+            [Leg(1, from, to, 1, 2)], stops: stops)));
+    }
+
+    [Fact]
+    public void Create_ExplicitStopsMatchLegs_PreservesTheSnapshots() {
+        var from = Point("attraction");
+        var to = Point("transport_stop");
+
+        var trip = Trip.Create("t", Zone, Day, Day.AddHours(10), false, [Leg(1, from, to, 1, 2)], stops: [from, to]);
+
+        Assert.Equal(new[] { from, to }, trip.Stops);
+    }
+
+    [Fact]
+    public void Create_MutableInputCollections_CannotChangeSavedStopOrLegOrder() {
+        var place = Point("attraction");
+        var stops = new List<TripPlace> { place };
+        var legs = new List<TripLeg>();
+        var trip = Trip.Create("t", Zone, Day, Day.AddHours(1), false, legs, stops: stops);
+
+        stops.Clear();
+        legs.Add(Leg(1, place, Point("transport_stop"), 0, 1));
+
+        Assert.Equal(place, Assert.Single(trip.Stops));
+        Assert.Empty(trip.Legs);
+        Assert.Throws<NotSupportedException>(() => ((IList<TripPlace>)trip.Stops).Clear());
+    }
+
+    [Theory]
+    [InlineData("placeId")]
+    [InlineData("type")]
+    [InlineData("name")]
+    [InlineData("address")]
+    [InlineData("lat")]
+    [InlineData("lon")]
+    public void Create_InvalidStandaloneSnapshot_ReportsTheInvalidField(string field) {
+        var place = InvalidPlace(field);
+
+        Assert.Contains($"stops[0].{field}", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(1), false, [], stops: [place])));
+    }
+
+    [Theory]
+    [InlineData("placeId")]
+    [InlineData("type")]
+    [InlineData("name")]
+    [InlineData("address")]
+    [InlineData("lat")]
+    [InlineData("lon")]
+    public void Create_InvalidLegSnapshot_ReportsTheInvalidEndpointField(string field) {
+        var leg = Leg(1, InvalidPlace(field), Point("attraction"), 1, 2);
+
+        Assert.Contains($"legs[0].from.{field}", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(10), false, [leg])));
+    }
+
+    [Theory]
+    [InlineData(-90, -180)]
+    [InlineData(-90, 180)]
+    [InlineData(90, -180)]
+    [InlineData(90, 180)]
+    public void Create_StandaloneCoordinatesAtLimits_Accepted(int lat, int lon) {
+        var place = Point("transport_stop") with { Latitude = lat, Longitude = lon };
+
+        Assert.Equal(place, Assert.Single(Trip.Create("t", Zone, Day, Day.AddHours(1), false, [], stops: [place]).Stops));
+    }
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("end")]
+    [InlineData("timeZone")]
+    public void Create_EmptyTripWithInvalidBasics_StillRejected(string field) {
+        var name = field == "name" ? " " : "A plan";
+        var zone = field == "timeZone" ? null! : Zone;
+        var end = field == "end" ? Day.AddHours(-1) : Day.AddHours(1);
+
+        Assert.Contains(field, RejectedFields(() => Trip.Create(name, zone, Day, end, false, [])));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Create_UtcBoundsAndLocalLegOffsets_ReconstructsLegacyTripWithoutChangingOffsets(bool roundTrip) {
+        var tripId = Guid.Parse("019a08e6-a150-7000-8000-000000000001");
+        var hotel = Point("accommodation");
+        var museum = Point("attraction");
+        TripLeg[] legs = roundTrip
+            ? [Leg(1, hotel, museum, 1, 2), Leg(2, museum, hotel, 3, 4)]
+            : [Leg(1, hotel, museum, 1, 2)];
+        var start = Day.ToUniversalTime();
+        var end = Day.AddHours(10).ToUniversalTime();
+
+        var trip = Trip.Create("Existing trip", Zone, start, end, roundTrip, legs, tripId, revision: 7);
+
+        Assert.Equal(tripId, trip.TripId);
+        Assert.Equal(7, trip.Revision);
+        Assert.Equal(start, trip.Start);
+        Assert.Equal(end, trip.End);
+        Assert.Equal(TimeSpan.Zero, trip.Start.Offset);
+        Assert.Equal(TimeSpan.Zero, trip.End.Offset);
+        Assert.Equal(legs, trip.Legs);
+        Assert.Equal(TimeSpan.FromHours(2), trip.Legs[0].Departure.Offset);
+        Assert.Equal(TimeSpan.FromHours(2), trip.Legs[0].Arrival.Offset);
+        Assert.Equal(roundTrip, trip.IsRoundTrip);
+    }
+
+    [Theory]
+    [InlineData(3, 29, 2, 30, 1, false)]
+    [InlineData(10, 25, 2, 30, 3, false)]
+    [InlineData(10, 25, 2, 30, 1, true)]
+    [InlineData(10, 25, 2, 30, 2, true)]
+    public void Create_NewCompositionAtClockChange_StillRequiresValidLegOffsets(int month, int day, int hour, int minute, int offset, bool valid) {
+        var time = new DateTimeOffset(2026, month, day, hour, minute, 0, TimeSpan.FromHours(offset));
+        var arrival = TimeZoneInfo.ConvertTime(time.AddHours(2), Zone);
+        var start = time.AddHours(-1).ToUniversalTime();
+        var end = arrival.AddHours(1).ToUniversalTime();
+        var leg = new TripLeg(1, Point("attraction"), Point("transport_stop"), new(Stable("train"), "train", "Train"), time, arrival);
+
+        if (valid) Assert.Equal(time.Offset, Assert.Single(Trip.Create("Clock change", Zone, start, end, false, [leg]).Legs).Departure.Offset);
+        else Assert.Contains("legs[0].departure", RejectedFields(() => Trip.Create("Clock change", Zone, start, end, false, [leg])));
+    }
+
+    [Fact]
+    public void Create_CrossCatalogueIdentifierCollision_DoesNotConnectDifferentPlaceTypes() {
+        var first = Point("attraction");
+        var transfer = Point("transport_stop");
+        var otherPlace = Point("accommodation") with { PlaceId = transfer.PlaceId };
+
+        Assert.Contains("legs[1].from", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(10), false,
+            [Leg(1, first, transfer, 1, 2), Leg(2, otherPlace, first, 3, 4)])));
+    }
+
+    /**
+     * Supplies one invalid catalogue snapshot value without changing the others.
+     * @param field The invalid field to exercise.
+     * @return A location whose selected field is outside the domain contract.
+     */
+    private static TripPlace InvalidPlace(string field) {
+        var place = Point("transport_stop");
+        return field switch {
+            "placeId" => place with { PlaceId = Guid.Empty },
+            "type" => place with { Type = "airport" },
+            "name" => place with { Name = " " },
+            "address" => place with { Address = null! },
+            "lat" => place with { Latitude = 90.001m },
+            _ => place with { Longitude = -180.001m }
+        };
     }
 
     /**
@@ -147,5 +366,27 @@ public sealed class TripTests
         Assert.Contains("name", RejectedFields(() => Trip.Create(new('x', Trip.MaxNameLength + 1), Zone, Day, Day.AddHours(10), false, legs)));
         Assert.Contains("tripId", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(10), false, legs, Guid.Empty)));
         Assert.Contains("revision", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(10), false, legs, null, 0)));
+    }
+
+    [Theory]
+    [InlineData(100, true)]
+    [InlineData(101, false)]
+    public void Create_RelaxedEndpointComposition_RetainsTheMaximumLegBoundary(int count, bool accepted)
+    {
+        var stop = Point("transport_stop");
+        var mode = new TripTransport(Stable("train"), "train", "Train");
+        var legs = Enumerable.Range(1, count).Select(sequence => new TripLeg(sequence, stop, stop, mode,
+            Day.AddMinutes(sequence * 2), Day.AddMinutes(sequence * 2 + 1))).ToArray();
+
+        if (accepted)
+        {
+            var trip = Trip.Create(new string('x', 200), Zone, Day, Day.AddHours(10), true, legs);
+            Assert.Equal(100, trip.Legs.Count);
+            Assert.Equal(101, trip.Stops.Count);
+        }
+        else
+        {
+            Assert.Contains("legs", RejectedFields(() => Trip.Create("t", Zone, Day, Day.AddHours(10), true, legs)));
+        }
     }
 }

@@ -36,6 +36,8 @@ Response codes: `201` create, `404` not found, `400` invalid trip direction/time
 
 The Trips service validates account standing and referenced place and transport IDs over HTTP against the owning services at write time. Each service owns its own store.
 
+Under #105, trip saves require a nonblank name, recognized time zone, valid start/end and a possibly empty `legs` array. Optional `stops` references represent an empty or single-stop itinerary without inventing a leg; with legs they must match the journey order. Responses include ordered `stops` snapshots. All supported place types may appear at either endpoint, visits are not required, and `isRoundTrip` is intent rather than a mandatory closed loop. Existing leg payloads remain compatible. Ownership, live standing, scopes, coordinate/time checks, `If-Match` replacement and atomic PostgreSQL persistence remain enforced. See [minimal draft/save fields and examples](trips-service.md#minimal-draft-and-save-fields-105).
+
 ## Ownership
 
 Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: James.
@@ -102,6 +104,12 @@ Attractions failure handling: missing validated identity returns 401; forbidden 
 The Blazor `/attractions` view consumes these public HTTP DTOs and sends the current user's bearer token to the configured Attractions service only. Search uses one percent-encoded literal `name` parameter. Create sends only writable fields and uses the service's private visibility default. Edit sends only changed fields, with explicit null clearing rating or description. Saved details come from a confirmed response; result-refresh failures are reported separately. Unconfirmed writes are never automatically retried.
 
 The frontend's optional duration ± field is a local preview and has no HTTP or persistence field. The map is the user-supplied static placeholder; choosing a location currently means confirming manually entered coordinates. No endpoint or database change is included in #43.
+
+## PDF ticket-import contracts (#109)
+
+The Trips host accepts a raw `application/pdf` upload at `POST /api/v1/trips/{tripId}/ticket-imports` with `trips.write`. It checks live active standing and saved-trip ownership before reading or parsing the body. The maximum is 10 MiB and 10 pages. A successful response proposes only supported ticket fields with `extracted`, `missing` or `uncertain` status; it never writes a trip.
+
+The original is available to its owner at `GET /api/v1/trips/{tripId}/ticket-imports/{importId}/document` with `trips.read`; `DELETE /api/v1/trips/{tripId}/ticket-imports/{importId}` with `trips.write` removes it. Temporary content expires after 15 minutes, is process-local and has no public URL. Another owner's trip or import appears absent, including to administrators. See the [full upload, response, privacy and input contract](ticket-import.md).
 
 ## Users contracts
 

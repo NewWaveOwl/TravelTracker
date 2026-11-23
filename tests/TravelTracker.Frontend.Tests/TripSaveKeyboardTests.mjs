@@ -3,23 +3,26 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = await readFile(new URL("../../src/TravelTracker.Frontend/Components/Pages/NewTrip.razor.js", import.meta.url), "utf8");
-const { watchUndo } = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+const { watchSave } = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 globalThis.Element = class {
     constructor(dialog = false) { this.dialog = dialog; }
     closest() { return this.dialog ? {} : null; }
+    matches() { return true; }
+    dispatchEvent() { this.onchange?.(); }
 };
 
 function setup({ disabled = false, connected = true, present = true, active, onSave } = {}) {
     let listener;
     let signal;
     let clicks = 0;
-    globalThis.document = { activeElement: active, addEventListener: (_, callback, options) => { listener = callback; signal = options.signal; } };
-    const registration = watchUndo({ isConnected: connected, contains: element => element === active, querySelector: selector =>
+    active ??= new Element();
+    globalThis.document = { body: new Element(), documentElement: new Element(), activeElement: active, addEventListener: (_, callback, options) => { listener = callback; signal = options.signal; } };
+    const registration = watchSave({ isConnected: connected, contains: element => element === active, querySelector: selector =>
         selector === "[data-trip-save]" && present ? { disabled, click: () => { clicks++; onSave?.(); } } : null });
     return {
         send: (overrides = {}) => {
             let prevented = false;
-            if (!signal.aborted) listener({ key: "s", ctrlKey: true, target: new Element(),
+            if (!signal.aborted) listener({ key: "s", ctrlKey: true, target: active,
                 preventDefault: () => { prevented = true; }, ...overrides });
             return { prevented, clicks };
         },
@@ -41,7 +44,7 @@ test("busy save suppresses the browser dialog without another submission", () =>
 test("shortcut commits the focused field change before invoking save", () => {
     let boundValue = "Old name";
     const active = new Element();
-    active.blur = () => { boundValue = "Typed name"; };
+    active.onchange = () => { boundValue = "Typed name"; };
     const fixture = setup({ active, onSave: () => assert.equal(boundValue, "Typed name") });
     assert.deepEqual(fixture.send(), { prevented: true, clicks: 1 });
 });

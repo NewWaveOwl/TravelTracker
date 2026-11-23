@@ -30,5 +30,6 @@ internal sealed class TripConfiguration : IEntityTypeConfiguration<TripRow>
         builder.Property(row => row.OwnerSubject).IsRequired();
         builder.HasIndex(row => new { row.OwnerIssuer, row.OwnerSubject });
         builder.HasMany(row => row.Legs).WithOne(leg => leg.Trip).HasForeignKey(leg => leg.TripId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasMany(row => row.Stops).WithOne(stop => stop.Trip).HasForeignKey(stop => stop.TripId).OnDelete(DeleteBehavior.Cascade);
     }
 }

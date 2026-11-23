@@ -47,7 +47,7 @@ Transport mode codes: `car`, `bus`, `train`, `pedestrian`, `bike`, `plane` (`Tra
 
 No historical tables yet for `Stays`, `Visits`, `TicketImports`, scheduled transport routes or intermediate stops. `TripLegs` and route points are implemented in the Trips and Transport service databases.
 
-Note: the historical `Trips` row above describes the legacy shape. The independent Trips service (`TravelTracker.Trips.Data`) stores trips in a `Trips` table with owner columns and a `TripLegs` table with ordered legs and snapshot columns. It creates or replaces each owned trip and its legs in one PostgreSQL transaction. See [Trips service](trips-service.md).
+Note: the historical `Trips` row above describes the legacy shape. The independent Trips service (`TravelTracker.Trips.Data`) stores trips in a `Trips` table with owner columns, `TripLegs` with ordered journeys and `TripStops` with ordered place snapshots (#105). The additive stop migration preserves existing rows; legacy trips without stop rows derive their stops from leg snapshots. Empty and single-stop plans need no leg. A create or replacement commits the parent, stops, legs and revision in one PostgreSQL transaction. Supported types and coordinates remain constrained, without enforcing any accommodation/attraction composition or return structure. See [Trips service](trips-service.md).
 
 ## Repository interfaces
 
@@ -72,6 +72,10 @@ Users/Accommodations: Christel. Transport/Attractions: Artiom. Trips/Settings: J
 Attractions owns its EF context, mappings and migration history. Accommodations owns `AccommodationsDbContext`, its mapping, initial migration and visibility-scoped repository. Transport owns `TransportDbContext`, `EfTransportModeRepository`, `EfRoutePointRepository` and the initial Transport migration. All use PostgreSQL/Npgsql. Accommodation rows store their public UUID directly as the primary key with owner/visibility and coordinate constraints. Transport's dedicated tables store internal app-issued bigint keys and unique public UUIDs, enforce supported mode/type and coordinate constraints, and return detached domain values. Seeds preserve the existing sample public identities and cover all six modes, including bike. SourceId is unverified metadata with no foreign key. See [Transport startup, allocation limits and relational testing](transport-service.md).
 
 Historical in-memory repositories in `TravelTracker.Data` remain unused by runnable hosts. Trip domain tests live in `tests/TravelTracker.Trips.Domain.Tests`. They do not represent production persistence.
+
+## Private ticket-import originals (#109)
+
+`TravelTracker.Trips.Data/TicketImports` implements owner-and-trip-scoped temporary storage in bounded server memory, separate from PostgreSQL trip persistence. It retains at most five 10 MiB PDFs per validated issuer/subject, 100 MiB of original bytes and 1,000 documents per process, for at most 15 minutes. Random import identifiers do not replace owner checks. Reads return copies; deletion, expiry and disposal clear retained bytes. There are no ticket tables, temporary disk files, public storage objects or migrations for this feature. Restarts discard originals; multiple instances require session affinity. See [ticket-import lifecycle and limitations](ticket-import.md).
 
 ## Planned trip-point and route persistence
 

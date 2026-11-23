@@ -58,6 +58,40 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
     public async Task<T?> BootstrapFirstAdministratorAsync<T>(string secret, CancellationToken cancellationToken = default) =>
         (await SendCoreAsync<T>("Users", HttpMethod.Post, "/api/v1/users/bootstrap-first-administrator", new { }, cancellationToken, secret)).Body;
 
+    /**
+     * Sends a PDF using the same session and destination safeguards as JSON contracts.
+     * @param path Versioned Trips import path.
+     * @param content Caller-owned PDF stream.
+     * @param fileName Display filename supplied by the file picker.
+     * @param cancellationToken Cancels the import.
+     * @return The owner's reviewable extraction draft.
+     */
+    public Task<T?> UploadPdfAsync<T>(string path, Stream content, string fileName, CancellationToken cancellationToken) =>
+        SendAuthorizedAsync("Trips", HttpMethod.Post, path,
+            (url, token) => client.UploadPdfAsync<T>(url, content, fileName, cancellationToken, token), cancellationToken);
+
+    /**
+     * Retrieves a PDF only while the requesting session remains active.
+     * @param path Versioned Trips document path.
+     * @param cancellationToken Cancels the download.
+     * @return The owner's temporary source document.
+     */
+    public Task<byte[]> GetPdfAsync(string path, CancellationToken cancellationToken) =>
+        SendAuthorizedAsync("Trips", HttpMethod.Get, path, (url, token) => client.GetPdfAsync(url, cancellationToken, token), cancellationToken);
+
+    /**
+     * Cancels one temporary import through its owner-scoped HTTP contract.
+     * @param path Versioned Trips import path.
+     * @param cancellationToken Cancels cleanup.
+     * @return Completion after acknowledged removal.
+     */
+    public async Task DeleteTicketAsync(string path, CancellationToken cancellationToken) =>
+        _ = await SendAuthorizedAsync("Trips", HttpMethod.Delete, path, async (url, token) =>
+        {
+            await client.DeleteTicketAsync(url, cancellationToken, token);
+            return true;
+        }, cancellationToken);
+
     async Task<ServiceResponse<T>> SendCoreAsync<T>(string service, HttpMethod method, string path, object? body, CancellationToken cancellationToken, string? bootstrapSecret = null, string? ifMatch = null)
         => await SendAuthorizedAsync(service, method, path,
             (url, token) => client.SendAsync<T>(method, url, body, cancellationToken, token, bootstrapSecret, ifMatch), cancellationToken);

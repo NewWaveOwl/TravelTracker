@@ -1,4 +1,5 @@
 using TravelTracker.Frontend.Api;
+using TravelTracker.Frontend.Api.TicketImports;
 using TravelTracker.Frontend.Api.Accommodations;
 using TravelTracker.Frontend.Api.Attractions;
 using TravelTracker.Frontend.Api.Settings;
@@ -31,6 +32,7 @@ builder.Services.AddSingleton<SessionRegistry>();
 builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationStateProvider>();
 builder.Services.AddScoped<ProtectedClient>();
 builder.Services.AddScoped<TripsClient>();
+builder.Services.AddScoped<TicketImportsClient>();
 builder.Services.AddScoped<TripPlacesClient>();
 builder.Services.AddScoped<TransportClient>();
 builder.Services.AddScoped<AttractionsClient>();
@@ -99,6 +101,7 @@ app.UseAuthorization();
 if (supabase is not null) app.UseRateLimiter();
 app.UseAntiforgery();
 app.MapStaticAssets();
+app.MapTicketDocument();
 if (supabase is not null)
     app.MapSupabaseAuthEndpoints();
 else if (auth0 is not null)

@@ -19,19 +19,51 @@
 }
 else
 {
+    <div class="trip-workspace-controls">
     <div class="trip-workspace-actions" aria-label="Trip workspace">
         @if (showMap)
         {
             <button type="button" class="map-icon-action secondary" disabled="@busy" title="New trip" aria-label="New trip" @onclick="CreateNewAsync"><img src="assets/icons/new-trip.svg" alt="" /><span class="visually-hidden">Create new</span></button>
-            <button type="button" class="map-icon-action" data-trip-save aria-keyshortcuts="Control+S Meta+S" title="Save trip" aria-label="@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")"
-                    disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync"><img src="assets/icons/save-trip.svg" alt="" /><span class="visually-hidden">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</span></button>
+            <button type="button" class="map-icon-action" data-trip-save aria-keyshortcuts="Control+S Meta+S" title="Save trip" aria-label="@(savingTrip ? "Saving trip" : "Save trip")"
+                    disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync"><img src="assets/icons/save-trip.svg" alt="" /><span>@(savingTrip ? "Saving trip" : "Save trip")</span></button>
         }
         else
         {
-            <button type="button" data-trip-save aria-keyshortcuts="Control+S Meta+S" disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</button>
+            <button type="button" data-trip-save aria-keyshortcuts="Control+S Meta+S" disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync">@(savingTrip ? "Saving trip" : "Save trip")</button>
             <button type="button" class="secondary" disabled="@busy" @onclick="CreateNewAsync">Create new</button>
             <button type="button" class="secondary" disabled="@busy" aria-expanded="@Pressed(browseSaved)" aria-controls="saved-trip-browser" @onclick="() => browseSaved = !browseSaved">Open saved</button>
         }
+        @if (!showMap && draft.Id is { } ticketTripId)
+        {
+            <a class="button secondary" href="@($"trips/{ticketTripId:D}")">Tickets &amp; bookings</a>
+        }
+    </div>
+    @if (savingTrip) { <p class="trip-save-status" role="status">Saving trip…</p> }
+    @if (notice is not null)
+    {
+        <div class="trip-message success" role="status">
+            @notice
+            @if (draft.Id is { } savedId)
+            {
+                <a href="@($"map/{savedId:D}")">Saved trip link</a>
+                <a href="history">Trip history</a>
+            }
+        </div>
+    }
+
+    @if (errors.Count > 0)
+    {
+        <div class="trip-message @(actionFailed ? "failure" : "validation")" role="alert">
+            <strong>@(actionFailed ? "Action could not be completed" : "Check your trip details")</strong>
+            <p>Your draft is still here. Correct the details or retry.</p>
+            <ul>
+            @foreach (var error in errors)
+            {
+                <li>@error</li>
+            }
+            </ul>
+        </div>
+    }
     </div>
     @if (browseSaved)
     {
@@ -93,7 +125,7 @@ else
                 <div class="trip-actions trip-steps" role="group" aria-label="Planning steps">
                     <button type="button" class="secondary" aria-pressed="@Pressed(!stopsStep && !review)" disabled="@busy" @onclick="ShowTripBasics">Basics</button>
                     <button type="button" class="secondary" aria-pressed="@Pressed(stopsStep && !review)" disabled="@busy" @onclick="ShowTripItinerary">Stops</button>
-                    <button type="button" class="secondary" aria-pressed="@Pressed(review)" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review trip</button>
+                    <button type="button" class="secondary" aria-pressed="@Pressed(review)" disabled="@busy" @onclick="ShowReview">Review trip</button>
                 </div>
                 <details class="browser-draft-actions">
                 <summary>Browser draft</summary>
@@ -118,7 +150,7 @@ else
                     title="Undo last edit (Ctrl+Z)" disabled="@(!CanUndo)" @onclick="Undo">Undo last edit</button>
             @if (draft.Stops.Count == 0)
             {
-                <p>Start with an accommodation. Add places to build your route.</p>
+                <p>Add any place to build your route, or save an empty plan.</p>
             }
             <ol aria-label="Ordered stops and transport connections">
                 @foreach (var (first, end) in ItineraryRows())
@@ -166,9 +198,9 @@ else
             {
                 <button type="button" class="secondary" disabled="@busy" @onclick="OpenMarkers">+ Add stop</button>
             }
-            @if (!review && draft.Stops.Count > 1 && draft.Stops[0].Place.Type == "accommodation")
+            @if (!review && draft.Stops.Count > 1)
             {
-                <button type="button" class="secondary" disabled="@busy" @onclick="AddReturnStop">+ Return to starting accommodation</button>
+                <button type="button" class="secondary" disabled="@busy" @onclick="AddReturnStop">+ Return to starting place</button>
             }
         </section>
         </MovablePanel>
@@ -200,31 +232,6 @@ else
 
         <MovablePanel Label="Plan stops and routes" Class="editor-panel" Enabled="showMap" RevealVersion="editorRevealVersion">
         <div id="trip-tools-panel" class="trip-work">
-    @if (notice is not null)
-    {
-        <div class="trip-message success" role="status">
-            @notice
-            @if (draft.Id is { } savedId)
-            {
-                <a href="@($"map/{savedId:D}")">Saved trip link</a>
-                <a href="history">Trip history</a>
-            }
-        </div>
-    }
-
-    @if (errors.Count > 0)
-    {
-        <div class="trip-message @(actionFailed ? "failure" : "validation")" role="alert">
-            <strong>@(actionFailed ? "Action could not be completed" : "Check your trip details")</strong>
-            <ul>
-            @foreach (var error in errors)
-            {
-                <li>@error</li>
-            }
-            </ul>
-        </div>
-    }
-
             @if (review)
             {
                 <section class="trip-panel trip-review" aria-label="Trip review details">
@@ -269,7 +276,7 @@ else
                 }
                 @if (!showMap)
                 {
-                    <div class="trip-itinerary-navigation"><button type="button" class="secondary" disabled="@busy" @onclick="ShowTripBasics">Back to basics</button><button type="button" disabled="@(busy || draft.Stops.Count == 0)" @onclick="ShowReview">Review trip</button></div>
+                    <div class="trip-itinerary-navigation"><button type="button" class="secondary" disabled="@busy" @onclick="ShowTripBasics">Back to basics</button><button type="button" disabled="@busy" @onclick="ShowReview">Review trip</button></div>
                 }
                 @if (!showMap || mapTool != MapTool.Transport)
                 {

@@ -59,7 +59,7 @@ These rules are documented for later implementation; the current GET/POST catalo
 - T1: bus, Example Bus.
 - R1 (future): uses T1, starts at P1, ends at P3, with P2 as an intermediate stop; departure, arrival and preparation belong to R1 and its stop.
 
-A future trip can select R1 as an itinerary leg and add visits/stays around it. Its global accommodation-to-attraction or round-trip rules remain owned by Trips. A transport-stop point can be a route endpoint or intermediate transfer; it does not automatically become the entire trip's start or destination.
+A future trip can select R1 as an itinerary leg and add visits/stays around it. Trips owns itinerary validation, but #105 removes category composition and mandatory return rules: a transport stop, accommodation or attraction can be the entire trip's start, destination or only stop. Empty and single-stop plans are valid saves with the required trip basics. Connected multi-stop journeys still validate their transport and times; scheduled routes remain future work. See the [current save contract](trips-service.md#minimal-draft-and-save-fields-105).
 
 ## API and persistence boundaries
 

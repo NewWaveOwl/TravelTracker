@@ -34,11 +34,11 @@ public sealed class TripsContractTests
     [InlineData(404)]
     public async Task KeepsLegFieldErrorsFromTheTripsService(int status)
     {
-        var body = """{"errors":{"legs[1].arrival":["arrival must be after departure."],"legs":["a trip needs at least one leg."],"name":["name is required."],"password":["ignored"]}}""";
+        var body = """{"errors":{"legs[1].arrival":["arrival must be after departure."],"legs":["legs must connect in order."],"stops[0].placeId":["place ID is required."],"stops[0].owner":["ignored"],"name":["name is required."],"password":["ignored"]}}""";
         using var httpClient = new HttpClient(StubHandler.Status(status, body));
         var client = new ServiceClient(httpClient, NullLogger<ServiceClient>.Instance);
         var error = await Assert.ThrowsAsync<ApiError>(() => client.SendAsync<object>(HttpMethod.Post, "http://localhost:5108/api/v1/trips", new { }));
-        Assert.Equal(["legs", "legs[1].arrival", "name"], error.Errors.Keys.Order());
+        Assert.Equal(["legs", "legs[1].arrival", "name", "stops[0].placeId"], error.Errors.Keys.Order());
         Assert.Equal("arrival must be after departure.", error.Errors["legs[1].arrival"].Single());
     }
 }

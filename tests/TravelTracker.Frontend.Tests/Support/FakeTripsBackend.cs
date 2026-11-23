@@ -31,6 +31,9 @@ public sealed class FakeTripsBackend : HttpMessageHandler
     /** when set, trip creates wait for this gate before answering, so tests can observe the saving state. */
     public TaskCompletionSource<bool>? CreateGate { get; set; }
 
+    /** when set, answers a trip create after its optional gate without storing a trip. */
+    public HttpStatusCode? CreateFailureStatus { get; set; }
+
     /** the number of trip creates that arrived, whether or not they were accepted. */
     public int CreateCount => CreateBodies.Count;
 
@@ -78,13 +81,17 @@ public sealed class FakeTripsBackend : HttpMessageHandler
         var body = await request.Content!.ReadAsStringAsync(cancellationToken);
         CreateBodies.Add(body);
         if (CreateGate is { } gate) await gate.Task;
+        if (CreateFailureStatus is { } failure) return new HttpResponseMessage(failure);
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
         var legs = root.GetProperty("legs").EnumerateArray().Select(leg => new TripDto.Leg(
             leg.GetProperty("sequence").GetInt32(), Place(leg.GetProperty("from")), Place(leg.GetProperty("to")),
             new TripDto.Mode(Bus, "bus", "City bus"), leg.GetProperty("departure").GetDateTimeOffset(), leg.GetProperty("arrival").GetDateTimeOffset())).ToList();
         var trip = new TripDto(Guid.Parse($"00000000-0000-0000-0000-{++nextTripNumber:D12}"), root.GetProperty("name").GetString()!, root.GetProperty("timeZone").GetString()!,
-            root.GetProperty("start").GetDateTimeOffset(), root.GetProperty("end").GetDateTimeOffset(), root.GetProperty("isRoundTrip").GetBoolean(), legs);
+            root.GetProperty("start").GetDateTimeOffset(), root.GetProperty("end").GetDateTimeOffset(), root.GetProperty("isRoundTrip").GetBoolean(), legs,
+            root.TryGetProperty("stops", out var stops) && stops.ValueKind == JsonValueKind.Array
+                ? stops.EnumerateArray().Select(Place).ToArray()
+                : legs.Count == 0 ? [] : new[] { legs[0].From }.Concat(legs.Select(leg => leg.To)).ToArray());
         stored[trip.TripId] = trip;
         return new HttpResponseMessage(HttpStatusCode.Created) { Content = JsonContent.Create(trip) };
     }

@@ -70,33 +70,33 @@ public sealed class TripDraftTests
     }
 
     [Fact]
-    public void ChecksTripEndpointsForOneWayAndRoundTrips()
+    public void AllowsEverySupportedEndpointWithoutForcedReturnOrAttraction()
     {
         var notAccommodation = Valid();
         notAccommodation.Legs[0].From = Museum;
-        Assert.Contains("legs[0].from", notAccommodation.ValidateItinerary().Keys);
+        Assert.Empty(notAccommodation.ValidateItinerary());
 
         var oneWayEndingAtStop = Valid();
         oneWayEndingAtStop.Legs[0].To = Station;
-        Assert.Contains("legs[0].to", oneWayEndingAtStop.ValidateItinerary().Keys);
+        Assert.Empty(oneWayEndingAtStop.ValidateItinerary());
 
         var roundTrip = Valid();
         roundTrip.IsRoundTrip = true;
-        Assert.Contains("legs[0].to", roundTrip.ValidateItinerary().Keys);
+        Assert.Empty(roundTrip.ValidateItinerary());
         roundTrip.Legs.Add(Leg(Museum, Hotel, "2026-06-01T11:00", "2026-06-01T12:00"));
         Assert.Empty(roundTrip.ValidateItinerary());
 
         var noAttraction = new TripDraft { Name = "x", TimeZone = "UTC", Start = "2026-06-01T08:00", End = "2026-06-01T20:00", IsRoundTrip = true };
         noAttraction.Legs.Add(Leg(Hotel, Station, "2026-06-01T09:00", "2026-06-01T10:00"));
         noAttraction.Legs.Add(Leg(Station, Hotel, "2026-06-01T11:00", "2026-06-01T12:00"));
-        Assert.Contains("legs", noAttraction.ValidateItinerary().Keys);
+        Assert.Empty(noAttraction.ValidateItinerary());
     }
 
     [Fact]
-    public void RequiresALegAndEachLegChoice()
+    public void AllowsEmptyItineraryButRequiresEachSuppliedLegChoice()
     {
         var empty = new TripDraft { Name = "x", TimeZone = "UTC", Start = "2026-06-01T08:00", End = "2026-06-01T20:00" };
-        Assert.Contains("legs", empty.ValidateItinerary().Keys);
+        Assert.Empty(empty.ValidateItinerary());
         empty.Legs.Add(new TripLegDraft());
         var errors = empty.ValidateItinerary();
         foreach (var key in new[] { "legs[0].from", "legs[0].to", "legs[0].transport", "legs[0].departure", "legs[0].arrival" }) Assert.Contains(key, errors.Keys);

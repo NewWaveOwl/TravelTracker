@@ -1,0 +1,117 @@
+@page "/trips/{TripId:guid}/ticket-import"
+@using TravelTracker.Frontend.Features.TicketImports
+@implements IAsyncDisposable
+
+<PageTitle>@Title · TravelTracker</PageTitle>
+<section class="ticket-import" aria-labelledby="ticket-heading" aria-busy="@(loading || stage == ImportStage.Extracting ? "true" : "false")">
+    <p class="ticket-eyebrow">@(trip?.Name ?? "YOUR TRIP") / TICKETS</p>
+    <h1 id="ticket-heading">@Title</h1>
+    @if (loading)
+    {
+        <Feedback Kind="FeedbackKind.Loading">Opening your saved trip…</Feedback>
+    }
+    else if (trip is null)
+    {
+        <Feedback Kind="@(failure?.Kind == FailureKind.Permission ? FeedbackKind.Permission : FeedbackKind.Unavailable)" Title="@(failure?.Status == 404 ? "Trip not found" : "Unable to open ticket import")">@(failure?.Message ?? "Sign in to import a ticket for your own saved trip.")</Feedback>
+        <a class="button secondary" href="trip">Back to Trip</a>
+    }
+    else if (!canWrite)
+    {
+        <Feedback Kind="FeedbackKind.Permission" Title="Read-only trip">@readOnlyReason</Feedback>
+        <div class="ticket-actions"><button @onclick="LoadAsync">Check access again</button><a class="button secondary" href="@TripLink">Back to trip</a></div>
+    }
+    else
+    {
+        <p class="ticket-introduction">@Introduction</p>
+        <ol class="ticket-steps" aria-label="Ticket import progress">
+            <li aria-current="@(stage is ImportStage.Upload or ImportStage.Extracting or ImportStage.Failed ? "step" : null)">1 <span>@(stage == ImportStage.Upload ? "Upload PDF" : "PDF selected")</span></li>
+            <li aria-current="@(stage == ImportStage.Review ? "step" : null)">2 <span>@(stage == ImportStage.Extracting ? "Extracting details" : stage == ImportStage.Failed ? "Extraction failed" : "Review details")</span></li>
+            <li aria-current="@(stage == ImportStage.Reviewed ? "step" : null)">3 <span>Reviewed draft</span></li>
+        </ol>
+
+        @if (!string.IsNullOrEmpty(notice))
+        {
+            <aside class="ticket-feedback" role="status"><p>@notice</p></aside>
+        }
+        @if (stage == ImportStage.Upload)
+        {
+            <div class="ticket-drop-zone">
+                <h2>Drop your ticket PDF here</h2>
+                <p>Flight, train, bus or activity tickets and booking confirmations.</p>
+                <small id="pdf-limits">PDF only · Up to 10 MB and 10 pages · One document at a time</small>
+                <span class="button">Choose PDF</span>
+                <small>Use a simple, text-based ticket PDF with labelled English fields. Other layouts, scans or password-protected PDFs need manual entry.</small>
+                <InputFile OnChange="ChoosePdfAsync" accept="application/pdf,.pdf" aria-label="Choose ticket PDF" aria-describedby="pdf-limits" />
+            </div>
+            <article class="ticket-card">
+                <h2>Your details, ready to review</h2>
+                <ol class="ticket-instructions"><li>Upload your ticket or booking PDF.</li><li>Review the travel details found in your document.</li><li>Correct anything missing, then finish your review.</li></ol>
+                <small>Nothing is saved automatically. The private source PDF expires after 15 minutes. Your draft stays on this page until you leave.</small>
+            </article>
+            <div class="ticket-actions"><a class="button secondary" href="@TripLink">Back to trip</a><button class="secondary" @onclick="EnterManually">Enter manually</button></div>
+        }
+        else if (stage == ImportStage.Extracting)
+        {
+            <div class="ticket-card ticket-document"><span class="ticket-pdf-badge">PDF</span><div><p>@fileName</p><small>@FileSize · Uploading and reading</small></div></div>
+            <aside class="ticket-feedback" role="status"><small>LOADING</small><p>Extracting travel details from your PDF…</p></aside>
+            <article class="ticket-card"><h2>Finding the important details</h2><p>Reading document text…<br />Next: identify travel details for your review</p><small>You’ll be able to edit dates, locations, times and booking references. Your trip stays unchanged.</small></article>
+            <div class="ticket-actions"><button class="secondary" @onclick="CancelAsync">Cancel import</button></div>
+        }
+        else if (stage == ImportStage.Failed)
+        {
+            <div class="ticket-card ticket-document"><span class="ticket-pdf-badge">PDF</span><div><p>@fileName</p><small>@FileSize · Extraction unsuccessful</small></div></div>
+            <aside class="ticket-feedback @(InputFailure ? "warning" : "error")" role="alert"><small>@(InputFailure ? "CHECK YOUR FILE" : "IMPORT UNAVAILABLE")</small><p>@failure?.Message</p></aside>
+            <article class="ticket-card"><h2>You can still review this ticket</h2><p>Choose a text-based PDF, or enter the travel details yourself. For a password-protected PDF, use an unlocked copy.</p><small>Rejected PDFs are discarded. Manual entry starts with empty fields and no attachment.</small></article>
+            <div class="ticket-actions"><button @onclick="EnterManually">Enter manually</button><button class="secondary" @onclick="ChooseAnotherAsync">Choose another PDF</button><a class="button secondary" href="@TripLink">Back to trip</a></div>
+        }
+        else if (draft is not null)
+        {
+            @if (source is not null)
+            {
+                <div class="ticket-card ticket-document"><div><p>@source.FileName</p><small>@(sourceExpired ? "Temporary PDF expired. Your editable values remain below." : $"{FileSize} · Private temporary PDF · Expires {source.ExpiresAt.UtcDateTime:HH:mm} UTC")</small></div>
+                    @if (!sourceExpired) { <a class="button secondary" href="@DocumentLink" target="_blank" rel="noopener">View PDF</a> }
+                </div>
+            }
+            @if (stage == ImportStage.Review)
+            {
+                <aside class="ticket-feedback warning" role="status"><small>CHECK YOUR INPUT</small><p>Compare every value with the original PDF. Missing and uncertain details are flagged. Nothing has been added to your trip.</p></aside>
+                @if (validationFailed)
+                {
+                    <aside class="ticket-feedback warning" role="alert"><p>Complete the highlighted required fields before finishing your review.</p><ul>@foreach (var field in draft.Fields.Where(field => field.Error is not null)) { <li><a href="@($"#ticket-{field.Name}")">@field.Label: @field.Error</a></li> }</ul></aside>
+                }
+                <form @onsubmit="FinishReview" @onsubmit:preventDefault novalidate>
+                    <article class="ticket-card">
+                        <h2>Travel details</h2>
+                        <small>All fields are editable. Required fields are marked *.</small>
+                        <div class="ticket-fields">
+                            @foreach (var field in draft.Fields)
+                            {
+                                <div class="ticket-field" @key="field.Name">
+                                    <label for="@($"ticket-{field.Name}")">@field.Label @(field.Required ? "*" : "")</label>
+                                    <input id="@($"ticket-{field.Name}")" name="@field.Name" type="@field.InputType" value="@field.Value" @oninput="args => field.Value = args.Value?.ToString() ?? string.Empty" maxlength="500" required="@field.Required" aria-required="@field.Required.ToString().ToLowerInvariant()" aria-invalid="@(field.Error is not null ? "true" : null)" aria-describedby="@($"hint-{field.Name}")" class="@(field.Error is not null || field.Status == "uncertain" ? "needs-check" : null)" />
+                                    <small id="@($"hint-{field.Name}")" class="@(field.Error is not null ? "ticket-field-error" : null)">@field.Hint</small>
+                                </div>
+                            }
+                        </div>
+                        <small>Station and airport names are ticket details only. Choose matching accommodation or attraction places in the trip editor yourself. Review does not change the itinerary.</small>
+                    </article>
+                    <div class="ticket-actions"><button type="submit">Finish review</button><button type="button" class="secondary" @onclick="CancelAsync">Cancel import</button></div>
+                </form>
+            }
+            else
+            {
+                <aside class="ticket-feedback success" role="status"><small>REVIEWED</small><p>Your ticket draft is ready to use. Your saved trip is unchanged.</p></aside>
+                <article class="ticket-card ticket-reviewed">
+                    <small>@draft.Value("ticketType") / @draft.Value("departureDate")</small>
+                    <h2>@draft.Value("from") to @draft.Value("to")</h2>
+                    <p>@draft.Value("operator") @(string.IsNullOrWhiteSpace(draft.Value("traveler")) ? "" : $"· {draft.Value("traveler")}")</p>
+                    <div class="ticket-journey"><div><h2>@draft.Value("departureTime")</h2><p>@draft.Value("from")</p><small>@draft.Value("departureDate")</small></div><div><h2>@draft.Value("arrivalTime")</h2><p>@draft.Value("to")</p><small>@draft.Value("arrivalDate")</small></div></div>
+                    <small>Times shown in @draft.Value("timeZone")</small>
+                    <p>Booking reference: @(string.IsNullOrWhiteSpace(draft.Value("bookingReference")) ? "Not supplied" : draft.Value("bookingReference"))</p>
+                </article>
+                <p class="ticket-introduction">This reviewed draft is temporary and will be lost when you leave this page. Add confirmed details through the normal trip editor and save there.</p>
+                <div class="ticket-actions"><button @onclick="EditAgain">Edit details</button><a class="button secondary" href="@TripLink">View trip</a><button class="secondary" @onclick="ChooseAnotherAsync">Import another ticket</button></div>
+            }
+        }
+    }
+</section>

@@ -77,6 +77,8 @@
 }
 @media (max-width: 420px) {
     .trip-open form, .trip-search { grid-template-columns: minmax(0, 1fr); }
+    .trip-workspace-actions [data-trip-save] { flex: 1; }
+    .trip-save-shortcut { margin-right: 0; }
 }
 
 .trip-palette img { flex: none; }
@@ -360,3 +362,15 @@
     .map-workspace input:not([type=checkbox]) { font-size: 18px; padding: 8px 10px; min-height: 48px; }
     .map-workspace .location-coordinates input:not([type=checkbox]) { font-size: 16px; min-height: 44px; }
 }
+
+.trip-workspace-controls { position: sticky; top: 0; z-index: 10; width: fit-content; max-width: 100%; }
+.trip-workspace-controls .trip-workspace-actions { position: relative; top: auto; right: auto; left: auto; z-index: 1; margin-bottom: 0; align-items: center; }
+.trip-workspace-controls .trip-workspace-actions .button { padding: 8px 13px; min-height: 44px; font-size: 16px; line-height: 1.2; }
+.trip-workspace-controls .trip-message { margin: 8px 0 0; max-height: 35dvh; overflow: auto; background: var(--trip-panel-surface); }
+.trip-workspace-controls .trip-message.failure { background: var(--error-surface, #fce8e6); }
+.trip-workspace-controls .trip-message.success { background: #e2eadc; }
+.trip-save-status { margin: 8px 0 0 !important; padding: 8px 12px; background: var(--trip-panel-surface); border-radius: 5px; }
+.map-workspace .trip-workspace-controls { position: absolute; top: 24px; right: 24px; max-width: min(480px, calc(100% - 48px)); }
+.map-workspace .trip-workspace-controls .trip-workspace-actions { position: relative; top: auto; right: auto; left: auto; max-width: 100%; }
+.map-workspace .trip-workspace-actions .map-icon-action[data-trip-save] { width: auto; gap: 8px; font-size: 16px; }
+@media (max-width: 700px) { .map-workspace .trip-workspace-controls { top: 88px; right: 8px; max-width: calc(100% - 16px); } }

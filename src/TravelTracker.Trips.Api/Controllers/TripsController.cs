@@ -155,6 +155,9 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
 
         for (var index = 0; index < request.Legs!.Count; index++)
             if (request.Legs[index] is null) ModelState.AddModelError($"legs[{index}]", "Each leg must be an object.");
+        if (request.Stops is not null)
+            for (var index = 0; index < request.Stops.Count; index++)
+                if (request.Stops[index] is null) ModelState.AddModelError($"stops[{index}]", "Each stop must be an object.");
         var draft = ModelState.IsValid ? ToDraft(request) : null;
         // on replace the save service checks account standing first, so a refused account never sees field errors.
         if (draft is null && tripId is null) return ValidationProblem(ModelState);
@@ -239,7 +242,8 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
                 new(leg.To!.PlaceId!.Value, leg.To.Type!),
                 leg.TransportModeId!.Value,
                 leg.Departure!.Value,
-                leg.Arrival!.Value)).ToList());
+                leg.Arrival!.Value)).ToList(),
+            request.Stops?.Select(stop => new TripPlaceReference(stop.PlaceId!.Value, stop.Type!)).ToList());
     }
 
     /**
@@ -294,7 +298,7 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
             ToPlace(leg.To),
             new(leg.Transport.TransportModeId, leg.Transport.Code, leg.Transport.Name),
             leg.Departure,
-            leg.Arrival)).ToList());
+            leg.Arrival)).ToList(), trip.Stops.Select(ToPlace).ToList());
 
     /**
      * maps one place snapshot to its public shape.

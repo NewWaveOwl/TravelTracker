@@ -55,6 +55,512 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Contains("Enter a trip name", page.Find("[role=alert]").TextContent);
     }
 
+    [Theory]
+    [InlineData("map")]
+    [InlineData("trip")]
+    [InlineData("new-trip")]
+    public void WorkspaceSaveIsAvailableBeforeReviewAndCreatesAnEmptyTrip(string route)
+    {
+        SaveTripRequest? created = null;
+        Configure(async (request, token) =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            created = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
+            return Json(Saved with { Name = created!.Name, Legs = [], Stops = [] });
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/{route}");
+        var page = Render<NewTrip>();
+        var save = page.Find("[data-trip-save]");
+        Assert.Equal("Control+S Meta+S", save.GetAttribute("aria-keyshortcuts"));
+        Assert.NotNull(save.Closest(".trip-workspace-controls"));
+        Assert.Null(save.Closest("#trip-tools-panel"));
+        Assert.Empty(page.FindAll(".trip-review"));
+        page.Find(".map-trip-name, .trip-basics input").Change("An empty plan");
+        SelectTripDates(page, new(2026, 11, 14), new(2026, 11, 14));
+
+        save.Click();
+
+        page.WaitForAssertion(() => Assert.NotNull(created));
+        Assert.Equal("An empty plan", created!.Name);
+        Assert.Empty(created.Legs);
+        Assert.Empty(created.Stops!);
+        Assert.Contains("Saved An empty plan", page.Find(".trip-workspace-controls").TextContent);
+        Click(page, "Back to editor");
+        page.Find(".map-trip-name, .trip-basics input").Change("Changed after saving");
+        Assert.DoesNotContain("Saved An empty plan", page.Find(".trip-workspace-controls").TextContent);
+    }
+
+
+    [Fact]
+    public void WorkspaceSaveValidatesMissingBasicsWithoutHidingTheAction()
+    {
+        Configure((_, _) => throw new InvalidOperationException("Invalid drafts must not send HTTP requests."));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
+        var page = Render<NewTrip>();
+
+        page.Find("[data-trip-save]").Click();
+
+        Assert.Contains("name", page.Find(".trip-workspace-controls [role=alert]").TextContent, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Save trip", page.Find("[data-trip-save]").TextContent);
+        Assert.False(page.Find("[data-trip-save]").HasAttribute("disabled"));
+    }
+
+
+    [Fact]
+    public async Task WorkspaceSaveStaysVisibleWithClosedToolsAndRetainsDraftAfterFailedSingleStopSave()
+    {
+        var single = Saved with { Legs = [], Stops = [Museum] };
+        var writes = new List<SaveTripRequest>();
+        var saving = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fail = true;
+        Configure(async (request, token) =>
+        {
+            if (request.Method == HttpMethod.Get) return Json(single);
+            writes.Add((await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token))!);
+            await saving.Task.WaitAsync(token);
+            return fail ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : Json(single with { Name = writes[^1].Name });
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        page.Find(".map-trip-name").Change("Keep my single stop");
+        var detailsPanel = page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Last();
+        detailsPanel.Find(".movable-panel-body").SetAttribute("inert", "");
+        var save = page.Find("[data-trip-save]");
+
+        var pendingSave = save.ClickAsync(new MouseEventArgs());
+        page.WaitForAssertion(() => Assert.Single(writes));
+        Assert.Equal("Saving trip", page.Find("[data-trip-save]").TextContent);
+        Assert.Contains("Saving trip", page.Find(".trip-workspace-controls [role=status]").TextContent);
+        Assert.True(page.Find("[data-trip-save]").HasAttribute("disabled"));
+        save.Click();
+        Assert.Single(writes);
+        saving.SetResult(true);
+        await pendingSave;
+
+        page.WaitForAssertion(() => Assert.Contains("Your draft is still here", page.Find(".trip-workspace-controls [role=alert]").TextContent));
+        Assert.Equal("Keep my single stop", page.Find(".map-trip-name").GetAttribute("value"));
+        Assert.Equal(Museum, Assert.Single(page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>().Instance.Stops));
+        Assert.Empty(Assert.Single(writes).Legs);
+        Assert.Single(writes[0].Stops!);
+        fail = false;
+        page.Find("[data-trip-save]").Click();
+        page.WaitForAssertion(() => Assert.Contains("Saved Keep my single stop", page.Find(".trip-workspace-controls").TextContent));
+        Assert.Equal(2, writes.Count);
+        Assert.Equal(writes[0].Name, writes[1].Name);
+        Assert.Equal(writes[0].Stops, writes[1].Stops);
+    }
+
+
+    [Fact]
+    public async Task WorkspaceSavePreservesUnconfirmedMarkerDetailsInsteadOfSavingOldValues()
+    {
+        var writes = 0;
+        Configure((request, _) =>
+        {
+            if (request.Method != HttpMethod.Get) writes++;
+            return Task.FromResult(Json(Saved));
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
+        page.Find(".trip-place input[type=text]").Change("Unconfirmed museum name");
+        var detailsPanel = page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Last();
+        var revealBeforeSave = detailsPanel.Instance.RevealVersion;
+        detailsPanel.Find(".movable-panel-body").SetAttribute("inert", "");
+
+        page.Find("[data-trip-save]").Click();
+
+        Assert.Equal(0, writes);
+        Assert.Contains("Apply or cancel", page.Find("[role=alert]").TextContent);
+        Assert.True(detailsPanel.Instance.RevealVersion > revealBeforeSave);
+        Assert.Equal("Unconfirmed museum name", page.Find(".trip-place input[type=text]").GetAttribute("value"));
+        Assert.Equal(Museum, canvas.Instance.Stops[1]);
+    }
+
+
+    [Fact]
+    public async Task WorkspaceSaveOpensExplicitCatalogueConfirmationWithoutWritingNewPlaces()
+    {
+        var writes = 0;
+        Configure((request, _) =>
+        {
+            if (request.Method != HttpMethod.Get) writes++;
+            return Task.FromResult(Json(Saved));
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.MoveMarker(1, 15, 10));
+
+        page.Find("[data-trip-save]").Click();
+
+        Assert.Equal(0, writes);
+        Assert.Single(page.FindAll(".trip-review"));
+        Assert.Contains("Save catalogue entries", page.Find(".trip-review").TextContent);
+        Assert.Single(page.FindAll("[data-trip-save]"));
+        Assert.Equal(Guid.Empty, canvas.Instance.Stops[1].PlaceId);
+    }
+
+
+    [Fact]
+    public async Task WorkspaceShortcutsAreRegisteredOnceAndDisconnectedWhenEditorCloses()
+    {
+        Configure((_, _) => Task.FromResult(Json(Saved)));
+        var module = JSInterop.SetupModule("./Components/Pages/NewTrip.razor.js");
+        var shortcuts = module.SetupModule("watchEditorShortcuts", _ => true);
+        shortcuts.SetupVoid("disconnect").SetVoidResult();
+        var page = Render<NewTrip>();
+        page.Find(".trip-basics input").Change("Still editing");
+        Assert.Single(module.Invocations["watchEditorShortcuts"]);
+
+        await page.Instance.DisposeAsync();
+
+        Assert.Single(shortcuts.Invocations["disconnect"]);
+    }
+
+
+    [Fact]
+    public void MapPlannerCreatesAnEmptyTripAndReopensItWithNoStops()
+    {
+        SaveTripRequest? created = null;
+        var empty = Saved with { Legs = [], Stops = [] };
+        Configure(async (request, token) =>
+        {
+            if (request.Method == HttpMethod.Get) return Json(empty);
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("/api/v1/trips", request.RequestUri!.AbsolutePath);
+            created = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
+            return Json(empty with { Name = created!.Name });
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/new-trip");
+        var page = Render<NewTrip>();
+        page.Find(".trip-basics input").Change("Empty ideas");
+        SelectTripDates(page, new(2026, 11, 14), new(2026, 11, 14));
+        Click(page, "Review trip");
+        Assert.Empty(page.FindAll("[role=alert]"));
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.NotNull(created));
+        Assert.Empty(created!.Legs);
+        Assert.Empty(created.Stops!);
+        Assert.Empty(page.FindAll(".trip-stop"));
+        Assert.Contains("Saved Empty ideas", page.Markup);
+
+        var reopened = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        Assert.Empty(reopened.FindAll(".trip-stop"));
+    }
+
+
+    [Theory]
+    [InlineData("accommodation", false)]
+    [InlineData("attraction", true)]
+    [InlineData("transport_stop", true)]
+    public void SingleStopSavesWithoutAConnectionAndReopensItsSnapshot(string type, bool roundTrip)
+    {
+        var stop = Hotel with { Type = type, Name = "Only place" };
+        var single = Saved with { IsRoundTrip = roundTrip, Legs = [], Stops = [stop] };
+        SaveTripRequest? replacement = null;
+        Configure(async (request, token) =>
+        {
+            if (request.Method == HttpMethod.Get) return Json(single);
+            Assert.Equal(HttpMethod.Put, request.Method);
+            replacement = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
+            return Json(single with { Name = replacement!.Name }, "\"2\"");
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        Assert.Equal("Only place", Assert.Single(page.FindAll(".trip-stop strong")).TextContent);
+        Click(page, "Review trip");
+        Assert.Empty(page.FindAll("[role=alert]"));
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.NotNull(replacement));
+        Assert.Empty(replacement!.Legs);
+        Assert.Equal(new SaveTripRequest.Place(stop.PlaceId, type), Assert.Single(replacement.Stops!));
+        Assert.Equal(roundTrip, replacement.IsRoundTrip);
+        Assert.Equal(stop, Assert.Single(page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>().Instance.Stops));
+
+        var reopened = Render<TripDetails>(parameters => parameters.Add(details => details.TripId, TripId));
+        reopened.WaitForAssertion(() => Assert.Contains("Only place", reopened.Markup));
+        Assert.Empty(reopened.FindAll(".trip-legs li"));
+    }
+
+
+    [Fact]
+    public async Task SingleNewStopResolvesItsCatalogueEntryWithoutCreatingTransportOrALeg()
+    {
+        var place = new TripPlaceDto(Guid.NewGuid(), "attraction", "Attraction 1", "", 45.51m, -73.58m);
+        SaveTripRequest? created = null;
+        var catalogueCreates = 0;
+        Configure(async (request, token) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/v1/attractions")
+            {
+                if (request.Method == HttpMethod.Get)
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<AttractionDto>()) };
+                Assert.Equal(HttpMethod.Post, request.Method);
+                catalogueCreates++;
+                return new HttpResponseMessage(HttpStatusCode.Created)
+                {
+                    Content = JsonContent.Create(new AttractionDto(place.PlaceId, place.Name, null, null,
+                        place.Address, place.Lat, place.Lon, 0))
+                };
+            }
+            Assert.Equal("/api/v1/trips", request.RequestUri.AbsolutePath);
+            Assert.Equal(HttpMethod.Post, request.Method);
+            created = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
+            return Json(Saved with { Name = created!.Name, Legs = [], Stops = [place] });
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
+        var page = Render<NewTrip>();
+        page.Find(".map-trip-name").Change("One place");
+        SelectTripDates(page, new(2026, 11, 14), new(2026, 11, 14));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.MarkerDropped.InvokeAsync((place.Type, place.Lat, place.Lon)));
+        Click(page, "Review trip");
+        Click(page, "Save catalogue entries");
+        page.WaitForAssertion(() => Assert.Equal(1, catalogueCreates));
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.NotNull(created));
+        Assert.Empty(created!.Legs);
+        Assert.Equal(new SaveTripRequest.Place(place.PlaceId, place.Type), Assert.Single(created.Stops!));
+        Assert.Equal(place, Assert.Single(canvas.Instance.Stops));
+    }
+
+
+    [Fact]
+    public async Task MapToolsTogglePreservesSelectedStopAndUnconfirmedEditBuffer()
+    {
+        Configure((_, _) => Task.FromResult(Json(Saved)));
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        Assert.Contains(page.FindAll("button"), button => button.TextContent.Trim() == "Basics");
+        Assert.Single(page.FindAll(".trip-chain .trip-basics"));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
+        page.Find(".trip-place input[type=text]").Change("Pending name");
+        var detailsPanel = page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Last();
+        var body = detailsPanel.Find(".movable-panel-body");
+        body.SetAttribute("inert", "");
+        Assert.Null(page.Find("[data-trip-save]").Closest(".movable-panel-body"));
+        page.Find(".map-trip-name").Change("Changed while tools are collapsed");
+        body.RemoveAttribute("inert");
+        Assert.Equal("Pending name", page.Find(".trip-place input[type=text]").GetAttribute("value"));
+        Assert.Equal(1, canvas.Instance.SelectedIndex);
+        Assert.Equal(Museum, canvas.Instance.Stops[1]);
+        Assert.Same(detailsPanel.Instance, page.FindComponents<TravelTracker.Frontend.Components.Trips.MovablePanel>().Last().Instance);
+    }
+
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LostPlaceResponseRetriesLookupWithoutCreatingAnotherRecord(bool committed)
+    {
+        var previous = new AttractionDto(Guid.NewGuid(), Museum.Name, null, null, "", 45.52m, -73.59m, 30);
+        var created = previous with { AttractionId = Guid.NewGuid(), Name = " MUSEUM " };
+        var nearMatch = created with { AttractionId = Guid.NewGuid(), Lon = -73.58m };
+        var catalogueWrites = 0;
+        var tripWrites = 0;
+        Configure(async (request, token) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/api/v1/attractions")
+            {
+                if (request.Method == HttpMethod.Get)
+                {
+                    Assert.Contains("name=Museum", request.RequestUri.Query);
+                    AttractionDto[] results = committed && catalogueWrites > 0 ? [previous, nearMatch, created] : [previous];
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(results) };
+                }
+
+                Assert.Equal(HttpMethod.Post, request.Method);
+                catalogueWrites++;
+                throw new HttpRequestException("Response lost after the create request.");
+            }
+
+            Assert.Equal($"/api/v1/trips/{TripId:D}", path);
+            if (request.Method == HttpMethod.Get)
+                return Json(Saved);
+
+            Assert.Equal(HttpMethod.Put, request.Method);
+            tripWrites++;
+            var body = (await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token))!;
+            Assert.Equal(created.AttractionId, Assert.Single(body.Legs).To.PlaceId);
+            return Json(Saved);
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, previous.Lat + 0.000003m, previous.Lon - 0.000004m)));
+
+        Click(page, "Review trip");
+        Click(page, "Save catalogue entries");
+        page.WaitForAssertion(() => Assert.Contains("could not be confirmed", page.Find("[role=alert]").TextContent));
+        Click(page, "Save catalogue entries");
+
+        if (committed)
+        {
+            Click(page, "Save trip");
+            page.WaitForAssertion(() => Assert.Contains("Saved Weekend", page.Find("[role=status]").TextContent));
+            Assert.Equal(1, tripWrites);
+        }
+        else
+        {
+            page.WaitForAssertion(() => Assert.Contains("No saved record matches Museum", page.Find("[role=alert]").TextContent));
+            Assert.DoesNotContain(page.FindAll(".trip-review button"), button => button.TextContent == "Save trip");
+            Assert.Equal(0, tripWrites);
+        }
+
+        Assert.Equal(1, catalogueWrites);
+    }
+
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MapJoinsNonAdjacentStopsAndPreservesTheFirstJourneyWhenClosingALoop(bool addReturnFirst)
+    {
+        Configure((_, _) => throw new InvalidOperationException("Drafting must not call the catalogue."));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/map");
+        var page = Render<NewTrip>();
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.DropMarker("accommodation", 350, 200));
+        await page.InvokeAsync(() => canvas.Instance.DropMarker("attraction", 430, 220));
+        await page.InvokeAsync(() => canvas.Instance.DropMarker("transport_stop", 390, 290));
+        Click(page, "Transport");
+
+        if (addReturnFirst)
+            Connect("Walk", "Attraction 2", "Accommodation 1");
+        Connect("Train", "Accommodation 1", "Stop 3");
+        Connect("Bus", "Stop 3", "Attraction 2");
+        if (!addReturnFirst)
+            Connect("Walk", "Attraction 2", "Accommodation 1");
+
+        Assert.Equal(addReturnFirst
+                ? new[] { "Attraction 2", "Accommodation 1", "Stop 3", "Attraction 2" }
+                : ["Accommodation 1", "Stop 3", "Attraction 2", "Accommodation 1"],
+            page.FindAll(".trip-stop strong").Select(name => name.TextContent));
+        Assert.Equal(addReturnFirst ? new[] { "Walk", "Train", "Bus" } : ["Train", "Bus", "Walk"],
+            page.FindAll(".map-leg-label span").Select(label => label.TextContent));
+        Assert.Equal(3, page.FindAll(".route-line").Count);
+
+        Click(page, "Review trip");
+        Assert.Contains("Round trip", page.Find(".trip-review small").TextContent);
+
+        void Connect(string mode, string from, string to)
+        {
+            Click(page, mode);
+            page.Find($".trip-marker[aria-label$=': {from}']").Click();
+            page.Find($".trip-marker[aria-label$=': {to}']").Click();
+        }
+    }
+
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MapPlannerSavesSavedPlacesAndBrowserCheckpointAfterModeCatalogueRetry(bool catalogueInitiallyEmpty)
+    {
+        SaveTripRequest? created = null;
+        var modeWrites = 0;
+        var modeReads = 0;
+        Configure(async (request, token) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            Assert.Equal("test-token", request.Headers.Authorization?.Parameter);
+            switch (path)
+            {
+                case "/api/v1/accommodations":
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(
+                        new[] { new { AccommodationId = Hotel.PlaceId, Hotel.Name, Hotel.Address, Hotel.Lat, Hotel.Lon } }) };
+                case "/api/v1/attractions":
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(
+                        new[] { new { AttractionId = Museum.PlaceId, Museum.Name, Museum.Address, Museum.Lat, Museum.Lon, EstimatedVisitMinutes = 30 } }) };
+                case "/api/v1/transport-modes":
+                    if (request.Method == HttpMethod.Get)
+                    {
+                        Assert.Equal("?name=&code=", request.RequestUri.Query);
+                        var modes = catalogueInitiallyEmpty && modeReads++ == 0 ? Array.Empty<TripDto.Mode>() : [Train];
+                        return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(modes) };
+                    }
+
+                    modeWrites++;
+                    throw new InvalidOperationException("Trip planning must never create transport modes.");
+                case "/api/v1/trips":
+                    Assert.Equal(HttpMethod.Post, request.Method);
+                    created = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
+                    return Json(Saved);
+                default:
+                    throw new InvalidOperationException($"Unexpected request path {path}.");
+            }
+        });
+        ConfigureBrowserDraftStorage();
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/map");
+        var page = Render<NewTrip>();
+
+        page.Find(".map-trip-name, .trip-basics input").Change("Weekend");
+        SelectTripDates(page, new(2026, 11, 14), new(2026, 11, 14));
+        Click(page, "Markers");
+        Click(page, "Accommodation");
+        page.Find(".trip-search").Submit();
+        page.WaitForAssertion(() => Assert.Contains("Hotel", page.Find(".trip-search-results").TextContent));
+        Click(page, "Hotel");
+        Click(page, "Attraction");
+        page.Find(".trip-search").Submit();
+        page.WaitForAssertion(() => Assert.Contains("Museum", page.Find(".trip-search-results").TextContent));
+        Click(page, "Museum");
+        Click(page, "Transport");
+        Click(page, "Train");
+        page.FindAll(".trip-stop")[0].Click();
+        page.FindAll(".trip-stop")[1].Click();
+        page.Find("button[aria-label^='Edit connection 1:']").Click();
+        page.Find("input[aria-label='Duration hours']").Change("1");
+        page.FindAll(".leg-panel input[type=datetime-local]")[0].Change("2026-11-14T10:00:00");
+        Assert.Contains("Train · 1 h 0 min", page.Find(".map-leg-label").TextContent);
+        Assert.StartsWith("2026-11-14T11:00", page.FindAll(".leg-panel input[type=datetime-local]")[1].GetAttribute("value"));
+
+        page.Find("input[aria-label='Duration minutes']").Change("60");
+        Assert.Contains("Enter whole minutes from 0 to 59.", page.Find("[role=alert]").TextContent);
+        page.Find("input[aria-label='Duration minutes']").Change("20");
+        Assert.StartsWith("2026-11-14T11:20", page.FindAll(".leg-panel input[type=datetime-local]")[1].GetAttribute("value"));
+
+        page.FindAll(".leg-panel input[type=datetime-local]")[1].Change("2026-11-14T11:15");
+        Assert.Equal("1", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
+        Assert.Equal("15", page.Find("input[aria-label='Duration minutes']").GetAttribute("value"));
+        Assert.Contains("Train · 1 h 15 min", page.Find(".map-leg-label").TextContent);
+        page.FindAll(".leg-panel input[type=datetime-local]")[0].Change("2026-11-14T10:15");
+        Assert.Equal("1", page.Find("input[aria-label='Duration hours']").GetAttribute("value"));
+        Assert.Equal("0", page.Find("input[aria-label='Duration minutes']").GetAttribute("value"));
+        Assert.StartsWith("2026-11-14T11:15", page.FindAll(".leg-panel input[type=datetime-local]")[1].GetAttribute("value"));
+        Click(page, "Review trip");
+        Assert.True(page.FindAll("[role=alert]").Count == 0, string.Join(" ", page.FindAll("[role=alert]").Select(alert => alert.TextContent)));
+        Click(page, "Save catalogue entries");
+        if (catalogueInitiallyEmpty)
+        {
+            page.WaitForAssertion(() => Assert.Contains("Transport modes unavailable", page.Find("[role=alert]").TextContent));
+            Click(page, "Save catalogue entries");
+        }
+        Click(page, "Save map draft");
+        Click(page, "Save trip");
+
+        page.WaitForAssertion(() => Assert.Contains(page.FindAll("[role=status]"), item => item.TextContent.Contains("Saved Weekend")));
+        Assert.Collection(JSInterop.Invocations["localStorage.setItem"],
+            item => Assert.EndsWith("-new", Assert.IsType<string>(item.Arguments[0])),
+            item => Assert.EndsWith($"-{TripId:D}", Assert.IsType<string>(item.Arguments[0])));
+        Assert.Equal(0, modeWrites);
+        Assert.NotNull(created);
+        Assert.Equal(new DateTimeOffset(2026, 11, 14, 0, 0, 0, Start.Offset), created.Start);
+        var leg = Assert.Single(created.Legs);
+        Assert.Equal(Hotel.PlaceId, leg.From.PlaceId);
+        Assert.Equal(Museum.PlaceId, leg.To.PlaceId);
+        Assert.Equal(Train.TransportModeId, leg.TransportModeId);
+        Assert.Equal(Start.AddMinutes(75), leg.Departure);
+        Assert.Equal(Start.AddMinutes(135), leg.Arrival);
+        Assert.EndsWith($"/map/{TripId:D}", navigation.Uri);
+    }
+
+
     [Fact]
     public void UnavailableMapTripRequestsAttentionForItsLoadFailure()
     {
@@ -1355,9 +1861,12 @@ public sealed class TripPlannerTests : BunitContext
         if (!addReturnFirst)
             Connect("Walk", "Attraction 2", "Accommodation 1");
 
-        Assert.Equal(new[] { "Accommodation 1", "Stop 3", "Attraction 2", "Accommodation 1" },
+        Assert.Equal(addReturnFirst
+            ? new[] { "Attraction 2", "Accommodation 1", "Stop 3", "Attraction 2" }
+            : new[] { "Accommodation 1", "Stop 3", "Attraction 2", "Accommodation 1" },
             page.FindAll(".trip-stop strong").Select(name => name.TextContent));
-        Assert.Equal(new[] { "Train", "Bus", "Walk" }, page.FindAll(".map-leg-label span").Select(label => label.TextContent));
+        Assert.Equal(addReturnFirst ? new[] { "Walk", "Train", "Bus" } : new[] { "Train", "Bus", "Walk" },
+            page.FindAll(".map-leg-label span").Select(label => label.TextContent));
         Assert.Equal(3, page.FindAll(".route-line").Count);
 
         Click(page, "Review trip");
@@ -1402,7 +1911,7 @@ public sealed class TripPlannerTests : BunitContext
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
 
         if (hasReturnStop)
-            Click(page, "+ Return to starting accommodation");
+            Click(page, "+ Return to starting place");
         Click(page, "Transport");
         Click(page, "Walk");
         page.Find(".trip-marker[aria-label$=': Museum']").Click();
@@ -1456,7 +1965,7 @@ public sealed class TripPlannerTests : BunitContext
         });
         Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
-        Click(page, "+ Return to starting accommodation");
+        Click(page, "+ Return to starting place");
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
         var changed = (Lat: Hotel.Lat + 0.01m, Lon: Hotel.Lon - 0.01m);
         await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((0, changed.Lat, changed.Lon)));

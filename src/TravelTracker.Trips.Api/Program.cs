@@ -9,6 +9,8 @@ using TravelTracker.Security.Hosting;
 using TravelTracker.Trips.Api.Errors;
 using TravelTracker.Trips.Data;
 using TravelTracker.Trips.Data.Repositories;
+using TravelTracker.Trips.Api.TicketImports;
+using TravelTracker.Trips.Data.TicketImports;
 
 namespace TravelTracker.Trips.Api;
 
@@ -62,6 +64,10 @@ public class TripsProgram
         builder.Services.AddDbContext<TripsDbContext>(options => options.UseNpgsql(connectionString));
         builder.Services.AddScoped<ITripRepository, EfTripRepository>();
         builder.Services.AddScoped<TripReadService>();
+        builder.Services.AddSingleton<ITicketImportStore, MemoryTicketImportStore>();
+        builder.Services.AddSingleton<ITicketPdfParser, TicketPdfParser>();
+        builder.Services.AddSingleton<TicketImportCapacity>();
+        builder.Services.AddScoped<TicketImportService>();
         builder.Services.AddTripReferences(builder.Configuration);
 
         var app = builder.Build();

@@ -28,6 +28,19 @@ else if (trip is not null)
         <dt>Type</dt><dd>@(trip.IsRoundTrip ? "Round trip" : "One way")</dd>
     </dl>
     <h2>Itinerary</h2>
+    @if (trip.Legs.Count == 0)
+    {
+        @if (trip.Stops is { Count: > 0 })
+        {
+            <ol class="trip-stops">
+                @foreach (var stop in trip.Stops)
+                {
+                    <li><strong>@stop.Name</strong><small>@stop.Address</small></li>
+                }
+            </ol>
+        }
+        else { <p>No stops planned yet.</p> }
+    }
     <ol class="trip-legs">
         @foreach (var leg in trip.Legs)
         {
@@ -37,6 +50,14 @@ else if (trip is not null)
             </li>
         }
     </ol>
+    <section class="trip-ticket-entry" aria-labelledby="tickets-heading">
+        <div><h2 id="tickets-heading">Tickets &amp; bookings</h2><p>Import a PDF and review its travel details.</p></div>
+        @if (canImport)
+        {
+            <a class="button" href="@($"trips/{trip.TripId:D}/ticket-import")">Import tickets</a>
+        }
+        else { <small>Read-only access. Importing tickets requires trips.write.</small> }
+    </section>
     <div class="trip-actions"><a class="button secondary" href="@($"new-trip/{trip.TripId:D}")">Edit trip</a><a class="button secondary" href="new-trip">Plan another trip</a><a class="button" href="history">View trip history</a>
     </div>
     </section>

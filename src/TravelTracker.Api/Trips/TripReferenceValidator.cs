@@ -85,18 +85,11 @@ public sealed class TripReferenceValidator(AccommodationReferenceClient accommod
         return null;
     }
 
-    /**
-     * Refuses a draft whose leg endpoints name an unsupported place type, before any catalogue lookup.
-     *
-     * @param draft The trip as submitted.
-     * @return A blocking outcome, or null when every type is supported.
-     */
-    private TripReferenceOutcome? CheckTypes(TripDraft draft)
-    {
-        var typeErrors = CheckPlaceTypes(draft);
-        if (typeErrors.Count == 0) return null;
-        logger.LogWarning("trip check refused before catalogue lookups: {Count} leg endpoint(s) name an unsupported place type.", typeErrors.Count);
-        return new(TripReferenceStatus.InvalidTrip, null, typeErrors, "a leg names an unsupported place type.");
+    private TripReferenceOutcome? CheckTypes(TripDraft draft) {
+        var errors = CheckPlaceReferences(draft);
+        if (errors.Count == 0) return null;
+        logger.LogWarning("trip check refused before catalogue lookups: {Count} place reference error(s).", errors.Count);
+        return new(TripReferenceStatus.InvalidTrip, null, errors, "the submitted place references are invalid.");
     }
 
     /**
@@ -144,8 +137,19 @@ public sealed class TripReferenceValidator(AccommodationReferenceClient accommod
     {
         var errors = new List<TripError>();
         var legs = new List<TripLeg>();
-        for (var index = 0; index < draft.Legs.Count; index++)
-        {
+        List<TripPlace>? stops = null;
+        if (draft.Legs.Count == 0 && draft.Stops is not null) {
+            stops = [];
+            for (var index = 0; index < draft.Stops.Count; index++) {
+                var result = await ResolvePlaceAsync(draft.Stops[index], bearerToken, cancellationToken);
+                var field = $"stops[{index}]";
+                var blocking = BlockingFor(result, field);
+                if (blocking is not null) return blocking;
+                Collect(result, field, errors);
+                if (result.Status == ReferenceStatus.Found) stops.Add(result.Value!);
+            }
+        }
+        for (var index = 0; index < draft.Legs.Count; index++) {
             var leg = draft.Legs[index];
             var from = await ResolvePlaceAsync(leg.From, bearerToken, cancellationToken);
             if (BlockingFor(from, $"legs[{index}].from") is { } fromBlocking) return fromBlocking;
@@ -165,9 +169,8 @@ public sealed class TripReferenceValidator(AccommodationReferenceClient accommod
             return new(TripReferenceStatus.ReferenceRejected, null, errors, "one or more references are absent or not available to this caller.");
         }
 
-        try
-        {
-            var trip = Trip.Create(draft.Name, draft.TimeZone, draft.Start, draft.End, draft.IsRoundTrip, legs, tripId, revision);
+        try {
+            var trip = Trip.Create(draft.Name, draft.TimeZone, draft.Start, draft.End, draft.IsRoundTrip, legs, tripId, revision, stops);
             logger.LogInformation("trip check passed: {Count} leg(s) snapshotted and ready to save.", trip.Legs.Count);
             return new(TripReferenceStatus.Ready, trip, [], "trip snapshot is ready to save.");
         }
@@ -196,22 +199,34 @@ public sealed class TripReferenceValidator(AccommodationReferenceClient accommod
         };
 
     /**
-     * Finds every leg endpoint whose place type the trip cannot use, before any outbound call.
+     * Checks public place references and any explicit stop order before an outbound catalogue call.
      *
      * @param draft The trip as submitted.
-     * @return One error per unsupported endpoint; empty when all types are known.
+     * @return Field errors for unsupported types, missing identifiers or stops that disagree with the journeys.
      */
-    private static List<TripError> CheckPlaceTypes(TripDraft draft)
-    {
+    private static List<TripError> CheckPlaceReferences(TripDraft draft) {
         var errors = new List<TripError>();
-        for (var index = 0; index < draft.Legs.Count; index++)
-        {
-            if (!SupportedTypes.Contains(draft.Legs[index].From.Type))
-                errors.Add(new($"legs[{index}].from", "place type must be accommodation, attraction or transport_stop."));
-            if (!SupportedTypes.Contains(draft.Legs[index].To.Type))
-                errors.Add(new($"legs[{index}].to", "place type must be accommodation, attraction or transport_stop."));
+        for (var index = 0; index < draft.Legs.Count; index++) {
+            Check(draft.Legs[index].From, $"legs[{index}].from");
+            Check(draft.Legs[index].To, $"legs[{index}].to");
         }
+        if (draft.Stops is null) return errors;
+        for (var index = 0; index < draft.Stops.Count; index++) Check(draft.Stops[index], $"stops[{index}]");
+        if (draft.Legs.Count == 0) {
+            if (draft.Stops.Count > 1) errors.Add(new("stops", "multiple stops need connecting legs."));
+            return errors;
+        }
+
+        var expected = new[] { draft.Legs[0].From }.Concat(draft.Legs.Select(leg => leg.To));
+        if (!draft.Stops.SequenceEqual(expected))
+            errors.Add(new("stops", "stops must match the first departure and each ordered leg destination."));
         return errors;
+
+        void Check(TripPlaceReference reference, string field) {
+            if (!SupportedTypes.Contains(reference.Type))
+                errors.Add(new(field, "place type must be accommodation, attraction or transport_stop."));
+            if (reference.PlaceId == Guid.Empty) errors.Add(new(field, "a nonempty public place identifier is required."));
+        }
     }
 
     /**
