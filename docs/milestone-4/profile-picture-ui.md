@@ -36,6 +36,12 @@ introduce a public storage URL, or access a database directly. Image responses
 need a separate bounded receive allowance from the upload limit. Client checks
 help the user; the API remains responsible for validating decoded image data.
 
+The client also reads recognizable PNG/JPEG header dimensions before uploading.
+A photo wider or taller than 512 pixels gets local resize guidance even when its
+compressed file is below 1 MiB; no PUT is sent and the confirmed picture stays
+visible. Truncated or unreadable headers still go to the API for authoritative
+format/decoder validation. The client neither resizes nor rewrites the photo.
+
 ## User flow and private state
 
 The profile overview shows the confirmed photo, or initials derived from the
