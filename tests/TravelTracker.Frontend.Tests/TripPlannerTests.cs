@@ -19,6 +19,7 @@ using TravelTracker.Frontend.Api.Attractions;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
 using TravelTracker.Frontend.Api.Users;
+using TravelTracker.Frontend.Api.Routing;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Components;
 using TravelTracker.Frontend.Components.Pages;
@@ -744,7 +745,7 @@ public sealed class TripPlannerTests : BunitContext
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
         await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
         page.FindAll(".trip-place input[type=text]")[0].Change(name);
-        page.FindAll(".trip-place input[type=text]")[1].Change(address);
+        page.Find(".address-search input").Input(address);
 
         page.Find(".trip-place").Submit();
         Assert.Equal(Museum, canvas.Instance.Stops[1]);
@@ -790,7 +791,7 @@ public sealed class TripPlannerTests : BunitContext
         var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
         await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
         page.FindAll(".trip-place input[type=text]")[0].Change(name);
-        page.FindAll(".trip-place input[type=text]")[1].Change(address);
+        page.Find(".address-search input").Input(address);
 
         page.Find(".trip-place").Submit();
         Assert.Equal(Guid.Empty, canvas.Instance.Stops[1].PlaceId);
@@ -898,7 +899,7 @@ public sealed class TripPlannerTests : BunitContext
         Assert.DoesNotContain("Save catalogue entries", page.Markup);
         Click(page, "Back to stops");
         page.FindAll(".trip-stop")[1].Click();
-        Assert.Empty(page.FindAll(".trip-place"));
+        Assert.Single(page.FindAll(".address-search"));
         page.Find(".trip-search input").Change("Saved station");
         page.Find(".trip-search").Submit();
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".trip-search-results button")));
@@ -1067,7 +1068,7 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Contains("Enter a place name", page.Find("[role=alert]").TextContent);
         Assert.Equal(Museum, canvas.Instance.Stops[1]);
         page.Find(".trip-place input[type=text]").Change(name);
-        page.FindAll(".trip-place input[type=text]")[1].Change("New address");
+        page.Find(".address-search input").Input("New address");
         page.Find(".trip-place").Submit();
         Assert.Equal(Guid.Empty, canvas.Instance.Stops[1].PlaceId);
         Assert.Equal(name, page.FindAll(".trip-stop strong")[1].TextContent);
@@ -2285,6 +2286,85 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Contains("export function watchUndo", await browser.GetStringAsync("/Components/Pages/NewTrip.razor.js"));
     }
 
+    [Fact]
+    public async Task RepeatedMarkerMovesLookUpEachFinishedPositionAndKeepSuggestionsUnconfirmed()
+    {
+        var lookups = 0;
+        Configure((request, _) =>
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            if (request.RequestUri!.AbsolutePath.StartsWith("/v1/places/"))
+            {
+                lookups++;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new AddressLookupResult("success",
+                        [new($"Suggested address {lookups}", 46m, -74m, "OpenStreetMap Nominatim")], "© OpenStreetMap contributors")),
+                });
+            }
+            return Task.FromResult(Json(Saved));
+        }, routing: true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, 45.52m, -73.59m)));
+        page.WaitForAssertion(() => Assert.Equal("Suggested address 1", page.Find(".address-search input").GetAttribute("value")));
+        Assert.Equal("", canvas.Instance.Stops[1].Address);
+        Assert.Equal(45.52m, canvas.Instance.Stops[1].Lat);
+        page.Find(".trip-place input[type=text]").Change("My pending marker name");
+        await page.InvokeAsync(() => canvas.Instance.StopMoved.InvokeAsync((1, 45.53m, -73.60m)));
+        page.WaitForAssertion(() => Assert.Equal("Suggested address 2", page.Find(".address-search input").GetAttribute("value")));
+        Assert.Equal("My pending marker name", page.Find(".trip-place input[type=text]").GetAttribute("value"));
+        Assert.Equal(2, lookups);
+        Assert.Equal("", canvas.Instance.Stops[1].Address);
+        Assert.Equal(45.53m, canvas.Instance.Stops[1].Lat);
+        page.Find(".trip-place").Submit();
+        Assert.Equal("Suggested address 2", canvas.Instance.Stops[1].Address);
+        Assert.Equal("My pending marker name", canvas.Instance.Stops[1].Name);
+        Assert.Equal(45.53m, canvas.Instance.Stops[1].Lat);
+        Assert.Equal(2, canvas.Instance.Stops.Count);
+    }
+
+    [Fact]
+    public async Task SelectedAddressPreviewsItsPositionUntilApplyWithoutCreatingADuplicateStop()
+    {
+        var lookups = 0;
+        Configure((request, _) =>
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            if (request.RequestUri!.AbsolutePath == "/v1/places/search")
+            {
+                lookups++;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new AddressLookupResult("success",
+                        [new("Chosen street", 45.53m, -73.60m, "OpenStreetMap Nominatim")], "© OpenStreetMap contributors")),
+                });
+            }
+            return Task.FromResult(Json(Saved));
+        }, routing: true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
+        var search = page.Find(".address-search");
+        Assert.Null(search.ParentElement!.Closest("form"));
+        page.Find(".address-search input").Input("Chosen street");
+        Assert.Equal(0, lookups);
+        search.Submit();
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".address-candidates button")));
+        page.Find(".address-candidates button").Click();
+        Assert.Equal(Museum, canvas.Instance.Stops[1]);
+        Assert.Equal((45.53m, -73.60m), canvas.Instance.PreviewLocation);
+        Assert.Single(page.FindAll(".address-preview-marker"));
+        Assert.Equal(2, canvas.Instance.Stops.Count);
+        page.Find(".trip-place").Submit();
+        Assert.Equal("Chosen street", canvas.Instance.Stops[1].Address);
+        Assert.Equal(45.53m, canvas.Instance.Stops[1].Lat);
+        Assert.Equal(2, canvas.Instance.Stops.Count);
+        Assert.Equal(1, lookups);
+    }
+
     void ConfigureBrowserDraftStorage(bool signedIn = true)
     {
         var authentication = new SwitchableAuthentication(new SessionRegistry(TimeProvider.System));
@@ -2302,7 +2382,7 @@ public sealed class TripPlannerTests : BunitContext
     }
 
     void Configure(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond,
-        bool withAccommodationCatalogue = false, string? scopes = null)
+        bool withAccommodationCatalogue = false, string? scopes = null, bool routing = false)
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         var clock = new FakeTimeProvider(Start);
@@ -2317,10 +2397,12 @@ public sealed class TripPlannerTests : BunitContext
             ["Trips"] = "http://localhost:5108",
             ["Accommodations"] = "http://localhost:5106",
             ["Attractions"] = "http://localhost:5104",
-            ["Transport"] = "http://localhost:5105"
+            ["Transport"] = "http://localhost:5105",
+            ["Routing"] = "https://routing.example"
         });
         var services = new ServiceClient(new HttpClient(new StubHandler(respond)), NullLogger<ServiceClient>.Instance);
         var client = new ProtectedClient(authentication, directory, services, clock, NullLogger<ProtectedClient>.Instance, sessions);
+        if (routing) Services.AddSingleton(new RoutingClient(client));
         var transport = new TransportClient(client);
         Services.AddSingleton(transport);
         Services.AddSingleton(new TripsClient(client));

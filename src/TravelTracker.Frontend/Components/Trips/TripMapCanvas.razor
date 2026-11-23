@@ -1,6 +1,8 @@
 @using System.Globalization
 @using Microsoft.JSInterop
 @using TravelTracker.Frontend.Api.Trips
+@using TravelTracker.Frontend.Api.Routing
+@using TravelTracker.Frontend.Features.Trips
 @inject IJSRuntime JavaScript
 @inject ILogger<TripMapCanvas> Logger
 @implements IAsyncDisposable
@@ -32,6 +34,18 @@
             {
                 <path class="route-halo" d="@connection.Path" pointer-events="none" aria-hidden="true" />
                 <path class="route-line @connection.Code" d="@connection.Path" pointer-events="none" aria-hidden="true" />
+            }
+            @if (PreviewRoute is { } preview)
+            {
+                @foreach (var leg in preview.Legs)
+                {
+                    var geometry = GeometryPath(leg.Geometry);
+                    @if (geometry is not null)
+                    {
+                        <path class="route-halo" d="@geometry" pointer-events="none" aria-hidden="true" />
+                        <path class="route-line provider-route" d="@geometry" pointer-events="none" aria-label="Selected route preview" />
+                    }
+                }
             }
             @if (CanPick)
             {
@@ -75,6 +89,13 @@
                         <path d="M-4 -4L4 4M4 -4L-4 4" aria-hidden="true" />
                     </g>
                 }
+            }
+            @if (PreviewLocation is { } position && !Stops.Any(stop => stop.Lat == position.Lat && stop.Lon == position.Lon))
+            {
+                var point = ScreenPoint(position.Lat, position.Lon);
+                <g class="address-preview-marker" transform="@($"translate({Number(point.X)} {Number(point.Y)})")" role="img" aria-label="Unconfirmed address position">
+                    <circle r="14" /><path d="M-7 0H7M0 -7V7" />
+                </g>
             }
             @foreach (var connection in connections)
             {
@@ -120,6 +141,10 @@
     {
         <p>Lines show approximate connections between stops.</p>
     }
+    @if (PreviewRoute is not null)
+    {
+        <p>Highlighted line: selected provider route preview. Other connections remain approximate. Preview times have not changed your trip.</p>
+    }
 </section>
 
 @code {
@@ -136,6 +161,8 @@
     [Parameter] public bool AllowMarkerDrop { get; set; }
     [Parameter] public EventCallback<(string Type, decimal Lat, decimal Lon)> MarkerDropped { get; set; }
     [Parameter] public IReadOnlyList<(string Code, string Label)> Legs { get; set; } = [];
+    [Parameter] public RouteItinerary? PreviewRoute { get; set; }
+    [Parameter] public (decimal Lat, decimal Lon)? PreviewLocation { get; set; }
 
     int ViewportWidth = 768;
     int ViewportHeight = 432;
@@ -160,6 +187,7 @@
     private bool disposed;
     private (decimal Lat, decimal Lon)[] previousStops = [];
     private Guid? previousTripId;
+    private (decimal Lat, decimal Lon)? previousPreviewLocation;
     private bool hasMeasuredViewport;
     private int zoom = DefaultZoom;
     private (double X, double Y) center = Project(45.5019m, -73.5674m);
@@ -289,6 +317,12 @@
             previousStops = positions;
             previousTripId = TripId;
         }
+        if (PreviewLocation != previousPreviewLocation)
+        {
+            previousPreviewLocation = PreviewLocation;
+            if (PreviewLocation is { } position && !Stops.Any(stop => stop.Lat == position.Lat && stop.Lon == position.Lon))
+                center = Project(position.Lat, position.Lon);
+        }
     }
 
     /**
@@ -371,6 +405,22 @@
 
         result.Sort((first, second) => first.Destination.CompareTo(second.Destination));
         return result;
+    }
+
+    /**
+     * Projects the provider's real geometry independently from approximate itinerary connections.
+     * @param encoded A bounded, encoded provider polyline.
+     * @return An SVG path, or null when a complete usable geometry is unavailable.
+     */
+    string? GeometryPath(string encoded)
+    {
+        var coordinates = RouteGeometry.Decode(encoded);
+        if (coordinates.Count < 2) return null;
+        return string.Join(" ", coordinates.Select((position, index) =>
+        {
+            var point = ScreenPoint(position.Lat, position.Lon);
+            return $"{(index == 0 ? "M" : "L")} {Number(point.X)} {Number(point.Y)}";
+        }));
     }
 
     /**

@@ -1,0 +1,132 @@
+@using TravelTracker.Frontend.Api.Routing
+@implements IDisposable
+
+<section class="route-previews" aria-label="Route previews">
+    <h3>Route preview</h3>
+    <p>Uses your chosen stops, transport and departure time. Your entered times stay unchanged.</p>
+    @if (Request is null)
+    {
+        <p>Choose a connection, transport and departure time to preview routes. Resolve any repeated-time UTC offset first.</p>
+    }
+    <button type="button" class="secondary" disabled="@(Request is null || loading)" @onclick="LoadAsync">@(loading ? "Finding routes…" : "Find routes")</button>
+    @if (loading)
+    {
+        <button type="button" class="secondary" @onclick="CancelPreview">Cancel route lookup</button>
+    }
+    <p role="status" aria-live="polite">@message</p>
+    @if (routes.Count > 0)
+    {
+        <ul class="route-options" aria-label="Candidate routes">
+        @foreach (var route in routes)
+        {
+            <li>
+                <button type="button" class="secondary" aria-pressed="@(route == chosen ? "true" : "false")" @onclick="() => SelectAsync(route)">
+                    <strong>@($"{Math.Ceiling(route.DurationSeconds / 60)} min · {route.DistanceMeters / 1000:0.0} km")</strong>
+                    <span>@TimingLabel(route.TimingBasis)</span>
+                    <span>@string.Join(" → ", route.Legs.Select(leg => leg.RouteName ?? leg.Mode))</span>
+                </button>
+            </li>
+        }
+        </ul>
+        <button type="button" class="secondary" @onclick="() => SelectAsync(null)">Clear route preview</button>
+    }
+</section>
+
+@code {
+    [Parameter] public RoutingClient? Client { get; set; }
+    [Parameter] public RoutePlanRequest? Request { get; set; }
+    [Parameter] public EventCallback<RouteItinerary?> Selected { get; set; }
+
+    CancellationTokenSource? pending;
+    RoutePlanRequest? previous;
+    IReadOnlyList<RouteItinerary> routes = [];
+    RouteItinerary? chosen;
+    string? message;
+    long version;
+    bool loading;
+    bool disposed;
+
+    /** Invalidates route candidates after endpoints, mode or departure changes. */
+    protected override void OnParametersSet()
+    {
+        if (Request == previous) return;
+        previous = Request;
+        CancelPending();
+        message = null;
+    }
+
+    async Task LoadAsync()
+    {
+        CancelPending();
+        await Selected.InvokeAsync(null);
+        if (Request is null) return;
+        if (Client is null)
+        {
+            message = "Route preview is unavailable. Keep planning with your entered times.";
+            return;
+        }
+        pending = new();
+        var token = pending.Token;
+        var requestVersion = version;
+        loading = true;
+        message = "Finding a route for the selected departure…";
+        try
+        {
+            var result = await Client.PlanAsync(Request, token);
+            if (disposed || token.IsCancellationRequested || requestVersion != version) return;
+            routes = result.Itineraries;
+            message = result.Status == "unsupported" ? "This mode or coverage is not supported by the routing server. Your entered times are unchanged."
+                : routes.Count == 0 ? "No route found for this mode, area or service date. Your entered times are unchanged."
+                : "Choose a candidate to display its route on the map. Preview times are not saved to the trip.";
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (ApiError error)
+        {
+            if (!disposed && !token.IsCancellationRequested && requestVersion == version)
+                message = error.Status == 401 ? "Sign in to preview routes. Your entered times are unchanged."
+                    : "Route preview is unavailable. Keep planning with your entered times.";
+        }
+        finally
+        {
+            if (!disposed && requestVersion == version) loading = false;
+        }
+    }
+
+    async Task SelectAsync(RouteItinerary? route)
+    {
+        chosen = route;
+        await Selected.InvokeAsync(route);
+    }
+
+    async Task CancelPreview()
+    {
+        CancelPending();
+        await Selected.InvokeAsync(null);
+        message = "Route lookup cancelled. Your entered times are unchanged.";
+    }
+
+    void CancelPending()
+    {
+        version++;
+        pending?.Cancel();
+        pending?.Dispose();
+        pending = null;
+        routes = [];
+        chosen = null;
+        loading = false;
+    }
+
+    static string TimingLabel(string basis) => basis switch
+    {
+        "realtime" => "Includes realtime transit predictions",
+        "scheduled" => "Scheduled transit times",
+        _ => "Estimated travel time; no live road traffic",
+    };
+
+    /** Cancels a provider request when its connection panel closes. */
+    public void Dispose()
+    {
+        disposed = true;
+        CancelPending();
+    }
+}

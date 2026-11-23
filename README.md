@@ -107,6 +107,24 @@ In the **Map** and **Trip** workspaces, choose the beginning and ending days tog
 
 Place forms and details show the **street address** prominently, with **latitude and longitude** underneath in smaller text. In Map View, pick the map position and enter its street address; you can also adjust the coordinates.
 
+### Shared routing and address lookup
+
+The map can suggest editable addresses through Public Nominatim and preview chosen
+routes through the shared RNDTransit Windows server. Address search requires
+**Search address** or Enter; it does not search while typing. A spinner inside the
+address box covers queue waiting and lookup. Manual entry remains available.
+
+Set the server's **Public HTTPS** Dev Tunnel base address before launching:
+
+```powershell
+$env:Services__Routing = 'https://YOUR-TUNNEL-18088.YOUR-REGION.devtunnels.ms'
+dotnet run --file scripts/StartSupabaseDev.cs
+```
+
+Use the base URL without an API suffix. Configure the same TravelTracker Auth
+project in the server's TravelTracker settings. See the [integration, public-service
+rules and Windows update guide](docs/public-nominatim-integration.md).
+
 **Profile pictures:** Account → Edit profile → **Upload photo** uses the protected Users picture API and migration merged in [PR #137](https://github.com/NewWaveOwl/TravelTracker/pull/137), now included from `milestone_4`. Choose one static PNG or JPEG up to 1 MiB and 512 × 512 pixels. File selection saves the photo separately from profile text edits; a rejected upload keeps the previous photo. See [picture UI behavior and validation](docs/milestone-4/profile-picture-ui.md).
 
 ### Troubleshooting database login

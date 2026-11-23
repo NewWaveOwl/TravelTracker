@@ -111,6 +111,16 @@ The Trips host accepts a raw `application/pdf` upload at `POST /api/v1/trips/{tr
 
 The original is available to its owner at `GET /api/v1/trips/{tripId}/ticket-imports/{importId}/document` with `trips.read`; `DELETE /api/v1/trips/{tripId}/ticket-imports/{importId}` with `trips.write` removes it. Temporary content expires after 15 minutes, is process-local and has no public URL. Another owner's trip or import appears absent, including to administrators. See the [full upload, response, privacy and input contract](ticket-import.md).
 
+## Shared address and route preview contracts
+
+The optional `Services:Routing` service is the shared RNDTransit Ktor backend, not
+one of the .NET catalogue APIs. Protected app-specific operations are
+`GET /v1/places/search?q=...`, `GET /v1/places/reverse?lat=...&lon=...` and
+`POST /v1/routes/plan`. They return candidates/previews only and never create or
+update saved records. The Blazor server mediates through the configured HTTP
+boundary and existing session safeguards. See [request/response shapes, errors,
+authentication, global limits and configuration](public-nominatim-integration.md).
+
 ## Users contracts
 
 The independent Users service runs on HTTPS port 5101 locally and owns its PostgreSQL database. The following profile routes identify the caller from the validated token issuer and subject.

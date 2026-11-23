@@ -17,9 +17,9 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
     public static void Validate(IReadOnlyDictionary<string, string> services, bool production)
     {
         string[] required = ["Accommodations", "Attractions", "Settings", "Transport", "Trips", "Users"];
-        if (services.Keys.Any(service => !required.Contains(service, StringComparer.Ordinal)))
+        if (services.Keys.Any(service => !required.Contains(service, StringComparer.Ordinal) && service != "Routing"))
             throw new InvalidOperationException("Services contains an unsupported service name.");
-        foreach (var service in required)
+        foreach (var service in required.Concat(services.ContainsKey("Routing") ? ["Routing"] : Array.Empty<string>()))
         {
             if (!services.TryGetValue(service, out var address))
             {
@@ -55,7 +55,7 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
     public string ProtectedUrlFor(string service, string path)
     {
         var parts = path.Split('?', 2);
-        if (!ProtectedPath().IsMatch(parts[0]) ||
+        if (!(service == "Routing" ? RoutingPath().IsMatch(parts[0]) : ProtectedPath().IsMatch(parts[0])) ||
             (parts.Length == 2 && !AllowedQuery(service, parts[0], parts[1])))
             throw new ApiError(FailureKind.Unexpected, "Unsupported API path.");
         if (!urls.TryGetValue(service, out var url) || !Uri.TryCreate(url, UriKind.Absolute, out var baseUri))
@@ -70,12 +70,23 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
     [GeneratedRegex("^/api/v1/[a-z0-9/-]+$", RegexOptions.IgnoreCase)]
     private static partial Regex ProtectedPath();
 
+    [GeneratedRegex("^/v1/(?:places/(?:search|reverse)|routes/plan)$")]
+    private static partial Regex RoutingPath();
+
     [GeneratedRegex("^name=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})*$")]
     private static partial Regex NameQuery();
 
     static bool AllowedQuery(string service, string path, string query) =>
         (((service == "Attractions" && path == "/api/v1/attractions") || (service == "Accommodations" && path == "/api/v1/accommodations")) && NameQuery().IsMatch(query)) ||
-        (service == "Transport" && ((path == "/api/v1/transport-modes" && TransportQuery().IsMatch(query)) || (path == "/api/v1/route-points" && PointQuery().IsMatch(query))));
+        (service == "Transport" && ((path == "/api/v1/transport-modes" && TransportQuery().IsMatch(query)) || (path == "/api/v1/route-points" && PointQuery().IsMatch(query)))) ||
+        (service == "Routing" && ((path == "/v1/places/search" && AddressQuery().IsMatch(query)) ||
+            (path == "/v1/places/reverse" && CoordinateQuery().IsMatch(query))));
+
+    [GeneratedRegex("^q=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})+$")]
+    private static partial Regex AddressQuery();
+
+    [GeneratedRegex("^lat=-?[0-9]+(?:\\.[0-9]+)?&lon=-?[0-9]+(?:\\.[0-9]+)?$")]
+    private static partial Regex CoordinateQuery();
 
     [GeneratedRegex("^name=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})*&code=(?:car|bus|train|pedestrian|bike|plane)?$")]
     private static partial Regex TransportQuery();

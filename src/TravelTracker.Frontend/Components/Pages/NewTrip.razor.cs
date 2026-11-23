@@ -95,6 +95,8 @@ public partial class NewTrip : IAsyncDisposable
     string searchValue = "";
     string placeName = "";
     string placeAddress = "";
+    int reverseAddressVersion;
+    int addressLookupSequence;
     string openValue = "";
     decimal? latitude;
     decimal? longitude;
@@ -770,6 +772,11 @@ public partial class NewTrip : IAsyncDisposable
 
     void ShowReview()
     {
+        if (!HasUnconfirmedMarkerChanges)
+        {
+            placing = false;
+            ClearMarkerDetails();
+        }
         editorRevealVersion++;
         review = true;
         savedReview = false;
@@ -832,6 +839,8 @@ public partial class NewTrip : IAsyncDisposable
         if (previous.Lat == move.Lat && previous.Lon == move.Lon)
             return;
 
+        var retainEditor = placing && editingMarker is { } active &&
+            ReferenceEquals(active.LocationIdentity, stop.LocationIdentity);
         RememberEdit();
         if (review)
             ShowStops();
@@ -839,9 +848,11 @@ public partial class NewTrip : IAsyncDisposable
         draft.UpdatePlace(stop, updated);
         selected = move.Index;
         CancelConnection();
-        if (ReferenceEquals(editingMarker?.Place, updated))
+        if (retainEditor)
             (latitude, longitude, placeAddress) = (move.Lat, move.Lon, "");
         MarkEdited();
+        if (!retainEditor) EditSelectedStop();
+        reverseAddressVersion = ++addressLookupSequence;
     }
 
     void RemoveStop(int index)
@@ -961,6 +972,7 @@ public partial class NewTrip : IAsyncDisposable
 
     void ClearMarkerDetails()
     {
+        reverseAddressVersion = 0;
         editingMarker = null;
         editingStopDetails = false;
         placeName = "";
@@ -972,6 +984,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Opens an isolated edit buffer for the selected stop without moving the map. */
     void EditSelectedStop()
     {
+        reverseAddressVersion = 0;
         var marker = draft.Stops[selected];
         editingMarker = marker;
         editingStopDetails = true;
@@ -1025,6 +1038,7 @@ public partial class NewTrip : IAsyncDisposable
         placeName = name;
         placeAddress = address;
         (latitude, longitude) = position;
+        reverseAddressVersion = ++addressLookupSequence;
     }
 
     /**

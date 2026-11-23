@@ -75,7 +75,7 @@ else
     {
         <div class="map-surface">
             <TripMapCanvas TripId="draft.Id" Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())" SelectedIndex="selected"
-                           Legs="MapLegs" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<(int, bool)>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
+                           Legs="MapLegs" PreviewRoute="MapRoutePreview" PreviewLocation="@(placing ? PickedCoordinates : null)" ConnectionSelected="@(!review && !busy ? EventCallback.Factory.Create<(int, bool)>(this, EditConnection) : default)" StopSelected="SelectStop" LocationPicked="PickLocation"
                            CanPick="@(!review && !busy && mapTool == MapTool.Markers && placing && !editingStopDetails)"
                            StopMoved="@(!busy && (showMap || !review) ? EventCallback.Factory.Create<(int, decimal, decimal)>(this, MoveMarker) : default)"
                            StopRemoved="@(!review && !busy ? EventCallback.Factory.Create<int>(this, RemoveStop) : default)" AllowMarkerDrop="@(showMap && !review && !busy)" MarkerDropped="PlaceDroppedMarker" FullScreen="true" />
@@ -357,6 +357,7 @@ else
                                     </div>
                                 </div>
                             </fieldset>
+                            <RoutePreviewPanel Client="SharedRouting" Request="CurrentRouteRequest" Selected="SelectRoutePreview" />
                             @if (showMap)
                             {
                                 <p>Choose transport, then select the start and destination in travel order.</p>
@@ -552,7 +553,13 @@ else
                             }
                         }
                         }
-                        @if (activeMarker == "transport_stop")
+                        @if (placing)
+                        {
+                            <AddressLookup Client="SharedRouting" Value="@placeAddress" ValueChanged="value => placeAddress = value"
+                                Latitude="latitude" Longitude="longitude" Context="editingMarker" ReverseVersion="reverseAddressVersion"
+                                CandidateSelected="PreviewAddress" />
+                        }
+                        @if (activeMarker == "transport_stop" && !placing)
                         {
                             <p>Choose a saved transport stop to use in your trip. Map pins placed by hand can be kept in a browser draft.</p>
                             @if (editingStopDetails)
@@ -569,11 +576,13 @@ else
                             <form class="trip-place" @onsubmit="AddPickedStop" @onsubmit:preventDefault>
                                 <p>@(editingStopDetails ? "Confirm your changes to update this stop. Changed locations must be saved to the catalogue before saving the trip." : showMap ? "Select a point on the map or enter its coordinates." : "Enter the coordinates for this place.")</p>
                                 <label>Place name <input @ref="stopNameInput" type="text" required @bind="placeName" /></label>
-                                <label class="location-address">Street address (optional) <input type="text" @bind="placeAddress" /></label>
+                                <details class="location-coordinate-details">
+                                <summary>Map coordinates (optional adjustment)</summary>
                                 <div class="trip-fields location-coordinates">
                                     <label>Latitude <input type="number" min="-90" max="90" step="any" required @bind="latitude" /></label>
                                     <label>Longitude <input type="number" min="-180" max="180" step="any" required @bind="longitude" /></label>
                                 </div>
+                                </details>
                                 <div class="trip-actions">
                                     <button type="submit">@(editingMarker is null ? $"Add {MarkerLabel(activeMarker).ToLowerInvariant()}" : "Apply marker details")</button>
                                     <button type="button" class="secondary" @onclick="CancelMarkerDetails">Cancel</button>

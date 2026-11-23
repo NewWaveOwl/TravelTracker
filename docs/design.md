@@ -142,6 +142,14 @@ What each part of the system lets people create, read, update and delete.
 
 **Locations.** Place forms and details show the street address prominently, with labelled latitude and longitude beneath it in smaller, readable text. Addresses remain optional, and a missing address is shown honestly. Travellers can still choose or enter the map position manually.
 
+**Address help and route previews.** The shared RNDTransit backend supplies optional
+Public Nominatim address suggestions and chosen-endpoint OTP routes. Address search
+is submitted explicitly; marker placement/completed moves can request an editable
+suggestion. An in-field spinner shows queued/in-progress lookup. No suggestion saves
+automatically or overwrites a later manual edit. Route previews distinguish estimated,
+scheduled and realtime timing and preserve manually entered times. See the
+[implemented contract and provider rules](public-nominatim-integration.md).
+
 **Trip editor.** The canonical screen family uses Basics, Itinerary and Review. Additional stays and visits remain planned capabilities where the current contracts do not implement them.
 
 - In the Map/Trip workspace, **Trip duration** uses one calendar to choose a beginning day and an ending day, including both full days in the trip's time zone. Connection times stay separately editable. Existing saved trip timestamps are preserved until the date range is changed.
