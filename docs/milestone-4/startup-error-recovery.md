@@ -123,6 +123,16 @@ TravelTracker status and Auth settings; retain manual entries while resolving
 the failure. No new routing-server build is required for the local database
 migrations or frontend error-feedback changes.
 
+## Long car routes return 503
+
+Montreal to Trois-Rivieres was reproduced as a fast `OUTSIDE_BOUNDS` response
+from the loaded Montreal street map. The adapter incorrectly converted that
+normal coverage result into 503. The coverage update returns an explicit
+no-route result and keeps the selected route choices. Generating the journey
+also requires a graph covering both cities and their connecting roads; increasing
+timeouts or installing application JARs does not add those streets. Follow the
+[intercity diagnosis and update instructions](intercity-car-routing.md).
+
 ## Recovery-change validation
 
 The Release solution build passed with zero warnings/errors. All 1,781

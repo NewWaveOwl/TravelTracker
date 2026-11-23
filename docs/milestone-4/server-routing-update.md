@@ -16,16 +16,21 @@ errors, follow [startup error recovery](startup-error-recovery.md).
 Use the new `RNDTransitServer-TravelTracker-Update.zip` in RNDbackend:
 
 ```text
-backend/launcher/build/updates/TravelTracker-Routing-M4-20261122/
+backend/launcher/build/updates/TravelTracker-Coverage-20261123/
 ```
 
-- Runtime source commit: `58d68ff4f66e56479944d8c1acfe073c2d922ab0`.
-- ZIP size: 15,228,905 bytes; 34 launcher/backend JARs plus the updater,
+- Runtime source commit: `7ca9005005fc74a2cdb9bf4ffedbf135db1171bc`.
+- ZIP size: 15,228,721 bytes; 34 launcher/backend JARs plus the updater,
   manifest and instructions.
-- SHA-256: `68415AB3152B52D91D36EFFB889D15685DDCEB74B38D7741ED5890127AC9DECF`.
+- SHA-256: `21FA1C2FA10D47B195E585D16AC0FFE4B87825C80CF231C24B2A82ABE7E1C998`.
 
-This supersedes the earlier Nominatim-only and PowerShell-fix ZIPs. Archive JAR
-hashes/sizes and the bundled TravelTracker query/auth classes were checked against
+This supersedes the earlier M4, Nominatim-only and PowerShell-fix ZIPs. It corrects
+out-of-map car requests being reported as 503. All 137 backend and 60 launcher
+tests passed. [Intercity routing](intercity-car-routing.md) also requires map
+coverage for both cities and connecting roads; this application ZIP preserves
+the existing graph.
+
+Archive JAR hashes/sizes and the bundled TravelTracker query/auth classes were checked against
 the manifest; both distributions built without warnings. Eight isolated updater
 checks passed, and packaged CheckOnly succeeded with the genuine prior portable
 JARs copied to an isolated fixture. The actual remote server was not changed by

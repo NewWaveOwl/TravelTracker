@@ -150,7 +150,11 @@ Car/transit previews (#108) use actual OTP CAR, BUS or RAIL routing. Successful
 routes include `coverage` when metadata is available and `reason: null`.
 Unsupported mode/dataset returns no itinerary with `unsupported_mode` or
 `mode_not_in_dataset`. Actual router no-route errors distinguish
-`outside_service_period`, `location_not_found`, `no_stops_in_range` and `no_route`.
+`outside_coverage`, `outside_service_period`, `location_not_found`,
+`no_stops_in_range` and `no_route`. OTP `OUTSIDE_BOUNDS` is a normal HTTP 200
+`no_route / outside_coverage` result, and `NO_DIRECT_MODE_CONNECTION` is a normal
+no-route result. Extending street routing requires a wider graph, as shown by
+the [Montreal to Trois-Rivieres diagnosis](milestone-4/intercity-car-routing.md).
 The global service-date union alone never rejects a journey; the router decides
 whether that selected date has service. Optional metadata failure leaves coverage
 unknown and does not falsely declare a mode unsupported.

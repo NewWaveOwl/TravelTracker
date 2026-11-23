@@ -87,6 +87,31 @@ public sealed class RoutePreviewTests : BunitContext
     }
 
     [Fact]
+    public async Task OutsideCoverageExplainsTheMapUpdateAndRetainsTheChosenCarJourney()
+    {
+        var request = new RoutePlanRequest(new(45.5088m, -73.5686m), new(46.3432m, -72.5477m), "car", Departure);
+        var requests = 0;
+        var handler = new StubHandler((_, _) =>
+        {
+            requests++;
+            return Task.FromResult(RoutingFixtures.Json(new RoutePlanResult("no_route", [], Reason: "outside_coverage")));
+        });
+        var panel = Render<RoutePreviewPanel>(parameters => parameters.Add(component => component.Request, request)
+            .Add(component => component.Client, Client(handler)));
+
+        await panel.Find("button").ClickAsync(new());
+
+        var feedback = panel.Find("[role=status]").TextContent;
+        Assert.Contains("loaded street map", feedback);
+        Assert.Contains("roads between them", feedback);
+        Assert.Contains("entered times are unchanged", feedback);
+        Assert.Equal(request, panel.Instance.Request);
+        Assert.Empty(panel.FindAll(".route-options"));
+        Assert.False(panel.Find("button").HasAttribute("disabled"));
+        Assert.Equal(1, requests);
+    }
+
+    [Fact]
     public async Task RoutingServerRejectionReportsItsProjectSettingsWithoutClaimingLocalSignOut()
     {
         var panel = Render<RoutePreviewPanel>(parameters => parameters.Add(component => component.Request, Request)

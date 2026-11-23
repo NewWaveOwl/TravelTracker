@@ -110,7 +110,7 @@
             if (disposed || token.IsCancellationRequested || requestVersion != version) return;
             routes = result.Itineraries;
             message = result.Reason == "outside_service_period" ? "No loaded transit timetable covers this departure date. Your entered times are unchanged."
-                : result.Reason == "outside_coverage" ? "These endpoints are outside the loaded routing area. Your entered times are unchanged."
+                : result.Reason == "outside_coverage" ? "One or both places are outside the server's loaded street map. Expand the server map to cover both places and the roads between them. Your entered times are unchanged."
                 : result.Reason == "location_not_found" ? "A chosen location could not be matched to a routable point. Your entered times are unchanged."
                 : result.Reason == "no_stops_in_range" ? "No transit stops are within range of these endpoints. Your entered times are unchanged."
                 : result.Status == "unsupported" ? "This mode or coverage is not supported by the routing server. Your entered times are unchanged."
