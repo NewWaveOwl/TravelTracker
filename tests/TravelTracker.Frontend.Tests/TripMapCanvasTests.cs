@@ -177,6 +177,27 @@ public sealed class TripMapCanvasTests : BunitContext
         Assert.Equal("assets/trip-map/pin-accommodation.svg", pin.GetAttribute("href"));
     }
 
+    [Theory]
+    [InlineData(MapQuality.Standard)]
+    [InlineData(MapQuality.Low)]
+    public async Task BasemapFailureKeepsStopsVisibleAndSelectableInEveryQuality(string quality)
+    {
+        var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
+        var selected = -1;
+        var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
+        module.SetupModule("watchViewport", _ => true);
+        var map = Render<TripMapCanvas>(parameters => parameters
+            .Add(component => component.Stops, [hotel])
+            .Add(component => component.QualityPreference, quality)
+            .Add(component => component.StopSelected, index => selected = index));
+
+        await map.InvokeAsync(() => map.Instance.SetBasemapReady(false));
+
+        Assert.Equal("Map background unavailable.", map.Find(".map-status [aria-live]").TextContent);
+        map.Find("[aria-label='Stop 1: Hotel']").Click();
+        Assert.Equal(0, selected);
+    }
+
     [Fact]
     public async Task BasemapFollowsPlannerZoomAndCanRetryAfterLoadFailure()
     {
