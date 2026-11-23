@@ -103,12 +103,12 @@
   <rect class="app" x="405" y="565" width="260" height="110"/><text class="box-title" x="535" y="594">Application service</text><text class="box-line" x="535" y="620">Planned IAccommodationService</text><text class="box-line" x="535" y="645">catalogue + place validation</text>
   <rect class="app" x="740" y="565" width="260" height="110"/><text class="box-title" x="870" y="594">Application service</text><text class="box-line" x="870" y="620">ITransportModeService</text><text class="box-line" x="870" y="645">catalogue + code lookup</text>
   <rect class="app" x="1075" y="565" width="260" height="110"/><text class="box-title" x="1205" y="594">Application service</text><text class="box-line" x="1205" y="620">IAttractionService</text><text class="box-line" x="1205" y="645">catalogue + place validation</text>
-  <rect class="app-trip" x="1410" y="565" width="260" height="110"/><text class="box-title" x="1540" y="594">Application services</text><text class="box-line" x="1540" y="620">ITripService + ITripMapService</text><text class="box-line" x="1540" y="645">direction, sequence, time rules</text>
+  <rect class="app-trip" x="1410" y="565" width="260" height="110"/><text class="box-title" x="1540" y="594">Application services</text><text class="box-line" x="1540" y="620">TripSaveService + TripReadService</text><text class="box-line" x="1540" y="645">direction, sequence, time rules</text>
   <rect class="app" x="1745" y="565" width="260" height="110"/><text class="box-title" x="1875" y="594">Application service</text><text class="box-line" x="1875" y="620">ISettingsService</text><text class="box-line" x="1875" y="645">defaults on read + If-Match replace</text>
 
   <!-- Repositories -->
-  <rect class="repo" x="70" y="715" width="260" height="110"/><text class="box-title" x="200" y="744">Data access</text><text class="box-line" x="200" y="770">IUserRepository</text><text x="200" y="795" text-anchor="middle" font-size="12" fill="#B45309">current interface is internal</text>
-  <rect class="repo" x="405" y="715" width="260" height="110"/><text class="box-title" x="535" y="744">Data access</text><text class="box-line" x="535" y="770">IAccomadationRepository</text><text x="535" y="795" text-anchor="middle" font-size="12" fill="#B45309">current spelling; internal</text>
+  <rect class="repo" x="70" y="715" width="260" height="110"/><text class="box-title" x="200" y="744">Data access</text><text class="box-line" x="200" y="770">IUserRepository (Users.Data)</text><text x="200" y="795" text-anchor="middle" font-size="12" fill="#B45309">current interface is internal</text>
+  <rect class="repo" x="405" y="715" width="260" height="110"/><text class="box-title" x="535" y="744">Data access</text><text class="box-line" x="535" y="770">IAccommodationRepository</text><text x="535" y="795" text-anchor="middle" font-size="12" fill="#B45309">current spelling; internal</text>
   <rect class="repo" x="740" y="715" width="260" height="110"/><text class="box-title" x="870" y="744">Data access</text><text class="box-line" x="870" y="770">ITransportModeRepository</text><text class="box-note" x="870" y="795">get all / by ID / by code</text>
   <rect class="repo" x="1075" y="715" width="260" height="110"/><text class="box-title" x="1205" y="744">Data access</text><text class="box-line" x="1205" y="770">IAttractionRepository</text><text class="box-note" x="1205" y="795">CRUD contract</text>
   <rect class="repo-trip" x="1410" y="715" width="260" height="110"/><text class="box-title" x="1540" y="744">Data access</text><text class="box-line" x="1540" y="770">ITripRepository</text><text class="box-note" x="1540" y="795">history + CRUD + ReplaceLegs</text>
@@ -124,7 +124,7 @@
 
   <!-- Ownership/domain notes -->
   <rect class="owner" x="70" y="1015" width="260" height="80"/><text class="box-line" x="200" y="1045">Owner: Christel</text><text class="box-note" x="200" y="1072">User, UserRole, UserStatus</text>
-  <rect class="owner" x="405" y="1015" width="260" height="80"/><text class="box-line" x="535" y="1045">Owner: Christel</text><text class="box-note" x="535" y="1072">Accomodation (current spelling)</text>
+  <rect class="owner" x="405" y="1015" width="260" height="80"/><text class="box-line" x="535" y="1045">Owner: Christel</text><text class="box-note" x="535" y="1072">Accommodation (Accommodations.Domain)</text>
   <rect class="owner" x="740" y="1015" width="260" height="80"/><text class="box-line" x="870" y="1045">Owner: Artiom</text><text class="box-note" x="870" y="1072">TransportMode</text>
   <rect class="owner" x="1075" y="1015" width="260" height="80"/><text class="box-line" x="1205" y="1045">Owner: Artiom</text><text class="box-note" x="1205" y="1072">Attraction</text>
   <rect class="owner" x="1410" y="1015" width="260" height="80"/><text class="box-line" x="1540" y="1045">Owner: James</text><text class="box-note" x="1540" y="1072">Trip, Leg, Stay, Visit, MapPoint</text>

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using TravelTracker.Attractions.Domain.Models;
 
 namespace TravelTracker.Attractions.Api.Contracts;
 
@@ -9,14 +10,15 @@ namespace TravelTracker.Attractions.Api.Contracts;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class CreateAttractionRequest
 {
-    [Required, RegularExpression("^(private|shared)$")]
+    [Required, RegularExpression(@"^(private|shared)\z")]
     public string Visibility { get; init; } = "private";
-    [Required]
+    [Required, MaxLength(Attraction.NameMaxLength)]
     public string? Name { get; init; }
+    [MaxLength(Attraction.DescriptionMaxLength)]
     public string? Description { get; init; }
     [Range(typeof(decimal), "0", "5")]
     public decimal? Rating { get; init; }
-    [Required(AllowEmptyStrings = true)]
+    [Required(AllowEmptyStrings = true), MaxLength(Attraction.AddressMaxLength)]
     public string? Address { get; init; } = string.Empty;
     [Required, Range(typeof(decimal), "-90", "90")]
     public decimal? Lat { get; init; }

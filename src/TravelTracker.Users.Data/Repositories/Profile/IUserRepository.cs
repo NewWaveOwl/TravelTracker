@@ -9,6 +9,22 @@ namespace TravelTracker.Users.Data.Repositories.Profile;
 public interface IUserRepository
 {
     /**
+     * Reads the current caller's picture and access state without provisioning.
+     * @param identity The validated provider identity.
+     * @param cancellationToken Cancels the lookup.
+     * @return Whether access is allowed and, if saved, the normalized PNG.
+     */
+    Task<(bool CanRead, byte[]? Picture)> ReadPictureAsync(ProviderIdentity identity, CancellationToken cancellationToken);
+
+    /**
+     * Replaces the picture only if the owner remains active.
+     * @param identity The validated provider identity.
+     * @param picture The decoded and re-encoded PNG.
+     * @param cancellationToken Cancels the operation.
+     * @return Whether the replacement was saved.
+     */
+    Task<bool> ReplacePictureAsync(ProviderIdentity identity, byte[] picture, CancellationToken cancellationToken);
+    /**
      * Finds an account by its validated provider identity.
      * @param identity The identity-provider issuer and subject.
      * @param cancellationToken Cancels the lookup.
@@ -44,6 +60,7 @@ public interface IUserRepository
      * @param cancellationToken Cancels the read or save.
      * @return Saved profile, unchanged inactive account, or null when absent.
      * @throws DbUpdateConcurrencyException when a concurrent update changed the loaded record.
+     * @throws UserProfileUsernameConflictException when the normalized username belongs to another account.
      */
     Task<UserAccount?> UpdateProfileAsync(
         ProviderIdentity identity,

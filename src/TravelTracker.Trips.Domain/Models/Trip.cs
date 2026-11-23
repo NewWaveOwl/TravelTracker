@@ -5,24 +5,25 @@ namespace TravelTracker.Trips.Domain.Models;
  * Immutable: an edit returns a new trip or throws,
  * so a rejected change leaves the existing trip untouched. Nothing is ever
  * corrected silently; every problem is reported against its field.
- * Stays and visits are deferred (roadmap concepts in docs/domain.md).
+ * stays and visits are deferred (roadmap concepts in docs/domain.md).
  */
-public sealed class Trip {
-    /** Public identifier, assigned when the trip is first created and kept when a stored trip is rebuilt. */
+public sealed class Trip
+{
+    /** public identifier, assigned when the trip is first created and kept when a stored trip is rebuilt. */
     public Guid TripId { get; }
-    /** Stored revision, starting at one and advancing with each committed replacement. */
+    /** stored revision, starting at one and advancing with each committed replacement. */
     public long Revision { get; }
-    /** Trip name. */
+    /** trip name. */
     public string Name { get; }
-    /** Zone the traveller enters times in. */
+    /** zone the traveller enters times in. */
     public TimeZoneInfo TimeZone { get; }
-    /** Trip start; no leg may depart earlier. */
+    /** trip start; no leg may depart earlier. */
     public DateTimeOffset Start { get; }
-    /** Trip end; no leg may arrive later. */
+    /** trip end; no leg may arrive later. */
     public DateTimeOffset End { get; }
     /** The traveller's round-trip intent; it does not require a completed return journey. */
     public bool IsRoundTrip { get; }
-    /** Ordered legs. */
+    /** ordered legs. */
     public IReadOnlyList<TripLeg> Legs { get; }
     /** Ordered place occurrences, including a standalone stop when no journey is planned. */
     public IReadOnlyList<TripPlace> Stops { get; }
@@ -41,7 +42,7 @@ public sealed class Trip {
     }
 
     /**
-     * Builds a trip, or throws with every rule it breaks.
+     * builds a trip, or throws with every rule it breaks.
      *
      * @param name Trip name, required.
      * @param timeZone Zone the traveller enters times in.
@@ -62,6 +63,8 @@ public sealed class Trip {
         var stopSnapshot = stops?.ToList() ?? derivedStops;
         var errors = Validate(name, timeZone, start, end, snapshot, stopSnapshot);
         if (legs is null) errors.Add(new("legs", "legs must be a collection, which may be empty."));
+        if (tripId == Guid.Empty) errors.Add(new("tripId", "the trip id must not be empty."));
+        if (revision < 1) errors.Add(new("revision", "the revision must be at least one."));
         if (snapshot.Count > 0 && !stopSnapshot.SequenceEqual(derivedStops))
             errors.Add(new("stops", "stops must match the ordered leg endpoints."));
         return errors.Count > 0
@@ -73,21 +76,33 @@ public sealed class Trip {
     /**
      * Replaces all legs and derives their stop occurrences, keeping the trip basics.
      *
-     * @param legs The new ordered legs.
-     * @return A new valid trip; this trip is never modified.
+     * @param legs the new ordered legs.
+     * @return a new valid trip; this trip is never modified.
      * @throws TripValidationException when the new legs break a rule.
      */
     public Trip WithLegs(IEnumerable<TripLeg> legs) => Create(Name, TimeZone, Start, End, IsRoundTrip, legs, TripId, Revision);
+
+    /** Longest trip name accepted. */
+    public const int MaxNameLength = 200;
+
+    /** Most legs one trip may hold. */
+    public const int MaxLegCount = 100;
 
     private static List<TripError> Validate(string name, TimeZoneInfo zone, DateTimeOffset start, DateTimeOffset end,
         List<TripLeg> legs, List<TripPlace> stops) {
         var errors = new List<TripError>();
         void Fail(string field, string message) => errors.Add(new(field, message));
         if (string.IsNullOrWhiteSpace(name)) Fail("name", "name is required.");
+        else if (name.Length > MaxNameLength) Fail("name", $"name must be at most {MaxNameLength} characters.");
         if (end < start) Fail("end", "trip end must not be before trip start.");
         if (zone is null) Fail("timeZone", "a trip time zone is required.");
         if (legs.Count == 0 && stops.Count > 1)
             Fail("stops", "multiple stops require connected legs.");
+        if (legs.Count > MaxLegCount)
+        {
+            Fail("legs", $"a trip may have at most {MaxLegCount} legs.");
+            return errors;
+        }
         for (var i = 0; i < stops.Count; i++) CheckPlace(stops[i], $"stops[{i}]", Fail);
         for (var i = 0; i < legs.Count; i++) {
             var leg = legs[i];
@@ -142,9 +157,10 @@ public sealed class Trip {
     }
 
     // a time whose offset disagrees with the trip zone was entered wrongly; report it rather than fix it
-    private static void CheckZoneOffset(DateTimeOffset time, TimeZoneInfo zone, string field, Action<string, string> fail) {
+    private static void CheckZoneOffset(DateTimeOffset time, TimeZoneInfo zone, string field, Action<string, string> fail)
+    {
         var local = time.DateTime;
         var valid = zone.IsAmbiguousTime(local) ? zone.GetAmbiguousTimeOffsets(local).Contains(time.Offset) : !zone.IsInvalidTime(local) && zone.GetUtcOffset(local) == time.Offset;
-        if (!valid) fail(field, $"{local:s}{time.Offset} is not a valid time in {zone.Id}; use TripTime.Resolve.");
+        if (!valid) fail(field, $"{time:yyyy-MM-ddTHH:mm:sszzz} is not a valid time in {zone.Id}; enter the time with an offset that {zone.Id} uses at that moment.");
     }
 }

@@ -80,6 +80,10 @@ public sealed class SettingsPostgreSqlRestartTests
         var settings = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal("system", settings.GetProperty("theme").GetString());
+        Assert.Equal(0m, settings.GetProperty("defaultMapLatitude").GetDecimal());
+        Assert.Equal(0m, settings.GetProperty("defaultMapLongitude").GetDecimal());
+        Assert.Equal(2, settings.GetProperty("defaultMapZoom").GetInt32());
         Assert.Equal("car", settings.GetProperty("preferredTransportMode").GetString());
+        Assert.Equal("UTC", settings.GetProperty("timeZone").GetString());
     }
 }

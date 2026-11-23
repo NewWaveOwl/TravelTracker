@@ -7,6 +7,5 @@ namespace TravelTracker.Api.Trips;
  *
  * @param Status Outcome category.
  * @param Trip The stored trip, or null.
- * @param Detail Safe diagnostic text; never identities, tokens or storage messages.
  */
-public sealed record TripReadOutcome(TripReadStatus Status, Trip? Trip, string Detail);
+public sealed record TripReadOutcome(TripReadStatus Status, Trip? Trip);

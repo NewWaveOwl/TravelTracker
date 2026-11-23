@@ -1,7 +1,7 @@
 @implements IDisposable
 @inject NavigationManager Navigation
 
-<header>
+<header class="site-header" @onkeydown="OnHeaderKeyDown">
     <a class="brand" href="/">TravelTracker<img src="assets/logo.svg" alt="" /></a>
     <nav class="primary-navigation" aria-label="Main navigation">
         <a class="map-navigation-link" aria-current="@CurrentWhenAt("map")" href="map">Map</a>
@@ -9,10 +9,11 @@
         <a aria-current="@CurrentWhenAt("history")" href="history">History</a>
     </nav>
     <a class="icon" href="account" aria-label="Your account"><img src="assets/account.svg" alt="" /></a>
-    <button class="icon" aria-label="Menu" aria-expanded="@menuOpen.ToString().ToLowerInvariant()" aria-controls="menu" @onclick="() => menuOpen = !menuOpen"><img src="assets/menu.svg" alt="" /></button>
+    <button class="icon" @ref="menuButton" aria-label="Menu" aria-expanded="@menuOpen.ToString().ToLowerInvariant()" aria-controls="@(menuOpen ? "menu" : null)" @onclick="() => menuOpen = !menuOpen"><img src="assets/menu.svg" alt="" /></button>
     @if (menuOpen)
     {
         <nav id="menu" class="menu" aria-label="More navigation">
+            <a class="mobile-navigation-link" aria-current="@CurrentWhenAt("map")" href="map">Map</a>
             <a class="mobile-navigation-link" aria-current="@CurrentTrip" href="trip">Trip</a>
             <a class="mobile-navigation-link" aria-current="@CurrentWhenAt("history")" href="history">History</a>
             <a aria-current="@CurrentWhenAt("attractions")" href="attractions">Attractions</a>
@@ -27,10 +28,23 @@
     bool menuOpen;
     string? CurrentTrip => Navigation.ToBaseRelativePath(Navigation.Uri).Split('/', '?', '#')[0]
         is "trip" or "new-trip" or "trips" ? "page" : null;
+    ElementReference menuButton;
 
     protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
 
     public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+
+    /**
+     * Closes an open menu on Escape and returns focus to its toggle, so keyboard users are not left on removed links.
+     * @param keyboard The key press that reached the header.
+     * @return Completion of the focus move; other keys are ignored.
+     */
+    async Task OnHeaderKeyDown(KeyboardEventArgs keyboard)
+    {
+        if (!menuOpen || keyboard.Key != "Escape") return;
+        menuOpen = false;
+        await menuButton.FocusAsync();
+    }
 
     void OnLocationChanged(object? _sender, LocationChangedEventArgs _arguments)
     {

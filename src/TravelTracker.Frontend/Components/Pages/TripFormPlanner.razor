@@ -2,7 +2,9 @@
 @using TravelTracker.Frontend.Components.Trips
 @using TravelTracker.Frontend.Features.Trips
 
-<PageHeading Title="New Trip" />
+<small>TRIP PLANNING / YOUR ITINERARY</small>
+<PageHeading Title="Plan your trip" />
+<p>Build your itinerary, review the route and save when you are ready.</p>
 <p><a class="button secondary" href="new-trip">Open trip editor</a></p>
 <NavigationLock OnBeforeInternalNavigation="ConfirmLeaveAsync" ConfirmExternalNavigation="@Dirty" />
 <div @ref="editorElement" class="trip-page">
@@ -32,16 +34,19 @@ else
             <p class="trip-save-error" role="status">Check trip details before saving. <a href="#trip-errors-heading">Review details</a></p>
         }
     </div>
-    <ol class="trip-steps" aria-label="Trip progress">
+    <ol class="trip-steps" aria-label="Trip progress" tabindex="-1" @ref="progressList">
         @foreach (var (number, title) in Steps)
         {
             <li aria-current="@(number == step ? "step" : null)">@number. @title</li>
         }
     </ol>
-    @if (!canWrite) { <p class="trip-status" role="status">Saving trips requires the trips write permission. You can still prepare an itinerary.</p> }
+    @if (!canWrite)
+    {
+        <p class="trip-status" role="status">Saving trips requires the trips write permission. You can still prepare an itinerary.</p>
+    }
     @if (pendingTarget is not null)
     {
-        <section class="trip-dialog" role="alertdialog" aria-modal="true" aria-labelledby="leave-heading" aria-describedby="leave-text">
+        <section class="trip-dialog" role="alertdialog" aria-modal="true" aria-labelledby="leave-heading" aria-describedby="leave-text" tabindex="-1" @ref="leaveDialog" @onkeydown="HandleDialogKeyDown">
             <h2 id="leave-heading">Leave without saving?</h2>
             <p id="leave-text">Your trip has not been saved. If you leave now, what you entered is lost.</p>
             <div class="trip-actions">
@@ -52,17 +57,26 @@ else
     }
     @if (saveError is not null)
     {
-        <section class="trip-alert" role="alert">
+        <section class="trip-alert @(saveError.Kind == FailureKind.Validation ? "validation" : "failure")" role="alert">
             <h2 id="trip-save-error-heading">@SaveHeading</h2>
             <p>@saveError.Message</p>
             <p>Everything you entered is still here. Fix what is listed or try the save again.</p>
+            @if (SaveMayHaveCreated)
+            {
+                <p>@CreateRetryWarning.Message</p>
+            }
         </section>
     }
     @if (VisibleErrors.Any())
     {
         <section class="trip-alert" role="alert" aria-labelledby="trip-errors-heading">
             <h2 id="trip-errors-heading">Check your itinerary</h2>
-            <ul>@foreach (var field in VisibleErrors) { <li><a href="@("#" + FieldId(field.Key))">@string.Join(" ", field.Value)</a></li> }</ul>
+            <ul>
+            @foreach (var field in VisibleErrors)
+            {
+                <li><a href="@("#" + FieldId(field.Key))">@string.Join(" ", field.Value)</a></li>
+            }
+            </ul>
         </section>
     }
 
@@ -78,7 +92,12 @@ else
             <div class="trip-field">
                 <label for="trip-timezone">Time zone *</label>
                 <input id="trip-timezone" list="trip-zones" aria-invalid="@Invalid("timeZone")" @bind="draft.TimeZone" />
-                <datalist id="trip-zones">@foreach (var zone in Zones) { <option value="@zone"></option> }</datalist>
+                <datalist id="trip-zones">
+                @foreach (var zone in TimeZoneNames.All)
+                {
+                    <option value="@zone"></option>
+                }
+                </datalist>
                 <small class="trip-hint">Every time in this trip is read in this zone. Nothing is converted for you.</small>
                 <FieldError Messages="@Messages("timeZone")" />
             </div>
@@ -106,7 +125,7 @@ else
     {
         <form class="trip-form" aria-label="Itinerary" @onsubmit="NextFromItinerary" @onsubmit:preventDefault>
             <fieldset disabled="@saving" class="trip-form-fields">
-            <h2 id="legs-heading" tabindex="-1">Itinerary</h2>
+            <h2 id="legs-heading" tabindex="-1" @ref="stepHeading">Itinerary</h2>
             <p>Add journeys in order between any supported places, or continue with an empty itinerary.</p>
             @if (modeFailure is not null)
             {
@@ -124,7 +143,10 @@ else
                         <label for="@($"leg-{position}-transport")">Transport mode *</label>
                         <select id="@($"leg-{position}-transport")" aria-invalid="@Invalid($"legs[{position}].transport")" value="@(leg.TransportModeId?.ToString() ?? "")" @onchange="change => ChooseMode(leg, change.Value?.ToString())">
                             <option value="">Choose a mode</option>
-                            @foreach (var mode in modes) { <option value="@mode.TransportModeId">@mode.Name (@mode.Code)</option> }
+                            @foreach (var mode in modes)
+                            {
+                                <option value="@mode.TransportModeId">@mode.Name (@mode.Code)</option>
+                            }
                         </select>
                         <FieldError Messages="@Messages($"legs[{position}].transport")" />
                     </div>
@@ -142,15 +164,15 @@ else
                 </section>
             }
             <FieldError Messages="@Messages("legs")" />
-            <button type="button" class="secondary" @onclick="AddLeg">Add leg</button>
-            <div class="trip-actions"><button type="button" class="secondary" @onclick="() => GoTo(1)">Back</button><button type="submit">Next: review</button></div>
+            <button type="button" class="secondary" @ref="addLegButton" @onclick="AddLeg">Add leg</button>
+            <div class="trip-actions"><button type="button" class="secondary" @onclick="() => GoTo(1)">Back</button><button type="button" @onclick="NextFromItinerary">Next: review</button></div>
             </fieldset>
         </form>
     }
     else
     {
         <section class="trip-review" aria-labelledby="review-heading">
-            <h2 id="review-heading" tabindex="-1">Review trip</h2>
+            <h2 id="review-heading" tabindex="-1" @ref="stepHeading">Review trip</h2>
             <dl>
                 <dt>Name</dt><dd>@draft.Name</dd>
                 <dt>Time zone</dt><dd>@draft.TimeZone</dd>

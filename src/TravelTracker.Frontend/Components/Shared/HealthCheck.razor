@@ -11,7 +11,7 @@
         <option @key="name" value="@name">@name</option>
     }
 </select>
-<Feedback Kind="kind" Retry="RetryCallback">@Message</Feedback>
+<Feedback Kind="kind" Eyebrow="@(kind == FeedbackKind.Success ? "SERVICE AVAILABLE" : null)" Retry="RetryCallback">@Message</Feedback>
 
 @code {
     string service = "";
@@ -63,11 +63,18 @@
         }
         catch (ApiError error)
         {
-            kind = Enum.Parse<FeedbackKind>(error.Kind.ToString());
+            kind = error.Kind switch
+            {
+                FailureKind.Validation => FeedbackKind.Validation,
+                FailureKind.Permission => FeedbackKind.Permission,
+                FailureKind.Network => FeedbackKind.Network,
+                FailureKind.Unavailable => FeedbackKind.Unavailable,
+                _ => FeedbackKind.Unexpected,
+            };
         }
         catch (Exception exception)
         {
-            Logger.LogError(exception, "Health check of {Service} failed unexpectedly", service);
+            Logger.LogError("Health check of {Service} failed unexpectedly ({FailureType})", service, exception.GetType().Name);
             kind = FeedbackKind.Unexpected;
         }
     }

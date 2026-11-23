@@ -1,7 +1,7 @@
 namespace TravelTracker.Trips.Data.Entities;
 
 /**
- * Stores one ordered leg with its place and transport snapshots. The snapshot columns are copied at save time,
+ * stores one ordered leg with its place and transport snapshots. The snapshot columns are copied at save time,
  * so catalogue edits never change a stored trip.
  */
 internal sealed class TripLegRow

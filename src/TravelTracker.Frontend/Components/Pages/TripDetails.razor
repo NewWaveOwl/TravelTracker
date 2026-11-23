@@ -14,7 +14,13 @@ else if (failure is not null)
 }
 else if (trip is not null)
 {
-    @if (justSaved) { <p class="trip-status" role="status">Trip saved. <a href="history">Find it in Trip history</a>.</p> }
+    @if (justSaved)
+    {
+        <p class="trip-status" role="status">Trip saved. <a href="history">Find it in Trip history</a>.</p>
+    }
+    <section class="saved-trip-card">
+    <h2>Saved trip details</h2>
+    <p>Your trip is saved. View the itinerary below.</p>
     <dl class="trip-summary">
         <dt>Time zone</dt><dd>@trip.TimeZone</dd>
         <dt>Starts</dt><dd>@When(trip.Start)</dd>
@@ -52,6 +58,8 @@ else if (trip is not null)
         }
         else { <small>Read-only access. Importing tickets requires trips.write.</small> }
     </section>
-    <div class="trip-actions"><a class="button secondary" href="@($"new-trip/{trip.TripId:D}")">Edit trip</a><a class="button secondary" href="new-trip">Plan another trip</a></div>
+    <div class="trip-actions"><a class="button secondary" href="@($"new-trip/{trip.TripId:D}")">Edit trip</a><a class="button secondary" href="new-trip">Plan another trip</a><a class="button" href="history">View trip history</a>
+    </div>
+    </section>
 }
 </div>

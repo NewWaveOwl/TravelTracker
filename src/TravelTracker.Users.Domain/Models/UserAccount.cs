@@ -151,6 +151,7 @@ public sealed record UserAccount
         if (string.IsNullOrWhiteSpace(email))
         {
             addError("email", "Email must not be blank.");
+            return;
         }
 
         if (email.Length > 254)
@@ -180,6 +181,7 @@ public sealed record UserAccount
         if (string.IsNullOrWhiteSpace(address))
         {
             addError("address", "Address must not be blank.");
+            return;
         }
 
         if (address.Contains('\0'))

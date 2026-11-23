@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
-namespace TravelTracker.Api.Authentication;
+namespace TravelTracker.Security.Authentication;
 
 /**
  * Describes protected operations while leaving anonymous health explicitly public.

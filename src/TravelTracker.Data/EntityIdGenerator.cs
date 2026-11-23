@@ -14,7 +14,8 @@ namespace TravelTracker.Data;
  *
  * @param readHighestKey Reads the highest key currently stored, or 0 when empty.
  */
-public sealed class EntityIdGenerator(Func<Task<long>> readHighestKey) {
+public sealed class EntityIdGenerator(Func<Task<long>> readHighestKey)
+{
     private readonly SemaphoreSlim seedLock = new(1, 1);
     private long last;
     private bool seeded;
@@ -32,20 +33,24 @@ public sealed class EntityIdGenerator(Func<Task<long>> readHighestKey) {
     /**
      * Issues the next identity. Safe to call concurrently; gaps after a crash are harmless.
      *
-     * @return A task containing a fresh identity for the entity type.
+     * @return A value task containing a fresh identity for the entity type.
      */
-    public async ValueTask<EntityId<TEntity>> NextAsync<TEntity>() {
+    public async ValueTask<EntityId<TEntity>> NextAsync<TEntity>()
+    {
         if (!Volatile.Read(ref seeded)) await SeedAsync();
         return new(new Id64(Interlocked.Increment(ref last)), Guid.CreateVersion7());
     }
 
-    private async Task SeedAsync() {
+    private async Task SeedAsync()
+    {
         await seedLock.WaitAsync();
-        try {
+        try
+        {
             if (seeded) return;
             last = await readHighestKey();
             Volatile.Write(ref seeded, true);
-        } finally {
+        } finally
+        {
             seedLock.Release();
         }
     }

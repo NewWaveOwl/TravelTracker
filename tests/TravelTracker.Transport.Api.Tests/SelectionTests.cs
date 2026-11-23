@@ -22,6 +22,24 @@ public sealed class SelectionTests
         Assert.Empty(absent!);
     }
 
+    /** Empty and whitespace-only filters behave as omitted filters rather than exact or unsupported values. */
+    [Theory]
+    [InlineData("transport-modes", "code=")]
+    [InlineData("transport-modes", "code=%20%20")]
+    [InlineData("transport-modes", "name=")]
+    [InlineData("route-points", "type=")]
+    [InlineData("route-points", "type=%20")]
+    [InlineData("route-points", "name=%20")]
+    public async Task Selection_BlankFilterIsTreatedAsOmitted(string resource, string query)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var all = await client.GetFromJsonAsync<JsonElement[]>($"/api/v1/{resource}");
+        var filtered = await client.GetFromJsonAsync<JsonElement[]>($"/api/v1/{resource}?{query}");
+        Assert.NotEmpty(all!);
+        Assert.Equal(all!.Length, filtered!.Length);
+    }
+
     [Theory]
     [InlineData("transport-modes?code=boat")]
     [InlineData("route-points?type=airport")]

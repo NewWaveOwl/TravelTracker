@@ -1,10 +1,14 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Authorization;
 
 namespace TravelTracker.Accommodations.Api.Access;
 
-/** Applies live account standing before accommodation catalogue actions. */
-public sealed class AccommodationAccessMiddleware(RequestDelegate next)
+/**
+ * Applies live account standing before accommodation actions: deactivated accounts are denied, and banned accounts see only their own private records and cannot write.
+ * Every endpoint that is not anonymous gets the check, so a new controller cannot skip it.
+ * @param next The next request component.
+ * @param logger Safe refusal diagnostics without identity or credential details.
+ */
+public sealed class AccommodationAccessMiddleware(RequestDelegate next, ILogger<AccommodationAccessMiddleware> logger)
 {
     /**
      * Resolves only the validated identity and fails closed when Users is unavailable.
@@ -15,8 +19,8 @@ public sealed class AccommodationAccessMiddleware(RequestDelegate next)
      */
     public async Task InvokeAsync(HttpContext context, UsersAccessClient users, CallerContext caller)
     {
-        if (context.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>()?.ControllerTypeInfo.AsType() !=
-            typeof(Controllers.AccommodationsController))
+        var metadata = context.GetEndpoint()?.Metadata;
+        if (metadata is null || metadata.GetMetadata<IAllowAnonymous>() is not null)
         {
             await next(context);
             return;
@@ -26,6 +30,7 @@ public sealed class AccommodationAccessMiddleware(RequestDelegate next)
         var subject = context.User.FindFirst("sub")?.Value;
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject))
         {
+            logger.LogWarning("Accommodations request refused with HTTP 401: the token has no issuer or subject claim.");
             await Results.Problem(statusCode: StatusCodes.Status401Unauthorized,
                 title: "A validated issuer and subject are required.").ExecuteAsync(context);
             return;
@@ -34,10 +39,12 @@ public sealed class AccommodationAccessMiddleware(RequestDelegate next)
         caller.Issuer = issuer;
         caller.Subject = subject;
         var access = await users.ResolveAsync(issuer, subject, context.RequestAborted);
-        if (access is null || access.Status == "deactivated" ||
-            access.Status == "banned" && !HttpMethods.IsGet(context.Request.Method))
+        var isBannedWrite = access?.Status == "banned" && !HttpMethods.IsGet(context.Request.Method);
+        if (access is null || access.Status == "deactivated" || isBannedWrite)
         {
             var status = access is null ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status403Forbidden;
+            var reason = access is null ? "live account standing could not be verified" : isBannedWrite ? "banned account tried to write" : "account is deactivated";
+            logger.LogWarning("Accommodations request refused with HTTP {StatusCode}: {Reason}.", status, reason);
             await Results.Problem(statusCode: status,
                 title: status == StatusCodes.Status503ServiceUnavailable
                     ? "Account access could not be verified."

@@ -5,6 +5,7 @@ using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Accommodations;
 using TravelTracker.Frontend.Api.Users;
 using TravelTracker.Frontend.Auth;
+using TravelTracker.Frontend.Components.Shared;
 using TravelTracker.Frontend.Features.Accommodations;
 using TravelTracker.Frontend.Services;
 
@@ -18,7 +19,9 @@ public partial class AccommodationWorkspace : IDisposable
     [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
     [Inject] SessionRegistry Sessions { get; set; } = default!;
     [Inject] TimeProvider Clock { get; set; } = default!;
-    [Parameter] public EventCallback<AccommodationDto?> SelectionChanged { get; set; }
+    [Inject] ILogger<AccommodationWorkspace> Logger { get; set; } = default!;
+    /** Asks the trip draft to take a confirmed place; false means the draft refused it, so the workspace must not report success. */
+    [Parameter] public Func<AccommodationDto?, bool> SelectionChanged { get; set; } = _ => true;
     [Parameter] public Guid? SelectedAccommodationId { get; set; }
 
     IReadOnlyList<AccommodationDto> results = [];
@@ -28,79 +31,126 @@ public partial class AccommodationWorkspace : IDisposable
     string? status, formError;
     ApiError? error;
     IReadOnlyDictionary<string, string[]> errors = new Dictionary<string, string[]>();
+    static readonly HashSet<string> RenderedFields = new(StringComparer.OrdinalIgnoreCase) { "name", "address", "lat", "lon" };
+
+    /** Field errors whose inputs exist on this form, so summary links land on a control; visibility only renders for administrators. */
+    IEnumerable<KeyValuePair<string, string[]>> VisibleErrors => errors.Where(entry =>
+        RenderedFields.Contains(entry.Key) || (canShare && string.Equals(entry.Key, "visibility", StringComparison.OrdinalIgnoreCase)));
     bool signedIn, canRead, canWrite, canShare, loaded, searching, loadingDetails, showCreate, saving, busy, disposed, retrySearch;
     bool focusError, focusDetails, focusNameOnRender, focusAddOnRender;
     ElementReference errorSummary, createErrorSummary, detailsHeading, workspaceHeading, addButton, lastModalControl;
     AccommodationFormFields? fields;
     CancellationTokenSource? request;
+    readonly CancellationTokenSource lifetime = new();
     int generation;
 
-    string ErrorHeading => error?.Kind switch
-    {
-        FailureKind.Validation => "Check your details",
-        FailureKind.Permission => "Permission denied",
-        FailureKind.Network => "Unable to connect",
-        FailureKind.Unavailable => "Service unavailable",
-        _ => "Unable to complete the request",
-    };
+    string ErrorHeading => ErrorHeadings.For(error);
 
     protected override async Task OnInitializedAsync()
     {
         Authentication.AuthenticationStateChanged += AuthenticationChanged;
-        await UpdateAccessAsync(await Authentication.GetAuthenticationStateAsync());
+        await UpdateAccessAsync(await Authentication.GetAuthenticationStateAsync(), lifetime.Token);
         if (signedIn && canRead) await SearchAsync();
         loaded = true;
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool _firstRender)
     {
-        if (focusNameOnRender && showCreate) { focusNameOnRender = false; await fields!.FocusFirstAsync(); }
+        if (focusNameOnRender && showCreate)
+        {
+            focusNameOnRender = false;
+            await fields!.FocusFirstAsync();
+        }
         else if (focusAddOnRender && !showCreate)
         {
             focusAddOnRender = false;
             if (signedIn && canWrite) await addButton.FocusAsync();
             else await workspaceHeading.FocusAsync();
         }
-        else if (focusError) { focusError = false; if (showCreate) await createErrorSummary.FocusAsync(); else await errorSummary.FocusAsync(); }
-        if (focusDetails && selected is not null) { focusDetails = false; await detailsHeading.FocusAsync(); }
+        else if (focusError)
+        {
+            focusError = false;
+            if (showCreate) await createErrorSummary.FocusAsync();
+            else await errorSummary.FocusAsync();
+        }
+
+        if (focusDetails && selected is not null)
+        {
+            focusDetails = false;
+            await detailsHeading.FocusAsync();
+        }
     }
 
     /**
      * Clears account-specific results and selection when the authenticated session changes.
      * @param state The new authentication state.
      */
-    void AuthenticationChanged(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
-    {
-        CancelRequest();
-        results = []; selected = null; showCreate = false; busy = saving = searching = loadingDetails = false;
-        status = formError = null; ClearError(); draft = new(); focusNameOnRender = focusAddOnRender = false;
-        await SelectionChanged.InvokeAsync(null);
-        await UpdateAccessAsync(await state);
-        if (signedIn && canRead) await SearchAsync();
-        loaded = true;
-        StateHasChanged();
-    });
+    void AuthenticationChanged(Task<AuthenticationState> state) => _ = AuthenticationChangedAsync(state);
 
-    async Task UpdateAccessAsync(AuthenticationState state)
+    /**
+     * Applies an account change on the render context and logs a failure instead of leaving it unobserved.
+     * @param state The new authentication state.
+     * @return Completion of the reset and any search for the new account.
+     */
+    async Task AuthenticationChangedAsync(Task<AuthenticationState> state)
+    {
+        if (disposed) return;
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (disposed) return;
+                CancelRequest();
+                results = []; selected = null; showCreate = false; busy = saving = searching = loadingDetails = false;
+                status = formError = null; ClearError(); draft = new(); focusNameOnRender = focusAddOnRender = false;
+                SelectionChanged(null);
+                await UpdateAccessAsync(await state, lifetime.Token);
+                if (signedIn && canRead) await SearchAsync();
+                loaded = true;
+                StateHasChanged();
+            });
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.LogError("Accommodation workspace account change failed ({FailureType})", exception.GetType().Name);
+        }
+    }
+
+    /**
+     * Applies the signed-in identity's scopes and checks whether the shared option is allowed.
+     * @param state The authentication state to apply.
+     * @param cancellationToken Cancels the Users lookup when the workspace closes.
+     * @return Completion of the access update.
+     */
+    async Task UpdateAccessAsync(AuthenticationState state, CancellationToken cancellationToken)
     {
         var user = state.User;
-        signedIn = user.Identity?.IsAuthenticated == true && Sessions.IsActive(user) && AccessTokenClaims.ActiveToken(user, Clock.GetUtcNow()) is not null;
-        var scopes = user.FindAll(AccessTokenClaims.GrantedScope).SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)).ToHashSet(StringComparer.Ordinal);
+        signedIn = AccessTokenClaims.IsSignedIn(user, Sessions, Clock.GetUtcNow());
+        var scopes = AccessTokenClaims.GrantedScopes(user);
         canRead = signedIn && scopes.Contains("catalogue.read");
         canWrite = signedIn && scopes.Contains("catalogue.write");
         canShare = false;
 
-        // The live Users profile controls only whether the shared option is shown. The catalogue API authorizes the write.
+        // the live Users profile controls only whether the shared option is shown. The catalogue API authorizes the write.
         if (signedIn && scopes.Contains("users.read"))
         {
             try
             {
-                var profile = await Users.GetMeAsync();
-                canShare = profile is { Role: "administrator", Status: "active" };
+                var profile = await Users.GetMeAsync(cancellationToken);
+                canShare = profile is { Role: AdminAccessState.AdministratorRole, Status: AdminAccessState.ActiveStatus };
             }
-            catch (ApiError) { canShare = false; }
+            catch (ApiError failure)
+            {
+                Logger.LogWarning("Accommodation share-permission lookup failed as {Kind} (status {Status})", failure.Kind, failure.Status);
+                canShare = false;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // the workspace closed while the share check was running
+            }
         }
-        if (!canShare && draft.Visibility == "shared") draft.Visibility = "private";
+
+        if (!canShare && draft.Visibility == AccommodationDraft.SharedVisibility) draft.Visibility = AccommodationDraft.PrivateVisibility;
     }
 
     /**
@@ -117,41 +167,71 @@ public partial class AccommodationWorkspace : IDisposable
             var found = await Client.SearchAsync(query, current.Token);
             if (Current(version)) results = found;
         }
-        catch (OperationCanceledException) when (current.IsCancellationRequested) { }
-        catch (ApiError failure) { if (Current(version)) await HandleReadFailure(failure, searchFailure: true); }
-        finally { if (Current(version)) { searching = busy = false; loaded = true; } }
+        catch (OperationCanceledException) when (current.IsCancellationRequested)
+        {
+            // superseded by a newer request, nothing to publish
+        }
+        catch (ApiError failure)
+        {
+            if (Current(version)) HandleReadFailure(failure, searchFailure: true);
+        }
+        finally
+        {
+            if (Current(version))
+            {
+                searching = busy = false;
+                loaded = true;
+            }
+        }
     }
 
-    async Task ClearSearchAsync() { if (busy) return; query = ""; await SearchAsync(); }
+    async Task ClearSearchAsync()
+    {
+        if (busy) return;
+        query = "";
+        await SearchAsync();
+    }
 
     /**
      * Loads detail by public ID and treats hidden private records as unavailable.
-     * @param id Public accommodation identifier from a visible result.
+     * @param accommodationId Public accommodation identifier from a visible result.
      * @return Completion of the detail request.
      */
-    async Task ShowDetailsAsync(Guid id)
+    async Task ShowDetailsAsync(Guid accommodationId)
     {
         if (busy || !signedIn || !canRead) return;
         var (current, version) = StartRequest();
         loadingDetails = busy = true; ClearError(); status = null;
         try
         {
-            var found = await Client.GetAsync(id, current.Token);
-            if (Current(version)) { selected = found; focusDetails = true; }
+            var found = await Client.GetAsync(accommodationId, current.Token);
+            if (Current(version))
+            {
+                selected = found;
+                focusDetails = true;
+            }
         }
-        catch (OperationCanceledException) when (current.IsCancellationRequested) { }
-        catch (ApiError failure) { if (Current(version)) await HandleReadFailure(failure, searchFailure: false, detailId: id); }
-        finally { if (Current(version)) loadingDetails = busy = false; }
+        catch (OperationCanceledException) when (current.IsCancellationRequested)
+        {
+            // superseded by a newer request, nothing to publish
+        }
+        catch (ApiError failure)
+        {
+            if (Current(version)) HandleReadFailure(failure, searchFailure: false, detailId: accommodationId);
+        }
+        finally
+        {
+            if (Current(version)) loadingDetails = busy = false;
+        }
     }
 
-    async Task SelectCurrentAsync()
+    void SelectCurrent()
     {
         if (busy || selected is null || !signedIn) return;
         if (selected.AccommodationId != SelectedAccommodationId)
-        {
-            await SelectionChanged.InvokeAsync(selected);
-            status = "Saved place selected for this trip draft.";
-        }
+            status = SelectionChanged(selected)
+                ? "Saved place selected for this trip draft."
+                : "The trip draft is busy or open on the map, so this place was not selected. Try again when it is ready.";
     }
 
     void OpenCreate()
@@ -169,18 +249,24 @@ public partial class AccommodationWorkspace : IDisposable
 
     /**
      * Closes the add dialog on Escape without interfering with other keyboard controls.
-     * @param args The key pressed while focus is inside the modal.
+     * @param eventArgs The key pressed while focus is inside the modal.
      */
-    void HandleModalKeyDown(KeyboardEventArgs args)
+    void HandleModalKeyDown(KeyboardEventArgs eventArgs)
     {
-        if (args.Key == "Escape") CloseCreate();
+        if (eventArgs.Key == "Escape") CloseCreate();
     }
 
     /** Moves keyboard focus to the final control when tabbing backwards past the dialog start. */
-    async Task FocusLastModalControl(FocusEventArgs _) { if (!saving) await lastModalControl.FocusAsync(); }
+    async Task FocusLastModalControl(FocusEventArgs _)
+    {
+        if (!saving) await lastModalControl.FocusAsync();
+    }
 
     /** Moves keyboard focus to the first form control when tabbing forward past the dialog end. */
-    async Task FocusFirstModalControl(FocusEventArgs _) { if (!saving) await fields!.FocusFirstAsync(); }
+    async Task FocusFirstModalControl(FocusEventArgs _)
+    {
+        if (!saving) await fields!.FocusFirstAsync();
+    }
 
     /**
      * Validates and creates once; only a confirmed response enters the trip draft.
@@ -210,9 +296,11 @@ public partial class AccommodationWorkspace : IDisposable
                 : results;
             showCreate = false; draft = new(); formError = null; errors = new Dictionary<string, string[]>();
             focusAddOnRender = !canRead;
-            await SelectionChanged.InvokeAsync(saved);
+            var accepted = SelectionChanged(saved);
             if (!Current(version)) return;
-            status = "Place saved and selected for this trip draft.";
+            status = accepted
+                ? "Place saved and selected for this trip draft."
+                : "Place saved, but the trip draft is busy or open on the map, so it is not selected. Select it again when the draft is ready.";
             if (canRead)
             {
                 try
@@ -220,54 +308,73 @@ public partial class AccommodationWorkspace : IDisposable
                     var refreshed = await Client.SearchAsync(query, current.Token);
                     if (Current(version)) results = refreshed;
                 }
-                catch (OperationCanceledException) when (current.IsCancellationRequested) { }
+                catch (OperationCanceledException) when (current.IsCancellationRequested)
+                {
+                    // superseded by a newer request, nothing to publish
+                }
                 catch (ApiError failure)
                 {
                     if (!Current(version)) return;
+                    LogFailure("refresh after create", failure);
                     if (failure.Status is 401 or 403)
                     {
-                        await HandleReadFailure(failure, searchFailure: true);
+                        HandleReadFailure(failure, searchFailure: true);
                         if (failure.Status == 403)
                             status = "Place saved, but catalogue access is now denied. It is not selected in this trip draft.";
                     }
-                    else { error = failure; retrySearch = true; status = "Place saved and selected. Search results could not be refreshed; retry the search instead of submitting again."; }
+                    else
+                    {
+                        error = failure;
+                        retrySearch = true;
+                        status = "Place saved and selected. Search results could not be refreshed; retry the search instead of submitting again.";
+                    }
                 }
             }
         }
-        catch (OperationCanceledException) when (current.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (current.IsCancellationRequested)
+        {
+            // superseded by a newer request, nothing to publish
+        }
         catch (ApiError failure)
         {
             if (Current(version))
             {
-                error = failure; formError = failure.Message; errors = failure.Errors; focusError = true;
+                LogFailure("create", failure);
+                error = failure;
+                formError = CreateRetryWarning.Applies(failure) ? $"{failure.Message} {CreateRetryWarning.Message}" : failure.Message;
+                errors = failure.Errors;
+                focusError = true;
                 if (failure.Status == 401) HandleUnauthorized();
                 if (failure.Status == 403) canWrite = false;
             }
         }
-        finally { if (Current(version)) saving = busy = false; }
+        finally
+        {
+            if (Current(version)) saving = busy = false;
+        }
     }
 
-    async Task HandleReadFailure(ApiError failure, bool searchFailure, Guid? detailId = null)
+    void HandleReadFailure(ApiError failure, bool searchFailure, Guid? detailId = null)
     {
-        if (failure.Status == 401) { HandleUnauthorized(); return; }
-        error = failure; errors = failure.Errors; focusError = true;
-        if (searchFailure && failure.Status == 403)
+        LogFailure(searchFailure ? "search" : "details", failure);
+        if (failure.Status == 401)
         {
-            results = []; selected = null; retrySearch = false;
-            await SelectionChanged.InvokeAsync(null);
+            HandleUnauthorized();
+            return;
         }
-        else if (searchFailure) retrySearch = failure.Status != 403;
 
-        if (!searchFailure && failure.Status == 403)
+        error = failure; errors = failure.Errors; focusError = true;
+        if (failure.Status == 403)
         {
             results = []; selected = null; retrySearch = false;
-            await SelectionChanged.InvokeAsync(null);
+            SelectionChanged(null);
         }
-        else if (!searchFailure && failure.Status == 404 && detailId is { } requestedId)
+        else if (searchFailure) retrySearch = true;
+        else if (failure.Status == 404 && detailId is { } requestedId)
         {
             results = results.Where(item => item.AccommodationId != requestedId).ToArray();
             if (selected?.AccommodationId == requestedId) selected = null;
-            if (SelectedAccommodationId == requestedId) await SelectionChanged.InvokeAsync(null);
+            if (SelectedAccommodationId == requestedId) SelectionChanged(null);
         }
         if (failure.Status == 404 && !searchFailure)
             error = new ApiError(FailureKind.Unexpected, "This accommodation is unavailable. Refresh the catalogue and choose a visible result.", 404);
@@ -275,17 +382,56 @@ public partial class AccommodationWorkspace : IDisposable
 
     void HandleUnauthorized()
     {
-        signedIn = canRead = canWrite = canShare = false; focusError = false;
-        results = []; selected = null; showCreate = false; status = null; retrySearch = false;
-        _ = SelectionChanged.InvokeAsync(null);
+        signedIn = canRead = canWrite = canShare = false;
+        focusError = false;
+        results = [];
+        selected = null;
+        showCreate = false;
+        status = null;
+        retrySearch = false;
+        SelectionChanged(null);
     }
 
-    void ClearError() { error = null; errors = new Dictionary<string, string[]>(); retrySearch = false; focusError = false; }
-    static string VisibilityLabel(string value) => value == "shared" ? "SHARED" : "PRIVATE";
+    /**
+     * Records an accommodation request failure without any identity or token data.
+     * @param operation The operation that failed.
+     * @param failure The classified failure.
+     */
+    void LogFailure(string operation, ApiError failure) => Logger.LogWarning("Accommodations {Operation} failed as {Kind} (status {Status})", operation, failure.Kind, failure.Status);
+
+    void ClearError()
+    {
+        error = null;
+        errors = new Dictionary<string, string[]>();
+        retrySearch = false;
+        focusError = false;
+    }
+
+    static string VisibilityLabel(string value) => value == AccommodationDraft.SharedVisibility ? "SHARED" : "PRIVATE";
     bool Current(int version) => !disposed && version == generation;
-    (CancellationTokenSource Source, int Version) StartRequest() { CancelRequest(); request = new(); return (request, generation); }
-    void CancelRequest() { generation++; request?.Cancel(); request?.Dispose(); request = null; }
+
+    (CancellationTokenSource Source, int Version) StartRequest()
+    {
+        CancelRequest();
+        request = new();
+        return (request, generation);
+    }
+
+    void CancelRequest()
+    {
+        generation++;
+        request?.Cancel();
+        request?.Dispose();
+        request = null;
+    }
 
     /** Unsubscribes session notifications and cancels work when the workspace leaves the page. */
-    public void Dispose() { disposed = true; Authentication.AuthenticationStateChanged -= AuthenticationChanged; CancelRequest(); }
+    public void Dispose()
+    {
+        disposed = true;
+        Authentication.AuthenticationStateChanged -= AuthenticationChanged;
+        CancelRequest();
+        lifetime.Cancel();
+        lifetime.Dispose();
+    }
 }

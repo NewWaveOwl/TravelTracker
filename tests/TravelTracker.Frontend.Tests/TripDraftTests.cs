@@ -3,15 +3,15 @@ using TravelTracker.Frontend.Features.Trips;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** The client-side trip rules: they mirror the service, point at the field, and never repair what was typed. */
+/** the client-side trip rules: they mirror the service, point at the field, and never repair what was typed. */
 public sealed class TripDraftTests
 {
-    static readonly TripPlaceChoice Hotel = new(Guid.NewGuid(), "accommodation", "Hotel", "1 Rue");
-    static readonly TripPlaceChoice Museum = new(Guid.NewGuid(), "attraction", "Museum", "2 Rue");
-    static readonly TripPlaceChoice Station = new(Guid.NewGuid(), "transport_stop", "Station", "3 Rue");
+    static readonly TripPlaceChoice Hotel = new(Guid.Parse("00000000-0000-0000-0000-000000009001"), "accommodation", "Hotel", "1 Rue");
+    static readonly TripPlaceChoice Museum = new(Guid.Parse("00000000-0000-0000-0000-000000009002"), "attraction", "Museum", "2 Rue");
+    static readonly TripPlaceChoice Station = new(Guid.Parse("00000000-0000-0000-0000-000000009003"), "transport_stop", "Station", "3 Rue");
 
     static TripLegDraft Leg(TripPlaceChoice from, TripPlaceChoice to, string departure, string arrival) =>
-        new() { From = from, To = to, TransportModeId = Guid.NewGuid(), TransportName = "Bus", Departure = departure, Arrival = arrival };
+        new() { From = from, To = to, TransportModeId = Guid.Parse("00000000-0000-0000-0000-000000009004"), TransportName = "Bus", Departure = departure, Arrival = arrival };
 
     static TripDraft Valid()
     {
@@ -106,13 +106,13 @@ public sealed class TripDraftTests
     public void RefusesSkippedAndRepeatedLocalTimesInsteadOfPickingAnOffset()
     {
         var zone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Paris");
-        Assert.False(TripDraft.ToOffset("2026-03-29T02:30", zone, out _, out var skipped));
+        Assert.False(TripDraft.TryResolveInstant("2026-03-29T02:30", zone, out _, out var skipped));
         Assert.Contains("does not exist", skipped);
-        Assert.False(TripDraft.ToOffset("2026-10-25T02:30", zone, out _, out var repeated));
+        Assert.False(TripDraft.TryResolveInstant("2026-10-25T02:30", zone, out _, out var repeated));
         Assert.Contains("happens twice", repeated);
-        Assert.True(TripDraft.ToOffset("2026-06-01T08:00", zone, out var instant, out _));
+        Assert.True(TripDraft.TryResolveInstant("2026-06-01T08:00", zone, out var instant, out _));
         Assert.Equal(TimeSpan.FromHours(2), instant.Offset);
-        Assert.False(TripDraft.ToOffset("not a time", zone, out _, out var unreadable));
+        Assert.False(TripDraft.TryResolveInstant("not a time", zone, out _, out var unreadable));
         Assert.Contains("valid date", unreadable);
     }
 
@@ -122,7 +122,7 @@ public sealed class TripDraftTests
     public void RefusesTimesWhoseUtcInstantIsOutOfRangeInsteadOfThrowing(string zoneId, string local)
     {
         var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId);
-        Assert.False(TripDraft.ToOffset(local, zone, out _, out var problem));
+        Assert.False(TripDraft.TryResolveInstant(local, zone, out _, out var problem));
         Assert.Contains("represent", problem);
     }
 

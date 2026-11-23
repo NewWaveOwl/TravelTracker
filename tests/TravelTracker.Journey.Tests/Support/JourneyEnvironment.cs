@@ -39,7 +39,7 @@ internal sealed class JourneyEnvironment : IDisposable
             Settings = Add(new JourneyHost<SettingsProgram>(Own("Settings", UsersAccess()), router));
             Accommodations = Add(new JourneyHost<AccommodationsProgram>(Own("Accommodations", UsersAccess()), router));
             Attractions = Add(new JourneyHost<AttractionsProgram>(Own("Attractions", UsersAccess()), router));
-            Transport = Add(new JourneyHost<TransportProgram>(Own("Transport", []), router));
+            Transport = Add(new JourneyHost<TransportProgram>(Own("Transport", UsersAccess()), router));
             Trips = Add(new JourneyHost<TripsProgram>(Own("Trips", new()
             {
                 ["TripReferences:AccommodationsBaseUrl"] = "https://accommodations.journey.test/",

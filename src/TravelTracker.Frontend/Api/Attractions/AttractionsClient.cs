@@ -20,12 +20,12 @@ public sealed class AttractionsClient(ProtectedClient client)
 
     /**
      * Reads one visible attraction.
-     * @param id Public attraction identifier.
+     * @param identifier Public attraction identifier.
      * @param cancellationToken Cancels a closed details view.
      * @return Current attraction details.
      */
-    public async Task<AttractionDto> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
-        await client.GetJsonAsync<AttractionDto>("Attractions", $"{Path}/{id:D}", cancellationToken) ?? throw EmptyResponse();
+    public async Task<AttractionDto> GetAsync(Guid identifier, CancellationToken cancellationToken = default) =>
+        await client.GetJsonAsync<AttractionDto>("Attractions", $"{Path}/{identifier:D}", cancellationToken) ?? throw EmptyResponse();
 
     /**
      * Creates a private attraction; service policy remains authoritative.
@@ -38,13 +38,13 @@ public sealed class AttractionsClient(ProtectedClient client)
 
     /**
      * Saves only edited fields; explicit null clears description or rating.
-     * @param id Public attraction identifier.
+     * @param identifier Public attraction identifier.
      * @param fields Changed public fields only.
      * @param cancellationToken Cancels the pending save.
      * @return The server-confirmed saved record.
      */
-    public async Task<AttractionDto> UpdateAsync(Guid id, Dictionary<string, object?> fields, CancellationToken cancellationToken = default) =>
-        await client.SendJsonAsync<AttractionDto>("Attractions", HttpMethod.Patch, $"{Path}/{id:D}", fields, cancellationToken) ?? throw EmptyResponse();
+    public async Task<AttractionDto> UpdateAsync(Guid identifier, Dictionary<string, object?> fields, CancellationToken cancellationToken = default) =>
+        await client.SendJsonAsync<AttractionDto>("Attractions", HttpMethod.Patch, $"{Path}/{identifier:D}", fields, cancellationToken) ?? throw EmptyResponse();
 
-    static ApiError EmptyResponse() => new(FailureKind.Unexpected, "The save could not be confirmed. Check the catalogue before retrying.");
+    static ApiError EmptyResponse() => new(FailureKind.Unexpected, "The save could not be confirmed. Check the attractions list before retrying.");
 }

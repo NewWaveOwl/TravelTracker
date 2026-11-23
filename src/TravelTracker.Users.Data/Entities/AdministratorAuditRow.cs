@@ -1,6 +1,6 @@
 namespace TravelTracker.Users.Data.Entities;
 
-/** Durable administrator-creation audit; no credentials or bootstrap secret are stored. */
+/** Durable administrator audit for bootstrap creations and role changes; no credentials or bootstrap secret are stored. */
 internal sealed class AdministratorAuditRow
 {
     public Guid AuditId { get; set; }

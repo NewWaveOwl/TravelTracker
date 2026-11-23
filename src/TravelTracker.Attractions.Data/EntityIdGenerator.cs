@@ -1,4 +1,3 @@
-using TravelTracker.Attractions.Data.SeedData;
 using TravelTracker.Attractions.Domain.Types;
 
 namespace TravelTracker.Attractions.Data;
@@ -14,19 +13,11 @@ namespace TravelTracker.Attractions.Data;
  *
  * @param readHighestKey Reads the highest key currently stored, or 0 when empty.
  */
-public sealed class EntityIdGenerator(Func<CancellationToken, Task<long>> readHighestKey) {
+public sealed class EntityIdGenerator(Func<CancellationToken, Task<long>> readHighestKey)
+{
     private readonly SemaphoreSlim seedLock = new(1, 1);
     private long last;
     private bool seeded;
-
-    /**
-     * Creates a generator for the in-memory repositories, starting after the highest seeded key.
-     *
-     * @return A generator that never reuses a seeded key.
-     */
-    public static EntityIdGenerator ForSeedData() => new(_ => Task.FromResult(new[] {
-        AttractionSeedData.Create().Max(record => (long)record.AttractionId.Key),
-    }.Max()));
 
     /**
      * Issues the next identity. Safe to call concurrently; gaps after a crash are harmless.
@@ -34,19 +25,28 @@ public sealed class EntityIdGenerator(Func<CancellationToken, Task<long>> readHi
      *
      * @return A task containing a fresh identity for the entity type.
      */
-    public async ValueTask<EntityId<TEntity>> NextAsync<TEntity>(CancellationToken cancellationToken = default) {
+    public async ValueTask<EntityId<TEntity>> NextAsync<TEntity>(CancellationToken cancellationToken = default)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         if (!Volatile.Read(ref seeded)) await SeedAsync(cancellationToken);
         return new(new Id64(Interlocked.Increment(ref last)), Guid.CreateVersion7());
     }
 
-    private async Task SeedAsync(CancellationToken cancellationToken) {
+    /**
+     * Reads the highest stored key once, under the private lock.
+     * @param cancellationToken Cancels lock acquisition or the lookup.
+     */
+    private async Task SeedAsync(CancellationToken cancellationToken)
+    {
         await seedLock.WaitAsync(cancellationToken);
-        try {
+        try
+        {
             if (seeded) return;
             last = await readHighestKey(cancellationToken);
             Volatile.Write(ref seeded, true);
-        } finally {
+        }
+        finally
+        {
             seedLock.Release();
         }
     }

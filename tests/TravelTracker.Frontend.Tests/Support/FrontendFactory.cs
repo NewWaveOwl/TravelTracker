@@ -18,7 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace TravelTracker.Frontend.Tests.Support;
 
 /**
- * Hosts the real frontend in memory with Auth0 pointed at FakeAuth0 and Transport at a stub.
+ * hosts the real frontend in memory with Auth0 pointed at FakeAuth0 and Transport at a stub.
  *
  * @param signInConfigured False to host the app with no Auth0 settings.
  * @param clientSecret Set to host the app as a regular web application with a client secret.
@@ -33,25 +33,26 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
 
     public FakeAuth0 Auth0 { get; } = new("test-client");
 
-    /** Answers protected transport and Users profile reads; its LastRequest shows what the app sent. */
+    /** answers protected transport and Users profile reads; its LastRequest shows what the app sent. */
     public StubHandler Transport { get; } = new((request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
     {
         Content = new StringContent(request.RequestUri?.AbsolutePath == "/api/v1/users/me" ? SelfProfileJson : """{"name":"Example Bus"}""")
     }));
 
-    /** Drives cookie expiry and the token expiry check without waiting. */
+    /** drives cookie expiry and the token expiry check without waiting. */
     public FakeTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+        builder.UseSetting("Authentication:Provider", "Auth0");
         if (signInConfigured)
         {
             builder.UseSetting("Auth0:Domain", "tenant.example.test");
             builder.UseSetting("Auth0:ClientId", "test-client");
             builder.UseSetting("Auth0:Audience", "traveltracker-api");
-            builder.UseSetting("Services:Users", "http://localhost:5106");
-            // Fake-tenant grants must never inherit the operator's local requested permissions.
+            builder.UseSetting("Services:Users", "https://localhost:5101");
+            // fake-tenant grants must never inherit the operator's local requested permissions.
             builder.UseSetting("Auth0:Scope", RequestedScope);
             if (clientSecret is not null)
                 builder.UseSetting("Auth0:ClientSecret", clientSecret);
@@ -74,11 +75,22 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
         });
     }
 
-    /** A client that keeps cookies and never follows redirects, so each hop of the flow can be asserted. */
-    public HttpClient CreateBrowser() => CreateDefaultClient(new CookieJarHandler());
+    /** Releases the fake tenant and the transport stub together with the host. */
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            Auth0.Dispose();
+            Transport.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+
+    /** a client that keeps cookies and never follows redirects, so each hop of the flow can be asserted. */
+    public HttpClient CreateBrowser() => CreateDefaultClient(new CookieJarHandler(Clock));
 
     /**
-     * Starts sign-in and records the nonce and PKCE challenge the fake tenant needs.
+     * starts sign-in and records the nonce and PKCE challenge the fake tenant needs.
      *
      * @param browser The cookie-keeping client.
      * @return The authorize URL the app redirected to.
@@ -96,17 +108,17 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
 
     public string? State { get; private set; }
 
-    /** Returns from the tenant with an authorization code, as the browser would. */
+    /** returns from the tenant with an authorization code, as the browser would. */
     public Task<HttpResponseMessage> CompleteSignInAsync(HttpClient browser) => browser.GetAsync($"/signin-oidc?code=fake-code&state={Uri.EscapeDataString(State!)}");
 
-    /** Reads the antiforgery token the account page renders into its sign-out form. */
+    /** reads the antiforgery token the account page renders into its sign-out form. */
     public static string AntiforgeryTokenFrom(string html) => HttpUtility.HtmlDecode(AntiforgeryField().Match(html).Groups[1].Value);
 
     [GeneratedRegex("name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"")]
     private static partial Regex AntiforgeryField();
 
     /**
-     * Stands in for a circuit: restores the signed-in user from the session cookie into the authentication
+     * stands in for a circuit: restores the signed-in user from the session cookie into the authentication
      * state exactly as circuit start does, then runs the same ProtectedClient call the account page makes.
      */
     sealed class ProtectedReadFilter : IStartupFilter
@@ -118,7 +130,7 @@ public sealed partial class FrontendFactory(bool signInConfigured = true, string
                 if (context.Request.Path == "/test/granted-scope")
                 {
                     var signedIn = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                    await context.Response.WriteAsync(string.Join(" ", signedIn.Principal?.FindAll(TravelTracker.Frontend.Auth.AccessTokenClaims.GrantedScope).Select(c => c.Value) ?? []));
+                    await context.Response.WriteAsync(string.Join(" ", signedIn.Principal?.FindAll(TravelTracker.Frontend.Auth.AccessTokenClaims.GrantedScope).Select(claim => claim.Value) ?? []));
                     return;
                 }
                 if (context.Request.Path != ProtectedReadPath)

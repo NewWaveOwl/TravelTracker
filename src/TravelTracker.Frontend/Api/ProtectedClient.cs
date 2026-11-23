@@ -27,7 +27,7 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
     /**
      * Sends a protected public contract while preserving session revocation across awaits.
      * @param service Configured service name.
-     * @param method GET, POST or PATCH.
+     * @param method GET, POST, PUT or PATCH.
      * @param path Versioned relative API path.
      * @param body Public request fields.
      * @param cancellationToken View cancellation.
@@ -67,8 +67,8 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
      * @return The owner's reviewable extraction draft.
      */
     public Task<T?> UploadPdfAsync<T>(string path, Stream content, string fileName, CancellationToken cancellationToken) =>
-        WithSessionAsync("Trips", path, cancellationToken,
-            (url, token) => client.UploadPdfAsync<T>(url, content, fileName, cancellationToken, token));
+        SendAuthorizedAsync("Trips", HttpMethod.Post, path,
+            (url, token) => client.UploadPdfAsync<T>(url, content, fileName, cancellationToken, token), cancellationToken);
 
     /**
      * Retrieves a PDF only while the requesting session remains active.
@@ -77,7 +77,7 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
      * @return The owner's temporary source document.
      */
     public Task<byte[]> GetPdfAsync(string path, CancellationToken cancellationToken) =>
-        WithSessionAsync("Trips", path, cancellationToken, (url, token) => client.GetPdfAsync(url, cancellationToken, token));
+        SendAuthorizedAsync("Trips", HttpMethod.Get, path, (url, token) => client.GetPdfAsync(url, cancellationToken, token), cancellationToken);
 
     /**
      * Cancels one temporary import through its owner-scoped HTTP contract.
@@ -86,25 +86,47 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
      * @return Completion after acknowledged removal.
      */
     public async Task DeleteTicketAsync(string path, CancellationToken cancellationToken) =>
-        _ = await WithSessionAsync("Trips", path, cancellationToken, async (url, token) =>
+        _ = await SendAuthorizedAsync("Trips", HttpMethod.Delete, path, async (url, token) =>
         {
             await client.DeleteTicketAsync(url, cancellationToken, token);
             return true;
-        });
+        }, cancellationToken);
 
     async Task<ServiceResponse<T>> SendCoreAsync<T>(string service, HttpMethod method, string path, object? body, CancellationToken cancellationToken, string? bootstrapSecret = null, string? ifMatch = null)
-        => await WithSessionAsync(service, path, cancellationToken,
-            (url, token) => client.SendAsync<T>(method, url, body, cancellationToken, token, bootstrapSecret, ifMatch));
+        => await SendAuthorizedAsync(service, method, path,
+            (url, token) => client.SendAsync<T>(method, url, body, cancellationToken, token, bootstrapSecret, ifMatch), cancellationToken);
 
-    async Task<T> WithSessionAsync<T>(string service, string path, CancellationToken cancellationToken, Func<string, string, Task<T>> send)
+    /**
+     * Exchanges image bytes through the same configured-origin and session-revocation boundary as JSON.
+     * @param service The configured service name.
+     * @param method GET or PUT.
+     * @param path A fixed versioned relative API route.
+     * @param body Raw upload bytes, or null for GET.
+     * @param contentType PNG/JPEG upload media type, or null for GET.
+     * @param maxResponseBytes Bound on the normalized response bytes.
+     * @param expectedSessionId The rendered owner session, preventing an old file selection from reaching a replacement account.
+     * @param cancellationToken Cancels work when the view or owner changes.
+     * @return Bytes accepted only while the same authenticated session remains active.
+     */
+    public Task<byte[]> SendImageAsync(string service, HttpMethod method, string path, byte[]? body, string? contentType,
+        int maxResponseBytes, string? expectedSessionId, CancellationToken cancellationToken = default) =>
+        SendAuthorizedAsync(service, method, path,
+            (url, token) => client.SendImageAsync(method, url, body, contentType, maxResponseBytes, token, cancellationToken), cancellationToken, expectedSessionId);
+
+    async Task<T> SendAuthorizedAsync<T>(string service, HttpMethod method, string path, Func<string, string, Task<T>> send,
+        CancellationToken cancellationToken, string? expectedSessionId = null)
     {
         var url = directory.ProtectedUrlFor(service, path);
         var user = (await authentication.GetAuthenticationStateAsync()).User;
         var sessionId = SessionRegistry.IdFor(user);
         var token = sessions.IsActive(user) ? AccessTokenClaims.ActiveToken(user, timeProvider.GetUtcNow()) : null;
-        if (token is null) throw SignedOut();
+        if (token is null || expectedSessionId is not null && expectedSessionId != sessionId) throw SignedOut();
+        cancellationToken.ThrowIfCancellationRequested();
         T result;
-        try { result = await send(url, token); }
+        try
+        {
+            result = await send(url, token);
+        }
         catch (ApiError error) when (error.Status == 401)
         {
             sessions.Revoke(sessionId);
@@ -115,17 +137,21 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
         {
             throw new ApiError(FailureKind.Permission, "You do not have permission for this action.", 403);
         }
-        try
+        if (cancellationToken.IsCancellationRequested)
         {
+            if (result is byte[] canceledImage) Array.Clear(canceledImage);
             cancellationToken.ThrowIfCancellationRequested();
-            var current = (await authentication.GetAuthenticationStateAsync()).User;
-            if (!sessions.IsActive(user) || !sessions.IsActive(current) || SessionRegistry.IdFor(current) != sessionId)
-                throw SignedOut();
         }
-        catch
+        var current = (await authentication.GetAuthenticationStateAsync()).User;
+        if (cancellationToken.IsCancellationRequested)
         {
-            if (result is byte[] bytes) Array.Clear(bytes);
-            throw;
+            if (result is byte[] canceledImage) Array.Clear(canceledImage);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        if (!sessions.IsActive(user) || !sessions.IsActive(current) || SessionRegistry.IdFor(current) != sessionId)
+        {
+            if (result is byte[] staleImage) Array.Clear(staleImage);
+            throw method == HttpMethod.Get ? SignedOut() : new ApiError(FailureKind.Permission, "You were signed out while saving. The save may have been applied; check before retrying.", 401);
         }
         return result;
     }

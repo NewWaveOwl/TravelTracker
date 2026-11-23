@@ -129,7 +129,7 @@ public sealed class FlexibleTripSaveTests
     [InlineData("empty")]
     [InlineData("reversed")]
     [InlineData("extra")]
-    public async Task Create_StopsDisagreeWithLegs_Reports400BeforeLookups(string mismatch)
+    public async Task Create_StopsDisagreeWithLegs_Reports400BeforeCatalogueLookups(string mismatch)
     {
         using var factory = CreateFactory();
         using var owner = factory.CreateClientFor();
@@ -146,7 +146,26 @@ public sealed class FlexibleTripSaveTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("stops", await response.Content.ReadAsStringAsync());
         Assert.Equal(0, factory.Repository.Count);
-        Assert.Empty(factory.Upstream.Calls);
+        Assert.Contains(factory.Upstream.Calls, call => call.StartsWith("POST /internal/users/identity", StringComparison.Ordinal));
+        Assert.DoesNotContain(factory.Upstream.Calls, call => call.Contains("/api/v1/", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("banned")]
+    [InlineData("deactivated")]
+    public async Task Create_RestrictedAccountWithMismatchedStops_Is403BeforeShapeErrors(string subject)
+    {
+        using var factory = CreateFactory();
+        using var owner = factory.CreateClientFor(subject: subject);
+        var body = JourneyBody("accommodation", "attraction");
+        body["stops"] = new JsonArray();
+
+        using var response = await owner.PostAsJsonAsync("/api/v1/trips", body);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.DoesNotContain("stops", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(factory.Upstream.Calls, call => call.Contains("/api/v1/", StringComparison.Ordinal));
+        Assert.Equal(0, factory.Repository.Count);
     }
 
     [Theory]

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -31,7 +32,7 @@ public sealed class UsersStartupTests
     [Fact]
     public async Task Health_ReturnsOkWithNoDatabaseConfiguration()
     {
-        // Bearer settings are still required at startup (ValidateOnStart); ConnectionStrings:Users is deliberately absent.
+        // bearer settings are still required at startup (ValidateOnStart); ConnectionStrings:Users is deliberately absent.
         using var factory = DevelopmentHost(new Dictionary<string, string?>
         {
             ["Authentication:Bearer:Authority"] = Authority,
@@ -63,5 +64,24 @@ public sealed class UsersStartupTests
         using var profile = await client.GetAsync("/api/v1/users/me");
 
         Assert.Equal(HttpStatusCode.Unauthorized, profile.StatusCode);
+    }
+
+    [Fact]
+    public async Task Health_RemainsPublicWithMalformedBearer()
+    {
+        using var factory = DevelopmentHost(new Dictionary<string, string?>
+        {
+            ["Authentication:Bearer:Authority"] = Authority,
+            ["Authentication:Bearer:Issuer"] = Authority,
+            ["Authentication:Bearer:Audience"] = "traveltracker-api"
+        });
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "M4_TOKEN_SENTINEL_malformed");
+
+        using var health = await client.GetAsync("/health");
+        var body = await health.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+        Assert.DoesNotContain("M4_TOKEN_SENTINEL_malformed", body);
     }
 }

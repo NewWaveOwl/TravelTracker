@@ -9,9 +9,11 @@ namespace TravelTracker.Api.Tests.Support;
  * call is recorded so a test can prove which upstream services were reached and with which credential.
  * An unscripted call fails the test instead of passing silently.
  */
-public sealed class StubUpstream : HttpMessageHandler {
+public sealed class StubUpstream : HttpMessageHandler
+{
     private readonly Dictionary<string, Func<HttpRequestMessage, HttpResponseMessage>> routes = [];
     private readonly HashSet<string> stalls = [];
+    private readonly Dictionary<string, TaskCompletionSource> stallReached = [];
 
     /** Every request that reached the stub, as "METHOD path". */
     public List<string> Calls { get; } = [];
@@ -27,11 +29,27 @@ public sealed class StubUpstream : HttpMessageHandler {
      * @param status Status code to return.
      * @param body Optional body, serialized with web defaults.
      */
-    public void Respond(string method, string path, HttpStatusCode status, object? body = null) {
+    public void Respond(string method, string path, HttpStatusCode status, object? body = null)
+    {
         stalls.Remove(Key(method, path));
-        routes[Key(method, path)] = _ => new HttpResponseMessage(status) {
+        routes[Key(method, path)] = _ => new HttpResponseMessage(status)
+        {
             Content = body is null ? null : JsonContent.Create(body, options: JsonSerializerOptions.Web)
         };
+    }
+
+    /**
+     * Scripts a raw response body for one route, for cases JSON serialization cannot produce, such as a bad charset.
+     *
+     * @param method HTTP method.
+     * @param path Absolute path.
+     * @param status Status code to return.
+     * @param content The exact content, including its headers, to return.
+     */
+    public void RespondWithContent(string method, string path, HttpStatusCode status, HttpContent content)
+    {
+        stalls.Remove(Key(method, path));
+        routes[Key(method, path)] = _ => new HttpResponseMessage(status) { Content = content };
     }
 
     /**
@@ -41,7 +59,8 @@ public sealed class StubUpstream : HttpMessageHandler {
      * @param path Absolute path.
      * @param exception The exception the handler throws.
      */
-    public void Fail(string method, string path, Exception exception) {
+    public void Fail(string method, string path, Exception exception)
+    {
         stalls.Remove(Key(method, path));
         routes[Key(method, path)] = _ => throw exception;
     }
@@ -52,7 +71,20 @@ public sealed class StubUpstream : HttpMessageHandler {
      * @param method HTTP method.
      * @param path Absolute path.
      */
-    public void Stall(string method, string path) => stalls.Add(Key(method, path));
+    public void Stall(string method, string path)
+    {
+        stalls.Add(Key(method, path));
+        stallReached[Key(method, path)] = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    /**
+     * Waits until a stalled route has been reached, so a test can act while the call is in flight.
+     *
+     * @param method HTTP method.
+     * @param path Absolute path.
+     * @return Completion once the stalled call arrived; fails after five seconds if it never does.
+     */
+    public Task WaitForStallAsync(string method, string path) => stallReached[Key(method, path)].Task.WaitAsync(TimeSpan.FromSeconds(5));
 
     /**
      * Records the call and answers it from the script.
@@ -61,13 +93,16 @@ public sealed class StubUpstream : HttpMessageHandler {
      * @param cancellationToken Cancelled by the client when its deadline passes; only stalled routes observe it.
      * @return The scripted response.
      */
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
         var key = Key(request.Method.Method, request.RequestUri!.AbsolutePath);
         Calls.Add(key);
         Credentials[key] = request.Headers.Authorization?.ToString();
-        if (stalls.Contains(key)) {
-            await Task.Delay(Timeout.Infinite, cancellationToken);
-            throw new InvalidOperationException("a stalled route must not complete.");
+        if (stalls.Contains(key))
+        {
+            stallReached[key].TrySetResult();
+            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+            throw new TimeoutException("a stalled route was never cancelled within five seconds: the caller set no deadline.");
         }
         if (!routes.TryGetValue(key, out var route)) throw new InvalidOperationException($"unscripted upstream call {key}.");
         return route(request);

@@ -16,10 +16,17 @@ public sealed class EntityIdGeneratorTests
     public async Task NextAsync_ConcurrentCallsAreUniqueAndSeedOnce()
     {
         var seedReads = 0;
-        var generator = new EntityIdGenerator(() => { Interlocked.Increment(ref seedReads); return Task.FromResult(41L); });
-        var issued = await Task.WhenAll(Enumerable.Range(0, 1000).Select(_ => Task.Run(() => generator.NextAsync<User>().AsTask())));
+
+        Task<long> ReadSeed()
+        {
+            Interlocked.Increment(ref seedReads);
+            return Task.FromResult(41L);
+        }
+
+        var generator = new EntityIdGenerator(ReadSeed);
+        var issued = await Task.WhenAll(Enumerable.Range(0, 1000).Select(_ => Task.Run(() => generator.NextAsync<TransportMode>().AsTask())));
         Assert.Equal(1000, issued.Distinct().Count());
-        Assert.Equal(1000, issued.Select(id => id.PublicId).Distinct().Count());
+        Assert.Equal(1000, issued.Select(entityId => entityId.PublicId).Distinct().Count());
         Assert.Equal(1, seedReads);
     }
 }

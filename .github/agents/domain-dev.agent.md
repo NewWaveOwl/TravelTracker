@@ -27,9 +27,9 @@ The original Domain project contains Transport/Route Point and trip models and i
 
 The Domain agent may edit only this existing test file for pure Domain rules:
 
-- `tests/TravelTracker.Api.Tests/TripTests.cs`
+- `tests/TravelTracker.Trips.Domain.Tests/TripTests.cs`
 
-Although it is in the API test project, this file directly tests Domain behavior without HTTP or storage. Do not edit other existing test files or shared helpers unless an approved task names the exact file.
+This file directly tests Trips Domain behavior without HTTP or storage. Do not edit other existing test files or shared helpers unless an approved task names the exact file.
 
 For approved M3-11 Users work, the Domain agent may also create or edit these files:
 
@@ -51,7 +51,7 @@ Coordinate those tests with the testing agent, who is authorized to create and m
 ## Prohibited changes
 
 - Do not edit `src/TravelTracker.Data/**`, `src/TravelTracker.Attractions.Data/**`, `src/TravelTracker.Users.Data/**`, `src/TravelTracker.Api/**`, `src/TravelTracker.Attractions.Api/**`, `src/TravelTracker.Users.Api/**`, `src/TravelTracker.Security/**`, frontend paths, solution files, skills, or copilot instructions.
-- Do not edit any test file or Users test-project file other than `tests/TravelTracker.Api.Tests/TripTests.cs` or, for approved M3-11 Users work, `tests/TravelTracker.Users.Domain.Tests/TravelTracker.Users.Domain.Tests.csproj` and `tests/TravelTracker.Users.Domain.Tests/UserAccountTests.cs`.
+- Do not edit any test file or Users test-project file other than `tests/TravelTracker.Trips.Domain.Tests/TripTests.cs` or, for approved M3-11 Users work, `tests/TravelTracker.Users.Domain.Tests/TravelTracker.Users.Domain.Tests.csproj` and `tests/TravelTracker.Users.Domain.Tests/UserAccountTests.cs`.
 - Do not add EF Core, ASP.NET Core, HTTP, persistence, or vendor references to a Domain project.
 - Do not expose `Id64` through a public HTTP-facing type.
 - Do not implement repositories, controllers, application services, DTO mappings, or frontend clients.

@@ -30,7 +30,6 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Accommoda
     private HttpClient? discoveryClient;
 
     internal UsersBackchannelHandler? Users { get; private set; }
-    internal DiscoveryBackchannelHandler? Discovery { get; private set; }
 
     /**
      * Creates a JWT signed by the isolated test key; production still uses real issuer discovery.
@@ -41,6 +40,7 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Accommoda
      */
     internal string CreateToken(string? scopes = "catalogue.read catalogue.write", string subject = "alice", string? failure = null)
     {
+        if (failure == "malformed") return "M4_TOKEN_SENTINEL_malformed";
         using var otherKey = RSA.Create(2048);
         var claims = new List<Claim>();
         if (failure != "missing-sub") claims.Add(new Claim("sub", failure == "empty-sub" ? " " : subject));
@@ -51,8 +51,8 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Accommoda
         SigningCredentials? credentials = failure == "unsigned" ? null : new SigningCredentials(
             new RsaSecurityKey(failure == "signature" ? otherKey : signingKey) { KeyId = "accommodations-test-key" },
             SecurityAlgorithms.RsaSha256);
-        var expires = failure == "expired" ? now.AddMinutes(-5) : now.AddMinutes(10);
-        var notBefore = failure == "expired" ? now.AddMinutes(-10) : now.AddMinutes(-1);
+        DateTime? expires = failure == "no-expiry" ? null : failure == "expired" ? now.AddMinutes(-5) : now.AddMinutes(10);
+        var notBefore = failure == "expired" ? now.AddMinutes(-10) : failure == "future" ? now.AddMinutes(5) : now.AddMinutes(-1);
         var token = new JwtSecurityToken(issuer, audience, claims, notBefore, expires, credentials);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
@@ -101,8 +101,7 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Accommoda
             services.AddHttpClient<UsersAccessClient>().ConfigurePrimaryHttpMessageHandler(() => Users);
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
-                Discovery = new DiscoveryBackchannelHandler(signingKey.ExportParameters(false), Issuer);
-                discoveryClient = new HttpClient(Discovery);
+                discoveryClient = new HttpClient(new DiscoveryBackchannelHandler(signingKey.ExportParameters(false), Issuer));
                 options.Backchannel = discoveryClient;
             });
         });

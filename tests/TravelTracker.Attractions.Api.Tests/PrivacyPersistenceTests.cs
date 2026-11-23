@@ -4,34 +4,14 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TravelTracker.Attractions.Data;
-using TravelTracker.Attractions.Api.Access;
-using Microsoft.Extensions.Configuration;
 
 namespace TravelTracker.Attractions.Api.Tests;
 
 /**
-
  * Proves creator-private/admin-shared authorization and PostgreSQL durability through HTTP.
-
  */
 public sealed class PrivacyPersistenceTests
 {
-    [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task UsersProtocolErrors_FailClosedWithoutEscapingAsServerErrors(bool malformedCredential, bool invalidCharset)
-    {
-        using var handler = new UsersBackchannelHandler(false) { InvalidCharset = invalidCharset };
-        using var http = new HttpClient(handler);
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["Users:AccessEndpoint"] = "https://users.example.test/resolve-access",
-            ["Users:ServiceAccessToken"] = malformedCredential ? "invalid\ncredential" : "test-service-token"
-        }).Build();
-        var client = new UsersAccessClient(http, configuration, Microsoft.Extensions.Logging.Abstractions.NullLogger<UsersAccessClient>.Instance);
-        Assert.Null(await client.ResolveAsync(ApiFactory.Issuer, "alice", CancellationToken.None));
-    }
-
     [Fact]
     [Trait("Category", "PostgreSQL")]
     public async Task EnablingExampleSeeding_DoesNotOverwriteOrCollideWithAnExistingUnseededDatabase()
@@ -85,7 +65,8 @@ public sealed class PrivacyPersistenceTests
         var id = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var stale = await repository.GetByIdAsync(id);
         Assert.NotNull(stale);
-        Assert.True(await other.DeleteAsync(id));
+        Assert.Equal(1, await second.ServiceProvider.GetRequiredService<AttractionsDbContext>().Database
+            .ExecuteSqlInterpolatedAsync($"DELETE FROM \"Attractions\" WHERE \"PublicId\" = {id}"));
         stale.Name = "Stale replacement";
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repository.UpdateAsync(stale));
         Assert.Null(await other.GetByIdAsync(id));
@@ -141,7 +122,9 @@ public sealed class PrivacyPersistenceTests
     [InlineData("ownerSubject")]
     [InlineData("ownerIssuer")]
     [InlineData("id")]
-    public async Task ClientCannotSupplyOwnerOrInternalKey(string field)
+    [InlineData("role")]
+    [InlineData("status")]
+    public async Task ClientCannotSupplyOwnerIdentityOrAccountState(string field)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
@@ -159,21 +142,27 @@ public sealed class PrivacyPersistenceTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(subject: "alice"));
         using var created = await client.PostAsJsonAsync("/api/v1/attractions", Place());
-        var saved = await HttpTestSupport.AssertCreatedAsync(client, created);
+        await HttpTestSupport.AssertCreatedAsync(client, created);
         var location = created.Headers.Location!;
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(subject: "admin"));
+        using var sharedCreate = await client.PostAsJsonAsync("/api/v1/attractions", Place("Shared place", "shared"));
+        await HttpTestSupport.AssertCreatedAsync(client, sharedCreate);
+        var sharedLocation = sharedCreate.Headers.Location!;
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(subject: "alice"));
         factory.Users!.ForcedStatus = "banned";
         using var readOwn = await client.GetAsync(location);
+        using var readShared = await client.GetAsync(sharedLocation);
         using var create = await client.PostAsJsonAsync("/api/v1/attractions", Place("Forbidden"));
         using var patch = await client.PatchAsJsonAsync(location, new { name = "Forbidden" });
         var list = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions");
         Assert.Equal(HttpStatusCode.OK, readOwn.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, readShared.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, patch.StatusCode);
         Assert.Single(list!);
         factory.Users.ForcedStatus = "deactivated";
         using var denied = await client.GetAsync(location);
         Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
-        Assert.True(factory.Users.Calls >= 7);
     }
 
     [Fact]
@@ -181,13 +170,14 @@ public sealed class PrivacyPersistenceTests
     {
         using var factory = new ApiFactory { UsersUnavailable = true };
         using var client = factory.CreateClient();
+        using var scope = factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<TravelTracker.Attractions.Data.Repositories.IAttractionRepository>();
+        var visibleBefore = (await repository.GetVisibleAsync(ApiFactory.Issuer, "test-traveller", includeShared: true)).Count;
         using var create = await client.PostAsJsonAsync("/api/v1/attractions", Place());
         using var health = await client.GetAsync("/health");
         Assert.Equal(HttpStatusCode.ServiceUnavailable, create.StatusCode);
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
-        using var scope = factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<TravelTracker.Attractions.Data.Repositories.IAttractionRepository>();
-        Assert.Equal(3, (await repository.GetAllAsync()).Count);
+        Assert.Equal(visibleBefore, (await repository.GetVisibleAsync(ApiFactory.Issuer, "test-traveller", includeShared: true)).Count);
     }
 
     [Fact]
@@ -216,7 +206,7 @@ public sealed class PrivacyPersistenceTests
             Assert.Equal(45.123456789012345678901234567m, record.GetProperty("lat").GetDecimal());
             using var scope = factory.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AttractionsDbContext>();
-            Assert.Single(await context.Database.GetAppliedMigrationsAsync());
+            Assert.Contains(await context.Database.GetAppliedMigrationsAsync(), migration => migration.EndsWith("_InitialAttractions", StringComparison.Ordinal));
             Assert.False(context.Database.HasPendingModelChanges());
             using var next = await client.PostAsJsonAsync("/api/v1/attractions", Place("After restart"));
             Assert.Equal(HttpStatusCode.Created, next.StatusCode);

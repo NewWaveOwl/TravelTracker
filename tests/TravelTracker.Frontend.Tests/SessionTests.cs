@@ -9,17 +9,17 @@ using TravelTracker.Frontend.Tests.Support;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** Exercises production circuit/session state without replacing it with a fake authentication provider. */
+/** exercises production circuit/session state without replacing it with a fake authentication provider. */
 public sealed class SessionTests
 {
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
     readonly SessionRegistry sessions;
-    const string Path = "/api/v1/transport-modes/00000000-0000-0000-0000-000000000101";
+    const string TransportPath = "/api/v1/transport-modes/00000000-0000-0000-0000-000000000101";
 
     public SessionTests() => sessions = new(clock);
 
     /**
-     * Registers a test identity in the same active-session registry used by production.
+     * registers a test identity in the same active-session registry used by production.
      *
      * @param token The token marker to send to the stub service.
      * @return A registered principal valid for five minutes.
@@ -32,7 +32,7 @@ public sealed class SessionTests
     ], "test"));
 
     /**
-     * Supplies a principal through the actual host-facing interface used at circuit start.
+     * supplies a principal through the actual host-facing interface used at circuit start.
      *
      * @param user The cookie principal being restored.
      * @return A production provider owned and disposed by the test.
@@ -57,7 +57,7 @@ public sealed class SessionTests
         using var second = Circuit(user);
         using var unrelated = Circuit(SignIn("another-token"));
         var notification = new TaskCompletionSource<AuthenticationState>(TaskCreationOptions.RunContinuationsAsynchronously);
-        second.AuthenticationStateChanged += state => notification.TrySetResult(state.GetAwaiter().GetResult());
+        second.AuthenticationStateChanged += state => state.ContinueWith(completed => notification.TrySetResult(completed.Result));
 
         sessions.Revoke(SessionRegistry.IdFor(user));
 
@@ -65,7 +65,7 @@ public sealed class SessionTests
         Assert.False((await first.GetAuthenticationStateAsync()).User.Identity!.IsAuthenticated);
         Assert.True((await unrelated.GetAuthenticationStateAsync()).User.Identity!.IsAuthenticated);
         var handler = StubHandler.Status(200, "{}");
-        Assert.Equal(401, (await Assert.ThrowsAsync<ApiError>(() => Client(second, handler).GetJsonAsync<object>("Transport", Path))).Status);
+        Assert.Equal(401, (await Assert.ThrowsAsync<ApiError>(() => Client(second, handler).GetJsonAsync<object>("Transport", TransportPath))).Status);
         Assert.Null(handler.LastRequest);
     }
 
@@ -113,8 +113,12 @@ public sealed class SessionTests
         using var circuit = Circuit(old);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completion = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var handler = new StubHandler((_, _) => { entered.TrySetResult(); return completion.Task; });
-        var request = Client(circuit, handler).GetJsonAsync<object>("Transport", Path);
+        var handler = new StubHandler((_, _) =>
+        {
+            entered.TrySetResult();
+            return completion.Task;
+        });
+        var request = Client(circuit, handler).GetJsonAsync<object>("Transport", TransportPath);
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
         var replacement = SignIn("replacement-token");
         circuit.SetAuthenticationState(Task.FromResult(new AuthenticationState(replacement)));
@@ -133,7 +137,7 @@ public sealed class SessionTests
         using var first = Circuit(user);
         using var second = Circuit(user);
 
-        Assert.Equal(403, (await Assert.ThrowsAsync<ApiError>(() => Client(first, StubHandler.Status(403)).GetJsonAsync<object>("Transport", Path))).Status);
+        Assert.Equal(403, (await Assert.ThrowsAsync<ApiError>(() => Client(first, StubHandler.Status(403)).GetJsonAsync<object>("Transport", TransportPath))).Status);
 
         Assert.True((await second.GetAuthenticationStateAsync()).User.Identity!.IsAuthenticated);
         Assert.True(sessions.IsActive(user));
@@ -146,11 +150,30 @@ public sealed class SessionTests
         using var first = Circuit(user);
         using var second = Circuit(user);
 
-        await Assert.ThrowsAsync<ApiError>(() => Client(first, StubHandler.Status(401)).GetJsonAsync<object>("Transport", Path));
+        await Assert.ThrowsAsync<ApiError>(() => Client(first, StubHandler.Status(401)).GetJsonAsync<object>("Transport", TransportPath));
 
         Assert.False((await second.GetAuthenticationStateAsync()).User.Identity!.IsAuthenticated);
         var handler = StubHandler.Status(200, "{}");
-        await Assert.ThrowsAsync<ApiError>(() => Client(second, handler).GetJsonAsync<object>("Transport", Path));
+        await Assert.ThrowsAsync<ApiError>(() => Client(second, handler).GetJsonAsync<object>("Transport", TransportPath));
         Assert.Null(handler.LastRequest);
+    }
+
+    [Fact]
+    public void AThrowingRevocationHandlerIsLoggedAndTheRemainingHandlersStillRun()
+    {
+        var logger = new RecordingLogger<SessionRegistry>();
+        var registry = new SessionRegistry(clock, logger);
+        var notified = new List<string>();
+        registry.Revoked += _ => throw new InvalidOperationException("subscriber failed");
+        registry.Revoked += notified.Add;
+        var identifier = registry.Create(clock.GetUtcNow().AddMinutes(5));
+
+        registry.Revoke(identifier);
+
+        Assert.Equal(new[] { identifier }, notified);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Null(entry.Exception);
+        Assert.Contains(nameof(InvalidOperationException), entry.Message);
+        Assert.DoesNotContain("subscriber failed", entry.Message);
     }
 }

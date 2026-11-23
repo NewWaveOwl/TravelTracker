@@ -23,7 +23,7 @@ public sealed class UsersClientTests
         var handler = StubHandler.Status(status, body ?? Profile);
         var service = new ServiceClient(new HttpClient(handler), NullLogger<ServiceClient>.Instance);
         var protectedClient = new ProtectedClient(authentication,
-            new ServiceDirectory(new Dictionary<string, string> { ["Users"] = "http://localhost:5105" }),
+            new ServiceDirectory(new Dictionary<string, string> { ["Users"] = "https://localhost:5101" }),
             service, clock, NullLogger<ProtectedClient>.Instance, sessions);
         var configuration = new ConfigurationBuilder().Build();
         return (new UsersClient(protectedClient, configuration), handler);

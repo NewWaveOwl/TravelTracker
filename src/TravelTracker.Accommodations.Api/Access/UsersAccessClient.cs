@@ -1,11 +1,14 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace TravelTracker.Accommodations.Api.Access;
 
 /** Resolves current account standing over the authenticated Users service boundary. */
-public sealed class UsersAccessClient(HttpClient http, IConfiguration configuration, ILogger<UsersAccessClient> logger)
+public sealed class UsersAccessClient(HttpClient httpClient, IConfiguration configuration, ILogger<UsersAccessClient> logger)
 {
+    private static readonly TimeSpan LookupBudget = TimeSpan.FromSeconds(5);
+
     /**
      * Resolves the standing of a validated issuer/subject pair without caching.
      * @param issuer The validated token issuer.
@@ -28,56 +31,73 @@ public sealed class UsersAccessClient(HttpClient http, IConfiguration configurat
             return null;
         }
 
+        // one time budget across both lookups, not one per call
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(LookupBudget);
+        var baseUri = new Uri(endpoint.AbsoluteUri.TrimEnd('/') + "/");
         try
         {
             var authorization = new AuthenticationHeaderValue("Bearer", credential);
-            using var resolve = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, "/internal/users/identity"))
+            using var resolve = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "internal/users/identity"))
             {
                 Content = JsonContent.Create(new { issuer, subject })
             };
             resolve.Headers.Authorization = authorization;
-            using var identity = await http.SendAsync(resolve, cancellationToken);
+            using var identity = await httpClient.SendAsync(resolve, budget.Token);
             if (identity.StatusCode == HttpStatusCode.NotFound)
+            {
+                logger.LogInformation("Users does not know this identity; treating the account as deactivated.");
                 return new UserAccessRecord("deactivated", "traveller");
+            }
             if (identity.StatusCode != HttpStatusCode.OK)
             {
                 logger.LogWarning("Users identity lookup returned HTTP {StatusCode}.", (int)identity.StatusCode);
                 return null;
             }
 
-            var resolved = await identity.Content.ReadFromJsonAsync<ResolvedUserId>(cancellationToken);
-            if (resolved is null || resolved.UserId == Guid.Empty) return null;
+            var resolved = await identity.Content.ReadFromJsonAsync<ResolvedUserId>(budget.Token);
+            if (resolved is null || resolved.UserId == Guid.Empty)
+            {
+                logger.LogWarning("Users identity lookup returned no usable user identifier.");
+                return null;
+            }
 
             using var lookup = new HttpRequestMessage(HttpMethod.Get,
-                new Uri(endpoint, $"/internal/users/{resolved.UserId:D}/access"));
+                new Uri(baseUri, $"internal/users/{resolved.UserId:D}/access"));
             lookup.Headers.Authorization = authorization;
-            using var response = await http.SendAsync(lookup, cancellationToken);
+            using var response = await httpClient.SendAsync(lookup, budget.Token);
             if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                logger.LogInformation("Users has no standing record for this account; treating it as deactivated.");
                 return new UserAccessRecord("deactivated", "traveller");
+            }
             if (response.StatusCode != HttpStatusCode.OK)
             {
                 logger.LogWarning("Users standing lookup returned HTTP {StatusCode}.", (int)response.StatusCode);
                 return null;
             }
 
-            var access = await response.Content.ReadFromJsonAsync<ResolvedUserAccess>(cancellationToken);
-            return access?.UserId == resolved.UserId &&
+            var access = await response.Content.ReadFromJsonAsync<ResolvedUserAccess>(budget.Token);
+            if (access?.UserId == resolved.UserId &&
                 access.Status is "active" or "banned" or "deactivated" &&
-                access.Role is "traveller" or "administrator"
-                ? new UserAccessRecord(access.Status, access.Role)
-                : null;
+                access.Role is "traveller" or "administrator")
+                return new UserAccessRecord(access.Status, access.Role);
+
+            logger.LogWarning("Users standing lookup returned a mismatched user identifier, status or role.");
+            return null;
         }
-        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException or FormatException ||
-            exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        catch (Exception exception) when (exception is HttpRequestException or JsonException or FormatException or NotSupportedException ||
+            (exception is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
             var reason = exception switch
             {
                 OperationCanceledException => "timeout",
                 HttpRequestException => "transport failure",
-                System.Text.Json.JsonException => "invalid JSON",
+                JsonException => "invalid JSON",
+                NotSupportedException => "unsupported response content type",
                 _ => "invalid service credential format"
             };
-            // Do not log exception text, URLs, response bodies or caller identifiers.
+            // do not log exception text, URLs, response bodies or caller identifiers.
             logger.LogWarning("Users access lookup failed: {Reason}.", reason);
             return null;
         }

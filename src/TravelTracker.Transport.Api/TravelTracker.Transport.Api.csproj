@@ -7,8 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../TravelTracker.Security/TravelTracker.Security.csproj" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
-    <ProjectReference Include="..\TravelTracker.Transport.Data\TravelTracker.Transport.Data.csproj" />
-    <ProjectReference Include="..\TravelTracker.Transport.Domain\TravelTracker.Transport.Domain.csproj" />
+    <ProjectReference Include="../TravelTracker.Transport.Data/TravelTracker.Transport.Data.csproj" />
+    <ProjectReference Include="../TravelTracker.Transport.Domain/TravelTracker.Transport.Domain.csproj" />
   </ItemGroup>
 </Project>

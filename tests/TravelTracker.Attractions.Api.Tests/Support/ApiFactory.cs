@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -31,6 +32,8 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractio
     internal bool UsersUnavailable { get; init; }
     internal bool SeedExamples { get; init; } = true;
     internal UsersBackchannelHandler? Users { get; private set; }
+    /** Optional command interceptor for relational tests that need writers to overlap; requires PostgreSQL. */
+    internal IInterceptor? WriteInterceptor { get; init; }
 
     /**
      * Defaults to EF InMemory for application tests; relational tests explicitly select PostgreSQL.
@@ -76,6 +79,7 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractio
     internal string CreateToken(string? scopes = "catalogue.read catalogue.write", string? failure = null,
         string? claimType = null, int? lifetimeOffsetSeconds = null, string subject = "test-traveller")
     {
+        if (failure == "malformed") return "M4_TOKEN_SENTINEL_malformed";
         using var otherKey = RSA.Create(2048);
         var now = DateTime.UtcNow;
         var claims = new List<Claim>();
@@ -121,12 +125,17 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractio
         {
             if (databaseConnection is null)
             {
+                if (WriteInterceptor is not null) throw new InvalidOperationException("WriteInterceptor needs PostgreSQL; the in-memory provider never runs row-lock statements.");
                 services.RemoveAll<DbContextOptions<AttractionsDbContext>>();
                 services.RemoveAll<IDbContextOptionsConfiguration<AttractionsDbContext>>();
                 services.AddDbContextFactory<AttractionsDbContext>(options => options.UseInMemoryDatabase(memoryDatabaseName));
                 services.AddScoped<IAttractionRepository, InMemoryEfAttractionRepository>();
                 services.AddSingleton<IHostedService>(provider => new InMemoryAttractionsInitializer(
                     provider.GetRequiredService<IServiceScopeFactory>(), SeedExamples));
+            }
+            else if (WriteInterceptor is not null)
+            {
+                services.ConfigureDbContext<AttractionsDbContext>(options => options.AddInterceptors(WriteInterceptor));
             }
             Users = new UsersBackchannelHandler(UsersUnavailable);
             services.AddHttpClient<UsersAccessClient>().ConfigurePrimaryHttpMessageHandler(() => Users);

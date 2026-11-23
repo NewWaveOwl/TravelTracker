@@ -12,7 +12,8 @@ namespace TravelTracker.Api.Trips;
  * @param trips Stores the snapshot trip for its validated owner.
  * @param logger Records whether each save was stored or skipped.
  */
-public sealed class TripSaveService(TripReferenceValidator validator, ITripRepository trips, ILogger<TripSaveService> logger) {
+public sealed class TripSaveService(TripReferenceValidator validator, ITripRepository trips, ILogger<TripSaveService> logger)
+{
     /**
      * Validates a draft and stores the resulting snapshot trip when it is ready.
      *
@@ -25,9 +26,11 @@ public sealed class TripSaveService(TripReferenceValidator validator, ITripRepos
      * @return The validation outcome; the trip is stored only when its status is Ready.
      */
     public async Task<TripReferenceOutcome> SaveAsync(CallerIdentity caller, string bearerToken, TripDraft? draft,
-        CancellationToken cancellationToken, Guid? tripId = null, long? expectedRevision = null) {
+        CancellationToken cancellationToken, Guid? tripId = null, long? expectedRevision = null)
+    {
         TripReferenceOutcome outcome;
-        if (tripId is Guid existingId) {
+        if (tripId is Guid existingId)
+        {
             var refusal = await validator.CheckCallerAsync(caller, bearerToken, cancellationToken);
             if (refusal is not null) return refusal;
             if (draft is null) return InvalidDraft();
@@ -35,32 +38,45 @@ public sealed class TripSaveService(TripReferenceValidator validator, ITripRepos
             var revision = await trips.GetOwnedRevisionAsync(existingId, caller.Issuer, caller.Subject, cancellationToken);
             if (revision is null) return TripNotFound();
             if (expectedRevision is null)
+            {
+                logger.LogWarning("trip not replaced: the If-Match revision header is missing.");
                 return new(TripReferenceStatus.RevisionRequired, null, [], "If-Match is required to replace an owned trip.");
+            }
             if (expectedRevision != revision) return StaleRevision();
 
             outcome = await validator.ValidateReplacementAsync(bearerToken, draft, cancellationToken, existingId, revision.Value + 1);
         }
-        else {
+        else
+        {
             if (draft is null) return InvalidDraft();
             outcome = await validator.ValidateAsync(caller, bearerToken, draft, cancellationToken);
         }
-        if (outcome.Status != TripReferenceStatus.Ready || outcome.Trip is null) {
-            logger.LogWarning("trip not stored: validation ended as {Status}; nothing was written.", outcome.Status);
+        if (outcome.Status != TripReferenceStatus.Ready || outcome.Trip is null)
+        {
+            logger.LogWarning("trip not stored: validation ended as {Status}; nothing was written ({Detail}).", outcome.Status, outcome.Detail);
             return outcome;
         }
 
-        try {
+        try
+        {
             if (tripId is null)
                 await trips.AddAsync(outcome.Trip, caller.Issuer, caller.Subject, cancellationToken);
-            else {
+            else
+            {
                 var replaced = await trips.ReplaceOwnedAsync(outcome.Trip, caller.Issuer, caller.Subject, expectedRevision!.Value, cancellationToken);
                 if (replaced == TripReplacementStatus.NotFound) return TripNotFound();
                 if (replaced == TripReplacementStatus.Stale) return StaleRevision();
             }
         }
-        catch (Exception exception) {
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning("trip write cancelled by the caller; whether it was stored is decided by the repository.");
+            throw;
+        }
+        catch (Exception exception)
+        {
             // log the exception type only; storage messages can carry connection details
-            logger.LogError("trip not stored: the write failed ({FailureType}); the transaction was rolled back.", exception.GetType().Name);
+            logger.LogError("trip write failed ({FailureType}); this service cannot confirm what the repository kept.", exception.GetType().Name);
             throw;
         }
         logger.LogInformation("trip stored with {Count} snapshot leg(s).", outcome.Trip.Legs.Count);
@@ -69,16 +85,32 @@ public sealed class TripSaveService(TripReferenceValidator validator, ITripRepos
 
     /**
      * Reports the same outcome for absent and inaccessible trips.
+     *
      * @return A result with no trip data.
      */
-    private static TripReferenceOutcome TripNotFound() =>
-        new(TripReferenceStatus.TripNotFound, null, [], "the owned trip is absent.");
+    private TripReferenceOutcome TripNotFound()
+    {
+        logger.LogWarning("trip not saved: the owned trip is absent or not visible to this caller.");
+        return new(TripReferenceStatus.TripNotFound, null, [], "the owned trip is absent.");
+    }
 
-    /** Returns the validation outcome when the action already holds the field errors. */
-    private static TripReferenceOutcome InvalidDraft() =>
-        new(TripReferenceStatus.InvalidTrip, null, [], "the submitted draft is invalid.");
+    /**
+     * Reports a missing draft. The host action owns the field errors of request validation, so none are carried here.
+     * @return A result with no trip data and no field errors.
+     */
+    private TripReferenceOutcome InvalidDraft()
+    {
+        logger.LogWarning("trip not saved: the request carried no draft.");
+        return new(TripReferenceStatus.InvalidTrip, null, [], "the submitted draft is invalid.");
+    }
 
-    /** Reports a stale revision without overwriting the stored trip. */
-    private static TripReferenceOutcome StaleRevision() =>
-        new(TripReferenceStatus.StaleRevision, null, [], "the owned trip has a newer revision.");
+    /**
+     * Reports a stale revision without overwriting the stored trip.
+     * @return A result with no trip data.
+     */
+    private TripReferenceOutcome StaleRevision()
+    {
+        logger.LogWarning("trip not replaced: the If-Match revision is stale.");
+        return new(TripReferenceStatus.StaleRevision, null, [], "the owned trip has a newer revision.");
+    }
 }

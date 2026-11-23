@@ -3,6 +3,7 @@ using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Domain.Tests;
 
+/** verifies account creation defaults and the role and status rules in the Users Domain. */
 public sealed class UserAccountTests
 {
     private static readonly DateTimeOffset CreatedAt = DateTimeOffset.Parse("2026-11-04T16:00:00Z");

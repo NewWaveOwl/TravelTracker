@@ -67,6 +67,11 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
         {
             services.RemoveAll<IUserRepository>();
             services.AddSingleton<IUserRepository>(Repository);
+            if (ProfileDatabaseConnection is null && ProfileSaveInterceptor is not null)
+            {
+                throw new InvalidOperationException("ProfileSaveInterceptor needs ProfileDatabaseConnection; the in-memory repository never calls SaveChanges.");
+            }
+
             if (ProfileDatabaseConnection is null)
             {
                 services.RemoveAll<TravelTracker.Users.Data.Repositories.Profile.IUserRepository>();
@@ -94,17 +99,21 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
      * @param scope Granted scope.
      * @return Signed test-only bearer token.
      */
-    public string Token(string? failure = null, string subject = "admin-subject", string scope = "catalogue.read users.read", string? role = null)
+    public string Token(string? failure = null, string subject = "admin-subject", string scope = "catalogue.read users.read users.admin", string? role = null)
     {
+        if (failure == "malformed") return "M4_TOKEN_SENTINEL_malformed";
         using var other = RSA.Create(2048);
         var now = DateTime.UtcNow;
-        var claims = new List<Claim> { new("sub", subject), new("scope", scope) };
+        var claims = new List<Claim> { new("scope", scope) };
+        if (failure != "missing-sub") claims.Add(new("sub", failure == "empty-sub" ? " " : subject));
         if (role is not null) claims.Add(new Claim("role", role));
+        var expires = failure == "no-expiry" ? (DateTime?)null : failure == "expired" ? now.AddMinutes(-1) : now.AddMinutes(failure == "future" ? 15 : 5);
+        var notBefore = failure == "future" ? now.AddMinutes(5) : now.AddMinutes(-10);
         return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
             failure == "issuer" ? "https://wrong.example.test/" : Issuer,
             failure == "audience" ? "wrong-audience" : Audience,
-            claims, now.AddMinutes(-10), failure == "expired" ? now.AddMinutes(-1) : now.AddMinutes(5),
-            new SigningCredentials(new RsaSecurityKey(failure == "signature" ? other : key) { KeyId = "test-key" }, SecurityAlgorithms.RsaSha256)));
+            claims, notBefore, expires,
+            failure == "unsigned" ? null : new SigningCredentials(new RsaSecurityKey(failure == "signature" ? other : key) { KeyId = "test-key" }, SecurityAlgorithms.RsaSha256)));
     }
 
     public HttpClient Browser(string? token = null, bool https = true)
@@ -114,5 +123,9 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
         return client;
     }
 
-    protected override void Dispose(bool disposing) { base.Dispose(disposing); if (disposing) key.Dispose(); }
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing) key.Dispose();
+    }
 }

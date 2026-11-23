@@ -15,7 +15,15 @@ public sealed class AttractionDraft
     public string Rating { get; set; } = "";
     string description = "";
     bool descriptionTouched;
-    public string Description { get => description; set { description = value; descriptionTouched = true; } }
+    public string Description
+    {
+        get => description;
+        set
+        {
+            description = value;
+            descriptionTouched = true;
+        }
+    }
 
     /**
      * Copies editable HTTP values without retaining a mutable reference to the response.
@@ -29,9 +37,10 @@ public sealed class AttractionDraft
             Name = attraction.Name, Address = attraction.Address,
             Lat = attraction.Lat.ToString(CultureInfo.InvariantCulture), Lon = attraction.Lon.ToString(CultureInfo.InvariantCulture),
             EstimatedVisitMinutes = attraction.EstimatedVisitMinutes.ToString(CultureInfo.InvariantCulture),
-            Rating = attraction.Rating?.ToString(CultureInfo.InvariantCulture) ?? "", Description = attraction.Description ?? "",
+            Rating = attraction.Rating?.ToString(CultureInfo.InvariantCulture) ?? "",
         };
-        draft.descriptionTouched = false;
+        // assign the backing field so loading a saved description does not count as an edit
+        draft.description = attraction.Description ?? "";
         return draft;
     }
 
@@ -43,8 +52,8 @@ public sealed class AttractionDraft
     {
         var errors = new Dictionary<string, string[]>();
         if (string.IsNullOrWhiteSpace(Name)) errors["name"] = ["Enter an attraction name."];
-        if (!Coordinate(Lat, -90, 90)) errors["lat"] = ["Enter a latitude from −90 to 90."];
-        if (!Coordinate(Lon, -180, 180)) errors["lon"] = ["Enter a longitude from −180 to 180."];
+        if (!RangeRules.IsDecimalInRange(Lat, -90, 90)) errors["lat"] = ["Enter a latitude from -90 to 90."];
+        if (!RangeRules.IsDecimalInRange(Lon, -180, 180)) errors["lon"] = ["Enter a longitude from -180 to 180."];
         if (!WholeMinutes(EstimatedVisitMinutes)) errors["estimatedVisitMinutes"] = ["Enter a visit duration in whole minutes, 0 or more."];
         if (!string.IsNullOrWhiteSpace(ApproximationMinutes) && !WholeMinutes(ApproximationMinutes)) errors["approximationMinutes"] = ["Enter a duration approximation in whole minutes, 0 or more, or leave it blank."];
         if (!string.IsNullOrWhiteSpace(Rating) && (!decimal.TryParse(Rating, NumberStyles.Float, CultureInfo.InvariantCulture, out var rating) || rating is < 0 or > 5)) errors["rating"] = ["Enter a rating from 0 to 5, or leave it blank."];
@@ -81,10 +90,13 @@ public sealed class AttractionDraft
      * Calculates a local preview without implying the approximation has been saved.
      * @return A nonnegative duration range, or null when one cannot be calculated.
      */
-    public string? RangePreview() => WholeMinutes(EstimatedVisitMinutes) && WholeMinutes(ApproximationMinutes)
-        ? $"{Math.Max(0L, (long)int.Parse(EstimatedVisitMinutes, CultureInfo.InvariantCulture) - int.Parse(ApproximationMinutes, CultureInfo.InvariantCulture))}–{(long)int.Parse(EstimatedVisitMinutes, CultureInfo.InvariantCulture) + int.Parse(ApproximationMinutes, CultureInfo.InvariantCulture)} minutes"
-        : null;
+    public string? RangePreview()
+    {
+        if (!WholeMinutes(EstimatedVisitMinutes) || !WholeMinutes(ApproximationMinutes)) return null;
+        long estimated = int.Parse(EstimatedVisitMinutes, CultureInfo.InvariantCulture);
+        long approximation = int.Parse(ApproximationMinutes, CultureInfo.InvariantCulture);
+        return $"{Math.Max(0L, estimated - approximation)} to {estimated + approximation} minutes";
+    }
 
-    static bool Coordinate(string value, decimal min, decimal max) => decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var coordinate) && coordinate >= min && coordinate <= max;
     static bool WholeMinutes(string value) => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var minutes) && minutes >= 0;
 }

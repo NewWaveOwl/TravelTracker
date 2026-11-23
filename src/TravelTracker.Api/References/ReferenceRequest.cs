@@ -6,7 +6,8 @@ namespace TravelTracker.Api.References;
 /**
  * Builds bearer-authenticated requests to other services. Sending and answer mapping live in ReferenceSender.
  */
-public static class ReferenceRequest {
+public static class ReferenceRequest
+{
     /**
      * Builds a GET request with a bearer credential.
      *
@@ -26,7 +27,10 @@ public static class ReferenceRequest {
      * @return A request that is sent once.
      */
     public static HttpRequestMessage Post<TBody>(string path, string bearerToken, TBody body) =>
-        WithBearer(new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) }, bearerToken);
+        WithBearer(new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = JsonContent.Create(body)
+        }, bearerToken);
 
     /**
      * Adds the bearer Authorization header.
@@ -35,7 +39,8 @@ public static class ReferenceRequest {
      * @param bearerToken The credential to send.
      * @return The same request.
      */
-    private static HttpRequestMessage WithBearer(HttpRequestMessage request, string bearerToken) {
+    private static HttpRequestMessage WithBearer(HttpRequestMessage request, string bearerToken)
+    {
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
         return request;
     }

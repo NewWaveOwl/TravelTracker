@@ -8,6 +8,12 @@ public sealed class ServiceClientTests
 {
     static ServiceClient ClientFor(StubHandler handler) => new(new HttpClient(handler), NullLogger<ServiceClient>.Instance);
 
+    static (ServiceClient Client, RecordingLogger<ServiceClient> Logger) RecordedClientFor(StubHandler handler)
+    {
+        var logger = new RecordingLogger<ServiceClient>();
+        return (new ServiceClient(new HttpClient(handler), logger), logger);
+    }
+
     [Fact]
     public async Task ReadsPublicHealthJsonWithoutCredentials()
     {
@@ -46,9 +52,68 @@ public sealed class ServiceClientTests
     }
 
     [Fact]
+    public async Task LogsTheTransportFailureTypeWithoutTheException()
+    {
+        var cause = new HttpRequestException("test-secret-sentinel");
+        var (client, logger) = RecordedClientFor(new StubHandler((_, _) => throw cause));
+
+        await Assert.ThrowsAsync<ApiError>(() => client.GetJsonAsync<object>("http://service/api/v1/trips/example"));
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Null(entry.Exception);
+        Assert.Contains(nameof(HttpRequestException), entry.Message);
+        Assert.DoesNotContain("test-secret-sentinel", entry.Message);
+        Assert.Contains("/api/v1/trips", entry.Message);
+        Assert.DoesNotContain("example", entry.Message);
+    }
+
+    [Fact]
+    public async Task LogsOnlyTheThreeLeadingSegmentsOfANestedRecordRoute()
+    {
+        var cause = new HttpRequestException("offline");
+        var (client, logger) = RecordedClientFor(new StubHandler((_, _) => throw cause));
+
+        await Assert.ThrowsAsync<ApiError>(() => client.GetJsonAsync<object>("http://service/api/v1/users/00000000-0000-0000-0000-000000000042/role"));
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Contains("/api/v1/users", entry.Message);
+        Assert.DoesNotContain("00000000-0000-0000-0000-000000000042", entry.Message);
+        Assert.DoesNotContain("role", entry.Message);
+    }
+
+    [Fact]
+    public async Task KeepsTheValidationStatusWhenTheErrorBodyCannotBeRead()
+    {
+        var response = new HttpResponseMessage(System.Net.HttpStatusCode.BadRequest) { Content = new UnreadableContent() };
+        var (client, logger) = RecordedClientFor(new StubHandler((_, _) => Task.FromResult(response)));
+
+        var error = await Assert.ThrowsAsync<ApiError>(() => client.GetJsonAsync<object>("http://service/health"));
+
+        Assert.Equal(FailureKind.Validation, error.Kind);
+        Assert.Equal(400, error.Status);
+        Assert.Empty(error.Errors);
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains(nameof(HttpRequestException), StringComparison.Ordinal));
+        Assert.All(logger.Entries, entry => Assert.Null(entry.Exception));
+    }
+
+    [Fact]
     public async Task ReportsMalformedResponses()
     {
         var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(StubHandler.Status(200, "invalid")).GetJsonAsync<object>("http://service/health"));
+
+        Assert.Equal(FailureKind.Unexpected, error.Kind);
+    }
+
+    [Theory]
+    [InlineData("x-unsupported-charset")]
+    [InlineData("utf-7")]
+    public async Task ReportsSuccessBodiesWithUnreadableCharsetAsUnexpected(string charset)
+    {
+        var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("{}") };
+        response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json") { CharSet = charset };
+        var handler = new StubHandler((_, _) => Task.FromResult(response));
+
+        var error = await Assert.ThrowsAsync<ApiError>(() => ClientFor(handler).GetJsonAsync<object>("http://service/health"));
 
         Assert.Equal(FailureKind.Unexpected, error.Kind);
     }
@@ -57,9 +122,29 @@ public sealed class ServiceClientTests
     public async Task PreservesCallerCancellation()
     {
         using var cancellation = new CancellationTokenSource();
-        await cancellation.CancelAsync();
-        var handler = new StubHandler((_, token) => Task.FromCanceled<HttpResponseMessage>(token));
+        var handler = new StubHandler(async (_, token) =>
+        {
+            // the stub only ends when the client cancels, so the cancel really flows through the request
+            await Task.Delay(Timeout.Infinite, token);
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK);
+        });
+        var pending = ClientFor(handler).GetJsonAsync<object>("http://service/health", cancellation.Token);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ClientFor(handler).GetJsonAsync<object>("http://service/health", cancellation.Token));
+        await cancellation.CancelAsync();
+
+        var thrown = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        Assert.IsNotType<ApiError>(thrown);
+    }
+
+    /** a body whose connection drops while it is read, like a reset during an error response. */
+    sealed class UnreadableContent : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) => throw new HttpRequestException("connection reset");
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 }

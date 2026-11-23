@@ -5,7 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 using Swashbuckle.AspNetCore.Swagger;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -82,7 +82,7 @@ public sealed class AuthenticationTests
     [Fact]
     public async Task Development_ShippedConfigurationStartsWithPublicHealthAndProtectedCatalogue()
     {
-        // No ApiFactory configuration overrides: load the repository's actual Development settings.
+        // no ApiFactory configuration overrides: load the repository's actual Development settings.
         using var factory = new WebApplicationFactory<TravelTracker.Transport.Api.TransportProgram>().WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
         using var client = factory.CreateClient();
         using var health = await client.GetAsync("/health");
@@ -102,6 +102,9 @@ public sealed class AuthenticationTests
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
+                    ["ConnectionStrings:Transport"] = "Host=db.example.test;Database=unused;Username=runtime;SSL Mode=VerifyFull",
+                    ["Users:InternalBaseUrl"] = "https://users.example.test",
+                    ["Users:ServiceAccessToken"] = "test-fixture-token",
                     ["Authentication:Bearer:Authority"] = "",
                     ["Authentication:Bearer:Issuer"] = "",
                     ["Authentication:Bearer:Audience"] = ""
@@ -210,7 +213,9 @@ public sealed class AuthenticationTests
         var document = factory.Services.GetRequiredService<ISwaggerProvider>().GetSwagger("v1");
         Assert.NotNull(document.Components?.SecuritySchemes);
         Assert.True(document.Components.SecuritySchemes.ContainsKey("Bearer"));
-        foreach (var (path, item) in document.Paths.Where(entry => entry.Key.StartsWith("/api/v1/", StringComparison.Ordinal)))
+        var protectedPaths = document.Paths.Where(entry => entry.Key.StartsWith("/api/v1/", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(protectedPaths);
+        foreach (var (path, item) in protectedPaths)
         {
             Assert.NotNull(item.Operations);
             foreach (var (method, operation) in item.Operations)
@@ -243,11 +248,16 @@ public sealed class AuthenticationTests
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = failure == "missing" ? null :
-            new AuthenticationHeaderValue("Bearer", failure == "malformed" ? "not-a-jwt" : factory.CreateToken(failure: failure));
+        var token = failure == "missing" ? null : factory.CreateToken(failure: failure);
+        client.DefaultRequestHeaders.Authorization = token is null ? null : new AuthenticationHeaderValue("Bearer", token);
         using var response = await client.GetAsync("/test/identity");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Contains(response.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
+        if (token is not null)
+        {
+            Assert.DoesNotContain(token, await response.Content.ReadAsStringAsync());
+            Assert.DoesNotContain(token, string.Join(" ", response.Headers.WwwAuthenticate));
+        }
     }
 
     [Theory]

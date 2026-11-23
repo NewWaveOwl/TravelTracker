@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
@@ -42,6 +43,7 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Empty(await repository.ListOwnedAsync("https://other-issuer.example/", "alice"));
         var migrations = await restarted.Database.GetAppliedMigrationsAsync();
 
+        Assert.False(restarted.Database.HasPendingModelChanges());
         Assert.NotNull(persisted);
         Assert.Equal(expected.TripId, persisted.TripId);
         Assert.Equal("Paris weekend", persisted.Name);
@@ -63,7 +65,9 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Equal(expected.Legs[0].Departure, first.Departure);
         Assert.Equal("Louvre", persisted.Legs[1].From.Name);
         Assert.Equal("Hotel Lumiere", persisted.Legs[1].To.Name);
-        Assert.Contains("20261106194443_InitialTrips", migrations);
+        Assert.Contains(migrations, migration => migration.EndsWith("_InitialTrips", StringComparison.Ordinal));
+        Assert.Contains("20261109120000_TripRevisionCheck", migrations);
+        Assert.Contains("20261123004432_TripStops", migrations);
     }
 
     [Fact]
@@ -151,11 +155,14 @@ public sealed class TripRepositoryPostgreSqlTests
         var roundTrip = Trip.Create("Round trip", original.TimeZone, original.Start, original.End, true,
             original.Legs, original.TripId);
 
-        await using var first = CreateContext(database.ConnectionString);
-        await using var second = CreateContext(database.ConnectionString);
+        // each writer pauses at its first UPDATE until the other one arrives, so both really overlap in the database.
+        var rendezvous = new WriteRendezvous(2);
+        await using var first = CreateContext(database.ConnectionString, new RendezvousCommandInterceptor(rendezvous));
+        await using var second = CreateContext(database.ConnectionString, new RendezvousCommandInterceptor(rendezvous));
         var writes = await Task.WhenAll(
-            new EfTripRepository(first).ReplaceOwnedAsync(oneWay, OwnerIssuer, "alice", original.Revision),
-            new EfTripRepository(second).ReplaceOwnedAsync(roundTrip, OwnerIssuer, "alice", original.Revision));
+            Task.Run(() => new EfTripRepository(first).ReplaceOwnedAsync(oneWay, OwnerIssuer, "alice", original.Revision)),
+            Task.Run(() => new EfTripRepository(second).ReplaceOwnedAsync(roundTrip, OwnerIssuer, "alice", original.Revision)));
+        Assert.True(rendezvous.Completed, "both writers must have reached the UPDATE together.");
 
         Assert.Single(writes, status => status == TripReplacementStatus.Replaced);
         Assert.Single(writes, status => status == TripReplacementStatus.Stale);
@@ -377,8 +384,10 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Equal(replacing ? 3L : 0L, await check.Database.SqlQuery<long>($"SELECT COUNT(*) AS \"Value\" FROM \"TripStops\"").SingleAsync());
     }
 
-    [Fact]
-    public async Task StopMigration_PreservesLegacyTripAndDerivesStopsFromItsLegs()
+    [Theory]
+    [InlineData("20261109022113_TripRevision")]
+    [InlineData("20261109120000_TripRevisionCheck")]
+    public async Task StopMigration_PreservesLegacyTripAndDerivesStopsFromItsLegs(string previousMigration)
     {
         await using var database = new PostgresTestDatabase();
         var sample = SampleTrip();
@@ -386,9 +395,14 @@ public sealed class TripRepositoryPostgreSqlTests
             sample.IsRoundTrip, sample.Legs, sample.TripId);
         await using (var context = CreateContext(database.ConnectionString))
         {
-            await context.GetService<IMigrator>().MigrateAsync("20261109022113_TripRevision");
+            await context.GetService<IMigrator>().MigrateAsync(previousMigration);
             await InsertLegacyTripAsync(context, original);
             await TripsDatabase.InitializeAsync(context);
+            Assert.False(context.Database.HasPendingModelChanges());
+            var invalidRevision = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE \"Trips\" SET \"Revision\" = {0L} WHERE \"TripId\" = {original.TripId}"));
+            Assert.Equal(PostgresErrorCodes.CheckViolation, invalidRevision.SqlState);
+            Assert.Equal("CK_Trips_Revision", invalidRevision.ConstraintName);
         }
 
         await using var restarted = CreateContext(database.ConnectionString);
@@ -432,7 +446,7 @@ public sealed class TripRepositoryPostgreSqlTests
 
     /**
      * Seeds the old schema directly so migration preservation is tested without the new stop mapping.
-     * @param context Context migrated only through TripRevision.
+     * @param context Context migrated before the stop snapshot table.
      * @param trip Existing complete itinerary to copy.
      * @return Completion once its old-schema rows have been written.
      */
@@ -488,43 +502,9 @@ public sealed class TripRepositoryPostgreSqlTests
      * Creates a PostgreSQL context isolated to the disposable test database.
      *
      * @param connectionString Connection string for this test's database.
+     * @param interceptors Optional EF interceptors for the context.
      * @return A new context that can be disposed independently.
      */
-    private static TripsDbContext CreateContext(string connectionString) =>
-        new(new DbContextOptionsBuilder<TripsDbContext>().UseNpgsql(connectionString).Options);
-
-    /**
-     * Creates and later drops one random PostgreSQL database for a relational test.
-     */
-    private sealed class PostgresTestDatabase : IAsyncDisposable
-    {
-        private readonly string adminConnectionString;
-        private readonly string databaseName = "traveltracker_trips_test_" + Guid.NewGuid().ToString("N");
-
-        public string ConnectionString { get; }
-
-        public PostgresTestDatabase()
-        {
-            adminConnectionString = Environment.GetEnvironmentVariable("TRAVELTRACKER_TEST_POSTGRES") ??
-                throw new InvalidOperationException("PostgreSQL data tests require TRAVELTRACKER_TEST_POSTGRES with CREATEDB permission.");
-            using var admin = new NpgsqlConnection(adminConnectionString);
-            admin.Open();
-            using var create = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", admin);
-            create.ExecuteNonQuery();
-            ConnectionString = new NpgsqlConnectionStringBuilder(adminConnectionString)
-            {
-                Database = databaseName,
-                Pooling = false
-            }.ConnectionString;
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            using var admin = new NpgsqlConnection(adminConnectionString);
-            admin.Open();
-            using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)", admin);
-            drop.ExecuteNonQuery();
-            return ValueTask.CompletedTask;
-        }
-    }
+    private static TripsDbContext CreateContext(string connectionString, params IInterceptor[] interceptors) =>
+        new(new DbContextOptionsBuilder<TripsDbContext>().UseNpgsql(connectionString).AddInterceptors(interceptors).Options);
 }

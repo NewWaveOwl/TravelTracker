@@ -3,10 +3,13 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.JSInterop;
+using Microsoft.AspNetCore.Components.Web;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
 using TravelTracker.Frontend.Auth;
+using TravelTracker.Frontend.Components.Shared;
+using TravelTracker.Frontend.Features.Settings;
 using TravelTracker.Frontend.Features.Trips;
 using TravelTracker.Frontend.Services;
 
@@ -17,9 +20,6 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
 {
     static readonly (int Number, string Title)[] Steps = [(1, "Basics"), (2, "Itinerary"), (3, "Review")];
     static readonly string[] AllTypes = ["accommodation", "attraction", "transport_stop"];
-
-    /** time zone names this host knows, offered as suggestions; the service still decides what it accepts. */
-    static readonly IReadOnlyList<string> Zones = TimeZoneInfo.GetSystemTimeZones().Select(zone => zone.Id).OrderBy(id => id, StringComparer.Ordinal).ToArray();
 
     [Inject] TripsClient Trips { get; set; } = default!;
     [Inject] TransportClient Transport { get; set; } = default!;
@@ -37,7 +37,10 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
     ApiError? saveError;
     string? modeFailure, pendingTarget;
     int step = 1;
-    bool signedIn, canWrite, loaded, saving, completed;
+    bool signedIn, canWrite, loaded, saving, completed, focusDialog, focusHeading, focusAddLeg, focusProgress;
+    int generation;
+    bool disposed;
+    ElementReference leaveDialog, stepHeading, addLegButton, progressList;
     readonly CancellationTokenSource lifetime = new();
     ElementReference editorElement;
     Task<IJSObjectReference?>? saveShortcut;
@@ -45,29 +48,19 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
     /** true while entries would be lost by leaving, which arms the leave confirmation. */
     bool Dirty => !completed && draft.HasEntries;
 
-    IEnumerable<KeyValuePair<string, string[]>> VisibleErrors => errors;
+    /** summary links only point at controls on the visible step, so other steps' errors stay out of the list. */
+    IEnumerable<KeyValuePair<string, string[]>> VisibleErrors => errors.Where(entry => IsItineraryKey(entry.Key) == (step == 2));
 
-    string SaveHeading => saveError?.Kind switch
-    {
-        FailureKind.Validation => "The trip was not saved",
-        FailureKind.Permission => "Permission denied",
-        FailureKind.Network => "Unable to connect",
-        FailureKind.Unavailable => "Service unavailable",
-        _ => "The trip was not saved",
-    };
+    string SaveHeading => saveError?.Kind is FailureKind.Permission or FailureKind.Network or FailureKind.Unavailable ? ErrorHeadings.For(saveError) : "The trip was not saved";
+
+    /** true when a failed create may already exist on the service, so the retry warning applies. */
+    bool SaveMayHaveCreated => saveError is not null && CreateRetryWarning.Applies(saveError);
 
     protected override async Task OnInitializedAsync()
     {
         Authentication.AuthenticationStateChanged += AuthenticationChanged;
         await UpdateAccessAsync(await Authentication.GetAuthenticationStateAsync());
         loaded = true;
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender) return;
-        saveShortcut = RegisterSaveShortcutAsync();
-        await saveShortcut;
     }
 
     /** @return The editor-local shortcut registration released when the form closes. */
@@ -88,32 +81,35 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
      */
     void AuthenticationChanged(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
     {
+        // an in-flight save from the previous account must not complete into this one
+        generation++;
         draft = new();
         errors = new Dictionary<string, string[]>();
         saveError = null;
         pendingTarget = null;
+        // step 1 unmounts the itinerary's PlaceSelectors, which drops their results and searches with them
         step = 1;
         saving = false;
+        modes = [];
+        modeFailure = null;
         await UpdateAccessAsync(await state);
         StateHasChanged();
     });
 
     async Task UpdateAccessAsync(AuthenticationState state)
     {
-        signedIn = state.User.Identity?.IsAuthenticated == true && Sessions.IsActive(state.User) && AccessTokenClaims.ActiveToken(state.User, Clock.GetUtcNow()) is not null;
-        canWrite = signedIn && state.User.FindAll(AccessTokenClaims.GrantedScope).SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Contains("trips.write", StringComparer.Ordinal);
+        signedIn = AccessTokenClaims.IsSignedIn(state.User, Sessions, Clock.GetUtcNow());
+        canWrite = signedIn && AccessTokenClaims.GrantedScopes(state.User).Contains("trips.write");
         if (!signedIn) return;
         var preferences = await Preferences.LoadAsync(lifetime.Token);
-        if (preferences is not null && draft.Name.Length == 0 && !draft.Legs.Any() && SettingsKnown(preferences.TimeZone)) draft.TimeZone = preferences.TimeZone;
+        if (preferences is not null && draft.Name.Length == 0 && !draft.Legs.Any() && SettingsRules.IsKnownTimeZone(preferences.TimeZone)) draft.TimeZone = preferences.TimeZone;
     }
 
-    static bool SettingsKnown(string zone) => Features.Settings.SettingsRules.IsKnownTimeZone(zone);
+    string[] Messages(string field) => errors.FirstOrDefault(entry => string.Equals(entry.Key, field, StringComparison.OrdinalIgnoreCase)).Value ?? [];
 
-    string? Message(string field) => errors.TryGetValue(field, out var messages) ? string.Join(" ", messages) : null;
+    string? Message(string field) => Messages(field) is { Length: > 0 } messages ? string.Join(" ", messages) : null;
 
-    string[] Messages(string field) => errors.TryGetValue(field, out var messages) ? messages : [];
-
-    string? Invalid(string field) => errors.ContainsKey(field) ? "true" : null;
+    string? Invalid(string field) => Messages(field).Length > 0 ? "true" : null;
 
     /**
      * maps a service or local error key to the control a summary link should land on.
@@ -150,6 +146,7 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
     {
         errors = new Dictionary<string, string[]>();
         step = target;
+        focusHeading = target > 1;
     }
 
     async Task NextFromBasics()
@@ -159,25 +156,37 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
         if (errors.Count > 0) return;
         if (modes.Count == 0) await LoadModesAsync();
         step = 2;
+        focusHeading = true;
     }
 
     void NextFromItinerary()
     {
         saveError = null;
         errors = draft.ValidateItinerary();
-        if (errors.Count == 0) step = 3;
+        if (errors.Count != 0) return;
+        step = 3;
+        focusHeading = true;
     }
 
     async Task LoadModesAsync()
     {
+        var version = generation;
         modeFailure = null;
-        try { modes = await Transport.SearchTransportAsync("", "", lifetime.Token); }
+        try
+        {
+            var found = await Transport.SearchTransportAsync("", "", lifetime.Token);
+            // modes can be private to their owner, so a load that started under the previous account is dropped
+            if (version == generation) modes = found;
+        }
         catch (ApiError failure)
         {
-            modeFailure = failure.Message;
+            if (version == generation) modeFailure = failure.Message;
             Logger.LogWarning("Loading transport modes failed as {Kind} (status {Status})", failure.Kind, failure.Status);
         }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+            // the view closed while the modes were loading
+        }
     }
 
     void AddLeg()
@@ -192,11 +201,13 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
     {
         draft.Legs.RemoveAt(index);
         errors = new Dictionary<string, string[]>();
+        // the removed leg's controls are gone, so keyboard focus moves to the add control instead of dropping to the body
+        focusAddLeg = true;
     }
 
     void ChooseMode(TripLegDraft leg, string? value)
     {
-        var mode = Guid.TryParse(value, out var id) ? modes.FirstOrDefault(candidate => candidate.TransportModeId == id) : null;
+        var mode = Guid.TryParse(value, out var modeId) ? modes.FirstOrDefault(candidate => candidate.TransportModeId == modeId) : null;
         leg.TransportModeId = mode?.TransportModeId;
         leg.TransportName = mode?.Name ?? "";
     }
@@ -218,28 +229,48 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
         }
         errors = new Dictionary<string, string[]>();
         saving = true;
+        var version = generation;
         try
         {
             var trip = await Trips.CreateAsync(draft.ToRequest(), lifetime.Token);
+            if (version != generation)
+            {
+                Logger.LogWarning("A trip save finished after the signed-in account changed; the result was not shown");
+                return;
+            }
+
             completed = true;
-            Logger.LogInformation("Trip {TripId} saved with {Legs} legs", trip.TripId, trip.Legs.Count);
+            Logger.LogInformation("A trip was saved with {Legs} legs", trip.Legs.Count);
             Navigation.NavigateTo($"trips/{trip.TripId:D}?saved=true");
         }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+            // the view closed while the save was running
+        }
         catch (ApiError failure)
         {
+            if (version != generation) return;
             saveError = failure;
             Logger.LogWarning("Saving the trip failed as {Kind} (status {Status}); entries are kept", failure.Kind, failure.Status);
             if (failure.Errors.Count > 0) ShowErrors(failure.Errors);
         }
-        finally { saving = false; }
+        finally
+        {
+            if (version == generation) saving = false;
+        }
     }
 
+    /**
+     * shows the earliest step that still has an error, so basics problems are never hidden behind the itinerary.
+     * @param found The errors to show, keyed by public field name.
+     */
     void ShowErrors(IReadOnlyDictionary<string, string[]> found)
     {
         errors = found;
-        step = found.Keys.Any(key => key.StartsWith("legs", StringComparison.Ordinal)) ? 2 : 1;
+        step = found.Keys.All(IsItineraryKey) ? 2 : 1;
     }
+
+    static bool IsItineraryKey(string key) => key.StartsWith("legs", StringComparison.Ordinal);
 
     /**
      * stops a navigation away from unsaved entries and asks first.
@@ -250,10 +281,56 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
         if (!Dirty) return Task.CompletedTask;
         context.PreventNavigation();
         pendingTarget = context.TargetLocation;
+        focusDialog = true;
         return Task.CompletedTask;
     }
 
-    void KeepEditing() => pendingTarget = null;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            saveShortcut = RegisterSaveShortcutAsync();
+            await saveShortcut;
+        }
+        if (focusDialog && pendingTarget is not null)
+        {
+            focusDialog = false;
+            await leaveDialog.FocusAsync();
+        }
+        else if (focusHeading)
+        {
+            focusHeading = false;
+            if (step > 1) await stepHeading.FocusAsync();
+        }
+
+        if (focusAddLeg)
+        {
+            focusAddLeg = false;
+            await addLegButton.FocusAsync();
+        }
+
+        // the dialog's focused button is removed on dismissal, so focus moves to the progress list that stays on screen
+        if (focusProgress)
+        {
+            focusProgress = false;
+            await progressList.FocusAsync();
+        }
+    }
+
+    void KeepEditing()
+    {
+        pendingTarget = null;
+        focusProgress = true;
+    }
+
+    /**
+     * lets Escape dismiss the leave confirmation like Keep editing.
+     * @param eventArgs The key pressed while focus is inside the dialog.
+     */
+    void HandleDialogKeyDown(KeyboardEventArgs eventArgs)
+    {
+        if (eventArgs.Key == "Escape") KeepEditing();
+    }
 
     void LeaveWithoutSaving()
     {
@@ -269,6 +346,8 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
      */
     public async ValueTask DisposeAsync()
     {
+        if (disposed) return;
+        disposed = true;
         Authentication.AuthenticationStateChanged -= AuthenticationChanged;
         lifetime.Cancel();
         lifetime.Dispose();

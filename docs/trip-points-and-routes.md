@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-Attractions now owns an independent Api/Data/Domain service on 5104 with PostgreSQL and private/shared access. Transport entries and Route Points run independently in TravelTracker.Transport.Api on 5105 with PostgreSQL storage. HTTP DTOs preserve name/lat/lon aliases. Trip/TripLeg domain rules exist, but trip/settings HTTP and persistence features remain unfinished. See [independent Attractions startup and access rules](attractions-service.md).
+Attractions now owns an independent Api/Data/Domain service on 5104 with PostgreSQL and private/shared access. Transport entries and Route Points run independently in TravelTracker.Transport.Api on 5105 with PostgreSQL storage. HTTP DTOs preserve name/lat/lon aliases. Trip/TripLeg domain rules exist. Trips has HTTP and PostgreSQL persistence for create, own-trip detail and replace (see [Trips service](trips-service.md)), and Settings is implemented as its own service (see [settings-service.md](settings-service.md)). See [independent Attractions startup and access rules](attractions-service.md).
 
 [Domain](domain.md), [API](api.md) and [Data](data.md) describe current models and contracts. The relationships and timing rules below are future product design.
 
@@ -38,7 +38,7 @@ The diagram describes future integration. Only RoutePoint, transport entries and
 
 A future scheduled-route contract would identify the transport entry, start/destination route points and each intermediate stop's point. The Trips service would select the route for a leg, associate that leg with its ordered trip-point occurrences, and save the chosen transport/location details as snapshots. The trip would stay readable if a catalogue changed or became unavailable. Final field names, ID conversions between the GUID catalogue and Id64 Trips contracts, and cross-owner validation still need review before implementation.
 
-Accommodation and attraction points can carry a sourceId for the corresponding place catalogue. Transport-stop points can stand alone. The current API merely stores that optional GUID; it does not verify a source record or keep its fields synchronized. An accommodation point therefore does not create an Accomodation entity, and an attraction point does not create an Attraction entity.
+Accommodation and attraction points can carry a sourceId for the corresponding place catalogue. Transport-stop points can stand alone. The current API merely stores that optional GUID; it does not verify a source record or keep its fields synchronized. An accommodation point therefore does not create an Accommodation entity, and an attraction point does not create an Attraction entity.
 
 ## Planned timing rules
 

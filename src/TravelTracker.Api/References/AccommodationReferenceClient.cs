@@ -1,3 +1,4 @@
+using TravelTracker.Api.Trips;
 using TravelTracker.Trips.Domain.Models;
 
 namespace TravelTracker.Api.References;
@@ -9,7 +10,8 @@ namespace TravelTracker.Api.References;
  * @param http Typed client whose base address points at the Accommodations service.
  * @param sender Sends the request and logs failures.
  */
-public sealed class AccommodationReferenceClient(HttpClient http, ReferenceSender sender) {
+public sealed class AccommodationReferenceClient(HttpClient http, ReferenceSender sender)
+{
     /**
      * Reads one accommodation the caller may see and copies it into a place snapshot.
      *
@@ -18,16 +20,16 @@ public sealed class AccommodationReferenceClient(HttpClient http, ReferenceSende
      * @param cancellationToken Cancels the lookup.
      * @return A place snapshot when found, otherwise the non-found outcome.
      */
-    public async Task<ReferenceResult<TripPlace>> GetPlaceAsync(Guid accommodationId, string bearerToken, CancellationToken cancellationToken) {
-        var operation = $"accommodation {accommodationId:D} lookup";
+    public async Task<ReferenceResult<TripPlace>> GetPlaceAsync(Guid accommodationId, string bearerToken, CancellationToken cancellationToken)
+    {
+        var operation = "accommodation lookup";
         var result = await sender.SendAsync<AccommodationResponse>(http,
             ReferenceRequest.Get($"api/v1/accommodations/{accommodationId:D}", bearerToken), operation, cancellationToken);
         if (result.Status != ReferenceStatus.Found) return result.Forward<TripPlace>();
         var place = result.Value!;
-        return string.IsNullOrWhiteSpace(place.Name) || place.Address is null || place.Lat is null || place.Lon is null
-            || place.Lat is < -90 or > 90 || place.Lon is < -180 or > 180
+        return !ReferenceSender.IsUsablePlace(place.Name, place.Address, place.Lat, place.Lon)
             ? sender.Incomplete<TripPlace>(operation)
-            : ReferenceResult<TripPlace>.Found(new(accommodationId, "accommodation", place.Name, place.Address, place.Lat.Value, place.Lon.Value));
+            : ReferenceResult<TripPlace>.Found(new(accommodationId, TripPlaceTypes.Accommodation, place.Name, place.Address, place.Lat.Value, place.Lon.Value));
     }
 
     /** The fields of the Accommodations response that a trip snapshot keeps; a missing one is detected, never defaulted. */

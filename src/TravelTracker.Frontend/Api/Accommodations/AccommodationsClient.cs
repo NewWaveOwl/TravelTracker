@@ -20,12 +20,12 @@ public sealed class AccommodationsClient(ProtectedClient client)
 
     /**
      * Reads a detail only when the service says it is visible to the caller.
-     * @param id Public accommodation identifier.
+     * @param identifier Public accommodation identifier.
      * @param cancellationToken Cancels a closed detail view.
      * @return The current public accommodation details.
      */
-    public async Task<AccommodationDto> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
-        await client.GetJsonAsync<AccommodationDto>("Accommodations", $"{Path}/{id:D}", cancellationToken)
+    public async Task<AccommodationDto> GetAsync(Guid identifier, CancellationToken cancellationToken = default) =>
+        await client.GetJsonAsync<AccommodationDto>("Accommodations", $"{Path}/{identifier:D}", cancellationToken)
         ?? throw EmptyResponse();
 
     /**
@@ -38,5 +38,5 @@ public sealed class AccommodationsClient(ProtectedClient client)
         await client.SendJsonAsync<AccommodationDto>("Accommodations", HttpMethod.Post, Path, request, cancellationToken)
         ?? throw EmptyResponse();
 
-    static ApiError EmptyResponse() => new(FailureKind.Unexpected, "The save could not be confirmed. Check the catalogue before retrying.");
+    static ApiError EmptyResponse() => new(FailureKind.Unexpected, "The save could not be confirmed. Check the accommodations list before retrying.");
 }

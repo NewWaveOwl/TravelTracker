@@ -7,9 +7,21 @@ using TravelTracker.Users.Tests.Support;
 
 namespace TravelTracker.Users.Tests;
 
+/** verifies the one-time first-administrator bootstrap over HTTP. */
 public sealed class BootstrapApiTests
 {
     const string Bootstrap = "/api/v1/users/bootstrap-first-administrator";
+    static string DefaultTravellerScopes()
+    {
+        var hook = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "supabase-auth-hook.sql"));
+        var declaration = System.Text.RegularExpressions.Regex.Match(hook, @"traveller_scopes text\[\] := ARRAY\[([^\]]+)\]");
+        Assert.True(declaration.Success);
+        var scopes = System.Text.RegularExpressions.Regex.Matches(declaration.Groups[1].Value, @"'([^']+)'")
+            .Select(match => match.Groups[1].Value).ToArray();
+        Assert.Contains("catalogue.read", scopes);
+        Assert.DoesNotContain("users.admin", scopes);
+        return string.Join(" ", scopes);
+    }
 
     static Task<HttpResponseMessage> Provision(HttpClient client, string? secret = UsersApiFactory.Secret)
     {
@@ -21,7 +33,8 @@ public sealed class BootstrapApiTests
     [Fact]
     public async Task HealthIsAnonymousAndBootstrapRequiresRealAuthentication()
     {
-        using var app = new UsersApiFactory(); using var client = app.Browser();
+        using var app = new UsersApiFactory();
+        using var client = app.Browser();
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Provision(client)).StatusCode);
         Assert.Null(app.Repository.Account);
@@ -44,15 +57,18 @@ public sealed class BootstrapApiTests
     [InlineData("expired")]
     public async Task InvalidBearerIsRejectedBeforeProviderOrPersistence(string failure)
     {
-        using var app = new UsersApiFactory(); using var client = app.Browser(app.Token(failure));
+        using var app = new UsersApiFactory();
+        using var client = app.Browser(app.Token(failure));
         Assert.Equal(HttpStatusCode.Unauthorized, (await Provision(client)).StatusCode);
-        Assert.Equal(0, app.Identity.Calls); Assert.Equal(0, app.Repository.BootstrapCalls);
+        Assert.Equal(0, app.Identity.Calls);
+        Assert.Equal(0, app.Repository.BootstrapCalls);
     }
 
     [Fact]
-    public async Task MissingCatalogueScopeCannotBootstrap()
+    public async Task MissingCatalogueReadScopeCannotBootstrap()
     {
-        using var app = new UsersApiFactory(); using var client = app.Browser(app.Token(scope: "openid"));
+        using var app = new UsersApiFactory();
+        using var client = app.Browser(app.Token(scope: "users.read users.write"));
         Assert.Equal(HttpStatusCode.Forbidden, (await Provision(client)).StatusCode);
         Assert.Equal(0, app.Repository.BootstrapCalls);
     }
@@ -62,15 +78,18 @@ public sealed class BootstrapApiTests
     [InlineData("wrong-secret")]
     public async Task InvalidOperatorCredentialNeverCallsProviderOrDatabase(string? secret)
     {
-        using var app = new UsersApiFactory(); using var client = app.Browser(app.Token());
+        using var app = new UsersApiFactory();
+        using var client = app.Browser(app.Token());
         Assert.Equal(HttpStatusCode.Forbidden, (await Provision(client, secret)).StatusCode);
-        Assert.Equal(0, app.Identity.Calls); Assert.Equal(0, app.Repository.BootstrapCalls);
+        Assert.Equal(0, app.Identity.Calls);
+        Assert.Equal(0, app.Repository.BootstrapCalls);
     }
 
     [Fact]
     public async Task BootstrapIsDisabledWithoutStrongOperatorConfiguration()
     {
-        using var app = new UsersApiFactory { ConfiguredSecret = "short" }; using var client = app.Browser(app.Token());
+        using var app = new UsersApiFactory { ConfiguredSecret = "short" };
+        using var client = app.Browser(app.Token());
         Assert.Equal(HttpStatusCode.NotFound, (await Provision(client)).StatusCode);
         Assert.Equal(0, app.Repository.BootstrapCalls);
     }
@@ -81,7 +100,10 @@ public sealed class BootstrapApiTests
     [InlineData("admin-subject", UsersApiFactory.Email, false)]
     public async Task BootstrapRequiresMatchingVerifiedProviderIdentity(string subject, string email, bool verified)
     {
-        using var app = new UsersApiFactory(); app.Identity.Subject = subject; app.Identity.Email = email; app.Identity.Verified = verified;
+        using var app = new UsersApiFactory();
+        app.Identity.Subject = subject;
+        app.Identity.Email = email;
+        app.Identity.Verified = verified;
         using var client = app.Browser(app.Token());
         Assert.Equal(HttpStatusCode.Forbidden, (await Provision(client)).StatusCode);
         Assert.Null(app.Repository.Account);
@@ -93,7 +115,8 @@ public sealed class BootstrapApiTests
     [InlineData("{\"sub\":\"admin-subject\",\"email\":\"initial-admin@example.test\",\"email_verified\":\"true\"}")]
     public async Task MalformedProviderIdentityFailsClosed(string response)
     {
-        using var app = new UsersApiFactory(); app.Identity.RawResponse = response;
+        using var app = new UsersApiFactory();
+        app.Identity.RawResponse = response;
         using var client = app.Browser(app.Token());
         Assert.Equal(HttpStatusCode.Forbidden, (await Provision(client)).StatusCode);
         Assert.Null(app.Repository.Account);
@@ -102,7 +125,8 @@ public sealed class BootstrapApiTests
     [Fact]
     public async Task UnavailableIdentityProviderNeverCreatesAdministratorOrLeaksDiagnostics()
     {
-        using var app = new UsersApiFactory(); app.Identity.Unavailable = true;
+        using var app = new UsersApiFactory();
+        app.Identity.Unavailable = true;
         using var client = app.Browser(app.Token());
         var response = await Provision(client);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
@@ -113,24 +137,33 @@ public sealed class BootstrapApiTests
     [Fact]
     public async Task VerifiedTargetBootstrapsAndReadsRoleWithoutExposingProviderIdentifiers()
     {
-        using var app = new UsersApiFactory(); var token = app.Token(); using var client = app.Browser(token);
+        using var app = new UsersApiFactory();
+        var token = app.Token(scope: DefaultTravellerScopes());
+        using var client = app.Browser(token);
         var response = await Provision(client);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var profile = await response.Content.ReadFromJsonAsync<UserProfileResponse>();
-        Assert.Equal("administrator", profile!.Role); Assert.Equal("active", profile.Status);
+        Assert.Equal("administrator", profile!.Role);
+        Assert.Equal("active", profile.Status);
         Assert.Equal(new Uri(UsersApiFactory.Issuer + "userinfo"), app.Identity.Destination);
         Assert.Equal("Bearer " + token, app.Identity.Authorization);
         var read = await client.GetFromJsonAsync<SelfProfileResponse>("/api/v1/users/me");
-        Assert.Equal(profile.UserId, read!.PublicId); Assert.Equal(profile.Role, read.Role); Assert.Null(read.Email);
+        Assert.Equal(profile.UserId, read!.PublicId);
+        Assert.Equal(profile.Role, read.Role);
+        Assert.Null(read.Email);
         var json = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("subject", json); Assert.DoesNotContain("issuer", json); Assert.DoesNotContain(UsersApiFactory.Secret, json);
+        Assert.DoesNotContain("subject", json);
+        Assert.DoesNotContain("issuer", json);
+        Assert.DoesNotContain(UsersApiFactory.Secret, json);
         Assert.Equal(profile, await (await Provision(client)).Content.ReadFromJsonAsync<UserProfileResponse>());
     }
 
     [Fact]
     public async Task OtherIdentityCannotClaimCompletedBootstrapEvenWithTheSameVerifiedEmail()
     {
-        using var app = new UsersApiFactory(); using var first = app.Browser(app.Token()); await Provision(first);
+        using var app = new UsersApiFactory();
+        using var first = app.Browser(app.Token());
+        await Provision(first);
         app.Identity.Subject = "other-subject";
         using var other = app.Browser(app.Token(subject: "other-subject"));
         Assert.Equal(HttpStatusCode.Conflict, (await Provision(other)).StatusCode);
@@ -140,7 +173,8 @@ public sealed class BootstrapApiTests
     [Fact]
     public async Task DeactivatedAccountCannotReadItsProfile()
     {
-        using var app = new UsersApiFactory(); using var client = app.Browser(app.Token());
+        using var app = new UsersApiFactory();
+        using var client = app.Browser(app.Token());
         Assert.Equal(HttpStatusCode.OK, (await Provision(client)).StatusCode);
         app.Repository.Deactivate();
         var response = await client.GetAsync("/api/v1/users/me");
@@ -151,7 +185,8 @@ public sealed class BootstrapApiTests
     [Fact]
     public async Task BootstrapRequiresHttps()
     {
-        using var app = new UsersApiFactory(); using var client = app.Browser(app.Token(), false);
+        using var app = new UsersApiFactory();
+        using var client = app.Browser(app.Token(), false);
         Assert.Equal(HttpStatusCode.BadRequest, (await Provision(client)).StatusCode);
         Assert.Null(app.Repository.Account);
     }
@@ -159,7 +194,8 @@ public sealed class BootstrapApiTests
     [Fact]
     public async Task LiveAccessLookupRequiresSeparateServiceCredentialAndDoesNotProvisionUnknownUsers()
     {
-        using var app = new UsersApiFactory(); using var client = app.Browser(app.Token());
+        using var app = new UsersApiFactory();
+        using var client = app.Browser(app.Token());
         var request = new { issuer = UsersApiFactory.Issuer, subject = "admin-subject" };
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/users/access", request)).StatusCode);
         Assert.Equal(0, app.Repository.ReadCalls);

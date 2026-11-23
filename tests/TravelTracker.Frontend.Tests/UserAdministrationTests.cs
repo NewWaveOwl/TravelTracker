@@ -14,10 +14,11 @@ using TravelTracker.Frontend.Components.Pages;
 using TravelTracker.Frontend.Components.Shared;
 using TravelTracker.Frontend.Services;
 using TravelTracker.Frontend.Tests.Support;
+using static TravelTracker.Frontend.Tests.Support.JsonResponses;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** Fake validated identities test live Users authorization responses and UI behavior, not bearer validation. */
+/** fake validated identities test live Users authorization responses and UI behavior, not bearer validation. */
 public sealed class UserAdministrationTests : BunitContext
 {
     const string TravellerEmail = "traveller@example.test";
@@ -27,7 +28,7 @@ public sealed class UserAdministrationTests : BunitContext
     PublishingAuthentication notifier = default!;
 
     /**
-     * Connects the actual public Users client to isolated, deterministic HTTP responses.
+     * connects the actual public Users client to isolated, deterministic HTTP responses.
      * @param handler Supplies service-owned profiles, lists and role-change responses.
      * @return A revocable fake validated session for sign-out and expiry checks.
      */
@@ -38,7 +39,7 @@ public sealed class UserAdministrationTests : BunitContext
         auth.SignIn("test-token", clock.GetUtcNow().AddMinutes(10));
         notifier = new PublishingAuthentication(auth);
         var protectedClient = new ProtectedClient(notifier,
-            new ServiceDirectory(new Dictionary<string, string> { ["Users"] = "http://localhost:5106" }),
+            new ServiceDirectory(new Dictionary<string, string> { ["Users"] = "https://localhost:5101" }),
             new ServiceClient(new HttpClient(handler), NullLogger<ServiceClient>.Instance), clock, NullLogger<ProtectedClient>.Instance, sessions);
         Services.AddSingleton<TimeProvider>(clock);
         Services.AddSingleton(sessions);
@@ -48,8 +49,6 @@ public sealed class UserAdministrationTests : BunitContext
         Services.AddLogging();
         return auth;
     }
-
-    static HttpResponseMessage Json<T>(T body, HttpStatusCode status = HttpStatusCode.OK) => new(status) { Content = JsonContent.Create(body) };
 
     static HttpResponseMessage Self(UserProfile user) => Json(new { publicId = user.UserId, user.Role, user.Status });
 
@@ -121,6 +120,29 @@ public sealed class UserAdministrationTests : BunitContext
         Assert.Equal(2, listReads);
     }
 
+    [Fact]
+    public void EmptyUserListOffersARefreshButtonThatMatchesItsCopy()
+    {
+        Configure(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(Administrator) : Json(Array.Empty<UserProfile>()))));
+        var panel = Render<AdministratorPanel>();
+        panel.WaitForAssertion(() => Assert.Contains("No registered users were returned. Refresh users to try again.", panel.Markup));
+        Assert.Equal("Refresh users", panel.Find("section[aria-labelledby=all-users-heading] button").TextContent);
+    }
+
+    [Fact]
+    public void RoleChangeReasonIsAnnouncedAsRequired()
+    {
+        Configure(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(Administrator) : Json(new[] { Administrator, Traveller }))));
+        var panel = Render<AdministratorPanel>();
+        panel.WaitForAssertion(() => Assert.Equal(2, panel.FindAll("tbody tr").Count));
+        panel.Find("tbody tr:last-child button").Click();
+
+        var reason = panel.Find("#role-change-reason");
+        Assert.True(reason.HasAttribute("required"));
+        Assert.Equal("true", reason.GetAttribute("aria-required"));
+        Assert.Contains("Reason (required)", panel.Find(".admin-confirmation label").TextContent);
+    }
+
     [Theory]
     [InlineData(409)]
     [InlineData(503)]
@@ -147,7 +169,11 @@ public sealed class UserAdministrationTests : BunitContext
         var otherAdmin = Traveller with { Role = "administrator" };
         Configure(new StubHandler((request, _) =>
         {
-            if (request.Method == HttpMethod.Patch) { me = Administrator with { Role = "traveller" }; return Task.FromResult(Json(me)); }
+            if (request.Method == HttpMethod.Patch)
+            {
+                me = Administrator with { Role = "traveller" };
+                return Task.FromResult(Json(me));
+            }
             return Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(me) : Json(new[] { Administrator, otherAdmin }));
         }));
         var navigation = Render<AdminNavigation>();
@@ -226,7 +252,11 @@ public sealed class UserAdministrationTests : BunitContext
         var writes = 0;
         Configure(new StubHandler((request, _) =>
         {
-            if (request.Method == HttpMethod.Patch) { Interlocked.Increment(ref writes); return pendingChange.Task; }
+            if (request.Method == HttpMethod.Patch)
+            {
+                Interlocked.Increment(ref writes);
+                return pendingChange.Task;
+            }
             return Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/me") ? Self(Administrator) : Json(new[] { Administrator, Traveller }));
         }));
         var panel = Render<AdministratorPanel>();
@@ -242,6 +272,32 @@ public sealed class UserAdministrationTests : BunitContext
         await first;
         panel.WaitForAssertion(() => Assert.NotEmpty(panel.FindAll("[role=alert]")));
         Assert.Equal("Coverage approved", panel.Find("#role-change-reason").GetAttribute("value"));
+    }
+
+    [Fact]
+    public void RefreshFailureAfterSavedRoleChangeKeepsTheSuccessAndOffersRetry()
+    {
+        var saved = false;
+        Configure(new StubHandler((request, _) =>
+        {
+            if (request.Method == HttpMethod.Patch)
+            {
+                saved = true;
+                return Task.FromResult(Json(Traveller with { Role = "administrator" }));
+            }
+            if (!request.RequestUri!.AbsolutePath.EndsWith("/me")) return Task.FromResult(Json(new[] { Administrator, Traveller }));
+            return Task.FromResult(saved ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : Self(Administrator));
+        }));
+        var panel = Render<AdministratorPanel>();
+        panel.WaitForAssertion(() => Assert.Equal(2, panel.FindAll("tbody tr").Count));
+        panel.Find("tbody tr:last-child button").Click();
+        panel.Find("#role-change-reason").Change("Approved support coverage");
+        panel.Find(".admin-confirmation").Submit();
+        panel.WaitForAssertion(() => Assert.Contains("Role change saved. Refreshing users failed; retry.", panel.Markup));
+        Assert.Equal("Role change confirmed.", panel.Find(".admin-status").TextContent);
+        Assert.Contains("Retry account and users", panel.Find(".admin-error").TextContent);
+        Assert.Equal(2, panel.FindAll("tbody tr").Count);
+        Assert.DoesNotContain("Refreshing the registered users", panel.Markup);
     }
 
     [Fact]
@@ -261,11 +317,15 @@ public sealed class UserAdministrationTests : BunitContext
         Assert.False(Services.GetRequiredService<AdminAccessState>().IsAdministrator);
     }
 
-    /** Adds a replacement-session notification to the existing fake identity helper. */
+    /** adds a replacement-session notification to the existing fake identity helper. */
     sealed class PublishingAuthentication : AuthenticationStateProvider, IDisposable
     {
         readonly SwitchableAuthentication source;
-        public PublishingAuthentication(SwitchableAuthentication source) { this.source = source; source.AuthenticationStateChanged += Changed; }
+        public PublishingAuthentication(SwitchableAuthentication source)
+        {
+            this.source = source;
+            source.AuthenticationStateChanged += Changed;
+        }
         public override Task<AuthenticationState> GetAuthenticationStateAsync() => source.GetAuthenticationStateAsync();
         public void Publish() => NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
         void Changed(Task<AuthenticationState> state) => NotifyAuthenticationStateChanged(state);

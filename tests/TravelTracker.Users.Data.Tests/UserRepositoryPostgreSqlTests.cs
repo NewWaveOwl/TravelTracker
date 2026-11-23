@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -5,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using TravelTracker.Users.Data;
 using TravelTracker.Users.Data.Repositories.Profile;
+using TravelTracker.Users.Data.Tests.Support;
 using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Data.Tests;
@@ -21,7 +23,7 @@ public sealed partial class UserRepositoryPostgreSqlTests
         {
             var factory = CreateFactory(database.ConnectionString);
             await using var context = await factory.CreateDbContextAsync();
-            await context.GetService<IMigrator>().MigrateAsync("20261104171950_AdministratorRoleAudit");
+            await context.GetService<IMigrator>().MigrateAsync(LegacyMigration);
 
             var publicId = Guid.CreateVersion7();
             await context.Database.ExecuteSqlInterpolatedAsync(
@@ -136,11 +138,11 @@ public sealed partial class UserRepositoryPostgreSqlTests
         await MigrateAsync(factory);
         await using var context = await factory.CreateDbContextAsync();
 
-        await AssertCheckViolationAsync(InsertAccountAsync(context, 1, Guid.CreateVersion7(), "", "subject"));
-        await AssertCheckViolationAsync(InsertAccountAsync(context, 2, Guid.CreateVersion7(), "https://issuer.example/", ""));
-        await AssertCheckViolationAsync(InsertAccountAsync(context, 3, Guid.CreateVersion7(), "https://issuer.example/", "email", ""));
-        await AssertCheckViolationAsync(InsertAccountAsync(context, 4, Guid.CreateVersion7(), "https://issuer.example/", "role", role: "unsupported"));
-        await AssertCheckViolationAsync(InsertAccountAsync(context, 5, Guid.CreateVersion7(), "https://issuer.example/", "status", status: "unsupported"));
+        await AssertCheckViolationAsync("CK_UserAccounts_Identity", InsertAccountAsync(context, 1, Guid.CreateVersion7(), "", "subject"));
+        await AssertCheckViolationAsync("CK_UserAccounts_Identity", InsertAccountAsync(context, 2, Guid.CreateVersion7(), "https://issuer.example/", ""));
+        await AssertCheckViolationAsync("CK_UserAccounts_Email", InsertAccountAsync(context, 3, Guid.CreateVersion7(), "https://issuer.example/", "email", ""));
+        await AssertCheckViolationAsync("CK_UserAccounts_Role", InsertAccountAsync(context, 4, Guid.CreateVersion7(), "https://issuer.example/", "role", role: "unsupported"));
+        await AssertCheckViolationAsync("CK_UserAccounts_Status", InsertAccountAsync(context, 5, Guid.CreateVersion7(), "https://issuer.example/", "status", status: "unsupported"));
     }
 
     [Fact]
@@ -151,11 +153,17 @@ public sealed partial class UserRepositoryPostgreSqlTests
         await MigrateAsync(factory);
         var identity = new ProviderIdentity("https://issuer.example/", "first-sign-in");
 
+        // both first requests reach the provisioning lock before either takes it, so the race really happens.
+        var barrier = new AdvisoryLockBarrier(2);
+        var racingFactory = CreateFactory(database.ConnectionString, barrier);
         var accounts = await Task.WhenAll(
-            new UserRepository(factory).GetOrCreateAsync(identity, CreatedAt, CancellationToken.None),
-            new UserRepository(factory).GetOrCreateAsync(identity, CreatedAt, CancellationToken.None));
+            new UserRepository(racingFactory).GetOrCreateAsync(identity, CreatedAt, CancellationToken.None),
+            new UserRepository(racingFactory).GetOrCreateAsync(identity, CreatedAt, CancellationToken.None));
+        Assert.True(barrier.Completed, "both first requests must reach the provisioning lock together.");
 
         Assert.Equal(accounts[0].PublicId, accounts[1].PublicId);
+        await using (var check = await factory.CreateDbContextAsync())
+            Assert.Equal(1, await check.Database.SqlQueryRaw<int>("SELECT count(*)::integer AS \"Value\" FROM \"UserAccounts\"").SingleAsync());
         var persisted = await new UserRepository(factory).FindByProviderIdentityAsync(identity, CancellationToken.None);
         Assert.Equal(accounts[0], persisted);
     }
@@ -246,14 +254,16 @@ public sealed partial class UserRepositoryPostgreSqlTests
             """);
 
     /**
-     * Verifies a PostgreSQL check constraint rejects the supplied insert.
+     * Verifies the named PostgreSQL check constraint rejects the supplied insert.
+     * @param constraintName The constraint expected to reject the row.
      * @param insert The account insert operation.
-     * @return A completed task after confirming the check-violation state.
+     * @return A completed task after confirming the check-violation state and constraint name.
      */
-    static async Task AssertCheckViolationAsync(Task<int> insert)
+    static async Task AssertCheckViolationAsync(string constraintName, Task<int> insert)
     {
         var exception = await Assert.ThrowsAsync<PostgresException>(() => insert);
         Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);
+        Assert.Equal(constraintName, exception.ConstraintName);
     }
 
     static async Task<Exception?> CaptureConcurrencyAsync<T>(Func<Task<T>> operation)
@@ -266,6 +276,34 @@ public sealed partial class UserRepositoryPostgreSqlTests
         catch (DbUpdateConcurrencyException exception)
         {
             return exception;
+        }
+    }
+
+    /**
+     * Holds each provisioning transaction at its advisory lock until every participant has reached it, so the lock really contends.
+     * SaveChanges is too late for this: the lock already serializes writers before SaveChanges runs.
+     * @param participants how many transactions must reach the lock before any takes it.
+     */
+    sealed class AdvisoryLockBarrier(int participants) : DbCommandInterceptor
+    {
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int arrivals;
+
+        /** Whether every participant reached the lock together. */
+        public bool Completed => released.Task.IsCompletedSuccessfully;
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("pg_advisory_xact_lock", StringComparison.Ordinal))
+            {
+                if (Interlocked.Increment(ref arrivals) == participants) released.TrySetResult();
+                await released.Task.WaitAsync(TimeSpan.FromSeconds(15), cancellationToken);
+            }
+            return result;
         }
     }
 
@@ -296,36 +334,4 @@ public sealed partial class UserRepositoryPostgreSqlTests
         }
     }
 
-    sealed class PostgresTestDatabase : IAsyncDisposable
-    {
-        private readonly string adminConnectionString;
-        private readonly string databaseName = "traveltracker_users_test_" + Guid.NewGuid().ToString("N");
-
-        public string ConnectionString { get; }
-
-        public PostgresTestDatabase()
-        {
-            adminConnectionString = Environment.GetEnvironmentVariable("TRAVELTRACKER_TEST_POSTGRES") ??
-                throw new InvalidOperationException("PostgreSQL data tests require TRAVELTRACKER_TEST_POSTGRES with CREATEDB permission.");
-
-            using var admin = new NpgsqlConnection(adminConnectionString);
-            admin.Open();
-            using var create = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", admin);
-            create.ExecuteNonQuery();
-            ConnectionString = new NpgsqlConnectionStringBuilder(adminConnectionString)
-            {
-                Database = databaseName,
-                Pooling = false,
-            }.ConnectionString;
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            using var admin = new NpgsqlConnection(adminConnectionString);
-            admin.Open();
-            using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)", admin);
-            drop.ExecuteNonQuery();
-            return ValueTask.CompletedTask;
-        }
-    }
 }

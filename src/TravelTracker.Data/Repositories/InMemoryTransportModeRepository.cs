@@ -14,9 +14,10 @@ public sealed class InMemoryTransportModeRepository : ITransportModeRepository
 
     /**
      * Reads the catalogue through the existing repository contract.
-     * @return A task containing copies of all stored entities.
+     * @return A task containing copies of all stored entities, ordered by public identifier.
      */
-    public Task<List<TransportMode>> GetAllAsync() => Task.FromResult(records.Values.Select(Copy).ToList());
+    public Task<List<TransportMode>> GetAllAsync() => Task.FromResult(
+        records.Values.OrderBy(record => record.TransportModeId.PublicId).Select(Copy).ToList());
 
     /**
      * Reads one entity without exposing the stored mutable instance.
@@ -30,22 +31,29 @@ public sealed class InMemoryTransportModeRepository : ITransportModeRepository
      * Stores a new entity for subsequent requests.
      * @param transportMode Entity created by the service.
      * @return A completed task after storing a copy.
+     * @throws InvalidOperationException when an entity with the same identifier is already stored.
      */
     public Task AddAsync(TransportMode transportMode)
     {
-        records[transportMode.TransportModeId.PublicId] = Copy(transportMode);
+        if (!records.TryAdd(transportMode.TransportModeId.PublicId, Copy(transportMode)))
+            throw new InvalidOperationException("A transport mode with this identifier already exists.");
         return Task.CompletedTask;
     }
 
     /**
      * Replaces an existing entity through the preserved contract.
      * @param transportMode New entity values with the existing identifier.
-     * @return A completed task after attempting replacement; no HTTP update endpoint is exposed.
+     * @return A completed task after replacement; no HTTP update endpoint is exposed.
+     * @throws KeyNotFoundException when no entity has the identifier.
+     * @throws InvalidOperationException when a concurrent change wins the replacement.
      */
     public Task UpdateAsync(TransportMode transportMode)
     {
-        if (records.TryGetValue(transportMode.TransportModeId.PublicId, out var previous))
-            records.TryUpdate(transportMode.TransportModeId.PublicId, Copy(transportMode), previous);
+        var publicId = transportMode.TransportModeId.PublicId;
+        if (!records.TryGetValue(publicId, out var previous))
+            throw new KeyNotFoundException("No transport mode has this identifier.");
+        if (!records.TryUpdate(publicId, Copy(transportMode), previous))
+            throw new InvalidOperationException("The transport mode changed while it was being replaced.");
         return Task.CompletedTask;
     }
 
@@ -63,5 +71,11 @@ public sealed class InMemoryTransportModeRepository : ITransportModeRepository
      * @param record Entity to copy.
      * @return An independent entity with the same fields.
      */
-    private static TransportMode Copy(TransportMode record) => new() { TransportModeId = record.TransportModeId, Code = record.Code, DisplayName = record.DisplayName, Description = record.Description };
+    private static TransportMode Copy(TransportMode record) => new()
+    {
+        TransportModeId = record.TransportModeId,
+        Code = record.Code,
+        DisplayName = record.DisplayName,
+        Description = record.Description
+    };
 }

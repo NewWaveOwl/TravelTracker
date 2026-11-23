@@ -264,6 +264,10 @@ public sealed class TripCreationTests
 
     [Theory]
     [InlineData("ownerSubject")]
+    [InlineData("ownerIssuer")]
+    [InlineData("subject")]
+    [InlineData("role")]
+    [InlineData("status")]
     [InlineData("tripId")]
     public async Task Create_ServerOwnedOrUnknownField_Returns400(string field)
     {
@@ -277,6 +281,7 @@ public sealed class TripCreationTests
         using var response = await client.PostAsJsonAsync("/api/v1/trips", body);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(factory.Upstream.Calls);
         Assert.Equal(0, factory.Repository.Count);
     }
 
@@ -291,6 +296,7 @@ public sealed class TripCreationTests
         using var response = await client.PostAsJsonAsync("/api/v1/trips", body);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, factory.Repository.Count);
     }
 
     [Fact]

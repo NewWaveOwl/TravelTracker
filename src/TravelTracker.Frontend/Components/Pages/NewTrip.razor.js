@@ -1,6 +1,7 @@
 export function watchUndo(planner) {
     const events = new AbortController();
     document.addEventListener("keydown", event => {
+        if (!planner.isConnected) return;
         if (event.defaultPrevented || event.isComposing || event.repeat || event.altKey || event.shiftKey ||
             !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") return;
 
@@ -30,7 +31,7 @@ export function watchSave(planner) {
             !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s" || !planner.isConnected) return;
 
         const target = event.target;
-        if (target instanceof Element && (target.closest("[role=dialog], [role=alertdialog]") ||
+        if (target instanceof Element && (target.closest("[role=dialog], [role=alertdialog], dialog") ||
             !planner.contains(target) && target !== document.body && target !== document.documentElement)) return;
 
         const button = planner.querySelector("[data-trip-save]");

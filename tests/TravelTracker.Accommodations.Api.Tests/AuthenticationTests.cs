@@ -11,26 +11,26 @@ namespace TravelTracker.Accommodations.Api.Tests;
 public sealed class AuthenticationTests
 {
     [Theory]
-    [InlineData(null, 401)]
-    [InlineData("", 403)]
-    [InlineData("catalogue.write", 403)]
-    [InlineData("catalogue.read", 200)]
-    public async Task Collection_RequiresCatalogueReadScope(string? scopes, int status)
+    [InlineData(null, HttpStatusCode.Unauthorized)]
+    [InlineData("", HttpStatusCode.Forbidden)]
+    [InlineData("catalogue.write", HttpStatusCode.Forbidden)]
+    [InlineData("catalogue.read", HttpStatusCode.OK)]
+    public async Task Collection_RequiresCatalogueReadScope(string? scopes, HttpStatusCode status)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClientFor("alice", scopes);
 
         using var response = await client.GetAsync("/api/v1/accommodations");
 
-        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal(status, response.StatusCode);
     }
 
     [Theory]
-    [InlineData(null, 401)]
-    [InlineData("", 403)]
-    [InlineData("catalogue.read", 403)]
-    [InlineData("catalogue.write", 201)]
-    public async Task Create_RequiresCatalogueWriteScope(string? scopes, int status)
+    [InlineData(null, HttpStatusCode.Unauthorized)]
+    [InlineData("", HttpStatusCode.Forbidden)]
+    [InlineData("catalogue.read", HttpStatusCode.Forbidden)]
+    [InlineData("catalogue.write", HttpStatusCode.Created)]
+    public async Task Create_RequiresCatalogueWriteScope(string? scopes, HttpStatusCode status)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClientFor("alice", scopes);
@@ -42,23 +42,23 @@ public sealed class AuthenticationTests
             lon = -73m
         });
 
-        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal(status, response.StatusCode);
     }
 
     [Theory]
-    [InlineData(null, 401)]
-    [InlineData("", 403)]
-    [InlineData("catalogue.write", 403)]
-    [InlineData("catalogue.read", 200)]
-    public async Task Detail_RequiresCatalogueReadScope(string? scopes, int status)
+    [InlineData(null, HttpStatusCode.Unauthorized)]
+    [InlineData("", HttpStatusCode.Forbidden)]
+    [InlineData("catalogue.write", HttpStatusCode.Forbidden)]
+    [InlineData("catalogue.read", HttpStatusCode.OK)]
+    public async Task Detail_RequiresCatalogueReadScope(string? scopes, HttpStatusCode status)
     {
         using var factory = new ApiFactory();
-        var id = await AccommodationTestData.SeedAsync(factory, "Visible to Alice", "alice", shared: false);
+        var id = await AccommodationTestData.SeedAsync(factory, Guid.Parse("00000000-0000-0000-0000-000000000914"), "Visible to Alice", "alice", shared: false);
         using var client = factory.CreateClientFor("alice", scopes);
 
         using var response = await client.GetAsync($"/api/v1/accommodations/{id:D}");
 
-        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal(status, response.StatusCode);
     }
 
     [Theory]
@@ -69,15 +69,26 @@ public sealed class AuthenticationTests
     [InlineData("missing-sub")]
     [InlineData("empty-sub")]
     [InlineData("unsigned")]
+    [InlineData("missing")]
+    [InlineData("malformed")]
+    [InlineData("no-expiry")]
+    [InlineData("future")]
     public async Task ProtectedCollection_RejectsInvalidBearerTokens(string failure)
     {
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(failure: failure));
+        var token = failure == "missing" ? null : factory.CreateToken(failure: failure);
+        client.DefaultRequestHeaders.Authorization = token is null ? null : new("Bearer", token);
 
         using var response = await client.GetAsync("/api/v1/accommodations");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Contains(response.Headers.WwwAuthenticate, header => header.Scheme == "Bearer");
+        if (token is not null)
+        {
+            Assert.DoesNotContain(token, await response.Content.ReadAsStringAsync());
+            Assert.DoesNotContain(token, string.Join(" ", response.Headers.WwwAuthenticate));
+        }
         Assert.Equal(0, factory.Users!.Calls);
     }
 
@@ -98,7 +109,7 @@ public sealed class AuthenticationTests
     [Fact]
     public async Task Development_ShippedConfigurationStartsWithPublicHealthAndProtectedCollection()
     {
-        // No ApiFactory overrides: load the repository's shipped Development settings, no other services running.
+        // no ApiFactory overrides: load the repository's shipped Development settings, no other services running.
         using var factory = new WebApplicationFactory<AccommodationsProgram>().WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
         using var client = factory.CreateClient();
 

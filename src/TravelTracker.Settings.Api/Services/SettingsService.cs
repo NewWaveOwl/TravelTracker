@@ -17,7 +17,7 @@ public sealed class SettingsService(ISettingsRepository repository, CallerContex
      * reads the caller's saved preferences, falling back to defaults without writing anything.
      * @param cancellationToken cancels database I/O.
      * @return the caller's current preferences.
-     * @throws UnauthorizedAccessException when no validated identity reached the service.
+     * @throws UnauthorizedAccessException when no validated identity reached the service; the host maps it to 401.
      */
     public async Task<UserSettings> GetAsync(CancellationToken cancellationToken = default)
     {
@@ -28,28 +28,35 @@ public sealed class SettingsService(ISettingsRepository repository, CallerContex
     /**
      * validates the candidate first, then replaces the caller's row only if its revision still equals the expected one.
      * @param candidate the complete submitted values.
-     * @param expectedRevision the revision the caller read, taken from If-Match.
+     * @param expectedRevision the revision the caller read, taken from If-Match; null when the header is malformed and so matches nothing.
      * @param cancellationToken cancels database I/O.
      * @return the saved values, field errors, or a stale marker.
      * @throws UnauthorizedAccessException when no validated identity reached the service.
      */
-    public async Task<SettingsReplaceResult> ReplaceAsync(UserSettings candidate, long expectedRevision, CancellationToken cancellationToken = default)
+    public async Task<SettingsReplaceResult> ReplaceAsync(UserSettings candidate, long? expectedRevision, CancellationToken cancellationToken = default)
     {
         RequireIdentity();
         var errors = candidate.Validate();
-        if (errors.Count != 0) return new(null, errors);
-        var saved = await repository.ReplaceIfRevisionAsync(caller.Issuer, caller.Subject, candidate, expectedRevision, cancellationToken);
+        if (errors.Count != 0)
+        {
+            logger.LogInformation("Settings replace rejected: {ErrorCount} field(s) failed validation.", errors.Count);
+            return new(null, errors);
+        }
+        var saved = expectedRevision is { } revision
+            ? await repository.ReplaceIfRevisionAsync(caller.Issuer, caller.Subject, candidate, revision, cancellationToken)
+            : null;
         if (saved is null)
         {
             logger.LogWarning("Settings replace refused: the If-Match revision is stale or does not match the stored settings.");
             return new(null, null, Stale: true);
         }
+        logger.LogInformation("Settings saved at revision {Revision}.", saved.Revision);
         return new(saved, null);
     }
 
     /**
      * refuses work for requests without a validated issuer and subject.
-     * @throws UnauthorizedAccessException when either claim is missing.
+     * @throws UnauthorizedAccessException when either claim is missing; the host maps it to 401.
      */
     private void RequireIdentity()
     {

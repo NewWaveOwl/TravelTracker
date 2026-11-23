@@ -9,6 +9,31 @@ namespace TravelTracker.Frontend.Api;
  */
 public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string> urls)
 {
+    /**
+     * Refuses credential-bearing service URLs and requires all HTTPS destinations in Production.
+     * @param services The configured service origins.
+     * @param production Whether Production settings are required.
+     */
+    public static void Validate(IReadOnlyDictionary<string, string> services, bool production)
+    {
+        string[] required = ["Accommodations", "Attractions", "Settings", "Transport", "Trips", "Users"];
+        if (services.Keys.Any(service => !required.Contains(service, StringComparer.Ordinal)))
+            throw new InvalidOperationException("Services contains an unsupported service name.");
+        foreach (var service in required)
+        {
+            if (!services.TryGetValue(service, out var address))
+            {
+                if (production) throw new InvalidOperationException($"Services:{service} is required in Production.");
+                continue;
+            }
+            if (!Uri.TryCreate(address, UriKind.Absolute, out var uri) || uri.UserInfo.Length != 0 ||
+                uri.Query.Length != 0 || uri.Fragment.Length != 0 ||
+                (uri.Scheme != Uri.UriSchemeHttps && (production || uri.Scheme != Uri.UriSchemeHttp || !uri.IsLoopback)))
+                throw new InvalidOperationException($"Services:{service} must be a credential-free HTTPS URL (loopback HTTP is allowed outside Production).");
+        }
+    }
+
+    /** @return The configured service names. */
     public IEnumerable<string> Names => urls.Keys;
 
     /**
@@ -49,8 +74,8 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
     private static partial Regex NameQuery();
 
     static bool AllowedQuery(string service, string path, string query) =>
-        (service == "Attractions" && path == "/api/v1/attractions" || service == "Accommodations" && path == "/api/v1/accommodations") && NameQuery().IsMatch(query) ||
-        service == "Transport" && (path == "/api/v1/transport-modes" && TransportQuery().IsMatch(query) || path == "/api/v1/route-points" && PointQuery().IsMatch(query));
+        (((service == "Attractions" && path == "/api/v1/attractions") || (service == "Accommodations" && path == "/api/v1/accommodations")) && NameQuery().IsMatch(query)) ||
+        (service == "Transport" && ((path == "/api/v1/transport-modes" && TransportQuery().IsMatch(query)) || (path == "/api/v1/route-points" && PointQuery().IsMatch(query))));
 
     [GeneratedRegex("^name=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})*&code=(?:car|bus|train|pedestrian|bike|plane)?$")]
     private static partial Regex TransportQuery();

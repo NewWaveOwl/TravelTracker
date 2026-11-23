@@ -39,7 +39,7 @@ public sealed class TicketDocumentProxyTests
         });
         using var host = fixture.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             services.AddHttpClient<ServiceClient>().ConfigurePrimaryHttpMessageHandler(() => handler)));
-        using var browser = host.CreateDefaultClient(new CookieJarHandler());
+        using var browser = host.CreateDefaultClient(new CookieJarHandler(fixture.Clock));
         await fixture.StartSignInAsync(browser);
         var signedIn = await fixture.CompleteSignInAsync(browser);
         Assert.Equal(HttpStatusCode.Redirect, signedIn.StatusCode);
@@ -66,7 +66,7 @@ public sealed class TicketDocumentProxyTests
         using var handler = StubHandler.Status(status, "PRIVATE PDF CONTENT AND DIAGNOSTICS");
         using var host = fixture.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             services.AddHttpClient<ServiceClient>().ConfigurePrimaryHttpMessageHandler(() => handler)));
-        using var browser = host.CreateDefaultClient(new CookieJarHandler());
+        using var browser = host.CreateDefaultClient(new CookieJarHandler(fixture.Clock));
         await fixture.StartSignInAsync(browser);
         await fixture.CompleteSignInAsync(browser);
 

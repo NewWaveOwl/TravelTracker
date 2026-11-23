@@ -9,6 +9,7 @@ public static class LoginFailure
     public const string ConsentRequired = "consent-required";
     public const string Canceled = "canceled";
     public const string StartFailed = "start-failed";
+    public const string IncompleteSignIn = "incomplete-sign-in";
 
     /**
      * Picks the failure code for a callback error.
@@ -43,6 +44,7 @@ public static class LoginFailure
         NotConfigured => "The sign-in service is not fully configured. Ask the administrator to check the API settings, then try again.",
         LoginRequired => "Your sign-in session has ended. Sign in again to continue.",
         StartFailed => "Unable to start sign-in. Please try again.",
+        IncompleteSignIn => "The sign-in service returned an incomplete response. Please try again.",
         ConsentRequired => "Permission is needed to continue. Sign in again and review the access request.",
         _ => "Sign-in was canceled or could not be completed. You can try again.",
     };

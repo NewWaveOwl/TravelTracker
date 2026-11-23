@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Net.Http.Headers;
 
 namespace TravelTracker.Transport.Api.Tests;
 
@@ -9,6 +10,96 @@ namespace TravelTracker.Transport.Api.Tests;
  */
 public sealed class RoutePointTests
 {
+    [Fact]
+    public async Task ActiveTravellerCanReadRoutePoints()
+    {
+        using var factory = new ApiFactory { SeedExamples = false };
+        factory.Users.Role = "traveller";
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/route-points");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, factory.Users.Calls);
+    }
+
+    [Theory]
+    [InlineData("banned", false)]
+    [InlineData("deactivated", false)]
+    [InlineData("active", true)]
+    public async Task NonActiveOrUnknownAccountCannotReadRoutePoints(string status, bool unknownIdentity)
+    {
+        using var factory = new ApiFactory { SeedExamples = false };
+        factory.Users.Status = status;
+        factory.Users.UnknownIdentity = unknownIdentity;
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/route-points");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("active", "administrator", false, HttpStatusCode.Created)]
+    [InlineData("active", "traveller", false, HttpStatusCode.Forbidden)]
+    [InlineData("banned", "administrator", false, HttpStatusCode.Forbidden)]
+    [InlineData("deactivated", "administrator", false, HttpStatusCode.Forbidden)]
+    [InlineData("active", "administrator", true, HttpStatusCode.Forbidden)]
+    public async Task CreatePointRequiresActiveAdministratorFromUsersNotToken(string status, string liveRole,
+        bool unknownIdentity, HttpStatusCode expectedStatus)
+    {
+        using var factory = new ApiFactory { SeedExamples = false };
+        factory.Users.Status = status;
+        factory.Users.Role = liveRole;
+        factory.Users.UnknownIdentity = unknownIdentity;
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
+            factory.CreateToken("catalogue.write", role: "administrator"));
+
+        using var response = await client.PostAsJsonAsync("/api/v1/route-points",
+            new { type = "transport_stop", name = "Policy Test Stop", lat = 45m, lon = -73m });
+
+        Assert.Equal(expectedStatus, response.StatusCode);
+        if (expectedStatus == HttpStatusCode.Created)
+        {
+            using var saved = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(saved.RootElement.TryGetProperty("role", out _));
+            Assert.False(saved.RootElement.TryGetProperty("status", out _));
+            Assert.False(saved.RootElement.TryGetProperty("ownerSubject", out _));
+            Assert.All(factory.Users.BearerTokens, token => Assert.Equal(ApiFactory.UsersServiceToken, token));
+        }
+        else
+        {
+            factory.Users.Status = "active";
+            factory.Users.Role = "traveller";
+            factory.Users.UnknownIdentity = false;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
+                factory.CreateToken("catalogue.read", role: "administrator"));
+            var points = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/route-points");
+            Assert.Empty(points!);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreatePointUsersFailureFailsClosedAndPersistsNothing(bool invalidResponse)
+    {
+        using var factory = new ApiFactory { SeedExamples = false };
+        factory.Users.Unavailable = !invalidResponse;
+        factory.Users.InvalidResponse = invalidResponse;
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/api/v1/route-points",
+            new { type = "transport_stop", name = "Must Not Persist", lat = 45m, lon = -73m });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        factory.Users.Unavailable = false;
+        factory.Users.InvalidResponse = false;
+        var points = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/route-points");
+        Assert.Empty(points!);
+    }
+
     /**
      * Creates each supported route-point type and reads its Location.
      * @param type One of the three permitted point roles.
@@ -32,6 +123,20 @@ public sealed class RoutePointTests
         Assert.Equal(sourceId, saved.GetProperty("sourceId").GetGuid());
         Assert.Equal(-90m, saved.GetProperty("lat").GetDecimal());
         Assert.Equal(180m, saved.GetProperty("lon").GetDecimal());
+    }
+
+    /**
+     * Rejects a create body that carries a field the contract does not define, before anything is stored.
+     * @return Completion after checking the rejection.
+     */
+    [Fact]
+    public async Task CreatePoint_UnknownFieldReturns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/route-points",
+            new { type = "attraction", name = "Example Point", lat = 1m, lon = 1m, status = "active" });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     /**
@@ -73,7 +178,7 @@ public sealed class RoutePointTests
         using var client = factory.CreateClient();
         using var response = await client.PostAsJsonAsync("/api/v1/route-points",
             new { type = "restaurant", name = "Example", lat = 45m, lon = -73m });
-        await HttpTestSupport.AssertValidationAsync(response);
+        await HttpTestSupport.AssertValidationAsync(response, "type");
     }
 
     /**
@@ -87,6 +192,34 @@ public sealed class RoutePointTests
         using var client = factory.CreateClient();
         using var response = await client.PostAsJsonAsync("/api/v1/route-points",
             new { type = "transport_stop", name = "Example", lat = 90.1m, lon = -73m });
-        await HttpTestSupport.AssertValidationAsync(response);
+        await HttpTestSupport.AssertValidationAsync(response, "lat");
+    }
+
+    /**
+     * Rejects longitude outside the permitted coordinate range.
+     * @return Completion after checking validation.
+     */
+    [Fact]
+    public async Task CreatePoint_InvalidLongitudeReturns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/route-points",
+            new { type = "transport_stop", name = "Example", lat = 45m, lon = 180.1m });
+        await HttpTestSupport.AssertValidationAsync(response, "lon");
+    }
+
+    /**
+     * Rejects a whitespace-only point name.
+     * @return Completion after checking validation.
+     */
+    [Fact]
+    public async Task CreatePoint_BlankNameReturns400()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.PostAsJsonAsync("/api/v1/route-points",
+            new { type = "transport_stop", name = "   ", lat = 45m, lon = -73m });
+        await HttpTestSupport.AssertValidationAsync(response, "name");
     }
 }

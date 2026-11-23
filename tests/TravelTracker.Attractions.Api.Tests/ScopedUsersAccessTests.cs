@@ -10,11 +10,15 @@ namespace TravelTracker.Attractions.Api.Tests;
 public sealed class ScopedUsersAccessTests
 {
     [Theory]
-    [InlineData("active")]
-    [InlineData("missing")]
-    [InlineData("mismatched")]
-    [InlineData("unavailable")]
-    public async Task ResolvesValidatedIdentityAndRequiresMatchingLiveStanding(string scenario)
+    [InlineData("active", "active", "traveller", 2)]
+    [InlineData("missing", "deactivated", "traveller", 1)]
+    [InlineData("mismatched", null, null, 2)]
+    [InlineData("unavailable", null, null, 2)]
+    public async Task ResolvesValidatedIdentityAndRequiresMatchingLiveStanding(
+        string scenario,
+        string? expectedStatus,
+        string? expectedRole,
+        int expectedCalls)
     {
         using var handler = new UsersHandler(scenario);
         using var http = new HttpClient(handler);
@@ -27,10 +31,9 @@ public sealed class ScopedUsersAccessTests
 
         var result = await client.ResolveAsync("https://issuer.example.test", "validated-subject", CancellationToken.None);
 
-        if (scenario == "active") Assert.Equal(new UserAccessRecord("active", "traveller"), result);
-        else if (scenario == "missing") Assert.Equal("deactivated", result?.Status);
-        else Assert.Null(result);
-        Assert.Equal(scenario == "missing" ? 1 : 2, handler.CallCount);
+        Assert.Equal(expectedStatus, result?.Status);
+        Assert.Equal(expectedRole, result?.Role);
+        Assert.Equal(expectedCalls, handler.CallCount);
     }
 
     private sealed class UsersHandler(string scenario) : HttpMessageHandler

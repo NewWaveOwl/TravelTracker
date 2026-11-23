@@ -2,11 +2,7 @@ using Npgsql;
 
 namespace TravelTracker.Transport.Api.Tests;
 
-/**
-
- * Owns one disposable PostgreSQL database; never connects to a production database by default.
-
- */
+/** Owns one disposable PostgreSQL database; never connects to a production database by default. */
 internal sealed class PostgresTestDatabase : IDisposable
 {
     private readonly string adminConnection;
@@ -14,11 +10,7 @@ internal sealed class PostgresTestDatabase : IDisposable
     private int disposed;
     internal string ConnectionString { get; }
 
-    /**
-
-     * Creates an isolated database using an explicitly configured local/test PostgreSQL role.
-
-     */
+    /** Creates an isolated database using an explicitly configured local/test PostgreSQL role. */
     public PostgresTestDatabase()
     {
         adminConnection = Environment.GetEnvironmentVariable("TRAVELTRACKER_TEST_POSTGRES") ??
@@ -31,11 +23,7 @@ internal sealed class PostgresTestDatabase : IDisposable
         ConnectionString = settings.ConnectionString;
     }
 
-    /**
-
-     * Drops only this randomly named test database after its host has stopped.
-
-     */
+    /** Drops only this randomly named test database after its host has stopped. */
     public void Dispose()
     {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;

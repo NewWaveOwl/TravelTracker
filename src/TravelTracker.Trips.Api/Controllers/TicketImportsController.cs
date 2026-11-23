@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Cryptography;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 using TravelTracker.Api.Trips;
 using TravelTracker.Trips.Api.Contracts;
 using TravelTracker.Trips.Api.TicketImports;

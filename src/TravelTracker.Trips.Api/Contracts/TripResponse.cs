@@ -1,7 +1,7 @@
 namespace TravelTracker.Trips.Api.Contracts;
 
 /**
- * Public representation of one saved trip. Owner identity and storage keys are never included.
+ * public representation of one saved trip. Owner identity and storage keys are never included.
  *
  * @param TripId Public trip identifier.
  * @param Name Trip name.

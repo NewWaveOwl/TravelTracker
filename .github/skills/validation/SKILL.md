@@ -47,7 +47,7 @@ If the contract, capabilities or limitations changed, `docs/api.md`, `docs/domai
 
 ## 4. Behavior check (when the change is user-visible)
 
-Run the affected service and any client that calls it (for the API: `dotnet run --project src/TravelTracker.Api --launch-profile http`, Swagger at `http://localhost:5104/swagger`) and exercise the changed endpoint, including one failure case. Passing tests is not the same as a working endpoint; say which you verified.
+Run the affected service and any client that calls it (for the API: `dotnet run --project src/TravelTracker.Attractions.Api --launch-profile http`, Swagger at `http://localhost:5104/swagger`) and exercise the changed endpoint, including one failure case. Passing tests is not the same as a working endpoint; say which you verified.
 
 ## 5. CI and delivery, when requested
 

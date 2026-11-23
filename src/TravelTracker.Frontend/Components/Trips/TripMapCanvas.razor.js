@@ -9,6 +9,11 @@ const mapLibreIntegrity = {
     "maplibre-gl-worker.mjs": "sha256-c9egJKTv4aRuSdsZPhjP4zJx4+zGUux1QsKBpO9fDwQ="
 };
 
+/** builds a rejection handler that writes a failed fire-and-forget call to the browser console; the .NET log does not receive it. */
+function reportFailure(operation) {
+    return error => console.error(`TripMapCanvas: ${operation} call failed`, error);
+}
+
 async function fetchVerifiedModule(name) {
     const response = await fetch(mapLibreDist + name, { integrity: mapLibreIntegrity[name], credentials: "omit" });
     if (!response.ok) throw new Error(`MapLibre asset unavailable: ${name}`);
@@ -68,7 +73,7 @@ function attachBasemap(container, planner, initialCamera) {
     }
 
     function notify(ready) {
-        planner.invokeMethodAsync("SetBasemapReady", ready).catch(() => {});
+        planner.invokeMethodAsync("SetBasemapReady", ready).catch(reportFailure("basemap state update"));
     }
 
     async function load() {
@@ -94,7 +99,9 @@ function attachBasemap(container, planner, initialCamera) {
                 center: [longitude, latitude],
                 zoom,
                 interactive: false,
-                trackResize: false
+                trackResize: false,
+                // The C# camera owns bounds; a second clamp would misalign tiles and stop markers near tile edges.
+                transformConstrain: (center, zoom) => ({ center, zoom })
             });
             const canvas = basemap.getCanvas();
             canvas.tabIndex = -1;
@@ -104,7 +111,8 @@ function attachBasemap(container, planner, initialCamera) {
                 clearTimeout(timeout);
                 notify(true);
             });
-        } catch {
+        } catch (error) {
+            console.error("TripMapCanvas: basemap failed to load", error);
             fail();
         }
     }
@@ -135,7 +143,7 @@ export function watchViewport(svg, container, map, camera) {
     const observer = new ResizeObserver(([entry]) => {
         basemap.resize();
         const { width, height } = entry.contentRect;
-        map.invokeMethodAsync("ResizeViewport", Math.round(width), Math.round(height)).catch(() => {});
+        map.invokeMethodAsync("ResizeViewport", Math.round(width), Math.round(height)).catch(reportFailure("viewport resize"));
     });
     observer.observe(svg);
     const events = new AbortController();
@@ -158,7 +166,8 @@ export function watchViewport(svg, container, map, camera) {
                 offsetX = offsetY = 0;
                 await map.invokeMethodAsync("PanByDrag", x, y);
             }
-        } catch {
+        } catch (error) {
+            console.error("TripMapCanvas: pan update failed", error);
             offsetX = offsetY = 0;
         } finally {
             sending = false;
@@ -173,7 +182,7 @@ export function watchViewport(svg, container, map, camera) {
         event.preventDefault();
         if (pointer?.dragging) return;
 
-        // Collect small trackpad deltas and treat line/page wheel events as a step.
+        // collect small trackpad deltas and treat line/page wheel events as a step.
         const delta = mode === 0 ? deltaY : Math.sign(deltaY) * 60;
         if (event.timeStamp - lastWheelTime > 250 || Math.sign(delta) !== Math.sign(wheelDelta))
             wheelDelta = 0;
@@ -183,7 +192,7 @@ export function watchViewport(svg, container, map, camera) {
 
         wheelDelta = 0;
         const [x, y] = viewBoxPoint(svg, event.clientX, event.clientY);
-        map.invokeMethodAsync("ZoomAtPointer", -Math.sign(delta), x, y).catch(() => {});
+        map.invokeMethodAsync("ZoomAtPointer", -Math.sign(delta), x, y).catch(reportFailure("zoom"));
     }, { ...options, passive: false });
 
     svg.addEventListener("pointerdown", event => {
@@ -240,7 +249,7 @@ export function watchViewport(svg, container, map, camera) {
         if (event.type !== "pointerup") return;
         const [x, y] = viewBoxPoint(svg, event.clientX, event.clientY);
         const [startX, startY] = viewBoxPoint(svg, drag.x, drag.y);
-        map.invokeMethodAsync("MoveMarker", Number(drag.marker.dataset.moveIndex), x - startX, y - startY).catch(() => {});
+        map.invokeMethodAsync("MoveMarker", Number(drag.marker.dataset.moveIndex), x - startX, y - startY).catch(reportFailure("marker move"));
     }
 
     svg.addEventListener("pointerup", endDrag, options);
@@ -256,6 +265,9 @@ export function watchViewport(svg, container, map, camera) {
     }, { ...options, capture: true });
     svg.addEventListener("keydown", event => {
         if (event.target === svg && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key))
+            event.preventDefault();
+        // SVG buttons activate in Blazor; Space must not also scroll the page.
+        if (event.key === " " && event.target.closest(".trip-marker, .marker-remove"))
             event.preventDefault();
     }, options);
 
@@ -279,7 +291,7 @@ export function watchViewport(svg, container, map, camera) {
         if (!svg.dataset.markerDrop || !type) return;
         event.preventDefault();
         const [x, y] = viewBoxPoint(svg, event.clientX, event.clientY);
-        map.invokeMethodAsync("DropMarker", type, x, y).catch(() => {});
+        map.invokeMethodAsync("DropMarker", type, x, y).catch(reportFailure("marker drop"));
     }, options);
 
     return {

@@ -9,6 +9,7 @@ namespace TravelTracker.Users.Tests.Support;
 public sealed class MemoryUserRepository : IUserRepository, ProfileRepository
 {
     readonly Dictionary<Guid, UserAccount> accounts = [];
+    readonly Dictionary<Guid, byte[]> pictures = [];
     Guid? bootstrapAccount;
     public UserAccount? Account => bootstrapAccount is { } id ? accounts.GetValueOrDefault(id) : accounts.Values.FirstOrDefault();
     public int BootstrapCalls { get; private set; }
@@ -29,16 +30,7 @@ public sealed class MemoryUserRepository : IUserRepository, ProfileRepository
     public Task<UserAccount?> FindAsync(string issuer, string subject, CancellationToken cancellationToken)
     {
         ReadCalls++;
-        return Task.FromResult(accounts.Values.SingleOrDefault(a => a.ProviderIdentity == new ProviderIdentity(issuer, subject)));
-    }
-
-    public async Task<UserAccount> GetOrCreateTravellerAsync(string issuer, string subject, string email, CancellationToken cancellationToken)
-    {
-        var existing = await FindAsync(issuer, subject, cancellationToken);
-        if (existing is not null) return existing;
-        var account = UserAccount.CreateTraveller(new ProviderIdentity(issuer, subject), DateTimeOffset.Parse("2026-11-04T12:00:00Z")) with { VerifiedEmail = email };
-        accounts[account.PublicId] = account;
-        return account;
+        return Task.FromResult(accounts.Values.SingleOrDefault(account => account.ProviderIdentity == new ProviderIdentity(issuer, subject)));
     }
 
     public async Task<UserAccount?> BootstrapAsync(string issuer, string subject, string email, CancellationToken cancellationToken)
@@ -46,7 +38,7 @@ public sealed class MemoryUserRepository : IUserRepository, ProfileRepository
         BootstrapCalls++;
         var existing = await FindAsync(issuer, subject, cancellationToken);
         if (bootstrapAccount is { } id) return existing?.PublicId == id ? existing : null;
-        if (accounts.Values.Any(a => a.Role == UserRole.Administrator) || existing?.Status is UserStatus.Banned or UserStatus.Deactivated) return null;
+        if (accounts.Values.Any(account => account.Role == UserRole.Administrator) || existing?.Status is UserStatus.Banned or UserStatus.Deactivated) return null;
         var account = existing is null
             ? UserAccount.CreateAdministrator(new ProviderIdentity(issuer, subject), DateTimeOffset.Parse("2026-11-04T12:00:00Z"))
             : existing with { Role = UserRole.Administrator };
@@ -73,6 +65,21 @@ public sealed class MemoryUserRepository : IUserRepository, ProfileRepository
     {
         if (StorageUnavailable) throw new InvalidOperationException("test-storage-details");
         return FindAsync(identity.Issuer, identity.Subject, cancellationToken);
+    }
+
+    public async Task<(bool CanRead, byte[]? Picture)> ReadPictureAsync(ProviderIdentity identity, CancellationToken cancellationToken)
+    {
+        var account = await FindByProviderIdentityAsync(identity, cancellationToken);
+        if (account?.Status == UserStatus.Deactivated) return (false, null);
+        return (true, account is null ? null : pictures.GetValueOrDefault(account.PublicId));
+    }
+
+    public async Task<bool> ReplacePictureAsync(ProviderIdentity identity, byte[] picture, CancellationToken cancellationToken)
+    {
+        var account = await FindByProviderIdentityAsync(identity, cancellationToken);
+        if (account?.Status != UserStatus.Active) return false;
+        pictures[account.PublicId] = picture;
+        return true;
     }
 
     public Task<UserAccount?> FindByPublicIdAsync(Guid publicId, CancellationToken cancellationToken)

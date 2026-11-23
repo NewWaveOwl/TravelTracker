@@ -5,13 +5,36 @@ using TravelTracker.Frontend.Components.Trips;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** Exercises map picks and marker selections through rendered Blazor controls. */
+/** exercises map picks and marker selections through rendered Blazor controls. */
 public sealed class TripMapCanvasTests : BunitContext
 {
     public TripMapCanvasTests() => JSInterop.Mode = JSRuntimeMode.Loose;
 
     [Fact]
-    public async Task SelectingAndEditingOffscreenMarkersPreservesTheCameraUntilFitStops()
+    public async Task OpeningAnotherTripFitsItsStopsAfterPanningThePreviousTrip()
+    {
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+        var montreal = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Montreal", "", 45.5m, -73.57m);
+        var paris = montreal with { PlaceId = Guid.NewGuid(), Name = "Paris", Lat = 48.86m, Lon = 2.35m };
+        var map = Render<TripMapCanvas>(parameters => parameters
+            .Add(component => component.TripId, firstId)
+            .Add(component => component.Stops, [montreal]));
+        await map.InvokeAsync(() => map.Instance.PanByDrag(4000, 0));
+        Assert.Empty(map.FindAll(".trip-marker"));
+
+        map.Render(parameters => parameters
+            .Add(component => component.TripId, secondId)
+            .Add(component => component.Stops, [paris]));
+
+        Assert.Single(map.FindAll(".trip-marker[aria-label='Stop 1: Paris']"));
+        await map.InvokeAsync(() => map.Instance.PanByDrag(4000, 0));
+        map.Render(parameters => parameters.Add(component => component.Stops, [paris with { Name = "Edited Paris" }]));
+        Assert.Empty(map.FindAll(".trip-marker"));
+    }
+
+    [Fact]
+    public async Task SelectingAndEditingOffscreenMarkersPreservesTheCameraUntilRecentering()
     {
         var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
         var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
@@ -28,16 +51,42 @@ public sealed class TripMapCanvasTests : BunitContext
         Assert.Equal(changes, viewport.Invocations["setCamera"].Count);
         Assert.Empty(map.FindAll(".trip-marker"));
 
-        map.Find("button[aria-label='Fit stops']").Click();
+        map.Find("button[aria-label='Recenter map']").Click();
         Assert.Single(map.FindAll(".trip-marker[aria-label='Stop 1: Edited hotel']"));
         Assert.Equal(changes + 1, viewport.Invocations["setCamera"].Count);
+    }
+
+    [Theory]
+    [InlineData(false, 43.6)]
+    [InlineData(true, 43.6)]
+    [InlineData(true, 70)]
+    public async Task RecenterUsesStartingStopOrInitialCenterAndPreservesZoomWithoutPicking(bool withStops, double latitude)
+    {
+        var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
+        var viewport = module.SetupModule("watchViewport", _ => true);
+        viewport.SetupVoid("setCamera", _ => true).SetVoidResult();
+        var start = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Start", "", (decimal)latitude, -79.3m);
+        var destination = start with { PlaceId = Guid.NewGuid(), Name = "Destination", Lat = 48.8m, Lon = 2.3m };
+        var picks = 0;
+        var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, withStops ? [start, destination] : [])
+            .Add(component => component.SelectedIndex, 1).Add(component => component.CanPick, true)
+            .Add(component => component.LocationPicked, _ => picks++));
+        map.Find("[aria-label='Zoom in']").Click();
+        await map.InvokeAsync(() => map.Instance.PanByDrag(500, 100));
+        var previous = Assert.IsType<double[]>(viewport.Invocations["setCamera"].Last().Arguments[0]);
+        map.Find("[aria-label='Recenter map']").Click();
+        var camera = Assert.IsType<double[]>(viewport.Invocations["setCamera"].Last().Arguments[0]);
+        Assert.Equal(withStops ? -79.3 : -73.5674, camera[0], 6);
+        Assert.Equal(withStops ? latitude : 45.5019, camera[1], 6);
+        Assert.Equal(previous[2], camera[2]);
+        Assert.Equal(0, picks);
     }
 
     [Fact]
     public void SharedPinCyclesBetweenReturnVisits()
     {
-        var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
-        var museum = new TripPlaceDto(Guid.NewGuid(), "attraction", "Museum", "", 45.4988m, -73.5796m);
+        var hotel = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009001"), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
+        var museum = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009002"), "attraction", "Museum", "", 45.4988m, -73.5796m);
         var selected = -1;
         var map = Render<TripMapCanvas>(parameters => parameters
             .Add(component => component.Stops, [hotel, museum, hotel])
@@ -67,14 +116,16 @@ public sealed class TripMapCanvasTests : BunitContext
     [Fact]
     public void FittingStopsAcrossTheDateLineKeepsBothMarkersVisible()
     {
-        var east = new TripPlaceDto(Guid.NewGuid(), "transport_stop", "East", "", 0, 179.9m);
-        var west = new TripPlaceDto(Guid.NewGuid(), "transport_stop", "West", "", 0, -179.9m);
+        var east = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009003"), "transport_stop", "East", "", 0, 179.9m);
+        var west = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009004"), "transport_stop", "West", "", 0, -179.9m);
         var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, [east, west]));
 
         Assert.Equal(2, map.FindAll(".trip-marker").Count);
         Assert.Single(map.FindAll(".map-basemap"));
         Assert.Empty(map.FindAll("image[href^='https://tile.openstreetmap.org/']"));
-        Assert.All(map.FindAll(".trip-marker image"), pin =>
+        var pins = map.FindAll(".trip-marker image");
+        Assert.Equal(2, pins.Count);
+        Assert.All(pins, pin =>
         {
             Assert.Equal("assets/trip-map/pin-transport_stop.svg", pin.GetAttribute("href"));
             Assert.Equal("54", pin.GetAttribute("width"));
@@ -88,13 +139,14 @@ public sealed class TripMapCanvasTests : BunitContext
         (decimal Lat, decimal Lon) selected = default;
         var map = Render<TripMapCanvas>(parameters => parameters
             .Add(component => component.CanPick, true)
+            .Add(component => component.FullScreen, true)
             .Add(component => component.LocationPicked, point => selected = point));
 
         var controls = map.FindAll(".map-controls button");
-        Assert.Equal(3, controls.Count);
-        Assert.Equal(new[] { "zoom-in.svg", "zoom-out.svg", "map-center.svg" },
+        Assert.Equal(4, controls.Count);
+        Assert.Equal(new[] { "zoom-in.svg", "zoom-out.svg", "map-center.svg", "pin-attraction.svg" },
             map.FindAll(".map-controls img").Select(image => Path.GetFileName(image.GetAttribute("src"))));
-        var center = map.Find("button[aria-label='Pick map center']");
+        var center = map.Find(".map-controls button[aria-label='Pick map center']");
         center.Click();
         var initial = selected;
         Assert.Equal((45.5019m, -73.5674m), initial);
@@ -102,12 +154,15 @@ public sealed class TripMapCanvasTests : BunitContext
         center.Click();
         Assert.Equal(initial.Lat, selected.Lat);
         Assert.True(selected.Lon > initial.Lon);
+        map.Render(parameters => parameters.Add(component => component.CanPick, false));
+        Assert.Empty(map.FindAll("[aria-label='Pick map center']"));
+        Assert.Single(map.FindAll("[aria-label='Recenter map']"));
     }
 
     [Fact]
     public async Task FullMapUsesTheMeasuredViewportAndKeepsPinsAtTheirExportedSize()
     {
-        var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
+        var hotel = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009005"), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
         var map = Render<TripMapCanvas>(parameters => parameters
             .Add(component => component.FullScreen, true)
             .Add(component => component.Stops, [hotel]));
@@ -181,8 +236,8 @@ public sealed class TripMapCanvasTests : BunitContext
     [Fact]
     public async Task NearbyConnectionsUseBadgesOnTheirOwnCurvesAndCanStillBeEdited()
     {
-        var west = new TripPlaceDto(Guid.NewGuid(), "transport_stop", "West", "", 0, -.15m);
-        var east = new TripPlaceDto(Guid.NewGuid(), "transport_stop", "East", "", 0, .15m);
+        var west = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009006"), "transport_stop", "West", "", 0, -.15m);
+        var east = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009007"), "transport_stop", "East", "", 0, .15m);
         (int Destination, bool FromKeyboard) selected = default;
         var map = Render<TripMapCanvas>(parameters => parameters
             .Add(component => component.Stops, [west, east, west])
@@ -223,9 +278,9 @@ public sealed class TripMapCanvasTests : BunitContext
     [Fact]
     public void LongFlightsKeepTheirDurationWhileNearbyConnectionsShrinkAtTheSameZoom()
     {
-        var toronto = new TripPlaceDto(Guid.NewGuid(), "transport_stop", "Toronto", "", 43.68m, -79.63m);
-        var montreal = new TripPlaceDto(Guid.NewGuid(), "transport_stop", "Montreal", "", 45.47m, -73.74m);
-        var paris = new TripPlaceDto(Guid.NewGuid(), "transport_stop", "Paris", "", 49.01m, 2.55m);
+        var toronto = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009008"), "transport_stop", "Toronto", "", 43.68m, -79.63m);
+        var montreal = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009009"), "transport_stop", "Montreal", "", 45.47m, -73.74m);
+        var paris = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009010"), "transport_stop", "Paris", "", 49.01m, 2.55m);
         var map = Render<TripMapCanvas>(parameters => parameters
             .Add(component => component.Stops, [toronto, montreal, paris])
             .Add(component => component.Legs, [("train", "Train · 5 h"), ("plane", "Plane · 7 h")]));
@@ -242,8 +297,8 @@ public sealed class TripMapCanvasTests : BunitContext
     [Fact]
     public void ZoomedOutStopsUseCompactTypeIconsAndRemainSelectable()
     {
-        var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 0, -.15m);
-        var museum = new TripPlaceDto(Guid.NewGuid(), "attraction", "Museum", "", 0, .15m);
+        var hotel = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009011"), "accommodation", "Hotel", "", 0, -.15m);
+        var museum = new TripPlaceDto(Guid.Parse("00000000-0000-0000-0000-000000009012"), "attraction", "Museum", "", 0, .15m);
         var selected = -1;
         var map = Render<TripMapCanvas>(parameters => parameters
             .Add(component => component.Stops, [hotel, museum])

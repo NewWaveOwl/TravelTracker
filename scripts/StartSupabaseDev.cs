@@ -5,12 +5,14 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-const string usage = "dotnet run --file scripts/StartSupabaseDev.cs [-- --setup | --check-config | --apply-migrations]\nLegacy: dotnet run --file scripts/StartSupabaseDev.cs -- <pooler-host> <database-user> <auth0-m2m-client-id> <root-certificate> [--apply-migrations]";
+const string usage = "dotnet run --file scripts/StartSupabaseDev.cs [-- --setup | --check-config | --apply-migrations]";
 const string usersUrl = "https://localhost:5101";
 const string frontendUrl = "http://localhost:5100";
 
@@ -23,8 +25,7 @@ if (args is ["--help"])
 var applyMigrations = args.Contains("--apply-migrations");
 var setupOnly = args is ["--setup"];
 var checkOnly = args is ["--check-config"];
-var positional = args.Where(value => value != "--apply-migrations").ToArray();
-if (!setupOnly && !checkOnly && positional.Length is not (0 or 4))
+if (args.Length > 1 || args.Length == 1 && !setupOnly && !checkOnly && !applyMigrations)
 {
     Console.Error.WriteLine(usage);
     return 2;
@@ -54,18 +55,11 @@ try
 {
     var solution = Path.Combine(repo, "TravelTracker.slnx");
     if (!File.Exists(solution))
-        throw new InvalidOperationException("Run the launcher from the TravelTracker repository root.");
+        throw new LaunchConfigurationException("Run the launcher from the TravelTracker repository root.");
 
     var configPath = Path.GetFullPath(Environment.GetEnvironmentVariable("TRAVELTRACKER_LAUNCH_CONFIG")
         ?? Path.Combine(repo, ".traveltracker-launch.json"));
     var config = LoadConfiguration(configPath);
-    if (positional.Length == 4 && !setupOnly && !checkOnly)
-    {
-        config["PoolerHost"] = positional[0];
-        config["DatabaseUser"] = positional[1];
-        config["BackendClientId"] = positional[2];
-        config["RootCertificate"] = positional[3];
-    }
     var interactive = !checkOnly && !Console.IsInputRedirected;
     var (poolerHost, connectionUser) = ParseConnection(Setting(config, "PoolerHost", null,
         "Supabase > Connect > Direct > Session pooler: paste Host or connection URI (input hidden)",
@@ -76,34 +70,24 @@ try
     var databaseUser = Setting(config, "DatabaseUser", null,
         "Supabase Session pooler User (include the .project-reference suffix)", interactive);
     if (!Regex.IsMatch(databaseUser, @"\A[a-z0-9_]+\.[a-z0-9]+\z"))
-        throw new InvalidOperationException("DatabaseUser must be the Session pooler username including its .project-reference suffix.");
-    var backendClientId = Setting(config, "BackendClientId", null,
-        "Auth0 > Applications > machine-to-machine application > Client ID", interactive);
+        throw new LaunchConfigurationException("DatabaseUser must be the Session pooler username including its .project-reference suffix.");
     var rootCertificate = Path.GetFullPath(Setting(config, "RootCertificate", null,
         "Supabase root certificate file path on THIS machine (download from Database Settings > SSL)", interactive).Trim('"', '\''));
     if (!File.Exists(rootCertificate))
-        throw new InvalidOperationException("RootCertificate file does not exist on this machine. Run with --setup to correct its path.");
+        throw new LaunchConfigurationException("RootCertificate file does not exist on this machine. Run with --setup to correct its path.");
     config["RootCertificate"] = rootCertificate;
-    var domain = Setting(config, "Auth0Domain", "Auth0__Domain",
-        "Auth0 > frontend application > Settings > Domain (for example dev-example.us.auth0.com)", interactive,
-        fallback: Environment.GetEnvironmentVariable("Authentication__Bearer__Authority"));
-    domain = domain.TrimEnd('/');
-    if (domain.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        domain = domain[8..];
-    if (!Regex.IsMatch(domain, @"\A[a-z0-9]+(?:[a-z0-9.-]*[a-z0-9])?\z", RegexOptions.IgnoreCase) ||
-        !domain.Contains('.') || domain.Contains(".."))
-        throw new InvalidOperationException("Auth0Domain must be your Auth0 tenant hostname, without a path, query, or credentials.");
-    config["Auth0Domain"] = domain;
-    var frontendClientId = Setting(config, "FrontendClientId", "Auth0__ClientId",
-        "Auth0 > frontend application > Settings > Client ID (different from M2M)", interactive);
-    var audience = Setting(config, "Audience", "Authentication__Bearer__Audience",
-        "Auth0 API identifier", interactive, fallback: "traveltracker-api");
-    var frontendType = Setting(config, "FrontendType", null,
-        "Frontend Auth0 application type: spa or regular", interactive, fallback: "spa").ToLowerInvariant();
-    if (frontendType is not ("spa" or "regular"))
-        throw new InvalidOperationException("FrontendType must be spa or regular.");
-    config["FrontendType"] = frontendType;
-    var authority = new Uri($"https://{domain}/");
+    var supabase = ParseSupabaseUrl(Setting(config, "SupabaseUrl", "Supabase__Url",
+        "Supabase > Project Settings > API: Project URL (https://project.supabase.co)", interactive));
+    config["SupabaseUrl"] = supabase.AbsoluteUri.TrimEnd('/');
+    var publicKey = Setting(config, "PublishableKey", "Supabase__PublishableKey",
+        "Supabase publishable key (sb_publishable_...) or legacy anon key; NEVER a secret/service_role key", interactive);
+    ValidatePublicKey(publicKey);
+    var serviceEmail = Setting(config, "ServiceEmail", "TRAVELTRACKER_SERVICE_EMAIL",
+        "Dedicated Supabase Auth service user's email (signed scope must be users.access only)", interactive);
+    if (!System.Net.Mail.MailAddress.TryCreate(serviceEmail, out var serviceAddress) || serviceAddress.Address != serviceEmail)
+        throw new LaunchConfigurationException("ServiceEmail must be a valid email address for the dedicated Supabase Auth service user.");
+    var authority = new Uri(supabase, "auth/v1");
+    const string audience = "authenticated";
     if (!checkOnly)
     {
         await SaveConfigurationAsync(configPath, config, shutdown.Token);
@@ -111,21 +95,19 @@ try
     }
     if (setupOnly || checkOnly)
     {
-        Console.WriteLine("Launch configuration is valid. Database access and Auth0 credentials have not been tested.");
+        Console.WriteLine("Launch configuration is valid. Database access and Supabase Auth credentials have not been tested.");
         return 0;
     }
 
     var listeners = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners();
     if (listeners.Any(listener => services.Any(service => service.Port == listener.Port)))
-        throw new InvalidOperationException("A TravelTracker port is already in use. Stop the existing stack first.");
+        throw new LaunchConfigurationException("A TravelTracker port is already in use. Stop the existing stack first.");
 
     await RunDotnetAsync(repo, ["dev-certs", "https", "--check", "--trust"],
         "Trust the Users development certificate with dotnet dev-certs https --trust.", shutdown.Token);
     await RunDotnetAsync(repo, ["build", solution, "--configuration", "Debug"], "TravelTracker build failed.", shutdown.Token);
 
-    var frontendSecret = frontendType == "regular"
-        ? ReadSecret("Auth0 FRONTEND client secret (Regular Web Application)", shutdown.Token) : null;
-    var (token, subject, expiry) = await GetServiceTokenAsync(authority, backendClientId, audience, shutdown.Token);
+    var (token, subject, expiry) = await GetServiceTokenAsync(supabase, publicKey, serviceEmail, shutdown.Token);
     var connection = new DbConnectionStringBuilder
     {
         ["Host"] = poolerHost, ["Port"] = 5432, ["Username"] = databaseUser,
@@ -152,12 +134,15 @@ try
         settings["Authentication__Bearer__Authority"] = authority.AbsoluteUri;
         settings["Authentication__Bearer__Issuer"] = authority.AbsoluteUri;
         settings["Authentication__Bearer__Audience"] = audience;
+        settings["Authentication__Bearer__ScopeClaimType"] = "scope";
+        settings["Authentication__Bearer__Provider"] = "Supabase";
+        settings["Authentication__Bearer__ValidAlgorithms__0"] = "ES256";
+        settings["Authentication__Bearer__ValidAlgorithms__1"] = "RS256";
+        settings["Supabase__Url"] = supabase.AbsoluteUri.TrimEnd('/');
+        settings["Supabase__PublishableKey"] = publicKey;
         if (frontend)
         {
-            settings["Auth0__Domain"] = domain;
-            settings["Auth0__ClientId"] = frontendClientId;
-            settings["Auth0__Audience"] = audience;
-            settings["Auth0__ClientSecret"] = frontendSecret ?? "";
+            settings["Authentication__Provider"] = "Supabase";
         }
         if (!frontend)
         {
@@ -176,25 +161,25 @@ try
                 settings["TripReferences__UsersBaseUrl"] = usersUrl;
                 settings["TripReferences__UsersServiceAccessToken"] = token;
                 break;
-            case "Attractions" or "Accommodations" or "Settings":
+            case "Attractions" or "Accommodations" or "Settings" or "Transport":
                 settings["Users__InternalBaseUrl"] = usersUrl;
                 settings["Users__ServiceAccessToken"] = token;
                 break;
         }
 
         Console.WriteLine($"Starting {service} at {origin}");
-        var process = Process.Start(start) ?? throw new InvalidOperationException($"Could not start {service}.");
+        var process = Process.Start(start) ?? throw new LaunchConfigurationException($"Could not start {service}.");
         processes.Add(process);
         await WaitForHostAsync(probe, process, service, origin, shutdown.Token);
     }
     connection.Clear();
 
     Console.WriteLine($"TravelTracker is running at {frontendUrl}. Map View: {frontendUrl}/map");
-    Console.WriteLine($"Press Ctrl+C to stop. Restart before the Auth0 service token expires at {expiry.ToLocalTime():g}.");
+    Console.WriteLine($"Press Ctrl+C to stop. Restart before the Supabase service token expires at {expiry.ToLocalTime():g}.");
     var exited = await Task.WhenAny(processes.Select(process => process.WaitForExitAsync(shutdown.Token)));
     await exited;
     if (!shutdown.IsCancellationRequested)
-        throw new InvalidOperationException("A TravelTracker host stopped. See its output above.");
+        throw new LaunchConfigurationException("A TravelTracker host stopped. See its output above.");
     return 0;
 }
 catch (OperationCanceledException) when (shutdown.IsCancellationRequested)
@@ -203,7 +188,7 @@ catch (OperationCanceledException) when (shutdown.IsCancellationRequested)
 }
 catch (Exception error)
 {
-    Console.Error.WriteLine(error.Message);
+    Console.Error.WriteLine(error is LaunchConfigurationException ? error.Message : $"TravelTracker launcher failed ({error.GetType().Name}). Check local configuration and dependency availability.");
     return 1;
 }
 finally
@@ -228,16 +213,18 @@ static Dictionary<string, string> LoadConfiguration(string path)
     try
     {
         var config = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(path))
-            ?? throw new InvalidOperationException("Local launch settings must be a JSON object.");
-        string[] allowed = ["PoolerHost", "DatabaseUser", "BackendClientId", "RootCertificate",
-            "Auth0Domain", "FrontendClientId", "Audience", "FrontendType"];
+            ?? throw new LaunchConfigurationException("Local launch settings must be a JSON object.");
+        string[] legacy = ["BackendClientId", "Auth0Domain", "FrontendClientId", "Audience", "FrontendType"];
+        if (config.Keys.Any(key => legacy.Contains(key)))
+            throw new LaunchConfigurationException("Saved launch settings use Auth0. Rename .traveltracker-launch.json, then run --setup for Supabase Auth; retain your database host, username and certificate path.");
+        string[] allowed = ["PoolerHost", "DatabaseUser", "RootCertificate", "SupabaseUrl", "PublishableKey", "ServiceEmail"];
         if (config.Keys.Any(key => !allowed.Contains(key)))
-            throw new InvalidOperationException("Local launch settings contain unsupported fields. Store only non-secret launcher settings.");
+            throw new LaunchConfigurationException("Local launch settings contain unsupported fields. Store only non-secret launcher settings.");
         return config;
     }
     catch (JsonException)
     {
-        throw new InvalidOperationException("Local launch settings contain invalid JSON. Correct or rename .traveltracker-launch.json, then run --setup.");
+        throw new LaunchConfigurationException("Local launch settings contain invalid JSON. Correct or rename .traveltracker-launch.json, then run --setup.");
     }
 }
 
@@ -275,7 +262,7 @@ string Setting(Dictionary<string, string> config, string key, string? environmen
     }
     if (string.IsNullOrWhiteSpace(value) || (key != "PoolerHost" && value.Contains("YOUR-", StringComparison.OrdinalIgnoreCase)) ||
         value.Contains("your-tenant", StringComparison.OrdinalIgnoreCase))
-        throw new InvalidOperationException($"{key} is missing or contains an example placeholder. {prompt}. Run --setup in an interactive terminal.");
+        throw new LaunchConfigurationException($"{key} is missing or contains an example placeholder. {prompt}. Run --setup in an interactive terminal.");
     config[key] = value;
     return value;
 }
@@ -295,16 +282,62 @@ static (string Host, string? User) ParseConnection(string input)
         var schemeEnd = host.IndexOf("://", StringComparison.Ordinal) + 3;
         var at = host.LastIndexOf('@');
         if (at <= schemeEnd)
-            throw new InvalidOperationException("The PostgreSQL URI must contain a username and host. Copy the Session pooler URI from Supabase.");
+            throw new LaunchConfigurationException("The PostgreSQL URI must contain a username and host. Copy the Session pooler URI from Supabase.");
         var credentials = host[schemeEnd..at];
         user = Uri.UnescapeDataString(credentials.Split(':', 2)[0]);
         if (!Uri.TryCreate("postgresql://" + host[(at + 1)..], UriKind.Absolute, out var uri) || uri.Port is not (-1 or 5432))
-            throw new InvalidOperationException("Use the Supabase Session pooler on port 5432, rather than the transaction pooler.");
+            throw new LaunchConfigurationException("Use the Supabase Session pooler on port 5432, rather than the transaction pooler.");
         host = uri.Host;
     }
     if (!Regex.IsMatch(host, @"\A[a-z0-9-]+\.pooler\.supabase\.com\z"))
-        throw new InvalidOperationException("PoolerHost must end in .pooler.supabase.com. In Supabase choose Connect > Direct > Session pooler; the db.* direct host will not work here.");
+        throw new LaunchConfigurationException("PoolerHost must end in .pooler.supabase.com. In Supabase choose Connect > Direct > Session pooler; the db.* direct host will not work here.");
     return (host, user);
+}
+
+/**
+ * Restricts authentication calls to the configured hosted project's HTTPS origin.
+ * @param input The project URL copied from Supabase.
+ * @return The normalized project origin with a trailing slash.
+ */
+static Uri ParseSupabaseUrl(string input)
+{
+    if (!Uri.TryCreate(input.Trim(), UriKind.Absolute, out var url) || url.Scheme != Uri.UriSchemeHttps ||
+        url.UserInfo.Length != 0 || url.Query.Length != 0 || url.Fragment.Length != 0 ||
+        url.AbsolutePath != "/" || !url.IsDefaultPort ||
+        !Regex.IsMatch(url.Host, @"\A[a-z0-9-]+\.supabase\.co\z"))
+        throw new LaunchConfigurationException("SupabaseUrl must be the HTTPS Project URL (https://project.supabase.co), without a path, query, credentials, or custom port.");
+    return url;
+}
+
+/**
+ * Rejects privileged server keys before any configuration can be saved or sent to a child host.
+ * @param value The publishable key or legacy anon JWT.
+ */
+static void ValidatePublicKey(string value)
+{
+    if (Regex.IsMatch(value, @"\Asb_publishable_[A-Za-z0-9_-]+\z")) return;
+    try
+    {
+        var parts = value.Split('.');
+        if (parts.Length == 3)
+        {
+            using var payload = JsonDocument.Parse(DecodeBase64Url(parts[1]));
+            if (payload.RootElement.TryGetProperty("role", out var role) && role.GetString() == "anon") return;
+        }
+    }
+    catch (Exception error) when (error is JsonException or FormatException or InvalidOperationException) { }
+    throw new LaunchConfigurationException("PublishableKey must be an sb_publishable_ key or legacy anon key. Secret and service_role keys are never accepted.");
+}
+
+/**
+ * Decodes the transport representation of a JWT segment; this does not authenticate claims.
+ * @param segment A base64url segment.
+ * @return The decoded bytes.
+ */
+static byte[] DecodeBase64Url(string segment)
+{
+    var encoded = segment.Replace('-', '+').Replace('_', '/');
+    return Convert.FromBase64String(encoded.PadRight((encoded.Length + 3) / 4 * 4, '='));
 }
 
 /**
@@ -331,12 +364,12 @@ static ProcessStartInfo Dotnet(string folder, params string[] arguments)
 
 static async Task RunDotnetAsync(string repo, string[] arguments, string failure, CancellationToken cancellationToken)
 {
-    using var process = Process.Start(Dotnet(repo, arguments)) ?? throw new InvalidOperationException(failure);
+    using var process = Process.Start(Dotnet(repo, arguments)) ?? throw new LaunchConfigurationException(failure);
     try
     {
         await process.WaitForExitAsync(cancellationToken);
         if (process.ExitCode != 0)
-            throw new InvalidOperationException(failure);
+            throw new LaunchConfigurationException(failure);
     }
     finally { StopProcess(process); }
 }
@@ -352,7 +385,7 @@ static void StopProcess(Process process)
         }
     }
     catch (InvalidOperationException) when (process.HasExited) { }
-    catch (System.ComponentModel.Win32Exception error) { Console.Error.WriteLine($"Could not stop host: {error.Message}"); }
+    catch (System.ComponentModel.Win32Exception error) { Console.Error.WriteLine($"Could not stop host ({error.GetType().Name})."); }
 }
 
 /**
@@ -372,7 +405,7 @@ static async Task WaitForHostAsync(HttpClient probe, Process process, string ser
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (process.HasExited)
-            throw new InvalidOperationException($"{service} exited during startup. See its output above.");
+            throw new LaunchConfigurationException($"{service} exited during startup. See its output above.");
 
         try
         {
@@ -391,40 +424,121 @@ static async Task WaitForHostAsync(HttpClient probe, Process process, string ser
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
         await Task.Delay(250, cancellationToken);
     }
-    throw new InvalidOperationException($"{service} did not become ready at {origin}. See its output above.");
+    throw new LaunchConfigurationException($"{service} did not become ready at {origin}. See its output above.");
 }
 
+/**
+ * Signs in the dedicated service identity and validates its JWT plus its current Supabase user.
+ * @param project The trusted HTTPS Supabase project origin.
+ * @param publicKey The public project API key, never a privileged service key.
+ * @param email The operator-provisioned service account email.
+ * @param cancellationToken Cancels authentication and key retrieval.
+ * @return The validated service access token, identity, and expiry.
+ */
 static async Task<(string Token, string Subject, DateTimeOffset Expiry)> GetServiceTokenAsync(
-    Uri authority, string clientId, string audience, CancellationToken cancellationToken)
+    Uri project, string publicKey, string email, CancellationToken cancellationToken)
 {
     using var http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(20) };
-    using var request = new FormUrlEncodedContent(new Dictionary<string, string>
+    http.DefaultRequestHeaders.Add("apikey", publicKey);
+    using var request = JsonContent.Create(new Dictionary<string, string>
     {
-        ["grant_type"] = "client_credentials",
-        ["client_id"] = clientId,
-        ["client_secret"] = ReadSecret("Auth0 machine-to-machine client secret", cancellationToken),
-        ["audience"] = audience,
-        ["scope"] = "users.access"
+        ["email"] = email,
+        ["password"] = ReadSecret("Supabase Auth SERVICE ACCOUNT password (not the database password)", cancellationToken)
     });
-    using var response = await http.PostAsync(authority.AbsoluteUri.TrimEnd('/') + "/oauth/token", request, cancellationToken);
+    using var response = await http.PostAsync(new Uri(project, "auth/v1/token?grant_type=password"), request, cancellationToken);
     if (!response.IsSuccessStatusCode)
-        throw new InvalidOperationException($"Auth0 returned HTTP {(int)response.StatusCode}. Check the client credentials, audience, and users.access grant.");
+        throw new LaunchConfigurationException($"Supabase Auth returned HTTP {(int)response.StatusCode}. Check the service account email/password, confirmed email, public API key and access-token hook.");
 
     using var result = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
-    var token = result?.RootElement.GetProperty("access_token").GetString();
+    var token = result?.RootElement.TryGetProperty("access_token", out var accessToken) == true ? accessToken.GetString() : null;
     if (token is null || !Regex.IsMatch(token, @"\A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z"))
-        throw new InvalidOperationException("Auth0 did not return a JWT. Check the configured API audience.");
+        throw new LaunchConfigurationException("Supabase Auth did not return an access JWT.");
 
-    // The APIs verify the signature. The launcher reads Auth0's response to configure the caller and expiry warning.
-    var payload = token.Split('.')[1].Replace('-', '+').Replace('_', '/');
-    using var jwt = JsonDocument.Parse(Convert.FromBase64String(payload.PadRight((payload.Length + 3) / 4 * 4, '=')));
+    var parts = token.Split('.');
+    using var header = JsonDocument.Parse(DecodeBase64Url(parts[0]));
+    var algorithm = header.RootElement.GetProperty("alg").GetString();
+    var keyId = header.RootElement.GetProperty("kid").GetString();
+    if (algorithm is not ("ES256" or "RS256") || string.IsNullOrWhiteSpace(keyId))
+        throw new LaunchConfigurationException("Supabase Auth must use an asymmetric ES256 or RS256 signing key. Rotate away from the legacy HS256 key before starting TravelTracker.");
+    using var keyResponse = await http.GetAsync(new Uri(project, "auth/v1/.well-known/jwks.json"), cancellationToken);
+    if (!keyResponse.IsSuccessStatusCode)
+        throw new LaunchConfigurationException("Supabase Auth signing keys could not be retrieved.");
+    using var keys = await keyResponse.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
+    var matching = keys!.RootElement.GetProperty("keys").EnumerateArray()
+        .Where(key => key.TryGetProperty("kid", out var id) && id.GetString() == keyId).ToArray();
+    if (matching.Length != 1 || !VerifySignature(matching[0], algorithm, Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]), DecodeBase64Url(parts[2])))
+        throw new LaunchConfigurationException("Supabase Auth access token signature is invalid.");
+
+    using var jwt = JsonDocument.Parse(DecodeBase64Url(parts[1]));
     var claims = jwt.RootElement;
     var expiry = DateTimeOffset.FromUnixTimeSeconds(claims.GetProperty("exp").GetInt64());
     var subject = claims.GetProperty("sub").GetString();
-    if (string.IsNullOrWhiteSpace(subject) || expiry <= DateTimeOffset.UtcNow ||
-        !claims.TryGetProperty("scope", out var scope) || scope.GetString()?.Split(' ').Contains("users.access") != true)
-        throw new InvalidOperationException("The backend token must be current and include users.access.");
+    var issuer = new Uri(project, "auth/v1").AbsoluteUri;
+    if (!Guid.TryParse(subject, out _) || expiry <= DateTimeOffset.UtcNow ||
+        claims.GetProperty("iss").GetString() != issuer ||
+        !HasAudience(claims.GetProperty("aud"), "authenticated") ||
+        claims.GetProperty("role").GetString() != "authenticated" ||
+        claims.TryGetProperty("nbf", out var notBefore) && notBefore.GetInt64() > DateTimeOffset.UtcNow.ToUnixTimeSeconds() ||
+        !claims.TryGetProperty("scope", out var scope) || scope.GetString()?.Trim() != "users.access")
+        throw new LaunchConfigurationException("The service token must be current, issued by this project for authenticated users, and grant users.access only. Check the access-token hook and the dedicated user's admin-managed metadata.");
+
+    using var identityRequest = new HttpRequestMessage(HttpMethod.Get, new Uri(project, "auth/v1/user"));
+    identityRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    using var identityResponse = await http.SendAsync(identityRequest, cancellationToken);
+    if (!identityResponse.IsSuccessStatusCode)
+        throw new LaunchConfigurationException("Supabase Auth could not verify the service account session.");
+    using var identity = await identityResponse.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
+    if (identity?.RootElement.GetProperty("id").GetString() != subject ||
+        !identity.RootElement.TryGetProperty("email_confirmed_at", out var confirmed) || confirmed.ValueKind != JsonValueKind.String)
+        throw new LaunchConfigurationException("The service session must belong to the confirmed Supabase Auth service user.");
     return (token, subject, expiry);
+}
+
+/**
+ * Matches string and array JWT audience representations.
+ * @param value The authenticated token audience claim.
+ * @param expected The required audience.
+ * @return Whether the required audience is present.
+ */
+static bool HasAudience(JsonElement value, string expected) => value.ValueKind == JsonValueKind.String
+    ? value.GetString() == expected
+    : value.ValueKind == JsonValueKind.Array && value.EnumerateArray().Any(item => item.ValueKind == JsonValueKind.String && item.GetString() == expected);
+
+/**
+ * Verifies supported asymmetric JWT signatures using only the project's trusted JWKS.
+ * @param key The single matching public signing key.
+ * @param algorithm The supported token algorithm.
+ * @param data The original JWT signing input.
+ * @param signature The token signature bytes.
+ * @return Whether the key, algorithm and signature match.
+ */
+static bool VerifySignature(JsonElement key, string algorithm, byte[] data, byte[] signature)
+{
+    if (key.TryGetProperty("alg", out var declaredAlgorithm) && declaredAlgorithm.GetString() != algorithm ||
+        key.TryGetProperty("use", out var use) && use.GetString() != "sig") return false;
+    try
+    {
+        if (algorithm == "RS256" && key.GetProperty("kty").GetString() == "RSA")
+        {
+            using var rsa = RSA.Create(new RSAParameters
+            {
+                Modulus = DecodeBase64Url(key.GetProperty("n").GetString()!),
+                Exponent = DecodeBase64Url(key.GetProperty("e").GetString()!)
+            });
+            return rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        }
+        if (algorithm == "ES256" && key.GetProperty("kty").GetString() == "EC" && key.GetProperty("crv").GetString() == "P-256")
+        {
+            using var ec = ECDsa.Create(new ECParameters
+            {
+                Curve = ECCurve.NamedCurves.nistP256,
+                Q = new ECPoint { X = DecodeBase64Url(key.GetProperty("x").GetString()!), Y = DecodeBase64Url(key.GetProperty("y").GetString()!) }
+            });
+            return ec.VerifyData(data, signature, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        }
+    }
+    catch (Exception error) when (error is CryptographicException or FormatException or InvalidOperationException or KeyNotFoundException) { }
+    return false;
 }
 
 /**
@@ -437,7 +551,7 @@ static async Task<(string Token, string Subject, DateTimeOffset Expiry)> GetServ
 static string ReadSecret(string prompt, CancellationToken cancellationToken, string? fallback = null)
 {
     if (Console.IsInputRedirected)
-        throw new InvalidOperationException("Run the launcher in an interactive terminal so it can prompt for secrets.");
+        throw new LaunchConfigurationException("Run the launcher in an interactive terminal so it can prompt for secrets.");
 
     Console.Write($"{prompt}: ");
     var value = new StringBuilder();
@@ -453,5 +567,8 @@ static string ReadSecret(string prompt, CancellationToken cancellationToken, str
             value.Append(key.KeyChar);
     }
     Console.WriteLine();
-    return value.Length > 0 ? value.ToString() : fallback ?? throw new InvalidOperationException($"{prompt} is required.");
+    return value.Length > 0 ? value.ToString() : fallback ?? throw new LaunchConfigurationException($"{prompt} is required.");
 }
+
+/** Carries only launcher-authored diagnostics that are safe to print. */
+sealed class LaunchConfigurationException(string message) : Exception(message);

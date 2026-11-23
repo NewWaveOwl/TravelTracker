@@ -14,7 +14,8 @@ namespace TravelTracker.Api.References;
  * @param options Supplies the backend Users credential.
  * @param logger Records answers that are present but outside the Users contract.
  */
-public sealed class UsersStandingClient(HttpClient http, ReferenceSender sender, IOptions<TripReferenceOptions> options, ILogger<UsersStandingClient> logger) {
+public sealed class UsersStandingClient(HttpClient http, ReferenceSender sender, IOptions<TripReferenceOptions> options, ILogger<UsersStandingClient> logger)
+{
     /**
      * Resolves the caller and reads the account's current standing, without caching.
      *
@@ -22,9 +23,11 @@ public sealed class UsersStandingClient(HttpClient http, ReferenceSender sender,
      * @param cancellationToken Cancels the lookups.
      * @return The live standing, NotFound when no account matches the sign-in, or Unavailable when standing cannot be confirmed.
      */
-    public async Task<ReferenceResult<AccountStanding>> GetStandingAsync(CallerIdentity caller, CancellationToken cancellationToken) {
+    public async Task<ReferenceResult<AccountStanding>> GetStandingAsync(CallerIdentity caller, CancellationToken cancellationToken)
+    {
         var credential = options.Value.UsersServiceAccessToken;
-        if (string.IsNullOrWhiteSpace(credential)) {
+        if (string.IsNullOrWhiteSpace(credential))
+        {
             logger.LogError("Users standing check cannot run: TripReferences:UsersServiceAccessToken is not configured.");
             return ReferenceResult<AccountStanding>.Failed(ReferenceStatus.Unavailable, "the backend Users credential is not configured.");
         }
@@ -33,23 +36,26 @@ public sealed class UsersStandingClient(HttpClient http, ReferenceSender sender,
             ReferenceRequest.Post("internal/users/identity", credential, new IdentityRequest(caller.Issuer, caller.Subject)), "users identity lookup", cancellationToken);
         if (identity.Status != ReferenceStatus.Found) return identity.Forward<AccountStanding>();
         var userId = identity.Value!.UserId;
-        if (userId == Guid.Empty) {
+        if (userId == Guid.Empty)
+        {
             logger.LogWarning("users identity lookup returned an empty account id; treated as unavailable.");
             return ReferenceResult<AccountStanding>.Failed(ReferenceStatus.Unavailable, "identity lookup returned no account id.");
         }
 
         var access = await sender.SendAsync<AccessResponse>(http,
-            ReferenceRequest.Get($"internal/users/{userId:D}/access", credential), $"users access lookup for account {userId:D}", cancellationToken);
+            ReferenceRequest.Get($"internal/users/{userId:D}/access", credential), "users access lookup", cancellationToken);
         if (access.Status != ReferenceStatus.Found) return access.Forward<AccountStanding>();
         var standing = access.Value!;
-        if (standing.UserId != userId) {
-            logger.LogWarning("users access lookup for account {UserId} answered for a different account; treated as unavailable.", userId);
+        if (standing.UserId != userId)
+        {
+            logger.LogWarning("users access lookup answered for a different account; treated as unavailable.");
             return ReferenceResult<AccountStanding>.Failed(ReferenceStatus.Unavailable, "account standing answered for a different account.");
         }
-        var recognised = (standing.Status is "active" or "banned" or "deactivated")
-            && (standing.Role is "traveller" or "administrator");
-        if (!recognised) {
-            logger.LogWarning("users access lookup for account {UserId} returned a status or role outside the contract; treated as unavailable.", userId);
+        var recognised = (standing.Status is AccountStanding.Active or AccountStanding.Banned or AccountStanding.Deactivated)
+            && (standing.Role is AccountStanding.Traveller or AccountStanding.Administrator);
+        if (!recognised)
+        {
+            logger.LogWarning("users access lookup returned a status or role outside the contract; treated as unavailable.");
             return ReferenceResult<AccountStanding>.Failed(ReferenceStatus.Unavailable, "account standing response was not recognised.");
         }
         return ReferenceResult<AccountStanding>.Found(new(userId, standing.Status, standing.Role));

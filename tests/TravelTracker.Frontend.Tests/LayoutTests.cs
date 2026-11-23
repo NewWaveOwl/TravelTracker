@@ -1,5 +1,6 @@
 using Bunit;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using TravelTracker.Frontend.Api;
@@ -50,6 +51,20 @@ public sealed class LayoutTests : BunitContext
 
         Assert.Equal("services", header.Find("#menu a[href='services']").GetAttribute("href"));
         Assert.Equal("true", header.Find("button[aria-label='Menu']").GetAttribute("aria-expanded"));
+    }
+
+    [Fact]
+    public void EscapeClosesTheMenuAndReturnsFocusToItsToggle()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var header = Render<SiteHeader>();
+        header.Find("button[aria-label='Menu']").Click();
+
+        header.Find("header").KeyDown(new KeyboardEventArgs { Key = "Escape" });
+
+        Assert.Empty(header.FindAll("#menu"));
+        Assert.Equal("false", header.Find("button[aria-label='Menu']").GetAttribute("aria-expanded"));
+        Assert.Contains(JSInterop.Invocations, invocation => invocation.Identifier.EndsWith("focus", StringComparison.Ordinal));
     }
 
     [Fact]

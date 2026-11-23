@@ -64,11 +64,11 @@ This contract implements #105 without changing existing leg payloads. Browser dr
 
 | Field | Save rule |
 | --- | --- |
-| `name` | Required, nonblank. |
+| `name` | Required, nonblank, at most 200 characters. |
 | `timeZone` | Required, recognized IANA or Windows zone ID. |
 | `start`, `end` | Required offset-bearing times; `end >= start` by instant. Their entered offsets are retained, including UTC boundaries on earlier saved trips. Equal boundaries are valid for an itinerary without journeys. |
 | `isRoundTrip` | Optional, defaults to `false`. Stored as traveller intent; it imposes no return, category or visit requirement. |
-| `legs` | Required array, possibly empty. Supplied legs need consecutive sequences, connected endpoints, a visible transport mode, positive duration, no overlap and times within trip bounds. |
+| `legs` | Required array, possibly empty, at most 100 entries. Supplied legs need consecutive sequences, connected endpoints, a visible transport mode, positive duration, no overlap and times within trip bounds. |
 | `stops` | Optional ordered array of `{ "placeId": "<public GUID>", "type": "<supported type>" }`. Omitted or null derives the list from legs. With no legs, zero or one stop is valid. With legs, an explicit list must equal the first departure followed by each destination, by place ID and type. |
 
 All supported types (`accommodation`, `attraction`, `transport_stop`) may be an endpoint or the only stop. No category, visit or closed loop is needed. Two or more stops require connecting legs. The service does not fabricate a self-leg, mode, visit, dates or offsets to fill gaps. The response adds `stops` containing authoritative snapshots in occurrence order; existing `legs` fields are preserved. A legacy request that supplies only legs continues to work. A legacy stored trip derives stops from its leg snapshots until it is next saved.
@@ -251,8 +251,17 @@ slide transition respects reduced-motion preferences. Select a marker to edit
 its name, address and coordinates; confirm applies the draft and Cancel leaves
 the original place intact. Changed saved places are resolved through **Save
 catalogue entries** before saving the trip, so reopening uses the confirmed
-location snapshot. Selecting or editing a marker preserves the map camera;
-**Fit stops** remains an explicit navigation action. Time inputs show minutes,
+location snapshot. Transport stops are selected from the shared catalogue.
+Hand-placed transport pins can be kept in a browser draft. Before saving the
+trip, select each draft pin and choose a saved stop from the search results.
+Replacing a pin preserves its connections. Trip review checks draft transport
+modes against the shared catalogue before saving new places. If a mode is
+missing, the editor offers saved modes for the affected connections. An
+administrator can add shared modes and route points in the Transport
+workspace. Switching editor views asks before discarding unconfirmed
+marker fields. Selecting or editing a marker preserves the map camera; opening
+a different saved trip fits its stops. **Fit stops** remains an explicit
+navigation action within a trip. Time inputs show minutes,
 and only changed times are normalized to minute precision.
 
 Creating a new trip confirms before discarding unsaved work. Opening another
@@ -334,6 +343,63 @@ run, physical mobile-device run or native macOS run is claimed. Cmd+S is covered
 by the JavaScript event tests. TRX files and the disposable browser harness stay
 in ignored local output; the verification summary and regression tests are
 committed for review.
+
+### PR #138 integration verification (2026-11-22)
+
+[PR #138](https://github.com/NewWaveOwl/TravelTracker/pull/138) integrates the
+three feature commits with `milestone_4` at `6302ab9`. A merge commit preserves
+the published feature history. Conflict resolution retains Supabase Auth,
+profile-picture security, canonical floating panels, the date-range picker,
+shared reference validation, name/leg limits and the database revision check.
+It also retains private PDF drafts, optional stop snapshots and one editor
+save-shortcut registration.
+
+| Check | Target baseline | Integrated discovered / executed / passed | Failed / skipped |
+| --- | --- | --- | --- |
+| Application/domain/HTTP | 1,430 passed | 1,679 / 1,679 / 1,679 | 0 / 0 |
+| PostgreSQL relational | 68 passed | 85 / 85 / 85 | 0 / 0 |
+| Browser JavaScript interaction | 41 passed | 55 / 55 / 55 | 0 / 0 |
+
+Both Release solution builds passed with zero warnings and errors. The
+integrated frontend has 625 passing cases, Trips HTTP 196, shared API 78 and
+Trips Domain 59. Target tests were retained; obsolete category and UI-selector
+expectations were updated to the approved contract and current controls.
+Additional integration cases cover restricted accounts before stop-shape
+errors, exact name/leg limits and upgrades from both existing migration states.
+
+```powershell
+dotnet restore TravelTracker.slnx
+dotnet restore TravelTracker.Tests.slnx
+dotnet build TravelTracker.slnx --configuration Release --no-restore
+dotnet build TravelTracker.Tests.slnx --configuration Release --no-restore
+dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category!=PostgreSQL" --logger "trx;LogFilePrefix=pr138-integrated-final"
+# TRAVELTRACKER_TEST_POSTGRES configured for isolated local PostgreSQL:
+dotnet test TravelTracker.Tests.slnx --configuration Release --no-build --no-restore --filter "Category=PostgreSQL" --logger "trx;LogFilePrefix=pr138-integrated-postgresql"
+node --test tests/TravelTracker.Frontend.Tests/TripSaveKeyboardTests.mjs tests/TravelTracker.Frontend.Tests/TripMapCanvasKeyboardTests.mjs tests/TravelTracker.Frontend.Tests/MovablePanelTests.cjs tests/TravelTracker.Frontend.Tests/TripDateRangePickerKeyboardTests.mjs tests/TravelTracker.Frontend.Tests/Browser/tripSaveShortcut.test.mjs
+dotnet run --file scripts/SmokeHosts.cs
+```
+
+All six service hosts independently returned health `200`. The Supabase Auth
+hook SQL checks passed in a fresh disposable database (nine permission checks
+plus execution by the hook role), then rolled back and the database was dropped.
+The marked PostgreSQL tests and loopback HTTP checks used an isolated local
+PostgreSQL instance; no shared Supabase data or hosted configuration changed.
+
+The integrated Kestrel API check used signed test JWTs and real PostgreSQL trip
+persistence with scripted account/catalogue responses. Empty/single-stop
+creates, flexible replacement, owner isolation, invalid-date rejection,
+unchanged rejected writes and context restart all passed. PDF extraction
+returned `201` with 12 fields, the owner downloaded the original (`200`), a
+different owner received `404`, malformed PDF returned `422`, and cleanup
+returned `204`. Import success and failure left the trip body and ETag intact.
+
+Published migrations remain unchanged. The combined model has no pending EF
+changes; reviewed upgrade SQL adds the revision constraint and stop table
+without destructive operations. Read-only integration review has no remaining
+findings. Human teammate review remains required. Remote CI status is tracked
+on the PR; local results do not establish live Supabase, physical-device or
+native macOS behavior. The native Chrome checks above predate integration;
+the integrated frontend was verified by component/HTTP and JavaScript tests.
 
 ## Limits
 

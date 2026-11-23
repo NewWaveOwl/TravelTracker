@@ -14,6 +14,10 @@ public sealed class SessionAuthenticationStateProvider : AuthenticationStateProv
     readonly SessionRegistry sessions;
     Task<AuthenticationState> state = Task.FromResult(Anonymous);
 
+    /**
+     * Subscribes to revocations so a revoked session turns anonymous at once.
+     * @param sessions The frontend process's active sessions.
+     */
     public SessionAuthenticationStateProvider(SessionRegistry sessions)
     {
         this.sessions = sessions;
@@ -49,10 +53,10 @@ public sealed class SessionAuthenticationStateProvider : AuthenticationStateProv
     /** Removes this circuit's subscription when its scope ends. */
     public void Dispose() => sessions.Revoked -= OnRevoked;
 
-    void OnRevoked(string id)
+    void OnRevoked(string identifier)
     {
         var current = Volatile.Read(ref state);
-        if (current.IsCompletedSuccessfully && SessionRegistry.IdFor(current.Result.User) == id)
+        if (current.IsCompletedSuccessfully && SessionRegistry.IdFor(current.Result.User) == identifier)
             NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Claims;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace TravelTracker.Frontend.Auth;
 
@@ -8,15 +9,25 @@ namespace TravelTracker.Frontend.Auth;
  * Unknown sessions fail closed, including cookies issued before a process restart.
  *
  * @param clock Supplies the current time for expiry and cleanup.
+ * @param logger Records revocation handlers that throw; defaults to a null logger for callers without DI.
  */
-public sealed class SessionRegistry(TimeProvider clock)
+public sealed class SessionRegistry(TimeProvider clock, ILogger<SessionRegistry>? logger = null)
 {
     public const string SessionIdClaim = "traveltracker:session_id";
 
     readonly ConcurrentDictionary<string, DateTimeOffset> active = new();
+    readonly ILogger<SessionRegistry> handlerLogger = logger ?? NullLogger<SessionRegistry>.Instance;
+    readonly object subscriberGate = new();
+    Action<string>? revoked;
 
-    /** Notifies circuits when a particular session is revoked. */
-    public event Action<string>? Revoked;
+    /**
+     * Notifies circuits when a particular session is revoked; subscriptions may change from any thread.
+     */
+    public event Action<string>? Revoked
+    {
+        add { lock (subscriberGate) revoked += value; }
+        remove { lock (subscriberGate) revoked -= value; }
+    }
 
     /**
      * Issues an unguessable session ID and removes expired registrations.
@@ -30,10 +41,10 @@ public sealed class SessionRegistry(TimeProvider clock)
         foreach (var session in active)
             if (session.Value <= now)
                 active.TryRemove(session.Key, out _);
-        var id = Guid.NewGuid().ToString("N");
+        var identifier = Guid.NewGuid().ToString("N");
         if (expiresAt > now)
-            active[id] = expiresAt;
-        return id;
+            active[identifier] = expiresAt;
+        return identifier;
     }
 
     /**
@@ -58,24 +69,39 @@ public sealed class SessionRegistry(TimeProvider clock)
      */
     public bool IsActive(ClaimsPrincipal user)
     {
-        var id = IdFor(user);
-        if (id is null || !active.TryGetValue(id, out var expiresAt))
+        var identifier = IdFor(user);
+        if (identifier is null || !active.TryGetValue(identifier, out var expiresAt))
             return false;
         var now = clock.GetUtcNow();
         if (expiresAt > now && AccessTokenClaims.ActiveToken(user, now) is not null)
             return true;
-        Revoke(id);
+        Revoke(identifier);
         return false;
     }
 
     /**
-     * Invalidates one session for all its cookies and circuits.
+     * Invalidates one session for all its cookies and circuits; a throwing handler is logged and does not stop the others.
      *
-     * @param id The captured session ID; null and already-revoked IDs are harmless.
+     * @param identifier The captured session ID; null and already-revoked IDs are harmless.
      */
-    public void Revoke(string? id)
+    public void Revoke(string? identifier)
     {
-        if (id is not null && active.TryRemove(id, out _))
-            Revoked?.Invoke(id);
+        if (identifier is null || !active.TryRemove(identifier, out _))
+            return;
+        Action<string>? handlers;
+        lock (subscriberGate) handlers = revoked;
+        if (handlers is null)
+            return;
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<string>>())
+        {
+            try
+            {
+                handler(identifier);
+            }
+            catch (Exception exception)
+            {
+                handlerLogger.LogError("A session revocation handler failed; the remaining handlers still run ({FailureType})", exception.GetType().Name);
+            }
+        }
     }
 }

@@ -1,13 +1,14 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Authorization;
 
 namespace TravelTracker.Settings.Api.Access;
 
 /**
  * applies live account standing after token and scope checks: deactivated accounts are denied, banned accounts may read but not write.
+ * every endpoint that is not anonymous gets the check, so a new controller cannot skip it.
  * @param next the next request component.
+ * @param logger safe refusal diagnostics without identity or credential details.
  */
-public sealed class SettingsAccessMiddleware(RequestDelegate next)
+public sealed class SettingsAccessMiddleware(RequestDelegate next, ILogger<SettingsAccessMiddleware> logger)
 {
     /**
      * resolves the validated identity against live Users data and fails closed when Users cannot answer.
@@ -18,8 +19,8 @@ public sealed class SettingsAccessMiddleware(RequestDelegate next)
      */
     public async Task InvokeAsync(HttpContext context, UsersAccessClient users, CallerContext caller)
     {
-        if (context.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>()?.ControllerTypeInfo.AsType() !=
-            typeof(Controllers.SettingsController))
+        var metadata = context.GetEndpoint()?.Metadata;
+        if (metadata is null || metadata.GetMetadata<IAllowAnonymous>() is not null)
         {
             await next(context);
             return;
@@ -29,6 +30,7 @@ public sealed class SettingsAccessMiddleware(RequestDelegate next)
         var subject = context.User.FindFirst("sub")?.Value;
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject))
         {
+            logger.LogWarning("Settings request refused with HTTP 401: the token has no issuer or subject claim.");
             await Results.Problem(statusCode: StatusCodes.Status401Unauthorized,
                 title: "A validated issuer and subject are required.").ExecuteAsync(context);
             return;
@@ -37,10 +39,12 @@ public sealed class SettingsAccessMiddleware(RequestDelegate next)
         caller.Issuer = issuer;
         caller.Subject = subject;
         var access = await users.ResolveAsync(issuer, subject, context.RequestAborted);
-        if (access is null || access.Status == "deactivated" ||
-            access.Status == "banned" && !HttpMethods.IsGet(context.Request.Method))
+        var isBannedWrite = access?.Status == "banned" && !HttpMethods.IsGet(context.Request.Method);
+        if (access is null || access.Status == "deactivated" || isBannedWrite)
         {
             var status = access is null ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status403Forbidden;
+            var reason = access is null ? "live account standing could not be verified" : isBannedWrite ? "banned account tried to write" : "account is deactivated";
+            logger.LogWarning("Settings request refused with HTTP {StatusCode}: {Reason}.", status, reason);
             await Results.Problem(statusCode: status,
                 title: status == StatusCodes.Status503ServiceUnavailable
                     ? "Account access could not be verified."

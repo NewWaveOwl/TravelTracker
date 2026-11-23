@@ -13,6 +13,9 @@ public static class AuthExtensions
 {
     const string AccountPath = "/account";
 
+    /** marks a provider response that completed without the tokens the app needs, so it gets its own fixed code. */
+    sealed class IncompleteSignInException(string message) : Exception(message);
+
     /**
      * Adds cookie and OpenID Connect authentication for Auth0.
      *
@@ -37,6 +40,7 @@ public static class AuthExtensions
             {
                 if (!context.HttpContext.RequestServices.GetRequiredService<SessionRegistry>().IsActive(context.Principal!))
                 {
+                    context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("TravelTracker.Frontend.Auth").LogInformation("Rejected a revoked or expired session cookie");
                     context.RejectPrincipal();
                     await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                 }
@@ -74,13 +78,19 @@ public static class AuthExtensions
                     var token = context.TokenEndpointResponse?.AccessToken;
                     if (string.IsNullOrEmpty(token))
                     {
-                        logger.LogWarning("Sign-in completed without an access token for audience {Audience}", settings.Audience);
-                        context.Fail("An access token is required.");
+                        logger.LogWarning("Sign-in completed without an access token.");
+                        context.Fail(new IncompleteSignInException("An access token is required."));
                         return Task.CompletedTask;
                     }
-                    var expiresAt = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow().AddSeconds(int.TryParse(context.TokenEndpointResponse?.ExpiresIn, out var seconds) ? seconds : 0);
+                    if (!int.TryParse(context.TokenEndpointResponse?.ExpiresIn, out var seconds) || seconds <= 0)
+                    {
+                        logger.LogWarning("Sign-in completed without a usable token lifetime.");
+                        context.Fail(new IncompleteSignInException("A token lifetime is required."));
+                        return Task.CompletedTask;
+                    }
+                    var expiresAt = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow().AddSeconds(seconds);
                     var identity = (ClaimsIdentity)context.Principal!.Identity!;
-                    // Provider claims cannot choose server-owned token or session metadata.
+                    // provider claims cannot choose server-owned token or session metadata.
                     foreach (var claim in context.Principal.FindAll(AccessTokenClaims.Token).Concat(context.Principal.FindAll(AccessTokenClaims.ExpiresAt)).Concat(context.Principal.FindAll(AccessTokenClaims.GrantedScope)).Concat(context.Principal.FindAll(SessionRegistry.SessionIdClaim)).ToArray())
                         ((ClaimsIdentity)claim.Subject!).RemoveClaim(claim);
                     identity.AddClaims(
@@ -97,13 +107,17 @@ public static class AuthExtensions
                 },
                 OnTicketReceived = async context =>
                 {
-                    // Register only after nonce, correlation and protocol validation have succeeded.
+                    // register only after nonce, correlation and protocol validation have succeeded.
                     var sessions = context.HttpContext.RequestServices.GetRequiredService<SessionRegistry>();
                     // OIDC handles its callback before default cookie authentication populates HttpContext.User.
                     var previous = await context.HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                     if (previous.Principal is not null)
+                    {
                         sessions.Revoke(SessionRegistry.IdFor(previous.Principal));
+                        logger.LogInformation("Replaced an existing session during sign-in");
+                    }
                     ((ClaimsIdentity)context.Principal!.Identity!).AddClaim(new Claim(SessionRegistry.SessionIdClaim, sessions.Create(context.Properties!.ExpiresUtc!.Value)));
+                    logger.LogInformation("Sign-in completed and a session was registered");
                 },
                 OnRedirectToIdentityProviderForSignOut = context =>
                 {
@@ -114,9 +128,11 @@ public static class AuthExtensions
                 },
                 OnRemoteFailure = context =>
                 {
-                    // the callback carries provider diagnostics; keep them in the log and show only a fixed code
-                    var code = LoginFailure.CodeFor(context.Request.Query["error"], context.Request.Query["error_description"]);
-                    logger.LogWarning(context.Failure, "Sign-in failed as {Code} (provider error {Error})", code, context.Request.Query["error"].ToString());
+                    // Provider diagnostics can include credentials or untrusted callback text.
+                    var code = context.Failure is IncompleteSignInException
+                        ? LoginFailure.IncompleteSignIn
+                        : LoginFailure.CodeFor(context.Request.Query["error"], context.Request.Query["error_description"]);
+                    logger.LogWarning("Sign-in failed as {Code}", code);
                     context.Response.Redirect($"{AccountPath}?signin={code}");
                     context.HandleResponse();
                     return Task.CompletedTask;
@@ -143,7 +159,7 @@ public static class AuthExtensions
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 // most likely the tenant's discovery document could not be fetched; nothing was sent to the browser yet
-                loggers.CreateLogger("TravelTracker.Frontend.Auth").LogError(exception, "Could not start Auth0 sign-in");
+                loggers.CreateLogger("TravelTracker.Frontend.Auth").LogError("Could not start Auth0 sign-in ({FailureType})", exception.GetType().Name);
                 context.Response.Redirect($"{AccountPath}?signin={LoginFailure.StartFailed}");
             }
         });
@@ -159,6 +175,7 @@ public static class AuthExtensions
             }
             // the local session ends first, so a provider failure below can never leave the user signed in
             context.RequestServices.GetRequiredService<SessionRegistry>().Revoke(SessionRegistry.IdFor(context.User));
+            loggers.CreateLogger("TravelTracker.Frontend.Auth").LogInformation("Session revoked by sign-out");
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             try
             {
@@ -166,7 +183,7 @@ public static class AuthExtensions
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                loggers.CreateLogger("TravelTracker.Frontend.Auth").LogError(exception, "Signed out locally but Auth0 logout could not be started");
+                loggers.CreateLogger("TravelTracker.Frontend.Auth").LogError("Signed out locally but Auth0 logout could not be started ({FailureType})", exception.GetType().Name);
                 context.Response.Redirect($"{AccountPath}?signedout=local");
             }
         }).WithMetadata(new RequireAntiforgeryTokenAttribute());

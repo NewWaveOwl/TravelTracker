@@ -1,7 +1,7 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TravelTracker.Api.Authentication;
+using TravelTracker.Security.Authentication;
 using TravelTracker.Settings.Api.Contracts;
 using TravelTracker.Settings.Api.Services;
 using TravelTracker.Settings.Domain.Models;
@@ -15,6 +15,8 @@ namespace TravelTracker.Settings.Api.Controllers;
  */
 [ApiController]
 [Route("api/v1/settings")]
+[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
 public sealed class SettingsController(ISettingsService service) : ControllerBase
 {
@@ -37,7 +39,7 @@ public sealed class SettingsController(ISettingsService service) : ControllerBas
      * order: body shape (400), missing If-Match (428), field validation (400), stale or malformed If-Match (412).
      * @param request the complete writable preference set.
      * @param ifMatch the ETag the caller last read, for example "3".
-     * @return 200 with the saved preferences and new ETag; 400 field errors; 412 when the settings changed since they were read.
+     * @return 200 with the saved preferences and new ETag; 400 field errors; 412 when the settings changed since they were read; 428 when If-Match is missing.
      */
     [HttpPut]
     [Authorize(Policy = ScopePolicies.SettingsWrite)]
@@ -60,7 +62,7 @@ public sealed class SettingsController(ISettingsService service) : ControllerBas
             DefaultMapZoom = request.DefaultMapZoom!.Value,
             PreferredTransportMode = request.PreferredTransportMode!,
             TimeZone = request.TimeZone!
-        }, ParseEntityTag(ifMatch) ?? -1, HttpContext.RequestAborted);
+        }, ParseEntityTag(ifMatch), HttpContext.RequestAborted);
         if (result.Errors is not null) return ValidationProblem(new ValidationProblemDetails(result.Errors));
         if (result.Stale)
             return Problem(statusCode: StatusCodes.Status412PreconditionFailed,
@@ -77,15 +79,16 @@ public sealed class SettingsController(ISettingsService service) : ControllerBas
     private static string ToEntityTag(long revision) => $"\"{revision.ToString(CultureInfo.InvariantCulture)}\"";
 
     /**
-     * reads a strong entity tag back into its revision. weak tags, wildcards and malformed values yield null, which never matches.
+     * reads a strong entity tag back into its revision. weak tags, wildcards and malformed or non-canonical values yield null, which never matches.
      * @param value the raw If-Match value.
-     * @return the revision, or null when the value is not a strong tag of a non-negative revision.
+     * @return the revision, or null when the value is not the exact strong tag the server issues for a non-negative revision.
      */
     private static long? ParseEntityTag(string value)
     {
         var trimmed = value.Trim();
         if (trimmed.Length < 3 || trimmed[0] != '"' || trimmed[^1] != '"') return null;
-        return long.TryParse(trimmed[1..^1], NumberStyles.None, CultureInfo.InvariantCulture, out var revision) && revision >= 0
+        return long.TryParse(trimmed[1..^1], NumberStyles.None, CultureInfo.InvariantCulture, out var revision) && revision >= 0 &&
+            trimmed == ToEntityTag(revision)
             ? revision
             : null;
     }

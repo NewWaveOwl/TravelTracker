@@ -9,7 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace TravelTracker.Frontend.Tests.Support;
 
 /**
- * Plays the Auth0 tenant in process: discovery, signing keys and the token endpoint, so the real
+ * plays the Auth0 tenant in process: discovery, signing keys and the token endpoint, so the real
  * OpenID Connect handler runs end to end without a browser or a network.
  *
  * @param clientId The client id the id token is issued to.
@@ -20,10 +20,10 @@ public sealed class FakeAuth0(string clientId) : HttpMessageHandler
 
     readonly RSA signingKey = RSA.Create(2048);
 
-    /** The nonce from the authorize redirect; the id token echoes it unless a test overrides it. */
+    /** the nonce from the authorize redirect; the id token echoes it unless a test overrides it. */
     public string? Nonce { get; set; }
 
-    /** The PKCE challenge from the authorize redirect, checked against the verifier at the token endpoint. */
+    /** the PKCE challenge from the authorize redirect, checked against the verifier at the token endpoint. */
     public string? CodeChallenge { get; set; }
 
     public string AccessToken { get; set; } = "access-token-1";
@@ -42,19 +42,27 @@ public sealed class FakeAuth0(string clientId) : HttpMessageHandler
 
     public TimeSpan IdTokenLifetime { get; set; } = TimeSpan.FromMinutes(10);
 
-    /** Signs the id token with a key that is not in the published key set. */
+    /** signs the id token with a key that is not in the published key set. */
     public bool SignWithUnpublishedKey { get; set; }
 
-    /** Leaves access_token out of the token response, as a misconfigured API grant can. */
+    /** leaves access_token out of the token response, as a misconfigured API grant can. */
     public bool OmitAccessToken { get; set; }
 
-    /** Makes every request to the tenant fail at the transport level, as a down or unreachable tenant would. */
+    /** makes every request to the tenant fail at the transport level, as a down or unreachable tenant would. */
     public bool Unreachable { get; set; }
 
-    /** Makes the token endpoint answer with this status and an OAuth error body instead of tokens. */
+    /** makes the token endpoint answer with this status and an OAuth error body instead of tokens. */
     public HttpStatusCode? TokenEndpointFailure { get; set; }
 
     public List<Dictionary<string, string>> TokenRequests { get; } = [];
+
+    /** Releases the signing key that the published key set was built from. */
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            signingKey.Dispose();
+        base.Dispose(disposing);
+    }
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {

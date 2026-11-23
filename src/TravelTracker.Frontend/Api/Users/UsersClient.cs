@@ -4,9 +4,57 @@ namespace TravelTracker.Frontend.Api.Users;
  * Reads and updates the signed-in caller's profile, reads live Users roles, and completes an operator-configured, one-time bootstrap.
  * @param client Uses only the authenticated session and a configured destination.
  * @param configuration Holds the setup secret on the server.
+ * @param logger Records expected outcomes such as a missing account; optional so tests can omit it.
  */
-public sealed class UsersClient(ProtectedClient client, IConfiguration configuration)
+public sealed class UsersClient(ProtectedClient client, IConfiguration configuration, ILogger<UsersClient>? logger = null)
 {
+    public const int MaxPictureUploadBytes = 1024 * 1024;
+    public const int MaxPictureReadBytes = 2 * 1024 * 1024;
+    public const int MaxPictureSide = 512;
+    const string PicturePath = "/api/v1/users/me/picture";
+
+    /**
+     * Reads the current owner's private normalized PNG through bearer-authenticated HTTP.
+     * @param expectedSessionId Optional rendered-owner session guard.
+     * @param cancellationToken Cancels a closed or superseded view.
+     * @return The bounded image, or null when no picture has been saved.
+     */
+    public async Task<byte[]?> GetPictureAsync(string? expectedSessionId = null, CancellationToken cancellationToken = default)
+    {
+        try { return await client.SendImageAsync("Users", HttpMethod.Get, PicturePath, null, null, MaxPictureReadBytes, expectedSessionId, cancellationToken); }
+        catch (ApiError failure) when (failure.Status == 404) { return null; }
+    }
+
+    /**
+     * Replaces only the current active owner's photo using raw PNG/JPEG bytes; no multipart filename is sent.
+     * @param picture Bounded input bytes. The server verifies pixels, dimensions and static format.
+     * @param contentType The file's PNG or JPEG media type.
+     * @param expectedSessionId Optional rendered-owner session guard.
+     * @param cancellationToken Cancels a closed or superseded view.
+     * @return Completion only after the API confirms 204. A subsequent read always uses the fixed own-picture path.
+     */
+    public async Task ReplacePictureAsync(byte[] picture, string contentType, string? expectedSessionId = null, CancellationToken cancellationToken = default)
+    {
+        if (picture.Length is < 1 or > MaxPictureUploadBytes)
+            throw new ApiError(FailureKind.Validation, "Choose a photo no larger than 1 MiB (1,048,576 bytes).", 413);
+        if (!string.Equals(contentType, "image/png", StringComparison.OrdinalIgnoreCase) && !string.Equals(contentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
+            throw new ApiError(FailureKind.Validation, "Choose one static PNG or JPEG photo.", 415);
+        try
+        {
+            await client.SendImageAsync("Users", HttpMethod.Put, PicturePath, picture, contentType.ToLowerInvariant(), MaxPictureReadBytes, expectedSessionId, cancellationToken);
+        }
+        catch (ApiError failure) when (failure.Status is 400 or 413 or 415)
+        {
+            throw new ApiError(FailureKind.Validation, failure.Status switch
+            {
+                413 => "Choose a photo no larger than 1 MiB with width and height no greater than 512 pixels.",
+                415 => "Choose one static PNG or JPEG photo with its matching format.",
+                _ => "The photo is empty or could not be read. Choose a valid static PNG or JPEG."
+            }, failure.Status);
+        }
+    }
+
+    /** true when the operator provisioned a long enough bootstrap secret. */
     public bool SetupEnabled => configuration["AdminBootstrap:Secret"] is { Length: >= 32 };
 
     /**
@@ -16,8 +64,16 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
      */
     public async Task<SelfUserProfile?> GetMeAsync(CancellationToken cancellationToken = default)
     {
-        try { return await client.GetJsonAsync<SelfUserProfile>("Users", "/api/v1/users/me", cancellationToken); }
-        catch (ApiError failure) when (failure.Status == 404) { return null; }
+        try
+        {
+            return await client.GetJsonAsync<SelfUserProfile>("Users", "/api/v1/users/me", cancellationToken);
+        }
+        catch (ApiError failure) when (failure.Status == 404)
+        {
+            // expected for a first sign-in: the identity has no Users account yet
+            logger?.LogInformation("The signed-in identity has no Users account yet");
+            return null;
+        }
     }
 
     /**
@@ -46,27 +102,27 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
 
     /**
      * Requests a role change with an explicit reason and the version of the role the administrator reviewed.
-     * @param id Public target user identifier.
+     * @param identifier Public target user identifier.
      * @param role Requested application role.
      * @param expectedRole Last observed target role, checked atomically by the service.
      * @param reason Explanation retained in the permanent role audit.
      * @param cancellationToken Cancels the pending request.
      * @return Only the server-confirmed updated profile.
      */
-    public async Task<UserProfile> ChangeRoleAsync(Guid id, string role, string expectedRole, string reason, CancellationToken cancellationToken = default)
+    public async Task<UserProfile> ChangeRoleAsync(Guid identifier, string role, string expectedRole, string reason, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await client.SendJsonAsync<UserProfile>("Users", HttpMethod.Patch, $"/api/v1/users/{id:D}/role", new { role, expectedRole, reason }, cancellationToken)
+            return await client.SendJsonAsync<UserProfile>("Users", HttpMethod.Patch, $"/api/v1/users/{identifier:D}/role", new { role, expectedRole, reason }, cancellationToken)
                 ?? throw new ApiError(FailureKind.Unexpected, "The role change could not be confirmed. Refresh users before retrying.");
         }
         catch (ApiError failure) when (failure.Status is 400 or 404 or 409)
         {
             var message = failure.Status switch
             {
-                400 => "Choose a valid role and enter a reason of 1–500 characters. Inactive accounts cannot be promoted.",
+                400 => "Choose a valid role and enter a reason of 1 to 500 characters. Inactive accounts cannot be promoted.",
                 404 => "That user is no longer available. Refresh the users list.",
-                _ => "The role change was refused. Refresh users before retrying; the last active administrator cannot be demoted."
+                _ => "The role change was refused, for example because the account changed or it is the last active administrator. Refresh users before retrying."
             };
             throw new ApiError(failure.Kind, message, failure.Status, failure.Errors);
         }

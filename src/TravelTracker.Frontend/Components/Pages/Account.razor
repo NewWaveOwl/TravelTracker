@@ -5,9 +5,16 @@
 @using TravelTracker.Frontend.Api.Users
 @using TravelTracker.Frontend.Auth
 @using TravelTracker.Frontend.Features.Users
+@using TravelTracker.Frontend.Components.Users
 
 <PageTitle>Your profile | TravelTracker</PageTitle>
-<PageHeading Title="Your profile" />
+<PageHeading Title="@(editing ? "Edit profile" : "Your profile")" />
+<p>@(editing ? "Update your profile details." : "View and manage your TravelTracker profile.")</p>
+
+@if (CredentialMessage is not null)
+{
+    <p role="status">@CredentialMessage</p>
+}
 
 @if (!Setup.Configured)
 {
@@ -24,6 +31,7 @@ else if (!signedIn)
         {
             <Feedback Kind="FeedbackKind.Unexpected" Title="Unable to sign in" Eyebrow="SIGN-IN ERROR">@LoginFailure.MessageFor(SignInFailure)</Feedback>
         }
+        <small>ACCESS REQUIRED</small>
         <h2 id="guest-profile-heading">Sign in to view your profile</h2>
         <p>Your profile is connected to your TravelTracker account. Sign in to view and update your permitted profile details.</p>
         @if (sessionMessage is not null)
@@ -32,14 +40,21 @@ else if (!signedIn)
         }
         @if (SignedOut == "local")
         {
-            <p role="status">Your TravelTracker session has ended. Provider sign-out could not be completed; sign in again when you're ready.</p>
+            <p role="status">Your TravelTracker session has ended. Provider sign-out could not be completed; sign in again when you’re ready.</p>
         }
         <div class="actions"><button @onclick="SignIn">Sign in</button></div>
     </section>
 }
 else if (profile is null)
 {
-    <Feedback Kind="loadFailureKind" Title="@loadFailureTitle" Retry="RetryLoadAsync">@loadFailure</Feedback>
+    @if (noAccount)
+    {
+        <Feedback Kind="FeedbackKind.Empty" Title="No TravelTracker profile yet">Your sign-in works, but TravelTracker has no profile for it yet. Try again later, or contact support if this continues.</Feedback>
+    }
+    else
+    {
+        <Feedback Kind="loadFailureKind" Title="@loadFailureTitle" Retry="RetryLoadAsync">@loadFailure</Feedback>
+    }
     <form method="post" action="auth/logout" class="profile-signout">
         <AntiforgeryToken />
         <button type="submit" class="secondary">Sign out</button>
@@ -56,6 +71,10 @@ else
         {
             <aside class="profile-notice" role="status"><strong>Read-only profile</strong><p>Your account is read-only. You can view your profile, but changes are unavailable.</p></aside>
         }
+        else if (profile.Status == "deactivated")
+        {
+            <aside class="profile-notice" role="status"><strong>Account deactivated</strong><p>This account is deactivated, so profile changes are unavailable. Contact support if you believe this is an error.</p></aside>
+        }
         else if (!HasScope("users.write"))
         {
             <aside class="profile-notice" role="status"><strong>Read-only profile</strong><p>This session can view your profile but does not have permission to edit it. Sign out and back in after <code>users.write</code> is granted.</p></aside>
@@ -65,10 +84,17 @@ else
             <aside class="profile-error" role="alert"><strong>Profile editing is unavailable</strong><p>@(saveError ?? "Your account no longer has permission to edit this profile. Your entered values are still shown below.")</p></aside>
         }
 
-        @if (editing && editModel is not null && editContext is not null)
-        {
-            <section class="profile-card profile-editor" aria-labelledby="edit-profile-heading">
-                <h2 id="edit-profile-heading">Edit profile</h2>
+        <section class="profile-card @(editing ? "profile-editor" : null)" aria-labelledby="@(editing ? "edit-profile-heading" : "profile-overview-heading")">
+            <div class="profile-heading-row">
+                <h2 id="@(editing ? "edit-profile-heading" : "profile-overview-heading")">@(editing ? "Edit profile" : "Profile details")</h2>
+                @if (!editing && CanEdit)
+                {
+                    <button @onclick="BeginEdit">Edit profile</button>
+                }
+            </div>
+            <ProfilePicture @key="generation" Profile="profile" Editable="CanEdit" Editing="editing" Disabled="busy" />
+            @if (editing && editModel is not null && editContext is not null)
+            {
                 <p class="profile-help">Email is contact information and does not change your sign-in email or password.</p>
                 @if (saveError is not null && !writeDenied)
                 {
@@ -80,7 +106,7 @@ else
                     <div class="profile-field">
                         <label for="profile-username">Username</label>
                         <InputText id="profile-username" @bind-Value="editModel.Username" autocomplete="username" maxlength="32" aria-describedby="profile-username-help" disabled="@(busy || writeDenied)" />
-                        <small id="profile-username-help">3–32 characters: letters, numbers, periods, underscores or hyphens.</small>
+                        <small id="profile-username-help">3 to 32 characters: letters, numbers, periods, underscores or hyphens.</small>
                         <ValidationMessage For="() => editModel.Username" />
                     </div>
                     <div class="profile-field">
@@ -100,18 +126,9 @@ else
                         <button type="button" class="secondary" disabled="@busy" @onclick="CancelEdit">Cancel</button>
                     </div>
                 </EditForm>
-            </section>
-        }
-        else
-        {
-            <section class="profile-card" aria-labelledby="profile-overview-heading">
-                <div class="profile-heading-row">
-                    <h2 id="profile-overview-heading">Profile details</h2>
-                    @if (CanEdit)
-                    {
-                        <button @onclick="BeginEdit">Edit profile</button>
-                    }
-                </div>
+            }
+            else
+            {
                 <dl class="profile-details">
                     <dt>Username</dt><dd>@Display(profile.Username)</dd>
                     <dt>Contact email</dt><dd>@Display(profile.Email)</dd>
@@ -119,6 +136,43 @@ else
                     <dt>Account type</dt><dd>@RoleLabel(profile.Role)</dd>
                     <dt>Account status</dt><dd>@StatusLabel(profile.Status)</dd>
                 </dl>
+            }
+        </section>
+
+        @if (CanEdit && Setup.Supabase is not null)
+        {
+            <section class="profile-card" aria-labelledby="profile-credentials">
+                <h2 id="profile-credentials">Sign-in credentials</h2>
+                <details>
+                    <summary>Change sign-in email</summary>
+                    <form method="post" action="/auth/change-credential" class="profile-editor">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="operation" value="email" />
+                        <label for="email-change-current">Current sign-in email</label>
+                        <input id="email-change-current" type="email" name="loginEmail" autocomplete="username" maxlength="254" required />
+                        <label for="email-change-password">Current password</label>
+                        <input id="email-change-password" type="password" name="currentPassword" autocomplete="current-password" maxlength="128" required />
+                        <label for="email-change-new">New sign-in email</label>
+                        <input id="email-change-new" type="email" name="newEmail" autocomplete="email" maxlength="254" required />
+                        <button type="submit">Request email change</button>
+                    </form>
+                </details>
+                <details>
+                    <summary>Change password</summary>
+                    <form method="post" action="/auth/change-credential" class="profile-editor">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="operation" value="password" />
+                        <label for="password-change-email">Current sign-in email</label>
+                        <input id="password-change-email" type="email" name="loginEmail" autocomplete="username" maxlength="254" required />
+                        <label for="password-change-current">Current password</label>
+                        <input id="password-change-current" type="password" name="currentPassword" autocomplete="current-password" maxlength="128" required />
+                        <label for="password-change-new">New password</label>
+                        <input id="password-change-new" type="password" name="newPassword" autocomplete="new-password" minlength="8" maxlength="128" required />
+                        <label for="password-change-confirm">Confirm new password</label>
+                        <input id="password-change-confirm" type="password" name="passwordConfirmation" autocomplete="new-password" minlength="8" maxlength="128" required />
+                        <button type="submit">Change password</button>
+                    </form>
+                </details>
             </section>
         }
 

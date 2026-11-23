@@ -1,7 +1,7 @@
 namespace TravelTracker.Trips.Data.Entities;
 
 /**
- * Stores one trip's own values and server-resolved owner. Offsets are kept beside the instants because
+ * stores one trip's own values and server-resolved owner. Offsets are kept beside the instants because
  * PostgreSQL timestamptz does not keep the offset the traveller entered.
  */
 internal sealed class TripRow

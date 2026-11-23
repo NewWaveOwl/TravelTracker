@@ -9,12 +9,14 @@ namespace TravelTracker.Api.Tests.Trips;
 /**
  * Proves the DI registration resolves a working graph and that invalid TripReferences settings fail validation.
  */
-public sealed class TripReferenceRegistrationTests {
+public sealed class TripReferenceRegistrationTests
+{
     /**
      * The registered validator and save service resolve and complete a valid save through the configured clients.
      */
     [Fact]
-    public async Task Registration_ResolvesSaveServiceThatCompletesAValidSave() {
+    public async Task Registration_ResolvesSaveServiceThatCompletesAValidSave()
+    {
         var repository = new FakeTripRepository();
         using var provider = TripFixture.CreateProvider(TripFixture.HealthyUpstream(), new LogSink(), repository);
 
@@ -30,7 +32,8 @@ public sealed class TripReferenceRegistrationTests {
      * The per-call timeout defaults to five seconds when the section does not set one.
      */
     [Fact]
-    public void Options_TimeoutDefaultsToFiveSeconds() {
+    public void Options_TimeoutDefaultsToFiveSeconds()
+    {
         using var provider = TripFixture.CreateProvider(new StubUpstream(), new LogSink());
 
         Assert.Equal(TimeSpan.FromSeconds(5), provider.GetRequiredService<IOptions<TripReferenceOptions>>().Value.Timeout);
@@ -40,7 +43,8 @@ public sealed class TripReferenceRegistrationTests {
      * A configured timeout replaces the default.
      */
     [Fact]
-    public void Options_ConfiguredTimeoutReplacesDefault() {
+    public void Options_ConfiguredTimeoutReplacesDefault()
+    {
         using var provider = TripFixture.CreateProvider(new StubUpstream(), new LogSink(),
             overrides: new Dictionary<string, string?> { ["TripReferences:Timeout"] = "00:00:02" });
 
@@ -65,7 +69,8 @@ public sealed class TripReferenceRegistrationTests {
     [InlineData("TripReferences:TransportBaseUrl", "not a url", "TransportBaseUrl")]
     [InlineData("TripReferences:Timeout", "00:00:00", "Timeout")]
     [InlineData("TripReferences:Timeout", "00:01:01", "Timeout")]
-    public void Options_InvalidSetting_FailsValidationWhenResolved(string key, string? value, string expectedFragment) {
+    public void Options_InvalidSetting_FailsValidationWhenResolved(string key, string? value, string expectedFragment)
+    {
         using var provider = TripFixture.CreateProvider(new StubUpstream(), new LogSink(),
             overrides: new Dictionary<string, string?> { [key] = value });
 
@@ -74,10 +79,44 @@ public sealed class TripReferenceRegistrationTests {
     }
 
     /**
+     * The timeout limits are inclusive: a value just above zero and exactly sixty seconds are accepted.
+     *
+     * @param timeout The accepted boundary value.
+     */
+    [Theory]
+    [InlineData("00:00:01")]
+    [InlineData("00:01:00")]
+    public void Options_TimeoutAtTheBoundary_IsAccepted(string timeout)
+    {
+        using var provider = TripFixture.CreateProvider(new StubUpstream(), new LogSink(),
+            overrides: new Dictionary<string, string?> { ["TripReferences:Timeout"] = timeout });
+
+        Assert.Equal(TimeSpan.Parse(timeout), provider.GetRequiredService<IOptions<TripReferenceOptions>>().Value.Timeout);
+    }
+
+    /**
+     * Plain http is accepted for the local catalogue hosts but is logged as a warning that names the service, never the address.
+     */
+    [Fact]
+    public void Options_PlainHttpCatalogue_IsAcceptedButWarned()
+    {
+        var logs = new LogSink();
+        using var provider = TripFixture.CreateProvider(new StubUpstream(), logs,
+            overrides: new Dictionary<string, string?> { ["TripReferences:TransportBaseUrl"] = "http://transport.test:5105" });
+
+        _ = provider.GetRequiredService<IOptions<TripReferenceOptions>>().Value;
+
+        var warning = Assert.Single(logs.Entries, entry => entry.Level == Microsoft.Extensions.Logging.LogLevel.Warning);
+        Assert.Contains("Transport", warning.Message);
+        Assert.DoesNotContain("transport.test", warning.Message);
+    }
+
+    /**
      * A rejected credential is never echoed back in the validation failure.
      */
     [Fact]
-    public void Options_InvalidToken_FailureNeverEchoesTheValue() {
+    public void Options_InvalidToken_FailureNeverEchoesTheValue()
+    {
         using var provider = TripFixture.CreateProvider(new StubUpstream(), new LogSink(),
             overrides: new Dictionary<string, string?> { ["TripReferences:UsersServiceAccessToken"] = "leaked value" });
 

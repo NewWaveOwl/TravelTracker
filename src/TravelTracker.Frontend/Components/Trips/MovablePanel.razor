@@ -1,0 +1,124 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JavaScript
+@implements IAsyncDisposable
+
+<section @ref="panel" class="movable-panel @Class" aria-label="@Label">
+    @if (Enabled)
+    {
+        <div @ref="header" class="movable-panel-controls">
+            <span class="movable-panel-label">@Label</span>
+            <button @ref="handle" type="button" class="movable-panel-handle" aria-label="@($"Move {Label} panel")"
+                    title="Click to collapse or expand; drag to move; double-click to restore" aria-expanded="true" aria-controls="@bodyId" aria-describedby="@instructionsId"
+                    aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home">
+                <img src="assets/icons/panel-box.svg" alt="" />
+            </button>
+        </div>
+        <span id="@instructionsId" class="movable-panel-instructions">Click to collapse or expand. Drag the header or icon, or use arrow keys to move. Shift moves farther. Double-click, double-tap or Home restores the position and expands the panel.</span>
+    }
+    <div id="@bodyId" class="movable-panel-body">@ChildContent</div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "Workspace";
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /** Whether map-only movement controls and browser handlers are enabled. */
+    [Parameter] public bool Enabled { get; set; } = true;
+    /** Advances when a workspace action needs its panel content revealed at the current position. */
+    [Parameter] public long RevealVersion { get; set; }
+
+    readonly string instructionsId = $"panel-instructions-{Guid.NewGuid():N}";
+    readonly string bodyId = $"panel-body-{Guid.NewGuid():N}";
+    ElementReference panel, handle, header;
+    IJSObjectReference? module, controller;
+    bool disposed, synchronizing;
+    long revealedVersion;
+
+    /**
+     * Synchronizes movement handlers after rendering without remounting editable children.
+     * @param firstRender Whether this is the first interactive render.
+     * @return Completion of movement attachment or teardown for the current view.
+     */
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (disposed || synchronizing) return;
+        synchronizing = true;
+        var enabled = Enabled;
+        try
+        {
+            if (!Enabled)
+            {
+                revealedVersion = RevealVersion;
+                if (controller is not null)
+                {
+                    await controller.InvokeVoidAsync("reset");
+                    await controller.InvokeVoidAsync("dispose");
+                    await controller.DisposeAsync();
+                    controller = null;
+                }
+                return;
+            }
+            if (controller is not null) { await RevealRequestedAsync(); return; }
+            if (module is null)
+            {
+                var imported = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Trips/MovablePanel.razor.js");
+                if (disposed)
+                {
+                    if (imported is not null) await imported.DisposeAsync();
+                    return;
+                }
+                module = imported;
+            }
+            if (disposed || !Enabled || module is null) return;
+            var attached = await module.InvokeAsync<IJSObjectReference>("attach", panel, handle, header);
+            if (disposed || !Enabled)
+            {
+                if (attached is not null)
+                {
+                    await attached.InvokeVoidAsync("reset");
+                    await attached.InvokeVoidAsync("dispose");
+                    await attached.DisposeAsync();
+                }
+            }
+            else { controller = attached; await RevealRequestedAsync(); }
+        }
+        catch (JSDisconnectedException) { }
+        finally
+        {
+            synchronizing = false;
+            if (!disposed && enabled != Enabled) StateHasChanged();
+        }
+    }
+
+    /**
+     * Reveals requested feedback without resetting panel position or editable child state.
+     * @return Completion of any requested browser expansion.
+     */
+    async Task RevealRequestedAsync()
+    {
+        if (controller is null || revealedVersion == RevealVersion) return;
+        revealedVersion = RevealVersion;
+        await controller.InvokeVoidAsync("expand");
+    }
+
+    /**
+     * Releases movement handlers and browser references.
+     * @return Completion of browser resource disposal.
+     */
+    public async ValueTask DisposeAsync()
+    {
+        if (disposed) return;
+        disposed = true;
+        try
+        {
+            if (controller is not null)
+            {
+                await controller.InvokeVoidAsync("dispose");
+                await controller.DisposeAsync();
+            }
+            if (module is not null) await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+}
