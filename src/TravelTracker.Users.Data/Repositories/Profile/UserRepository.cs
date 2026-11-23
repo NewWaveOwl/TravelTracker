@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using TravelTracker.Users.Data.Entities;
 using TravelTracker.Users.Domain.Models;
 using TravelTracker.Users.Domain.Types;

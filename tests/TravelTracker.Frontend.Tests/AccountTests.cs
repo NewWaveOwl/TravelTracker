@@ -143,7 +143,7 @@ public sealed class AccountTests : BunitContext
         var page = Render<Account>();
         var widget = page.FindComponent<TravelTracker.Frontend.Components.Users.ProfilePicture>().Instance;
         page.Find("button").Click();
-        page.Find("#profile-username").Change("unsaved_text_name");
+        page.Find("#profile-address").Change("unsaved text address");
         var file = Bunit.InputFileContent.CreateFromBinary(png, "private.png", contentType: "image/png");
         page.FindComponent<Microsoft.AspNetCore.Components.Forms.InputFile>().UploadFiles(file);
         page.WaitForAssertion(() => Assert.Contains("Photo saved.", page.Markup));
@@ -152,7 +152,7 @@ public sealed class AccountTests : BunitContext
 
         Assert.Same(widget, page.FindComponent<TravelTracker.Frontend.Components.Users.ProfilePicture>().Instance);
         Assert.Equal("data:image/png;base64," + Convert.ToBase64String(png), page.Find(".profile-picture img").GetAttribute("src"));
-        Assert.DoesNotContain("unsaved_text_name", page.Markup);
+        Assert.DoesNotContain("unsaved text address", page.Markup);
         Assert.Equal(0, profileWrites);
     }
 
