@@ -60,7 +60,7 @@
     @if (!CanConfirmContext) { <p class="route-hint">Apply or cancel your marker details before confirming a route.</p> }
     @if (destination != origin + 1) { <p class="route-hint">Only adjacent stops can receive a confirmed connection. Reorder the itinerary explicitly before confirming this pair.</p> }
     <p role="status" aria-live="polite">@message</p>
-    <RoutePreviewPanel @key="previewVersion" Client="Client" Request="ActiveRequest" Selected="SelectPreviewAsync" CanSearch="@(!Disabled && !loadingOptions && !confirming)" />
+    <RoutePreviewPanel @key="previewVersion" Client="Client" Request="ActiveRequest" Selected="SelectPreviewAsync" CanSearch="@(!Disabled && !loadingOptions && !confirming)" Disabled="@(Disabled || confirming)" />
     <div class="route-confirm-actions">
         <button type="button" disabled="@(!CanConfirmSelection)" @onclick="ConfirmAsync">@(confirming ? "Applying route…" : "Confirm selected route")</button>
         <button type="button" class="secondary" disabled="@confirming" @onclick="CancelAsync">Cancel route preview</button>

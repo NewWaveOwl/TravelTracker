@@ -88,7 +88,7 @@ public partial class NewTrip
         {
             var mode = await Transport.GetTransportAsync(selection.Transport.TransportModeId, closed.Token);
             if (!ReferenceEquals(requestedDraft, draft) || requestedRevision != routingRevision || version != routeVersion ||
-                HasUnconfirmedMarkerChanges || !PreviewStillCurrent(selection) || mode.Code != selection.Request.Mode ||
+                previewSelection != selection || HasUnconfirmedMarkerChanges || !PreviewStillCurrent(selection) || mode.Code != selection.Request.Mode ||
                 mode.TransportModeId != selection.Transport.TransportModeId || string.IsNullOrWhiteSpace(mode.Name)) return false;
             var starts = selection.Itinerary.Legs[0].DepartureTime;
             var ends = selection.Itinerary.Legs[^1].ArrivalTime;

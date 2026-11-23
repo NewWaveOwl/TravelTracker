@@ -1109,6 +1109,11 @@ public sealed class TripPlannerTests : BunitContext
         var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
         Assert.Empty(page.FindAll(".trip-basics input[type=datetime-local]"));
         Assert.Equal(new DateOnly(2026, 11, 14), page.FindComponent<TravelTracker.Frontend.Components.Trips.TripDateRangePicker>().Instance.Start);
+        page.Find("button[aria-label^='Edit connection 1:']").Click();
+        var unchangedTimes = page.FindAll(".leg-fields input[type=datetime-local]");
+        unchangedTimes[0].Change(unchangedTimes[0].GetAttribute("value"));
+        var unchangedArrival = page.FindAll(".leg-fields input[type=datetime-local]")[1];
+        unchangedArrival.Change(unchangedArrival.GetAttribute("value"));
         page.Find(".map-trip-name, .trip-basics input").Change("Renamed trip");
         Click(page, "Review trip");
         Click(page, "Save trip");
@@ -2481,6 +2486,102 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal(0, catalogueWrites);
         Assert.Equal(2, page.FindAll(".provider-route").Count);
         Assert.Equal(new[] { "Hotel", "Museum" }, page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>().Instance.Stops.Select(stop => stop.Name));
+    }
+
+    [Theory]
+    [InlineData(".leg-fields input[type=datetime-local]", 0)]
+    [InlineData(".leg-fields input[type=datetime-local]", 1)]
+    [InlineData("input[aria-label='Duration hours']", 0)]
+    [InlineData("input[aria-label='Duration minutes']", 0)]
+    public void KeyboardSaveFromAnUnchangedConnectionFieldPreservesConfirmedRouteTimes(string selector, int index)
+    {
+        SaveTripRequest? savedRequest = null;
+        Configure(async (request, token) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/v1/routes/capabilities") return RoutingFixtures.Json(RoutingFixtures.Capabilities);
+            if (path == "/v1/routes/plan") return RoutingFixtures.Json(RoutingFixtures.Success());
+            if (path.StartsWith("/api/v1/transport-modes"))
+                return path.EndsWith(Train.TransportModeId.ToString(), StringComparison.Ordinal)
+                    ? RoutingFixtures.Json(RoutingFixtures.Train) : RoutingFixtures.Json(new[] { RoutingFixtures.Train });
+            Assert.Equal($"/api/v1/trips/{TripId:D}", path);
+            if (request.Method == HttpMethod.Get) return Json(Saved);
+            savedRequest = (await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token))!;
+            var leg = Assert.Single(savedRequest.Legs);
+            return Json(Saved with { Legs = [Saved.Legs[0] with { Departure = leg.Departure, Arrival = leg.Arrival }] });
+        }, routing: true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        page.Find("button[aria-label^='Edit connection 1:']").Click();
+        Click(page, "Load routing options");
+        page.WaitForAssertion(() => Assert.False(page.Find("#route-mode option[value=train]").HasAttribute("disabled")));
+        Click(page, "Find routes");
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".route-options > li")));
+        page.Find(".route-options > li > button").Click();
+        Click(page, "Confirm selected route");
+        page.WaitForAssertion(() => Assert.Contains("Selected route applied", page.Markup));
+
+        // The save shortcut commits the focused field with change before clicking the workspace save button.
+        var focused = page.FindAll(selector)[index];
+        focused.Change(focused.GetAttribute("value"));
+        page.Find("[data-trip-save]").Click();
+
+        page.WaitForAssertion(() => Assert.NotNull(savedRequest));
+        Assert.Equal(RoutingFixtures.Departure, savedRequest!.Legs[0].Departure);
+        Assert.Equal(RoutingFixtures.Arrival, savedRequest.Legs[0].Arrival);
+        Assert.Equal(2, page.FindAll(".provider-route").Count);
+    }
+
+    [Fact]
+    public async Task ClearingTheSelectionDuringTransportConfirmationPreservesTheConnection()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reply = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Configure((request, token) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/v1/routes/capabilities") return Task.FromResult(RoutingFixtures.Json(RoutingFixtures.Capabilities));
+            if (path == "/v1/routes/plan") return Task.FromResult(RoutingFixtures.Json(RoutingFixtures.Success()));
+            if (path.StartsWith("/api/v1/transport-modes"))
+            {
+                if (path.EndsWith(Train.TransportModeId.ToString(), StringComparison.Ordinal))
+                {
+                    started.TrySetResult();
+                    return reply.Task.WaitAsync(token);
+                }
+                return Task.FromResult(RoutingFixtures.Json(new[] { RoutingFixtures.Train }));
+            }
+            Assert.Equal(HttpMethod.Get, request.Method);
+            return Task.FromResult(Json(Saved));
+        }, routing: true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        page.Find("button[aria-label^='Edit connection 1:']").Click();
+        Click(page, "Load routing options");
+        page.WaitForAssertion(() => Assert.False(page.Find("#route-mode option[value=train]").HasAttribute("disabled")));
+        Click(page, "Find routes");
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".route-options > li")));
+        page.Find(".route-options > li > button").Click();
+        var confirmation = page.FindAll("button").Single(button => button.TextContent == "Confirm selected route")
+            .TriggerEventAsync("onclick", new MouseEventArgs());
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            // Model an invalidation delivered while the asynchronous catalogue check is pending.
+            await page.InvokeAsync(() => page.FindComponent<TravelTracker.Frontend.Components.Trips.RoutePlannerPanel>()
+                .Instance.PreviewChanged.InvokeAsync(null));
+        }
+        finally
+        {
+            reply.TrySetResult(RoutingFixtures.Json(RoutingFixtures.Train));
+        }
+        await confirmation;
+
+        Assert.Contains("route was not applied", page.Markup);
+        Assert.Equal(Saved.Legs[0].Departure, page.FindComponent<TravelTracker.Frontend.Components.Trips.RoutePlannerPanel>()
+            .Instance.InitialRequest!.DepartureTime);
+        Assert.Empty(page.FindAll(".provider-route"));
+        Assert.False(page.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
     }
 
     [Fact]

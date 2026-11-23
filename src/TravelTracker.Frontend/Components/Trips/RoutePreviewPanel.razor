@@ -8,10 +8,10 @@
     {
         <p>Choose a connection, transport and departure time to preview routes. Resolve any repeated-time UTC offset first.</p>
     }
-    <button type="button" class="secondary" disabled="@(Request is null || loading || !CanSearch)" @onclick="LoadAsync">@(loading ? "Finding routes…" : "Find routes")</button>
+    <button type="button" class="secondary" disabled="@(Request is null || loading || !CanSearch || Disabled)" @onclick="LoadAsync">@(loading ? "Finding routes…" : "Find routes")</button>
     @if (loading)
     {
-        <button type="button" class="secondary" @onclick="CancelPreview">Cancel route lookup</button>
+        <button type="button" class="secondary" disabled="@Disabled" @onclick="CancelPreview">Cancel route lookup</button>
     }
     <p role="status" aria-live="polite">@message</p>
     @if (routes.Count > 0)
@@ -20,7 +20,7 @@
         @foreach (var route in routes)
         {
             <li>
-                <button type="button" class="secondary" aria-pressed="@(route == chosen ? "true" : "false")" @onclick="() => SelectAsync(route)">
+                <button type="button" class="secondary" disabled="@Disabled" aria-pressed="@(route == chosen ? "true" : "false")" @onclick="() => SelectAsync(route)">
                     <strong>@($"{Math.Ceiling(route.DurationSeconds / 60)} min · {route.DistanceMeters / 1000:0.0} km")</strong>
                     <span>@TimingLabel(route.TimingBasis)</span>
                     <span>Departs @TimeLabel(route.Legs[0].DepartureTime) · Arrives @TimeLabel(route.Legs[^1].ArrivalTime)</span>
@@ -58,7 +58,7 @@
             </li>
         }
         </ul>
-        <button type="button" class="secondary" @onclick="() => SelectAsync(null)">Clear route preview</button>
+        <button type="button" class="secondary" disabled="@Disabled" @onclick="() => SelectAsync(null)">Clear route preview</button>
     }
 </section>
 
@@ -67,6 +67,8 @@
     [Parameter] public RoutePlanRequest? Request { get; set; }
     [Parameter] public EventCallback<RouteItinerary?> Selected { get; set; }
     [Parameter] public bool CanSearch { get; set; } = true;
+    /** Locks preview actions while a connection is being confirmed. */
+    [Parameter] public bool Disabled { get; set; }
 
     CancellationTokenSource? pending;
     RoutePlanRequest? previous;
@@ -88,9 +90,10 @@
 
     async Task LoadAsync()
     {
+        if (Disabled || !CanSearch) return;
         CancelPending();
         await Selected.InvokeAsync(null);
-        if (Request is null || !CanSearch) return;
+        if (Request is null) return;
         if (Client is null)
         {
             message = "Route preview is unavailable. Keep planning with your entered times.";
@@ -133,12 +136,14 @@
 
     async Task SelectAsync(RouteItinerary? route)
     {
+        if (Disabled) return;
         chosen = route;
         await Selected.InvokeAsync(route);
     }
 
     async Task CancelPreview()
     {
+        if (Disabled) return;
         CancelPending();
         await Selected.InvokeAsync(null);
         message = "Route lookup cancelled. Your entered times are unchanged.";

@@ -256,13 +256,22 @@ public partial class NewTrip : IAsyncDisposable
         MarkEdited();
     }
 
+    /**
+     * Keeps exact times when a save shortcut commits an unchanged minute field, and normalizes actual edits.
+     * @param change The displayed local date and time.
+     * @param previous The existing time, including saved or confirmed seconds.
+     * @param apply Assigns a changed minute value or clears the field.
+     */
     void SetDateTime(ChangeEventArgs change, DateTime? previous, Action<DateTime?> apply)
     {
         var input = change.Value?.ToString();
         if (string.IsNullOrEmpty(input))
             EditTripValue(previous, null, apply);
         else if (DateTime.TryParseExact(input, LocalDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            if (DateTimeValue(date) == DateTimeValue(previous)) return;
             EditTripValue(previous, new DateTime(date.Ticks - date.Ticks % TimeSpan.TicksPerMinute, date.Kind), apply);
+        }
         else
         {
             errors = ["Enter a valid date and time."];
@@ -274,7 +283,12 @@ public partial class NewTrip : IAsyncDisposable
     long? DisplayedDuration(TripPlannerDraft.Leg connection) =>
         draft.DurationFor(connection) is { } duration ? (long)Math.Ceiling(duration.TotalMinutes) : null;
 
-    /** Updates one duration field and keeps the other part of the connection's elapsed time. */
+    /**
+     * Applies changed whole-minute durations while preserving exact times for an unchanged displayed duration.
+     * @param connection The connection whose duration is being edited.
+     * @param change The displayed hours or minutes.
+     * @param hours Whether the changed field is hours rather than minutes.
+     */
     void SetDurationPart(TripPlannerDraft.Leg connection, ChangeEventArgs change, bool hours)
     {
         var input = change.Value?.ToString();
@@ -296,6 +310,7 @@ public partial class NewTrip : IAsyncDisposable
             return;
         }
 
+        if (minutes == current) return;
         EditTripValue(connection.DurationMinutes, minutes == 0 ? null : (int)minutes,
             value => connection.DurationMinutes = value);
     }

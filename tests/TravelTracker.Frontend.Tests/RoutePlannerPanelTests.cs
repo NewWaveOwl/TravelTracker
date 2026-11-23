@@ -73,6 +73,38 @@ public sealed class RoutePlannerPanelTests : BunitContext
     }
 
     [Fact]
+    public async Task PendingConfirmationLocksCandidateAndClearActionsUntilItCompletes()
+    {
+        var reply = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        RouteSelection? preview = null;
+        var panel = Panel(new StubHandler((request, _) => Task.FromResult(Read(request))), _ => reply.Task);
+        panel.Render(parameters => parameters.Add(component => component.PreviewChanged, value => preview = value));
+        LoadAndChoose(panel);
+        var selection = preview;
+        var confirmation = panel.FindAll("button").Single(button => button.TextContent == "Confirm selected route")
+            .TriggerEventAsync("onclick", new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        try
+        {
+            var candidate = panel.Find(".route-options > li > button");
+            var clear = panel.FindAll("button").Single(button => button.TextContent == "Clear route preview");
+            Assert.True(candidate.HasAttribute("disabled"));
+            Assert.True(clear.HasAttribute("disabled"));
+            // Already queued events must also be ignored after the controls become disabled.
+            await clear.TriggerEventAsync("onclick", new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+            await candidate.TriggerEventAsync("onclick", new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+            Assert.Same(selection, preview);
+        }
+        finally
+        {
+            reply.TrySetResult(false);
+        }
+        await confirmation;
+        Assert.False(panel.Find(".route-options > li > button").HasAttribute("disabled"));
+        Assert.False(panel.FindAll("button").Single(button => button.TextContent == "Clear route preview").HasAttribute("disabled"));
+        Assert.False(panel.FindAll("button").Single(button => button.TextContent == "Confirm selected route").HasAttribute("disabled"));
+    }
+
+    [Fact]
     public void CancellingASelectedRouteDoesNotCallTheConfirmationCallback()
     {
         var confirms = 0;
