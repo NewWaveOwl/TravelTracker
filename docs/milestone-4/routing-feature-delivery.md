@@ -182,9 +182,9 @@ The primary agent also inspected representative desktop and phone screenshots.
 | #127 | TravelTracker | `399732b` |
 
 The sign-in correction is `7fc6515` in TravelTracker and `28a0da1` in RNDbackend.
-The mobile layout correction is `ea071f2`; delivery evidence is a separate follow-up. All
-commits are local; the earlier empty backend branch remains the only published
-work from this session. The prior Auth0 README edit remains preserved in its named
+The mobile layout correction is `ea071f2`; delivery evidence is a separate follow-up.
+At the end of the initial 2026-11-22 delivery, commits were local and the earlier
+empty backend branch was the only published work. The prior Auth0 README edit remains preserved in its named
 stash. See [the verified ZIP and exact server/app commands](server-routing-update.md).
 
 Final post-CSS gate: Release solution build zero warnings/errors; all 1,756
@@ -193,4 +193,39 @@ marked group was not run because no isolated connection was configured; these
 features have no schema or persistence edits. The real server/tunnel, public
 geocoder response quality, physical devices and live realtime feeds were not
 validated by the local fixture/artifact checks. Source worktrees are committed
-locally; no push, PR or actual server update is part of this delivery.
+locally at that point; no push, PR or actual server update was part of that initial delivery.
+
+## Recovery fixes and publication verification (2026-11-23)
+
+Frontend commits `5e0db39` and `cd27913` add early image-dimension rejection and
+specific, sanitized routing setup/connection guidance. `e1d3a03` records the
+confirmed missing `UserPictures`/`TripStops` tables and existing migration command,
+plus the current server's `authentication_unavailable` result. These are separate
+operator repairs; see [startup error recovery](startup-error-recovery.md).
+
+The current Release build passed with zero warnings/errors. All 1,781 application
+tests passed (727 frontend), plus all 55 Node keyboard/panel interaction cases.
+Rebuilt actual-component browser fixtures passed 41 checks at desktop and phone
+viewports with zero page errors: the prior 31 address/transit checks plus 10 Bike
+checks for preview, Cancel, Confirm, visible Undo and exact-second Save payloads.
+These use synthetic Auth/catalogue/provider responses. Phone testing emulates a
+390-by-844 viewport, not a physical device. Ignored evidence is under
+`tests/TravelTracker.Frontend.Tests/TestResults/browser-qa-final/`.
+
+The backend was freshly rebuilt/retested: 132 backend and 60 launcher cases passed
+with zero failures/errors/skips/warnings, and production-adapter replay passed all
+five modes and 11 alternatives from retained actual OTP responses. A new full
+graph build and live realtime feeds were not tested. Local marked PostgreSQL
+tests remain unavailable without the isolated test connection; GitHub CI provisions
+its own disposable PostgreSQL for that group.
+
+The [separate backend branch](https://github.com/NewWaveOwl/RNDTransitMTL/tree/backedn-for-TravelTracker)
+is now pushed at `080ae05`, including the tested implementation and diagnostic AI
+record. Its last runtime change is still `58d68ff`; later commits change docs only,
+so the verified Windows update ZIP remains current. Backend source is delivered
+on that branch rather than merged into RNDTransit's `main` by the TravelTracker PR.
+
+The operator reports the current update/tunnel are deployed. Read-only probes
+confirmed public health and the Auth setup failure; applying the database
+migrations, fixing the server's TravelTracker Auth pair, and successful live
+account/address/route/save journeys after repair have not been observed.

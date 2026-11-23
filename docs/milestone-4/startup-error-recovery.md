@@ -145,3 +145,8 @@ Local PostgreSQL relational tests were not run because the isolated test
 connection was not configured. The existing migrations were reviewed, not
 applied to the shared service databases. The live routing check established the
 configuration failure, not a successful account/route journey after repair.
+
+Refreshed desktop/phone browser fixtures also passed 41 assertions, including
+Bike preview, Cancel, Confirm, Undo and exact-second Save payloads, with zero page
+errors. Their Auth/provider responses are simulated; see the
+[feature verification record](routing-feature-delivery.md#recovery-fixes-and-publication-verification-2026-11-23).
