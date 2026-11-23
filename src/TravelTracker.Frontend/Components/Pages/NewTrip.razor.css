@@ -373,4 +373,7 @@
 .map-workspace .trip-workspace-controls { position: absolute; top: 24px; right: 24px; max-width: min(480px, calc(100% - 48px)); }
 .map-workspace .trip-workspace-controls .trip-workspace-actions { position: relative; top: auto; right: auto; left: auto; max-width: 100%; }
 .map-workspace .trip-workspace-actions .map-icon-action[data-trip-save] { width: auto; gap: 8px; font-size: 16px; }
-@media (max-width: 700px) { .map-workspace .trip-workspace-controls { top: 88px; right: 8px; max-width: calc(100% - 16px); } }
+@media (max-width: 700px) {
+    /* Keep save feedback above movable panels so it cannot cover their controls. */
+    .map-workspace .trip-workspace-controls { position: relative; top: auto; right: auto; width: auto; max-width: none; margin: 0 8px; padding-top: 8px; }
+}
