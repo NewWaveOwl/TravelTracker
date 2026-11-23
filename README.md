@@ -114,6 +114,10 @@ routes through the shared RNDTransit Windows server. Address search requires
 **Search address** or Enter; it does not search while typing. A spinner inside the
 address box covers queue waiting and lookup. Manual entry remains available.
 
+Routing is optional. Development defaults to `http://localhost:18088` for a local
+server. Production starts without routing configured; to enable it, set
+`Services__Routing` to an HTTPS base URL.
+
 Set the server's **Public HTTPS** Dev Tunnel base address before launching:
 
 ```powershell

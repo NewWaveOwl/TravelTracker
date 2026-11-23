@@ -224,8 +224,10 @@ dotnet user-secrets set 'Services:Routing' 'https://YOUR-TUNNEL-18088.YOUR-REGIO
 ```
 
 Use the actual **base URL**, without `/v1/...`. Environment values override user
-secrets; the normal launcher inherits `Services__Routing`. The default is
+secrets; the normal launcher inherits `Services__Routing`. Development defaults to
 `http://localhost:18088`, which is suitable only when Ktor runs on the same machine.
+Routing is optional and has no default in Production. Leave it unconfigured to
+keep manual planning available, or set an HTTPS base URL to enable routing.
 Remote URLs require HTTPS. Align backend TravelTracker Auth settings with the
 frontend's Auth project. Do not disable certificate checks to resolve tunnel errors.
 
