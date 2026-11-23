@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
 using SkiaSharp;
 using TravelTracker.Users.Tests.Support;
 
@@ -158,6 +160,140 @@ public sealed class UserPictureApiTests
         host.Repository.Deactivate();
         using var denied = await owner.GetAsync(Picture);
         Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+    }
+
+    [Fact]
+    public async Task SecondDeviceWithItsOwnTokenReadsTheReplacedPicture()
+    {
+        using var host = new UsersApiFactory();
+        using var deviceA = host.Browser(host.Token(subject: Owner, scope: "users.read users.write"));
+        using var deviceB = host.Browser(host.Token(subject: Owner, scope: "users.read users.write"));
+        using var profile = await deviceA.GetAsync("/api/v1/users/me");
+        using var first = await UploadAsync(deviceA, Image(SKEncodedImageFormat.Png), "image/png");
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+
+        // device B authenticates with its own credential and sees the same stored picture.
+        using var deviceBProfile = await deviceB.GetAsync("/api/v1/users/me");
+        Assert.Equal(HttpStatusCode.OK, deviceBProfile.StatusCode);
+        Assert.Equal(await deviceA.GetByteArrayAsync(Picture), await deviceB.GetByteArrayAsync(Picture));
+
+        using var replacement = await UploadAsync(deviceB, Image(SKEncodedImageFormat.Png, 24), "image/png");
+        Assert.Equal(HttpStatusCode.NoContent, replacement.StatusCode);
+        Assert.Equal(Picture, replacement.Headers.Location?.OriginalString);
+        using var seenByA = SKBitmap.Decode(await deviceA.GetByteArrayAsync(Picture));
+        Assert.NotNull(seenByA);
+        Assert.Equal(24, seenByA.Width);
+    }
+
+    [Theory]
+    [InlineData("signature")]
+    [InlineData("issuer")]
+    [InlineData("audience")]
+    [InlineData("expired")]
+    [InlineData("unsigned")]
+    [InlineData("malformed")]
+    public async Task InvalidBearerCredentialCanNeitherReadNorReplaceThePicture(string failure)
+    {
+        using var host = new UsersApiFactory();
+        using var owner = host.Browser(host.Token(subject: Owner, scope: "users.read users.write"));
+        using var profile = await owner.GetAsync("/api/v1/users/me");
+        using var initial = await UploadAsync(owner, Image(SKEncodedImageFormat.Png), "image/png");
+        Assert.Equal(HttpStatusCode.NoContent, initial.StatusCode);
+        var saved = await owner.GetByteArrayAsync(Picture);
+
+        using var rejected = host.Browser(host.Token(failure, subject: Owner, scope: "users.read users.write"));
+        using var read = await rejected.GetAsync(Picture);
+        using var write = await UploadAsync(rejected, Image(SKEncodedImageFormat.Png, 24), "image/png");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, read.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, write.StatusCode);
+        Assert.Equal(saved, await owner.GetByteArrayAsync(Picture));
+    }
+
+    [Fact]
+    public async Task AnonymousCallerCannotReplaceThePicture()
+    {
+        using var host = new UsersApiFactory();
+        using var owner = host.Browser(host.Token(subject: Owner, scope: "users.read users.write"));
+        using var profile = await owner.GetAsync("/api/v1/users/me");
+        using var initial = await UploadAsync(owner, Image(SKEncodedImageFormat.Png), "image/png");
+        Assert.Equal(HttpStatusCode.NoContent, initial.StatusCode);
+        var saved = await owner.GetByteArrayAsync(Picture);
+
+        using var anonymous = host.Browser();
+        using var write = await UploadAsync(anonymous, Image(SKEncodedImageFormat.Png, 24), "image/png");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, write.StatusCode);
+        Assert.Equal(saved, await owner.GetByteArrayAsync(Picture));
+    }
+
+    [Theory]
+    [InlineData("catalogue.read catalogue.write")]
+    [InlineData("openid profile email")]
+    [InlineData("users.write")]
+    public async Task ReadWithoutUsersReadScopeIsForbidden(string scope)
+    {
+        using var host = new UsersApiFactory();
+        using var owner = host.Browser(host.Token(subject: Owner, scope: "users.read users.write"));
+        using var profile = await owner.GetAsync("/api/v1/users/me");
+        using var initial = await UploadAsync(owner, Image(SKEncodedImageFormat.Png), "image/png");
+        Assert.Equal(HttpStatusCode.NoContent, initial.StatusCode);
+
+        using var underScoped = host.Browser(host.Token(subject: Owner, scope: scope));
+        using var read = await underScoped.GetAsync(Picture);
+
+        Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
+    }
+
+    [Fact]
+    public async Task GuessedAccountIdsCannotReadOrReplaceAnotherAccountsPicture()
+    {
+        using var host = new UsersApiFactory();
+        using var owner = host.Browser(host.Token(subject: Owner, scope: "users.read users.write"));
+        using var other = host.Browser(host.Token(subject: "another-user", scope: "users.read users.write"));
+        using var ownerProfile = await owner.GetAsync("/api/v1/users/me");
+        var ownerId = (await ownerProfile.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("publicId").GetString();
+        using var initial = await UploadAsync(owner, Image(SKEncodedImageFormat.Png), "image/png");
+        Assert.Equal(HttpStatusCode.NoContent, initial.StatusCode);
+        var saved = await owner.GetByteArrayAsync(Picture);
+
+        // there is no account-id picture route, so guessing the owner's id must not reach the picture.
+        using var guessedRead = await other.GetAsync($"/api/v1/users/{ownerId}/picture");
+        using var guessedWrite = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/users/{ownerId}/picture")
+        {
+            Content = new ByteArrayContent(Image(SKEncodedImageFormat.Png, 24))
+        };
+        guessedWrite.Content.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        using var guessedReplace = await other.SendAsync(guessedWrite);
+        Assert.Equal(HttpStatusCode.NotFound, guessedRead.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, guessedReplace.StatusCode);
+
+        // the other account's own upload goes to its own picture and leaves the owner's unchanged.
+        using var otherProfile = await other.GetAsync("/api/v1/users/me");
+        Assert.Equal(HttpStatusCode.OK, otherProfile.StatusCode);
+        using var otherUpload = await UploadAsync(other, Image(SKEncodedImageFormat.Png, 24), "image/png");
+        Assert.Equal(HttpStatusCode.NoContent, otherUpload.StatusCode);
+        Assert.Equal(saved, await owner.GetByteArrayAsync(Picture));
+    }
+
+    [Fact]
+    public async Task StorageOutageAnswersServiceUnavailableAndKeepsThePreviousPicture()
+    {
+        using var host = new UsersApiFactory();
+        using var owner = host.Browser(host.Token(subject: Owner, scope: "users.read users.write"));
+        using var profile = await owner.GetAsync("/api/v1/users/me");
+        using var initial = await UploadAsync(owner, Image(SKEncodedImageFormat.Png), "image/png");
+        Assert.Equal(HttpStatusCode.NoContent, initial.StatusCode);
+        var saved = await owner.GetByteArrayAsync(Picture);
+
+        host.Repository.StorageUnavailable = true;
+        using var read = await owner.GetAsync(Picture);
+        using var write = await UploadAsync(owner, Image(SKEncodedImageFormat.Png, 24), "image/png");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, read.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, write.StatusCode);
+        host.Repository.StorageUnavailable = false;
+        Assert.Equal(saved, await owner.GetByteArrayAsync(Picture));
     }
 
     [Fact]
