@@ -387,4 +387,112 @@ public sealed class AccountTests : BunitContext
         Assert.DoesNotContain("does not have permission to edit", page.Markup);
         Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Contains("Edit profile", StringComparison.Ordinal));
     }
+
+    static void FillPasswordForm(IRenderedComponent<Account> page, string current, string next, string confirm)
+    {
+        page.Find("#password-current").Change(current);
+        page.Find("#password-new").Change(next);
+        page.Find("#password-confirm").Change(confirm);
+    }
+
+    static void SubmitPasswordForm(IRenderedComponent<Account> page) =>
+        page.FindAll("button").Single(button => button.TextContent.Trim() == "Change password").Click();
+
+    [Fact]
+    public void PasswordFormIsOfferedOnlyWithTheWriteScope()
+    {
+        Configure();
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5), "users.read");
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        Assert.DoesNotContain("Change password", page.Markup);
+    }
+
+    [Fact]
+    public void PasswordChangeIsReportedOnlyAfterTheServerConfirms()
+    {
+        var release = new TaskCompletionSource<HttpResponseMessage>();
+        string? posted = null;
+        var handler = new StubHandler(async (request, token) =>
+        {
+            if (request.Method != HttpMethod.Post) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) };
+            posted = await request.Content!.ReadAsStringAsync(token);
+            return await release.Task;
+        });
+        Configure(handler: handler);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        FillPasswordForm(page, "old secret", "new secret", "new secret");
+
+        SubmitPasswordForm(page);
+
+        page.WaitForAssertion(() => Assert.NotNull(posted));
+        Assert.DoesNotContain("has been changed", page.Markup);
+        release.SetResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        page.WaitForAssertion(() => Assert.Contains("Your password has been changed", page.Markup));
+        Assert.Contains("\"currentPassword\":\"old secret\"", posted);
+        Assert.DoesNotContain("old secret", page.Markup);
+        Assert.DoesNotContain("new secret", page.Markup);
+    }
+
+    [Fact]
+    public void WrongCurrentPasswordShowsServerMessageAndKeepsTypedProfileDraft()
+    {
+        var handler = new StubHandler((request, _) => Task.FromResult(request.Method == HttpMethod.Post
+            ? new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("""{"errors":{"currentPassword":["The current password is not correct."]}}""", System.Text.Encoding.UTF8, "application/json") }
+            : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) }));
+        Configure(handler: handler);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        page.Find("button").Click();
+        page.Find("#profile-address").Change("draft address");
+        FillPasswordForm(page, "wrong secret", "new secret", "new secret");
+
+        SubmitPasswordForm(page);
+
+        page.WaitForAssertion(() => Assert.Contains("The current password is not correct.", page.Markup));
+        Assert.Contains("draft address", page.Markup);
+        Assert.DoesNotContain("Your password has been changed", page.Markup);
+    }
+
+    [Fact]
+    public void ServerFailureIsNeverReportedAsSuccess()
+    {
+        var handler = new StubHandler((request, _) => Task.FromResult(request.Method == HttpMethod.Post
+            ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) }));
+        Configure(handler: handler);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        FillPasswordForm(page, "old secret", "new secret", "new secret");
+
+        SubmitPasswordForm(page);
+
+        page.WaitForAssertion(() => Assert.Contains("role=\"alert\"", page.Markup));
+        Assert.DoesNotContain("has been changed", page.Markup);
+    }
+
+    [Fact]
+    public void MismatchedConfirmationIsRejectedBeforeAnyRequest()
+    {
+        var posts = 0;
+        var handler = new StubHandler((request, _) =>
+        {
+            if (request.Method == HttpMethod.Post) posts++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) });
+        });
+        Configure(handler: handler);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        FillPasswordForm(page, "old secret", "new secret", "new secre");
+
+        SubmitPasswordForm(page);
+
+        page.WaitForAssertion(() => Assert.Contains("do not match", page.Markup));
+        Assert.Equal(0, posts);
+    }
 }

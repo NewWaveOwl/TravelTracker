@@ -94,6 +94,16 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
     }
 
     /**
+     * Sends the password change; the Users API verifies the current password before it saves the new one.
+     * @param currentPassword The password the account has now. It is sent once over HTTPS and never kept by the frontend.
+     * @param newPassword The replacement password.
+     * @param cancellationToken Cancels the pending request.
+     * @return Completion only after the API confirms the change with 204; failures throw ApiError with any field errors.
+     */
+    public Task ChangePasswordAsync(string currentPassword, string newPassword, CancellationToken cancellationToken = default) =>
+        client.SendJsonAsync<object>("Users", HttpMethod.Post, "/api/v1/users/me/password", new { currentPassword, newPassword }, cancellationToken);
+
+    /**
      * Lists application accounts after the service checks the current administrator's standing.
      * @param cancellationToken Cancels a closed administrator panel.
      * @return The service-ordered account list; no provider directory credentials or identities.

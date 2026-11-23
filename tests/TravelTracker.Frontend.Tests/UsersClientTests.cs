@@ -74,4 +74,30 @@ public sealed class UsersClientTests
         Assert.Equal(kind, error.Kind);
         if (status == 400) Assert.Contains("username", error.Errors.Keys);
     }
+
+    [Fact]
+    public async Task ChangePasswordPostsBothValuesToTheOwnPasswordPath()
+    {
+        var (client, handler) = Create(status: 204);
+
+        await client.ChangePasswordAsync("current secret", "new secret");
+
+        Assert.Equal("POST", handler.LastRequest!.Method.Method);
+        Assert.Equal("/api/v1/users/me/password", handler.LastRequest.RequestUri!.AbsolutePath);
+        Assert.Equal("Bearer test-access-token", handler.LastRequest.Headers.Authorization!.ToString());
+        using var json = JsonDocument.Parse(handler.LastRequestBody!);
+        Assert.Equal("current secret", json.RootElement.GetProperty("currentPassword").GetString());
+        Assert.Equal("new secret", json.RootElement.GetProperty("newPassword").GetString());
+    }
+
+    [Fact]
+    public async Task RefusedPasswordChangeKeepsTheFieldErrorAndNeverSucceeds()
+    {
+        var (client, _) = Create(status: 400, body: """{"errors":{"currentPassword":["The current password is not correct."]}}""");
+
+        var failure = await Assert.ThrowsAsync<ApiError>(() => client.ChangePasswordAsync("wrong secret", "new secret"));
+
+        Assert.Equal(400, failure.Status);
+        Assert.Equal("The current password is not correct.", failure.Errors["currentPassword"].Single());
+    }
 }

@@ -45,19 +45,10 @@ public partial class Account : IDisposable
 
     bool CanEdit => profile is { Status: AdminAccessState.ActiveStatus } && HasScope("users.write") && !writeDenied;
 
-    [SupplyParameterFromQuery(Name = "credential")]
-    public string? CredentialResult { get; set; }
-
-    string? CredentialMessage => CredentialResult switch
-    {
-        "invalid" => "Check the email and password fields and try again.",
-        "rejected" => "The sign-in provider refused the change. Check your current credentials and the new value.",
-        "unavailable" => "The sign-in provider could not confirm the change. Check before trying again.",
-        "verify-email" => "Check your current and new sign-in email inboxes for confirmation links.",
-        "link-accepted" => "Confirmation accepted. Follow any remaining email instructions, then sign in.",
-        "password-changed" => "Password changed. Sign in again with your new password.",
-        _ => null
-    };
+    PasswordChangeModel? passwordModel;
+    EditContext? passwordContext;
+    string? passwordError, passwordStatus;
+    bool passwordBusy;
 
     protected override async Task OnInitializedAsync()
     {
@@ -99,6 +90,7 @@ public partial class Account : IDisposable
         writeDenied = false;
         saveError = null;
         statusMessage = null;
+        ClearPasswordForm();
         loadFailure = null;
         noAccount = false;
 
@@ -218,6 +210,7 @@ public partial class Account : IDisposable
             }
 
             profile = result;
+            ResetPasswordForm();
         }
         catch (OperationCanceledException) when (current.IsCancellationRequested)
         {
@@ -231,6 +224,7 @@ public partial class Account : IDisposable
                 {
                     signedIn = false;
                     profile = null;
+                    ClearPasswordForm();
                     sessionMessage = "Your session was rejected. Sign in again to continue.";
                 }
                 SetLoadFailure(failure.Kind, failure.Status == 403
@@ -434,6 +428,7 @@ public partial class Account : IDisposable
     {
         profile = null;
         ClearEditContext();
+        ClearPasswordForm();
         editing = false;
         writeDenied = false;
         saveError = null;
@@ -507,6 +502,83 @@ public partial class Account : IDisposable
         editModel = null;
     }
 
+    /** Starts an empty password form for the loaded profile; typed values never survive a session change. */
+    void ResetPasswordForm()
+    {
+        passwordModel = new PasswordChangeModel();
+        passwordContext = new EditContext(passwordModel);
+        passwordError = null;
+        passwordStatus = null;
+    }
+
+    /** Drops password values and messages, for example when the session ends or the profile is cleared. */
+    void ClearPasswordForm()
+    {
+        passwordModel = null;
+        passwordContext = null;
+        passwordError = null;
+        passwordStatus = null;
+        passwordBusy = false;
+    }
+
+    /**
+     * Sends the password change and reports success only after the Users API confirms it. Profile fields are not touched.
+     * @return Completion of the guarded password change request.
+     */
+    async Task ChangePasswordAsync()
+    {
+        if (passwordBusy || passwordModel is null || !CanEdit) return;
+
+        var version = generation;
+        var current = BeginRequest();
+        var model = passwordModel;
+        passwordBusy = true;
+        passwordError = null;
+        passwordStatus = null;
+        try
+        {
+            await Users.ChangePasswordAsync(model.CurrentPassword, model.NewPassword, current.Token);
+            if (!Current(version) || current.IsCancellationRequested) return;
+            ResetPasswordForm();
+            passwordStatus = "Your password has been changed. Your session stays signed in.";
+        }
+        catch (OperationCanceledException) when (current.IsCancellationRequested)
+        {
+            // superseded or closed, nothing to publish
+        }
+        catch (ApiError failure)
+        {
+            if (!Current(version)) return;
+            if (failure.Status == 401)
+            {
+                signedIn = false;
+                profile = null;
+                ClearEditContext();
+                ClearPasswordForm();
+                editing = false;
+                sessionMessage = "Your session was rejected. Sign in again to continue.";
+                return;
+            }
+
+            passwordError = failure.Status == 403
+                ? "Your account or session no longer permits password changes. Your entered values are still here."
+                : failure.Errors.Count > 0
+                    ? string.Join(" ", failure.Errors.Values.SelectMany(errors => errors))
+                    : failure.Message;
+        }
+        catch (Exception exception)
+        {
+            if (!Current(version)) return;
+            Logger.LogError("Password change failed unexpectedly ({FailureType})", exception.GetType().Name);
+            passwordError = "Your password could not be changed. Try again.";
+        }
+        finally
+        {
+            if (Current(version)) passwordBusy = false;
+            EndRequest(current);
+        }
+    }
+
     public void Dispose()
     {
         disposed = true;
@@ -516,5 +588,6 @@ public partial class Account : IDisposable
         request?.Cancel();
         request?.Dispose();
         ClearEditContext();
+        ClearPasswordForm();
     }
 }

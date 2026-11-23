@@ -14,7 +14,7 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
 {
     static readonly TimeSpan Timeout = TimeSpan.FromSeconds(8);
     static readonly HashSet<string> WritableFields = new(StringComparer.OrdinalIgnoreCase)
-    { "name", "address", "lat", "lon", "estimatedVisitMinutes", "rating", "description", "visibility", "code", "type", "sourceId", "username", "theme", "defaultMapLatitude", "defaultMapLongitude", "defaultMapZoom", "preferredTransportMode", "timeZone" };
+    { "name", "address", "lat", "lon", "estimatedVisitMinutes", "rating", "description", "visibility", "code", "type", "sourceId", "username", "theme", "defaultMapLatitude", "defaultMapLongitude", "defaultMapZoom", "preferredTransportMode", "timeZone", "currentPassword", "newPassword" };
 
     /**
      * Reads a public JSON contract.
@@ -71,7 +71,9 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
                     : trips && status == 404 ? "This trip is no longer available. Refresh your trips." : MessageFor(status);
                 throw Fail(Classify(status), message, method, status, errors, ResourceOf(request), code: code);
             }
-            return new ServiceResponse<T>(await response.Content.ReadFromJsonAsync<T>(bounded.Token), response.Headers.ETag?.Tag);
+            // a confirmed 204 has no body to read, so it reports no value rather than failing to parse
+            var parsed = response.StatusCode == System.Net.HttpStatusCode.NoContent ? default : await response.Content.ReadFromJsonAsync<T>(bounded.Token);
+            return new ServiceResponse<T>(parsed, response.Headers.ETag?.Tag);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

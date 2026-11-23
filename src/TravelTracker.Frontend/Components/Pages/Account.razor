@@ -11,11 +11,6 @@
 <PageHeading Title="@(editing ? "Edit profile" : "Your profile")" />
 <p>@(editing ? "Update your profile details." : "View and manage your TravelTracker profile.")</p>
 
-@if (CredentialMessage is not null)
-{
-    <p role="status">@CredentialMessage</p>
-}
-
 @if (!Setup.Configured)
 {
     <Feedback Kind="FeedbackKind.Unavailable">Sign-in is temporarily unavailable. Please try again later.</Feedback>
@@ -124,6 +119,43 @@ else
                 </dl>
             }
         </section>
+
+        @if (CanEdit && passwordModel is not null && passwordContext is not null)
+        {
+            <section class="profile-card" aria-labelledby="password-heading" aria-busy="@passwordBusy.ToString().ToLowerInvariant()">
+                <h2 id="password-heading">Change password</h2>
+                <p id="password-help">Enter your current password, then a new password of 6 to 128 characters. Your session stays signed in after the change.</p>
+                @if (passwordError is not null)
+                {
+                    <p class="profile-error" role="alert">@passwordError</p>
+                }
+                @if (passwordStatus is not null)
+                {
+                    <p class="profile-status" role="status">@passwordStatus</p>
+                }
+                <EditForm EditContext="passwordContext" OnValidSubmit="ChangePasswordAsync">
+                    <DataAnnotationsValidator />
+                    <div class="profile-field">
+                        <label for="password-current">Current password</label>
+                        <InputText id="password-current" type="password" autocomplete="current-password" @bind-Value="passwordModel.CurrentPassword" disabled="@passwordBusy" />
+                        <ValidationMessage For="() => passwordModel.CurrentPassword" />
+                    </div>
+                    <div class="profile-field">
+                        <label for="password-new">New password</label>
+                        <InputText id="password-new" type="password" autocomplete="new-password" maxlength="128" aria-describedby="password-help" @bind-Value="passwordModel.NewPassword" disabled="@passwordBusy" />
+                        <ValidationMessage For="() => passwordModel.NewPassword" />
+                    </div>
+                    <div class="profile-field">
+                        <label for="password-confirm">Confirm new password</label>
+                        <InputText id="password-confirm" type="password" autocomplete="new-password" maxlength="128" @bind-Value="passwordModel.ConfirmPassword" disabled="@passwordBusy" />
+                        <ValidationMessage For="() => passwordModel.ConfirmPassword" />
+                    </div>
+                    <div class="actions">
+                        <button type="submit" disabled="@passwordBusy">@(passwordBusy ? "Changing password…" : "Change password")</button>
+                    </div>
+                </EditForm>
+            </section>
+        }
 
         <div class="profile-actions">
             <form method="post" action="auth/logout">
