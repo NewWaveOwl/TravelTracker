@@ -116,8 +116,10 @@ The original is available to its owner at `GET /api/v1/trips/{tripId}/ticket-imp
 The optional `Services:Routing` service is the shared RNDTransit Ktor backend, not
 one of the .NET catalogue APIs. Protected app-specific operations are
 `GET /v1/places/search?q=...`, `GET /v1/places/reverse?lat=...&lon=...` and
-`POST /v1/routes/plan`. They return candidates/previews only and never create or
-update saved records. The Blazor server mediates through the configured HTTP
+`POST /v1/routes/plan`, plus `GET /v1/routes/capabilities` without query parameters.
+Capabilities describe router support, loaded feeds and known global service dates;
+they do not guarantee a journey for every point/date. These operations never create
+or update saved records. The Blazor server mediates through the configured HTTP
 boundary and existing session safeguards. See [request/response shapes, errors,
 authentication, global limits and configuration](public-nominatim-integration.md).
 

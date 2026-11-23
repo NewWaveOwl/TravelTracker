@@ -73,6 +73,7 @@ app's own APIs retains the existing session-revocation behavior.
 | --- | --- | --- |
 | `GET /v1/places/search` | One `q`, 3–200 characters, explicitly submitted | `status: success` or `no_match`; `candidates` with `label`, numeric `lat`/`lon`, `source`; `attribution` |
 | `GET /v1/places/reverse` | One finite `lat` (-90..90) and `lon` (-180..180) | Same candidate shape; marker coordinates are preserved by the client |
+| `GET /v1/routes/capabilities` | No query parameters; same protected session | Router version when known, loaded feeds/global service range, per-mode support and attribution |
 | `POST /v1/routes/plan` | JSON `origin: {lat, lon}`, `destination: {lat, lon}`, `mode`, `departureTime` with UTC offset | `success`, `no_route` or `unsupported`, plus `itineraries` |
 
 Errors: 400 invalid fields/duplicate parameters; 401 rejected session; 503 dependency
@@ -84,6 +85,21 @@ Modes are `pedestrian`, `bike`, `car`, `bus`, `train`, requesting OTP WALK, BICY
 CAR, BUS or RAIL respectively. Cycling is not accelerated/relabelled walking.
 Plane is unsupported. A missing street graph or expired transit schedule does not
 produce invented routes.
+
+Capabilities (#106) are read from the running OTP instance and cached for 30
+seconds. `modes` entries contain `code`, `status` (`available`, `unsupported`,
+`unknown`), `basis` and optional `reason`. `router_schema` means the direct mode is
+supported by the router's schema; `loaded_routes` means the transit mode appears
+in its loaded feeds. Neither guarantees a route for every point/date. The response
+also identifies the router, lists feed IDs/modes and reports attribution.
+
+`coverage` includes `timeZone`, inclusive `startDate`/`endDate` when known, exact
+`serviceStart` and `serviceEndExclusive`, `serviceRangeBasis: global_union`, feeds
+and bounds. Global dates are a union across feeds; per-feed dates and street
+bounds remain null when the router does not expose them. Missing version/time-zone
+metadata stays unknown. No public provider request or route calculation is made
+by this metadata operation. See [real five-mode verification](milestone-4/otp-mode-verification.md)
+for exact local OTP/Java/data hashes and sampled journeys.
 
 Itineraries contain `id`, `durationSeconds`, `distanceMeters`, `timingBasis`
 (`estimated`, `scheduled`, `realtime`) and `legs`. Legs contain `mode`,

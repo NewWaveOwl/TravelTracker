@@ -37,8 +37,8 @@ Feature commits and final verification evidence are recorded below as delivered.
 ## Auth correction
 
 Frontend `7fc6515` and shared backend `28a0da1` distinguish the app session from the
-optional routing server's Auth configuration. The full .NET suite passed1,719
-tests; backend75 and launcher60 passed, with zero build warnings/errors. Regression
+optional routing server's Auth configuration. The full .NET suite passed 1,719
+tests; backend 75 and launcher 60 passed, with zero build warnings/errors. Regression
 checks prove a Routing401 retains the session and later catalogue access, ordinary
 API401 still revokes it, and anonymous address lookup sends no request.
 
@@ -52,3 +52,13 @@ does not restart it. Selecting and cancelling preserves existing coordinates and
 stop count; applying marker details confirms one location. Provider attribution
 stays visible. Desktop/mobile visual verification follows the completed form/UI
 changes; it is separate from bUnit interaction tests.
+
+## OTP mode and dataset proof (#106)
+
+The [local verification record](otp-mode-verification.md) pins runtime, graph and
+source hashes and records successful real WALK/BICYCLE/CAR/BUS/RAIL requests. The
+shared backend adds protected capabilities from the current router schema and
+loaded feed metadata, with unknown per-feed dates/bounds preserved. Its inclusive
+date labels are paired with the exact exclusive service boundary; global union
+dates never promise per-feed/per-day service. This is local route evidence, not a
+claim that the Windows server or tunnel was updated or tested.
