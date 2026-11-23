@@ -33,3 +33,22 @@ connection is not configured, so relational validation is unavailable; no
 persistence change relies on an in-memory substitute.
 
 Feature commits and final verification evidence are recorded below as delivered.
+
+## Auth correction
+
+Frontend `7fc6515` and shared backend `28a0da1` distinguish the app session from the
+optional routing server's Auth configuration. The full .NET suite passed1,719
+tests; backend75 and launcher60 passed, with zero build warnings/errors. Regression
+checks prove a Routing401 retains the session and later catalogue access, ordinary
+API401 still revokes it, and anonymous address lookup sends no request.
+
+## Address candidates (#113)
+
+Explicit Search/Enter returns readable candidate addresses and an in-input spinner.
+ArrowDown enters the result buttons; arrows/Home/End navigate them, normal button
+activation selects a ghost marker, and Escape cancels and returns focus to the
+input. The result count is announced. Repeated submit while a request is pending
+does not restart it. Selecting and cancelling preserves existing coordinates and
+stop count; applying marker details confirms one location. Provider attribution
+stays visible. Desktop/mobile visual verification follows the completed form/UI
+changes; it is separate from bUnit interaction tests.

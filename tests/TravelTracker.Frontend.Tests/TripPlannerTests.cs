@@ -2365,6 +2365,34 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Equal(1, lookups);
     }
 
+    [Fact]
+    public async Task CancellingAChosenAddressPreviewPreservesTheExistingStopAndItsCoordinates()
+    {
+        Configure((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath == "/v1/places/search"
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new AddressLookupResult("success",
+                    [new("Unconfirmed street", 45.53m, -73.60m, "OpenStreetMap Nominatim")], "© OpenStreetMap contributors")),
+            }
+            : Json(Saved)), routing: true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        var canvas = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        await page.InvokeAsync(() => canvas.Instance.StopSelected.InvokeAsync(1));
+        page.Find(".address-search input").Input("Unconfirmed street");
+        page.Find(".address-search").Submit();
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".address-candidates button")));
+        page.Find(".address-candidates button").Click();
+        Assert.Single(page.FindAll(".address-preview-marker"));
+
+        page.Find(".trip-place button[type=button]").Click();
+
+        Assert.Equal(Museum, canvas.Instance.Stops[1]);
+        Assert.Equal(2, canvas.Instance.Stops.Count);
+        Assert.Empty(page.FindAll(".address-preview-marker"));
+        Assert.Null(canvas.Instance.PreviewLocation);
+    }
+
     void ConfigureBrowserDraftStorage(bool signedIn = true)
     {
         var authentication = new SwitchableAuthentication(new SessionRegistry(TimeProvider.System));

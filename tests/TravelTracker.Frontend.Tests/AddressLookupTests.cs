@@ -184,4 +184,53 @@ public sealed class AddressLookupTests : BunitContext
         Assert.Equal(45.5m, field.Instance.Latitude);
         Assert.Equal(-73.6m, field.Instance.Longitude);
     }
+
+    [Fact]
+    public async Task KeyboardArrowsMoveAcrossAmbiguousCandidatesWithoutConfirmingAndEscapeCancels()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        AddressCandidate? selected = null;
+        var handler = new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new AddressLookupResult("success",
+                [new("Rue Test, Montreal", 45.5m, -73.6m, "OpenStreetMap Nominatim"),
+                 new("Rue Test, Laval", 45.6m, -73.7m, "OpenStreetMap Nominatim")], "© OpenStreetMap contributors")),
+        }));
+        var field = Render<AddressLookup>(parameters => parameters.Add(component => component.Client, Client(handler))
+            .Add(component => component.CandidateSelected, value => selected = value));
+        field.Find("input").Input("Rue Test");
+        await field.Find("form").TriggerEventAsync("onsubmit", EventArgs.Empty);
+        Assert.Equal(2, field.FindAll(".address-candidates button").Count);
+        Assert.Contains("2 matching addresses", field.Find("[role=status]").TextContent);
+        field.Find("input").KeyDown("ArrowDown");
+        var firstFocus = JSInterop.Invocations.Last(call => call.Identifier.EndsWith("focus", StringComparison.Ordinal)).Arguments[0];
+        field.FindAll(".address-candidates button")[0].KeyDown("End");
+        var lastFocus = JSInterop.Invocations.Last(call => call.Identifier.EndsWith("focus", StringComparison.Ordinal)).Arguments[0];
+        Assert.NotEqual(firstFocus, lastFocus);
+        Assert.Null(selected);
+        field.FindAll(".address-candidates button")[1].KeyDown("ArrowDown");
+        Assert.Equal(firstFocus, JSInterop.Invocations.Last(call => call.Identifier.EndsWith("focus", StringComparison.Ordinal)).Arguments[0]);
+        field.FindAll(".address-candidates button")[0].KeyDown("Escape");
+        Assert.Empty(field.FindAll(".address-candidates"));
+        Assert.Null(selected);
+        Assert.Equal("Rue Test", field.Find("input").GetAttribute("value"));
+        Assert.Contains("cancelled", field.Find("[role=status]").TextContent);
+    }
+
+    [Fact]
+    public async Task RepeatedSubmitDuringLookupDoesNotSendOrRestartAnotherRequest()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var count = 0;
+        var handler = new StubHandler(async (_, _) => { count++; await gate.Task; return Match(); });
+        var field = Render<AddressLookup>(parameters => parameters.Add(component => component.Client, Client(handler)));
+        field.Find("input").Input("Rue Test");
+        var first = field.Find("form").TriggerEventAsync("onsubmit", EventArgs.Empty);
+        field.WaitForAssertion(() => Assert.Single(field.FindAll(".address-spinner")));
+        await field.Find("form").TriggerEventAsync("onsubmit", EventArgs.Empty);
+        Assert.Equal(1, count);
+        gate.SetResult();
+        await first;
+        Assert.Single(field.FindAll(".address-candidates button"));
+    }
 }

@@ -1,10 +1,11 @@
 @using TravelTracker.Frontend.Api.Routing
 @implements IDisposable
 
-<form class="address-search" aria-label="Street address lookup" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+<form class="address-search" aria-label="Street address lookup" @onsubmit="SearchAsync" @onsubmit:preventDefault
+      @onkeydown:stopPropagation="@(loading || candidates.Count > 0)">
     <label class="location-address" for="@inputId">Street address (optional)</label>
     <div class="address-input-box" aria-busy="@(loading ? "true" : "false")">
-        <input id="@inputId" type="text" value="@text" @oninput="EditAsync" maxlength="200" autocomplete="off"
+        <input @ref="inputControl" id="@inputId" type="text" value="@text" @oninput="EditAsync" @onkeydown="InputKeyAsync" maxlength="200" autocomplete="off"
                placeholder="Enter an address, then Search" aria-describedby="@($"{inputId}-status {inputId}-credit")" />
         @if (loading)
         {
@@ -22,9 +23,12 @@
     @if (candidates.Count > 0)
     {
         <ul class="address-candidates" aria-label="Matching addresses">
-            @foreach (var candidate in candidates)
+            @for (var index = 0; index < candidates.Count; index++)
             {
-                <li><button type="button" class="secondary" @onclick="() => SelectAsync(candidate)">@candidate.Label</button></li>
+                var candidate = candidates[index];
+                var candidateIndex = index;
+                <li><button @ref="candidateControls[candidateIndex]" type="button" class="secondary" @onclick="() => SelectAsync(candidate)"
+                            @onkeydown="keyboard => CandidateKeyAsync(keyboard, candidateIndex)">@candidate.Label</button></li>
             }
         </ul>
     }
@@ -43,6 +47,8 @@
 
     readonly string inputId = $"address-{Guid.NewGuid():N}";
     CancellationTokenSource? pending;
+    ElementReference inputControl;
+    ElementReference[] candidateControls = [];
     IReadOnlyList<AddressCandidate> candidates = [];
     object? previousContext;
     (decimal? Lat, decimal? Lon) previousPosition;
@@ -85,7 +91,38 @@
         await ValueChanged.InvokeAsync(text);
     }
 
-    Task SearchAsync() => LookupAsync(reverse: false);
+    Task SearchAsync() => loading ? Task.CompletedTask : LookupAsync(reverse: false);
+
+    async Task InputKeyAsync(KeyboardEventArgs keyboard)
+    {
+        if (keyboard.Key == "ArrowDown" && candidates.Count > 0)
+            await candidateControls[0].FocusAsync();
+        else if (keyboard.Key == "Escape" && (loading || candidates.Count > 0))
+        {
+            CancelLookup();
+            await inputControl.FocusAsync();
+        }
+    }
+
+    async Task CandidateKeyAsync(KeyboardEventArgs keyboard, int index)
+    {
+        if (candidates.Count == 0) return;
+        if (keyboard.Key == "Escape")
+        {
+            CancelLookup();
+            await inputControl.FocusAsync();
+            return;
+        }
+        var next = keyboard.Key switch
+        {
+            "ArrowDown" => (index + 1) % candidates.Count,
+            "ArrowUp" => (index + candidates.Count - 1) % candidates.Count,
+            "Home" => 0,
+            "End" => candidates.Count - 1,
+            _ => -1,
+        };
+        if (next >= 0) await candidateControls[next].FocusAsync();
+    }
 
     async Task LookupAsync(bool reverse)
     {
@@ -120,7 +157,8 @@
             else
             {
                 candidates = result.Candidates;
-                message = "Choose an address to preview its map position. Apply marker details to confirm.";
+                candidateControls = new ElementReference[candidates.Count];
+                message = $"{candidates.Count} matching addresses. Choose an address to preview its map position. Apply marker details to confirm.";
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -130,6 +168,7 @@
                 message = error.Status == 401 && error.Kind == FailureKind.Unavailable ? error.Message
                     : error.Status == 401 ? "Sign in to look up addresses. Manual entry remains available."
                     : error.Status == 429 ? "Address lookup is busy. Try again shortly, or enter the address manually."
+                    : error.Kind == FailureKind.Validation ? error.Message
                     : error.Status == 503 ? "Address lookup is unavailable. Check the routing server and its TravelTracker project settings. Manual entry remains available."
                     : "Address lookup is unavailable. Your map position and manual address are still available.";
         }
@@ -162,6 +201,7 @@
         pending = null;
         loading = false;
         candidates = [];
+        candidateControls = [];
     }
 
     /** Cancels queued or running work as soon as the address editor leaves the page. */

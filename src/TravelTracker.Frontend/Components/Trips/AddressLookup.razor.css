@@ -8,5 +8,6 @@
 .address-search small { font-size: .75rem; line-height: 1.4; }
 .address-candidates { display: grid; gap: .35rem; list-style: none; padding: 0; margin: 0; max-height: 14rem; overflow: auto; }
 .address-candidates button { width: 100%; text-align: left; overflow-wrap: anywhere; }
+.address-candidates button:focus-visible { outline: 3px solid #24553d; outline-offset: -3px; }
 @keyframes address-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .address-spinner { animation: none; border-style: dotted; } }
