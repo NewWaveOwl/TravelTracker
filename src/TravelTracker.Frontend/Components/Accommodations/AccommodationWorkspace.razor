@@ -131,8 +131,8 @@
                 }
                 <form @onsubmit="CreateAsync" @onsubmit:preventDefault>
                     <fieldset disabled="@saving">
-                        <AccommodationFormFields @ref="fields" Draft="draft" Errors="errors" Prefix="accommodation" CanShare="canShare" />
-                        <div class="actions"><button type="submit" disabled="@(!canWrite || saving)">@(saving ? "Saving…" : "Save place")</button><button type="button" class="secondary" @onclick="CloseCreate" @ref="lastModalControl" disabled="@saving">Cancel</button></div>
+                        <AccommodationFormFields @ref="fields" Draft="draft" Errors="errors" Prefix="accommodation" CanShare="canShare" PickingChanged="value => pickingLocation = value" />
+                        <div class="actions"><button type="submit" disabled="@(!canWrite || saving || pickingLocation)">@(saving ? "Saving…" : "Save place")</button><button type="button" class="secondary" @onclick="CloseCreate" @ref="lastModalControl" disabled="@saving">Cancel</button></div>
                     </fieldset>
                 </form>
                 <span class="visually-hidden" tabindex="0" @onfocus="FocusFirstModalControl"></span>

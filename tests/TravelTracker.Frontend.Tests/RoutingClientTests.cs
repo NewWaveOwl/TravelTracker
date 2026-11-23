@@ -49,6 +49,14 @@ public sealed class RoutingClientTests
         Assert.Equal(45.5m, Assert.Single(result.Candidates).Lat);
     }
 
+    [Fact]
+    public async Task ExplicitSearchNormalizesPostalAddressWhitespaceForTheProvider()
+    {
+        var handler = new StubHandler((_, _) => Task.FromResult(Addresses()));
+        await Client(handler).SearchAsync(" 120 Rue Test\r\n Montreal\tQuebec ");
+        Assert.Equal("?q=120%20Rue%20Test%20Montreal%20Quebec", handler.LastRequest!.RequestUri!.Query);
+    }
+
     [Theory]
     [InlineData(91, 0)]
     [InlineData(0, -181)]

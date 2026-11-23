@@ -2393,6 +2393,25 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Null(canvas.Instance.PreviewLocation);
     }
 
+    [Fact]
+    public async Task StandardTripEditorCanChooseAMapPositionWithoutTypingCoordinates()
+    {
+        Configure((_, _) => throw new InvalidOperationException("Choosing a map position must not save a catalogue record."));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/trip");
+        var page = Render<NewTrip>();
+        Click(page, "Attraction");
+        Click(page, "Enter a location");
+        var map = page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>();
+        Assert.Empty(map.Instance.Stops);
+        page.Find(".trip-place input[type=text]").Change("Map-picked museum");
+        await page.InvokeAsync(() => map.Instance.LocationPicked.InvokeAsync((45.51m, -73.59m)));
+        Assert.Empty(page.FindAll(".trip-stop"));
+        page.Find(".trip-place").Submit();
+        Assert.Single(page.FindAll(".trip-stop"));
+        Assert.Contains("Map-picked museum", page.Markup);
+        Assert.Empty(page.FindAll(".trip-place input[type=number][required]"));
+    }
+
     void ConfigureBrowserDraftStorage(bool signedIn = true)
     {
         var authentication = new SwitchableAuthentication(new SessionRegistry(TimeProvider.System));

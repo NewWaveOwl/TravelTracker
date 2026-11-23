@@ -40,6 +40,7 @@ public partial class AccommodationWorkspace : IDisposable
     bool focusError, focusDetails, focusNameOnRender, focusAddOnRender;
     ElementReference errorSummary, createErrorSummary, detailsHeading, workspaceHeading, addButton, lastModalControl;
     AccommodationFormFields? fields;
+    bool pickingLocation;
     CancellationTokenSource? request;
     readonly CancellationTokenSource lifetime = new();
     int generation;
@@ -101,7 +102,7 @@ public partial class AccommodationWorkspace : IDisposable
             {
                 if (disposed) return;
                 CancelRequest();
-                results = []; selected = null; showCreate = false; busy = saving = searching = loadingDetails = false;
+                results = []; selected = null; showCreate = pickingLocation = false; busy = saving = searching = loadingDetails = false;
                 status = formError = null; ClearError(); draft = new(); focusNameOnRender = focusAddOnRender = false;
                 SelectionChanged(null);
                 await UpdateAccessAsync(await state, lifetime.Token);
@@ -238,13 +239,13 @@ public partial class AccommodationWorkspace : IDisposable
     {
         if (busy || !canWrite) return;
         CancelRequest(); busy = searching = loadingDetails = false;
-        ClearError(); formError = status = null; draft = new(); showCreate = true; focusNameOnRender = true; focusAddOnRender = false;
+        ClearError(); formError = status = null; draft = new(); showCreate = true; pickingLocation = false; focusNameOnRender = true; focusAddOnRender = false;
     }
 
     void CloseCreate()
     {
         if (saving) return;
-        showCreate = false; formError = null; errors = new Dictionary<string, string[]>(); focusAddOnRender = true;
+        showCreate = false; pickingLocation = false; formError = null; errors = new Dictionary<string, string[]>(); focusAddOnRender = true;
     }
 
     /**
@@ -274,7 +275,7 @@ public partial class AccommodationWorkspace : IDisposable
      */
     async Task CreateAsync()
     {
-        if (saving || !canWrite || !signedIn) return;
+        if (saving || pickingLocation || !canWrite || !signedIn) return;
         ClearError(); formError = null; status = null;
         errors = draft.Validate();
         if (errors.Count != 0)

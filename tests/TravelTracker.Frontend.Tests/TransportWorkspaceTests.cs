@@ -45,6 +45,27 @@ public sealed class TransportWorkspaceTests : BunitContext
         return authentication;
     }
 
+    [Fact]
+    public void AddressWithoutAPositionKeepsTheDraftAndAsksForAMapChoiceWithoutPosting()
+    {
+        var posts = 0;
+        Configure(new StubHandler((request, _) =>
+        {
+            if (request.Method == HttpMethod.Post) posts++;
+            return Task.FromResult(Read(request));
+        }));
+        var page = Render<TransportWorkspace>();
+        page.WaitForAssertion(() => Assert.Contains("Saved train", page.Markup));
+        page.Find("#new-point-name").Change("Unresolved station");
+        page.Find("#new-point-address").Change("An unresolved address");
+        page.Find(".point-create").Submit();
+        Assert.Equal(0, posts);
+        Assert.Contains("Choose the location on the map", page.Find("[role=alert]").TextContent);
+        Assert.Equal("An unresolved address", page.Find("#new-point-address").GetAttribute("value"));
+        Assert.False(page.Find("#new-point-lat").HasAttribute("required"));
+        Assert.False(page.Find("#new-point-lon").HasAttribute("required"));
+    }
+
     static HttpResponseMessage Read(HttpRequestMessage request)
     {
         Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);

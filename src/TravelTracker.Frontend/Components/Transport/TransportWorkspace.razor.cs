@@ -36,6 +36,13 @@ public partial class TransportWorkspace : IDisposable
     string travelMinutes = "", changeMinutes = "";
     string? travelError, changeError;
     bool signedIn, canWrite, busy, showMap, disposed;
+    bool pickingPoint;
+
+    void UsePointLocation((string Lat, string Lon) location)
+    {
+        (latitudeInput, longitudeInput) = location;
+        pickingPoint = false;
+    }
     int? editingIndex;
     readonly CancellationTokenSource lifetime = new();
     CancellationTokenSource? operation;
@@ -59,7 +66,7 @@ public partial class TransportWorkspace : IDisposable
      */
     void AuthenticationChanged(Task<AuthenticationState> task) => _ = InvokeAsync(async () =>
     {
-        operation?.Cancel(); busy = false;
+        operation?.Cancel(); busy = false; pickingPoint = false;
         selections.Clear(); transports = []; points = []; mapReference = []; selectedPoint = selectedDeparture = null; selectedTransport = null; choosingDeparture = true;
         transportName = description = pointName = address = latitudeInput = longitudeInput = sourceId = pointQuery = type = string.Empty;
         fieldErrors = new Dictionary<string, string[]>();
@@ -126,7 +133,7 @@ public partial class TransportWorkspace : IDisposable
 
     void ChooseEndpoint(bool departure)
     {
-        if (!busy) choosingDeparture = departure;
+        if (!busy) { choosingDeparture = departure; pickingPoint = false; }
     }
 
     /**
@@ -187,6 +194,7 @@ public partial class TransportWorkspace : IDisposable
     {
         if (busy) return;
         editingIndex = null;
+        pickingPoint = false;
         selectedTransport = null;
         selectedPoint = null;
         selectedDeparture = selections.LastOrDefault()?.Destination;
@@ -239,8 +247,13 @@ public partial class TransportWorkspace : IDisposable
      */
     async Task CreatePointAsync()
     {
-        if (!canWrite || busy) return;
+        if (!canWrite || busy || pickingPoint) return;
         var departure = choosingDeparture;
+        if (string.IsNullOrWhiteSpace(latitudeInput) || string.IsNullOrWhiteSpace(longitudeInput))
+        {
+            error = "Choose the location on the map before saving it. Your address and other entries are still here.";
+            return;
+        }
         if (string.IsNullOrWhiteSpace(pointName) || !Types.Contains(newType) ||
             !decimal.TryParse(latitudeInput, NumberStyles.Float, CultureInfo.InvariantCulture, out var latitude) || latitude is < -90 or > 90 ||
             !decimal.TryParse(longitudeInput, NumberStyles.Float, CultureInfo.InvariantCulture, out var longitude) || longitude is < -180 or > 180 ||

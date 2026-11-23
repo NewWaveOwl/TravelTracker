@@ -103,7 +103,7 @@ Attractions failure handling: missing validated identity returns 401; forbidden 
 
 The Blazor `/attractions` view consumes these public HTTP DTOs and sends the current user's bearer token to the configured Attractions service only. Search uses one percent-encoded literal `name` parameter. Create sends only writable fields and uses the service's private visibility default. Edit sends only changed fields, with explicit null clearing rating or description. Saved details come from a confirmed response; result-refresh failures are reported separately. Unconfirmed writes are never automatically retried.
 
-The frontend's optional duration ± field is a local preview and has no HTTP or persistence field. The map is the user-supplied static placeholder; choosing a location currently means confirming manually entered coordinates. No endpoint or database change is included in #43.
+The frontend's optional duration ± field is a local preview and has no HTTP or persistence field. The current location picker (#120) uses the interactive map and optional submitted-address lookup, with explicit confirmation and manual fallback. Coordinates remain in the public DTOs and existing saved snapshots; users do not need to type them. Neither this UI change nor #43 adds endpoint or database fields.
 
 ## PDF ticket-import contracts (#109)
 

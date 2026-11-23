@@ -7,6 +7,7 @@
 @using TravelTracker.Frontend.Components.Accommodations
 @using TravelTracker.Frontend.Components.Trips
 @using TravelTracker.Frontend.Features.Trips
+@using System.Globalization
 
 <PageTitle>@(openingRoute ? "Opening trip" : showMap ? TripTitle : "Trip Editor") | TravelTracker</PageTitle>
 <NavigationLock ConfirmExternalNavigation="HasUnsavedWork" OnBeforeInternalNavigation="ConfirmDraftNavigationAsync" />
@@ -558,6 +559,12 @@ else
                             <AddressLookup Client="SharedRouting" Value="@placeAddress" ValueChanged="value => placeAddress = value"
                                 Latitude="latitude" Longitude="longitude" Context="editingMarker" ReverseVersion="reverseAddressVersion"
                                 CandidateSelected="PreviewAddress" />
+                            <LocationCoordinates Latitude="@(latitude?.ToString(CultureInfo.InvariantCulture))" Longitude="@(longitude?.ToString(CultureInfo.InvariantCulture))" />
+                            @if (!showMap)
+                            {
+                                <TripMapCanvas Stops="DraftLocationStops" SelectedIndex="@(DraftLocationStops.Count > 0 ? 0 : -1)"
+                                               CanPick="true" LocationPicked="PreviewManualPosition" />
+                            }
                         }
                         @if (activeMarker == "transport_stop" && !placing)
                         {
@@ -574,13 +581,13 @@ else
                         else
                         {
                             <form class="trip-place" @onsubmit="AddPickedStop" @onsubmit:preventDefault>
-                                <p>@(editingStopDetails ? "Confirm your changes to update this stop. Changed locations must be saved to the catalogue before saving the trip." : showMap ? "Select a point on the map or enter its coordinates." : "Enter the coordinates for this place.")</p>
+                                <p>@(editingStopDetails ? "Confirm your changes to update this stop. Changed locations must be saved to the catalogue before saving the trip." : "Choose an address result or select a point on the map.")</p>
                                 <label>Place name <input @ref="stopNameInput" type="text" required @bind="placeName" /></label>
                                 <details class="location-coordinate-details">
                                 <summary>Map coordinates (optional adjustment)</summary>
                                 <div class="trip-fields location-coordinates">
-                                    <label>Latitude <input type="number" min="-90" max="90" step="any" required @bind="latitude" /></label>
-                                    <label>Longitude <input type="number" min="-180" max="180" step="any" required @bind="longitude" /></label>
+                                    <label>Latitude <input type="number" min="-90" max="90" step="any" @bind="latitude" /></label>
+                                    <label>Longitude <input type="number" min="-180" max="180" step="any" @bind="longitude" /></label>
                                 </div>
                                 </details>
                                 <div class="trip-actions">

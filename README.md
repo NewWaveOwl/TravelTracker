@@ -105,7 +105,7 @@ In **Map View**, each floating panel has a box icon. Click it to collapse or exp
 
 In the **Map** and **Trip** workspaces, choose the beginning and ending days together in the **Trip duration** calendar. A newly selected range includes both full days in the trip's time zone; each connection keeps its own departure and arrival times. The map's **Recenter** control returns to the first trip stop, or the initial map position when the trip has no stops.
 
-Place forms and details show the **street address** prominently, with **latitude and longitude** underneath in smaller text. In Map View, pick the map position and enter its street address; you can also adjust the coordinates.
+Place forms show the **street address** prominently, with the selected map position underneath in smaller gray text. Search explicitly for an address or choose a point on the interactive map, then confirm it. Attractions, accommodations, transport points and trip markers support map entry without typing numeric coordinates. Optional numeric adjustments remain in closed Advanced details. An unknown address keeps its location unselected until you choose it.
 
 ### Shared routing and address lookup
 

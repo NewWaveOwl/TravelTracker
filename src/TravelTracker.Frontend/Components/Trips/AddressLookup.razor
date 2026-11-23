@@ -1,19 +1,45 @@
 @using TravelTracker.Frontend.Api.Routing
 @implements IDisposable
 
-<form class="address-search" aria-label="Street address lookup" @onsubmit="SearchAsync" @onsubmit:preventDefault
-      @onkeydown:stopPropagation="@(loading || candidates.Count > 0)">
+@if (!Embedded)
+{
+    <form class="address-search" aria-label="Street address lookup" @onsubmit="SearchAsync" @onsubmit:preventDefault
+          @onkeydown:stopPropagation="@(loading || candidates.Count > 0)">@AddressFields</form>
+}
+else
+{
+    <div class="address-search" role="group" aria-label="Street address and map suggestion"
+         @onkeydown:stopPropagation="@(loading || candidates.Count > 0)">@AddressFields</div>
+}
+
+@code {
+    RenderFragment AddressFields => @<text>
     <label class="location-address" for="@inputId">Street address (optional)</label>
     <div class="address-input-box" aria-busy="@(loading ? "true" : "false")">
+        @if (!Embedded)
+        {
         <input @ref="inputControl" id="@inputId" type="text" value="@text" @oninput="EditAsync" @onkeydown="InputKeyAsync" maxlength="200" autocomplete="off"
                placeholder="Enter an address, then Search" aria-describedby="@($"{inputId}-status {inputId}-credit")" />
+        }
+        else
+        {
+            <textarea @ref="inputControl" id="@inputId" value="@text" @oninput="EditAsync" @onkeydown="InputKeyAsync" maxlength="200" rows="2"
+                      placeholder="Enter an address or choose the map position" aria-describedby="@($"{inputId}-status {inputId}-credit")"></textarea>
+        }
         @if (loading)
         {
             <span class="address-spinner" aria-hidden="true"></span>
         }
     </div>
     <div class="address-actions">
-        <button type="submit" class="secondary" disabled="@(loading || text.Trim().Length < 3)">Search address</button>
+        @if (!Embedded)
+        {
+            <button type="submit" class="secondary" disabled="@(loading || text.Trim().Length < 3)">Search address</button>
+        }
+        else
+        {
+            <button type="button" class="secondary" disabled="@(loading || text.Trim().Length < 3)" @onclick="SearchAsync">Search address</button>
+        }
         @if (loading)
         {
             <button type="button" class="secondary" @onclick="CancelLookup">Cancel lookup</button>
@@ -28,15 +54,16 @@
                 var candidate = candidates[index];
                 var candidateIndex = index;
                 <li><button @ref="candidateControls[candidateIndex]" type="button" class="secondary" @onclick="() => SelectAsync(candidate)"
-                            @onkeydown="keyboard => CandidateKeyAsync(keyboard, candidateIndex)">@candidate.Label</button></li>
+                            @onkeydown="keyboard => CandidateKeyAsync(keyboard, candidateIndex)"><span>@candidate.Label</span><small class="candidate-coordinates">@FormattableString.Invariant($"Latitude {candidate.Lat:0.######}, Longitude {candidate.Lon:0.######}")</small></button></li>
             }
         </ul>
     }
     <small id="@($"{inputId}-credit")">Address lookup: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a> · Nominatim. Submit searches explicitly. Keep personal or confidential information out of requests.</small>
-</form>
+    </text>;
 
-@code {
     [Parameter] public RoutingClient? Client { get; set; }
+    /** Uses textarea and a Search button inside a parent form, avoiding nested forms and implicit Enter submissions. */
+    [Parameter] public bool Embedded { get; set; }
     [Parameter] public string Value { get; set; } = "";
     [Parameter] public EventCallback<string> ValueChanged { get; set; }
     [Parameter] public EventCallback<AddressCandidate> CandidateSelected { get; set; }

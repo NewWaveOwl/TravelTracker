@@ -140,7 +140,7 @@ What each part of the system lets people create, read, update and delete.
 
 **Map screen.** A large map with floating itinerary, tool and detail panels. Events show times, place, type and transport. Choosing a list item highlights its marker and vice versa. Markers are numbered with a legend, and each segment shows the transport icon, mode and duration. Straight lines are labelled approximate and never suggest a real road or flight path. Map controls and a text itinerary remain available. On phones, the floating panels start collapsed to their box icons. If the map cannot load, the list and details keep working.
 
-**Locations.** Place forms and details show the street address prominently, with labelled latitude and longitude beneath it in smaller, readable text. Addresses remain optional, and a missing address is shown honestly. Travellers can still choose or enter the map position manually.
+**Locations.** Place forms show the street address prominently and the selected coordinates underneath in smaller gray text. Ordinary planning uses an explicit address search or interactive map selection followed by confirmation. Numeric controls are optional adjustments in closed Advanced details. Unknown addresses keep their map position unselected until the traveller chooses it; existing saved coordinates stay intact. Addresses remain editable and optional, and a missing address is shown honestly.
 
 **Address help and route previews.** The shared RNDTransit backend supplies optional
 Public Nominatim address suggestions and chosen-endpoint OTP routes. Address search

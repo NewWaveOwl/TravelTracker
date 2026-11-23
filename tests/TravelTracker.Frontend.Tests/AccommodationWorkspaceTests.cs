@@ -142,6 +142,29 @@ public sealed class AccommodationWorkspaceTests : BunitContext
     }
 
     [Fact]
+    public void MissingMapPositionShowsVisibleRecoveryWithoutDiscardingAddressOrPosting()
+    {
+        var posts = 0;
+        Configure(Handler(request =>
+        {
+            if (request.Method == HttpMethod.Post) posts++;
+            return Task.FromResult(Json(Array.Empty<AccommodationDto>()));
+        }));
+        var page = Render<AccommodationWorkspace>();
+        page.WaitForAssertion(() => Assert.Contains("No accommodations found", page.Markup));
+        page.Find(".accommodation-heading button").Click();
+        page.Find("#accommodation-name").Change("Address-only hotel");
+        page.Find("#accommodation-address").Change("An unresolved address");
+        page.Find(".accommodation-modal form").Submit();
+        Assert.Equal(0, posts);
+        Assert.Equal("An unresolved address", page.Find("#accommodation-address").GetAttribute("value"));
+        Assert.Contains(page.FindAll(".accommodation-modal .field-error"), item =>
+            item.Closest("details") is null && item.TextContent.Contains("Choose a location on the map"));
+        Assert.False(page.Find("#accommodation-lat").HasAttribute("required"));
+        Assert.False(page.Find("#accommodation-lon").HasAttribute("required"));
+    }
+
+    [Fact]
     public void ReadOnlyGrantCanSearchButCannotOpenCreateForm()
     {
         var item = new AccommodationDto(Id, "Bay Hotel", "Toronto", 45.5m, -73.5m, "private");

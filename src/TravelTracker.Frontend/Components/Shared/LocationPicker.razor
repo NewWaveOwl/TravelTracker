@@ -1,32 +1,40 @@
 @using System.Globalization
+@using TravelTracker.Frontend.Api.Routing
+@using TravelTracker.Frontend.Api.Trips
+@using TravelTracker.Frontend.Components.Trips
+@inject IServiceProvider Services
 
-<section class="location-picker" aria-labelledby="location-heading">
-    <small>CHOOSE LOCATION / ATTRACTION</small>
-    <h1 id="location-heading" tabindex="-1" @ref="heading">Put your attraction on the map</h1>
-    <p>This map is a placeholder. Enter coordinates to choose a location; live map selection will be available later.</p>
+<section class="location-picker" aria-labelledby="@headingId">
+    <small>CHOOSE LOCATION / ADDRESS OR MAP</small>
+    <h2 id="@headingId" tabindex="-1" @ref="heading">Choose the location for @(string.IsNullOrWhiteSpace(Name) ? "this place" : Name)</h2>
+    <p>Choose an address result or click the map. You can pan, zoom or use Pick map center. The initial map view does not select a location.</p>
     <div class="location-columns">
-        <div>
-            <div class="map-preview">
-                <img src="assets/attractions-map-placeholder.png" alt="Static map preview of Montreal's Little Burgundy and Pointe-Saint-Charles neighbourhoods. This image does not provide interactive location selection." />
-            </div>
-            <small>Static map preview. Address search, pin placement and zoom are not connected yet.</small>
-        </div>
-        <form class="selected-location" @onsubmit="UseAsync" @onsubmit:preventDefault>
-            <h2>Selected location</h2>
-            <h3>@Name</h3>
-            <p class="location-address">@(string.IsNullOrWhiteSpace(Address) ? "Street address not provided" : Address)</p>
+        <TripMapCanvas Stops="MapStops" SelectedIndex="@(MapStops.Count > 0 ? 0 : -1)" CanPick="true" LocationPicked="PickPosition" />
+        <div class="selected-location">
+            <h3>@(string.IsNullOrWhiteSpace(Name) ? "Selected location" : Name)</h3>
+            <AddressLookup Client="@(Services.GetService<RoutingClient>())" Value="@address" ValueChanged="value => address = value"
+                           Latitude="PickedLatitude" Longitude="PickedLongitude" Context="this" ReverseVersion="reverseVersion"
+                           CandidateSelected="ChooseAddress" Embedded="Embedded" />
+            <p class="location-coordinate-readout" aria-label="Selected map position">@(PickedLatitude is { } lat && PickedLongitude is { } lon
+                ? FormattableString.Invariant($"Latitude {lat:0.######}, Longitude {lon:0.######}")
+                : "Map position not selected. Choose an address result or a point on the map.")</p>
             @if (error is not null)
             {
                 <p class="field-error" role="alert">@error</p>
             }
-            <div class="location-coordinates">
-                <div><AttractionField Id="map-lat" Label="Latitude * (−90 to 90)" @bind-Value="latitude" InputMode="decimal" /></div>
-                <div><AttractionField Id="map-lon" Label="Longitude * (−180 to 180)" @bind-Value="longitude" InputMode="decimal" /></div>
+            <details class="location-coordinate-details">
+                <summary>Advanced map position (optional)</summary>
+                <div class="location-coordinates">
+                    <div><AttractionField Id="map-lat" Label="Latitude" @bind-Value="latitude" InputMode="decimal" /></div>
+                    <div><AttractionField Id="map-lon" Label="Longitude" @bind-Value="longitude" InputMode="decimal" /></div>
+                </div>
+            </details>
+            <p>Use this location to update the form. Your other entries stay as entered.</p>
+            <div class="location-actions">
+                <button type="button" @onclick="UseAsync">Use this location</button>
+                <button type="button" class="secondary" @onclick="Cancel">Cancel location</button>
             </div>
-            <p>Use this location to fill the attraction’s coordinates. Your other form entries stay as entered.</p>
-            <button type="submit">Use this location</button>
-            <button type="button" class="secondary" @onclick="Cancel">Cancel</button>
-        </form>
+        </div>
     </div>
 </section>
 
@@ -35,38 +43,63 @@
     [Parameter] public string Address { get; set; } = "";
     [Parameter] public string Latitude { get; set; } = "";
     [Parameter] public string Longitude { get; set; } = "";
+    [Parameter] public string PlaceType { get; set; } = "attraction";
+    [Parameter] public bool Embedded { get; set; }
+    [Parameter] public EventCallback<string> AddressChanged { get; set; }
     [Parameter] public EventCallback<(string Lat, string Lon)> UseLocation { get; set; }
     [Parameter] public EventCallback Cancel { get; set; }
 
-    string latitude = "";
-    string longitude = "";
+    readonly string headingId = $"location-{Guid.NewGuid():N}";
+    string latitude = "", longitude = "", address = "";
     string? error;
+    int reverseVersion;
+    int lookupSequence;
     ElementReference heading;
+    decimal? PickedLatitude => Coordinate(latitude, -90, 90);
+    decimal? PickedLongitude => Coordinate(longitude, -180, 180);
+    IReadOnlyList<TripPlaceDto> MapStops => PickedLatitude is { } lat && PickedLongitude is { } lon
+        ? [new(Guid.Empty, PlaceType, string.IsNullOrWhiteSpace(Name) ? "Selected location" : Name, address, lat, lon)] : [];
 
-    /** Copies the incoming coordinates once; the picker is mounted fresh for each use, so later parameter changes are intentionally ignored. */
-    protected override void OnInitialized()
-    {
-        latitude = Latitude;
-        longitude = Longitude;
-    }
+    /** Keeps an isolated location draft; opening a map never invents coordinates for an unknown address. */
+    protected override void OnInitialized() => (latitude, longitude, address) = (Latitude, Longitude, Address);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender) await heading.FocusAsync();
     }
 
+    void PickPosition((decimal Lat, decimal Lon) position)
+    {
+        latitude = position.Lat.ToString(CultureInfo.InvariantCulture);
+        longitude = position.Lon.ToString(CultureInfo.InvariantCulture);
+        reverseVersion = ++lookupSequence;
+        error = null;
+    }
+
+    void ChooseAddress(AddressCandidate candidate)
+    {
+        latitude = candidate.Lat.ToString(CultureInfo.InvariantCulture);
+        longitude = candidate.Lon.ToString(CultureInfo.InvariantCulture);
+        address = candidate.Label;
+        reverseVersion = 0;
+        error = null;
+    }
+
     /**
-     * Applies a validated coordinate draft only after explicit confirmation.
-     * @return Completion of the parent update, or a retained picker with validation feedback.
+     * Applies the chosen map position and editable address only after explicit confirmation.
+     * @return Completion of the parent updates, or retained location controls when a position is missing.
      */
     async Task UseAsync()
     {
-        if (!decimal.TryParse(latitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedLatitude) || parsedLatitude is < -90 or > 90 ||
-            !decimal.TryParse(longitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedLongitude) || parsedLongitude is < -180 or > 180)
+        if (PickedLatitude is null || PickedLongitude is null)
         {
-            error = "Enter latitude from −90 to 90 and longitude from −180 to 180.";
+            error = "Choose an address result or a point on the map before using this location.";
             return;
         }
+        await AddressChanged.InvokeAsync(address);
         await UseLocation.InvokeAsync((latitude, longitude));
     }
+
+    static decimal? Coordinate(string value, decimal minimum, decimal maximum) =>
+        decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
 }

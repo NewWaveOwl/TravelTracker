@@ -1064,11 +1064,11 @@ public partial class NewTrip : IAsyncDisposable
         if (markerType is not { } type || string.IsNullOrWhiteSpace(placeName) || PickedCoordinates is not { } position ||
             position.Lat is < -90 or > 90 || position.Lon is < -180 or > 180)
         {
-            errors = ["Enter a place name and valid map coordinates."];
+            errors = ["Enter a place name and choose an address result or a point on the map."];
             actionFailed = false;
             return;
         }
-        if (showMap && editingMarker is { } marker)
+        if (editingMarker is { } marker)
         {
             var place = marker.Place with { Name = placeName.Trim(), Address = placeAddress.Trim(), Lat = position.Lat, Lon = position.Lon };
             if (place != marker.Place)

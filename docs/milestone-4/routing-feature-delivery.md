@@ -62,3 +62,21 @@ loaded feed metadata, with unknown per-feed dates/bounds preserved. Its inclusiv
 date labels are paired with the exact exclusive service boundary; global union
 dates never promise per-feed/per-day service. This is local route evidence, not a
 claim that the Windows server or tunnel was updated or tested.
+
+## Address-first ordinary forms (#120)
+
+Attraction, Accommodation/QuickAdd, Transport-point and Trip forms now offer real
+map selection and explicit address search. The selected coordinates remain visible
+under the address in small gray text; numeric controls are optional and collapsed.
+Embedded search cannot implicitly submit the containing save form. A missing
+position has visible map-selection guidance. The picker keeps a private buffer,
+and both candidate selection and using the location require confirmation. Cancel,
+failed lookup and unknown address preserve existing form data and coordinates.
+The compact trip editor can pick a map point, and applying an edited existing
+marker updates that marker without adding a duplicate.
+
+Validation: 680 frontend tests and 1,734 tests across the ordinary application
+suite passed, with zero failures/skips and zero Release build warnings/errors.
+The twelve added cases cover unknown positions, map/search confirmation, cancel,
+failed reverse lookup retaining manual text, embedded form isolation and compact
+trip-map entry. Read-only source review found no remaining actionable issues.

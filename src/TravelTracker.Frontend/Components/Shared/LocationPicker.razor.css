@@ -1,0 +1,6 @@
+.location-picker { width: 100%; min-width: 0; gap: 1rem; }
+.location-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .8fr); gap: 1rem; align-items: start; }
+.location-coordinate-readout { color: #657165; font-size: .85rem; line-height: 1.4; overflow-wrap: anywhere; }
+.location-coordinate-details { margin: .5rem 0; font-size: .85rem; }
+.location-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+@media (max-width: 800px) { .location-columns { grid-template-columns: minmax(0, 1fr); } }

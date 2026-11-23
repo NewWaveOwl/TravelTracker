@@ -16,7 +16,7 @@ public sealed class RoutingClient(ProtectedClient client)
      */
     public async Task<AddressLookupResult> SearchAsync(string query, CancellationToken cancellationToken = default)
     {
-        query = query.Trim();
+        query = string.Join(" ", query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         if (query.Length is < 3 or > 200)
             throw new ApiError(FailureKind.Validation, "Enter an address between 3 and 200 characters.");
         return CheckAddresses(await client.GetJsonAsync<AddressLookupResult>("Routing", $"/v1/places/search?q={Uri.EscapeDataString(query)}", cancellationToken));

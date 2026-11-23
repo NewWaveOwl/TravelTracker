@@ -22,8 +22,8 @@ public sealed class AccommodationDraft
     {
         var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(Name)) errors["name"] = ["Enter an accommodation name."];
-        if (!RangeRules.IsDecimalInRange(Lat, -90, 90)) errors["lat"] = ["Enter a latitude from -90 to 90."];
-        if (!RangeRules.IsDecimalInRange(Lon, -180, 180)) errors["lon"] = ["Enter a longitude from -180 to 180."];
+        if (!RangeRules.IsDecimalInRange(Lat, -90, 90)) errors["lat"] = [string.IsNullOrWhiteSpace(Lat) ? "Choose the location on the map." : "Enter a latitude from -90 to 90."];
+        if (!RangeRules.IsDecimalInRange(Lon, -180, 180)) errors["lon"] = [string.IsNullOrWhiteSpace(Lon) ? "Choose the location on the map." : "Enter a longitude from -180 to 180."];
         if (Visibility is not (PrivateVisibility or SharedVisibility)) errors["visibility"] = ["Choose private or shared visibility."];
         return errors;
     }

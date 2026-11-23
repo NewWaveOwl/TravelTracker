@@ -563,7 +563,7 @@ body:has(.map-workspace) > header { z-index: 3; }
 
 /* Street addresses identify places; coordinates remain secondary map details. */
 .location-address, .location-address label { font-size: 22px; line-height: 1.4; overflow-wrap: anywhere; }
-.location-coordinates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; min-width: 0; font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
+.location-coordinates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; min-width: 0; font-size: 16px; line-height: 1.4; color: #657165; overflow-wrap: anywhere; }
 .location-coordinates label, .location-coordinates input, .location-coordinates .field-error { font-size: 16px; line-height: 1.4; }
 .location-coordinates input { width: 100%; min-width: 0; min-height: 44px; padding: 8px 10px; }
 dl.location-coordinates { grid-template-columns: max-content minmax(0, 1fr); width: 100%; margin: 0; font-size: 16px; line-height: 1.4; }

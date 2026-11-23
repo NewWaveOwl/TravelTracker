@@ -1,0 +1,13 @@
+@using System.Globalization
+
+<p class="location-coordinate-readout" aria-label="Map position">@Description</p>
+
+@code {
+    [Parameter] public string? Latitude { get; set; }
+    [Parameter] public string? Longitude { get; set; }
+
+    string Description => decimal.TryParse(Latitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var lat) && lat is >= -90 and <= 90 &&
+        decimal.TryParse(Longitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var lon) && lon is >= -180 and <= 180
+        ? FormattableString.Invariant($"Latitude {lat:0.######}, Longitude {lon:0.######}")
+        : "Map position not selected. Choose an address result or a point on the map.";
+}

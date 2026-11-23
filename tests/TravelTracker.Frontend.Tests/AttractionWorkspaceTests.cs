@@ -12,6 +12,7 @@ using TravelTracker.Frontend.Api.Attractions;
 using TravelTracker.Frontend.Auth;
 using TravelTracker.Frontend.Components.Pages;
 using TravelTracker.Frontend.Components.Layout;
+using TravelTracker.Frontend.Components.Trips;
 using TravelTracker.Frontend.Tests.Support;
 
 namespace TravelTracker.Frontend.Tests;
@@ -77,6 +78,7 @@ public sealed class AttractionWorkspaceTests : BunitContext
      */
     SwitchableAuthentication Configure(StubHandler handler, bool write = true)
     {
+        JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js").Mode = JSRuntimeMode.Loose;
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
         authentication.SignIn("test-token", clock.GetUtcNow().AddMinutes(10), write ? "catalogue.read catalogue.write" : "catalogue.read");
@@ -185,7 +187,7 @@ public sealed class AttractionWorkspaceTests : BunitContext
     }
 
     [Fact]
-    public void LocationCancelDiscardsCoordinatesWhileUseAppliesThem()
+    public async Task LocationCancelDiscardsCoordinatesWhileUseAppliesThem()
     {
         Configure(StubHandler.Status(200, "[]"));
         var page = Render<Attractions>();
@@ -196,18 +198,17 @@ public sealed class AttractionWorkspaceTests : BunitContext
         page.Find("#attraction-lat").Input("45");
         page.Find("#attraction-lon").Input("-73");
         page.Find(".attraction-map-action button").Click();
-        Assert.Contains("placeholder", page.Find(".location-picker").TextContent);
-        Assert.Contains("123 Museum Street", page.Find(".selected-location").TextContent);
-        page.Find("#map-lat").Input("46");
-        page.Find("#map-lon").Input("-74");
-        page.Find(".selected-location button[type=button]").Click();
+        Assert.Contains("initial map view does not select", page.Find(".location-picker").TextContent);
+        Assert.Equal("123 Museum Street", page.Find(".selected-location .address-search input").GetAttribute("value"));
+        await page.InvokeAsync(() => page.FindComponent<TripMapCanvas>().Instance.LocationPicked.InvokeAsync((46m, -74m)));
+        page.Find(".selected-location .location-actions button.secondary").Click();
         Assert.Equal("45", page.Find("#attraction-lat").GetAttribute("value"));
         Assert.Equal("-73", page.Find("#attraction-lon").GetAttribute("value"));
         Assert.Equal("123 Museum Street", page.Find("#attraction-address").GetAttribute("value"));
         page.Find(".attraction-map-action button").Click();
-        page.Find("#map-lat").Input("46");
-        page.Find("#map-lon").Input("-74");
-        page.Find(".selected-location").Submit();
+        await page.InvokeAsync(() => page.FindComponent<TripMapCanvas>().Instance.LocationPicked.InvokeAsync((46m, -74m)));
+        page.Find(".selected-location .address-search input").Input("123 Museum Street");
+        page.Find(".selected-location .location-actions button:not(.secondary)").Click();
         Assert.Equal("46", page.Find("#attraction-lat").GetAttribute("value"));
         Assert.Equal("-74", page.Find("#attraction-lon").GetAttribute("value"));
         Assert.Equal("123 Museum Street", page.Find("#attraction-address").GetAttribute("value"));
@@ -397,7 +398,8 @@ public sealed class AttractionWorkspaceTests : BunitContext
         ExportVisual(page, "attraction-workspace.html");
         page.Find(".attraction-map-action button").Click();
         ExportVisual(page, "attraction-location.html");
-        Assert.NotNull(page.Find(".location-picker .map-preview img"));
+        Assert.NotNull(page.Find(".location-picker .trip-map-canvas svg"));
+        Assert.NotNull(page.Find(".location-picker button[aria-label='Pick map center']"));
     }
 
     static void FillValidDraft(IRenderedComponent<Attractions> page)

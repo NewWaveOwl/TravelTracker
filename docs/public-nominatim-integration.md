@@ -49,6 +49,15 @@ The developer explicitly selected the public service after reviewing its
   failure or access withdrawal; availability of the public service is not guaranteed.
 
 At most four address lookups are admitted at once; excess requests receive 503.
+
+Ordinary location entry (#120) uses the interactive map or a submitted address in
+Attractions, Accommodations, Transport points and the trip editor. Coordinates stay
+under the address in small gray text; optional numeric adjustments are inside
+closed Advanced details. Embedded pickers use a textarea and explicit Search
+button so address lookup cannot submit a surrounding save form. Unknown addresses
+never silently select the map's initial center. Use confirms the private picker
+buffer; Cancel preserves the parent form and existing saved coordinates.
+
 Provider I/O times out after four seconds and an entire operation after seven.
 Eight total TravelTracker operations may enter authentication at once; route I/O
 has its own two-request limit. These bounds protect the shared server; a queued
