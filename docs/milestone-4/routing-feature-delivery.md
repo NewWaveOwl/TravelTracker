@@ -97,3 +97,22 @@ without compiler warnings. The 23 new adapter/HTTP cases cover zone compatibilit
 DST ambiguity/gaps, endpoint and geometry consistency, realtime delays, no-route,
 timeout/cancellation cleanup and sanitized outages. Actual five-mode raw responses
 also passed the new declared-point-count and scheduled timing invariants.
+
+## Planner selection and confirmation (#127)
+
+Map tools → Transport offers explicit capabilities/catalogue loading, selected
+endpoints, date/time in the trip zone and supported modes. Windows zone IDs map to
+IANA without changing the saved trip. Alternatives display actual times, initial
+waiting and available stop/transfer details. Only explicit Confirm applies the
+saved transport and exact seconds to an adjacent connection. Preview/Cancel does
+not write the itinerary or reorder stops. Confirmation rechecks endpoint/revision,
+unconfirmed markers and the exact saved-mode ID, updates the parent immediately,
+and participates in Undo. Geometry stays within the circuit/session, is cleared
+for a different account/trip and is not a new persistence field.
+
+Validation: 702 frontend tests and 1,756 ordinary application tests passed, with
+zero failures/skips and zero build warnings/errors. The 22 added cases include
+Windows/no-slash IANA zone compatibility, DST choices, options gating, stale and
+nonadjacent selection, malformed legacy geometry, wrong catalogue ID and the full
+Cancel → Confirm → Undo → Confirm → Save path. Read-only review found no remaining
+issues. Responsive browser verification is recorded separately after inspection.

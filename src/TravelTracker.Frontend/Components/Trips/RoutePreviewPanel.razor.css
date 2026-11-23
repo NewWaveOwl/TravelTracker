@@ -5,3 +5,6 @@
 .route-options button { display: grid; width: 100%; gap: .25rem; text-align: left; }
 .route-options button[aria-pressed=true] { outline: 3px solid #286048; outline-offset: -3px; }
 .route-options span { font-size: .85rem; overflow-wrap: anywhere; }
+.route-leg-details { padding: .5rem; font-size: .85rem; }
+.route-leg-details li { margin: .5rem 0; }
+.route-leg-details span, .route-leg-details small { display: block; }

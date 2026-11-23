@@ -358,12 +358,18 @@ else
                                     </div>
                                 </div>
                             </fieldset>
-                            <RoutePreviewPanel Client="SharedRouting" Request="CurrentRouteRequest" Selected="SelectRoutePreview" />
                             @if (showMap)
                             {
                                 <p>Choose transport, then select the start and destination in travel order.</p>
                                 <button type="button" disabled="@busy" @onclick="ApplyConnectionChanges">Apply connection changes</button>
                             }
+                        }
+                        @if (pendingMode is null)
+                        {
+                            <RoutePlannerPanel Client="SharedRouting" Catalogue="Transport" Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())"
+                                               InitialRequest="CurrentRouteRequest" InitialDestination="selected" TimeZone="@draft.TimeZone"
+                                               Context="@((draft, routeVersion, routingRevision))" Disabled="busy" CanConfirmContext="@(!HasUnconfirmedMarkerChanges)"
+                                               PreviewChanged="SelectRoutePreview" Confirmed="ConfirmRouteAsync" />
                         }
                         @if (showMap)
                         {

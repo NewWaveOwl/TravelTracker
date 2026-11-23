@@ -133,4 +133,58 @@ public sealed class RoutingClientTests
         }));
         Assert.Equal(FailureKind.Unexpected, (await Assert.ThrowsAsync<ApiError>(() => Client(handler).SearchAsync("Rue Test"))).Kind);
     }
+
+    [Theory]
+    [InlineData("empty")]
+    [InlineData("zero")]
+    [InlineData("mode")]
+    [InlineData("geometry")]
+    [InlineData("disconnected")]
+    public async Task MalformedSuccessfulRouteIsNeverOfferedForConfirmation(string failure)
+    {
+        var route = RoutingFixtures.Candidate;
+        route = failure switch
+        {
+            "empty" => route with { Legs = [] },
+            "zero" => route with { DurationSeconds = 0 },
+            "mode" => route with { Legs = [route.Legs[0] with { Mode = "AIRPLANE" }, route.Legs[1]] },
+            "geometry" => route with { Legs = [route.Legs[0] with { Geometry = "_" }, route.Legs[1]] },
+            _ => route with { Legs = [route.Legs[0], route.Legs[1] with { Geometry = route.Legs[0].Geometry, From = null, To = null }] },
+        };
+        var handler = new StubHandler((_, _) => Task.FromResult(RoutingFixtures.Json(new RoutePlanResult("success", [route]))));
+        Assert.Equal(FailureKind.Unexpected, (await Assert.ThrowsAsync<ApiError>(() => Client(handler).PlanAsync(RoutingFixtures.Request))).Kind);
+    }
+
+    [Fact]
+    public async Task LegacyRouteWithoutOptionalStopMetadataStillMustMatchTheRequestedEndpoints()
+    {
+        var route = RoutingFixtures.Candidate with
+        {
+            TransferCount = 0,
+            Legs = [new("RAIL", 452, 1300, RoutingFixtures.Departure, RoutingFixtures.Arrival,
+                "_p~iF~ps|U_ulLnnqC_mqNvxq\u0060@", "Unrelated route", false)],
+        };
+        var handler = new StubHandler((_, _) => Task.FromResult(RoutingFixtures.Json(new RoutePlanResult("success", [route]))));
+        Assert.Equal(FailureKind.Unexpected, (await Assert.ThrowsAsync<ApiError>(() => Client(handler).PlanAsync(RoutingFixtures.Request))).Kind);
+    }
+
+    [Fact]
+    public async Task CapabilitiesPreserveUnknownCoverageAndRefuseDuplicateModeDeclarations()
+    {
+        var handler = new StubHandler((_, _) => Task.FromResult(RoutingFixtures.Json(RoutingFixtures.Capabilities with
+        {
+            Coverage = new(),
+            Modes = [new("train", "unknown")],
+        })));
+        var client = Client(handler);
+        var metadata = await client.CapabilitiesAsync();
+        Assert.Null(metadata.Coverage.Bounds);
+        Assert.Null(metadata.Coverage.StartDate);
+        Assert.Equal("unknown", Assert.Single(metadata.Modes).Status);
+        handler.RespondWith(200, System.Text.Json.JsonSerializer.Serialize(RoutingFixtures.Capabilities with
+        {
+            Modes = [new("train", "available"), new("train", "unsupported")],
+        }));
+        Assert.Equal(FailureKind.Unexpected, (await Assert.ThrowsAsync<ApiError>(() => client.CapabilitiesAsync())).Kind);
+    }
 }

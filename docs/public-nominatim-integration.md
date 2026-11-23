@@ -134,6 +134,30 @@ must be connected and valid. Previews preserve manually entered trip times; rout
 geometry is temporary draft data, not a new persisted trip field. No live road
 traffic is claimed.
 
+## Planner controls and explicit acceptance (#127)
+
+Open **Map tools → Transport → Load routing options**. The client explicitly reads
+current capabilities and saved transport entries before enabling supported modes.
+Choose origin, destination, departure date/time and Walk/Bike/Car/Bus/Train, then
+Find routes. Alternatives show duration/distance, actual departure/arrival and
+initial waiting; available transit details include walking legs, stops and
+transfers. Times display in the trip zone. Supported Windows zone IDs are
+translated to IANA for the request without changing the saved trip zone.
+
+Selecting a candidate draws a preview. Confirm applies the chosen saved mode and
+exact provider departure/arrival together, after rechecking the current draft,
+marker edits, endpoint order and exact catalogue identifier. Only adjacent stops
+can receive a connection; other pairs may be previewed but require an explicit
+itinerary reorder before confirmation. Cancel, outdated requests and provider
+failure preserve the itinerary. Confirmation supports Undo and does not itself
+save a catalogue record or trip.
+
+Confirmed geometry remains within the current session and survives a matching
+Save response. Changing positions/mode/times, opening a different trip, signing
+out or starting a new draft invalidates it. Existing trip persistence stores the
+mode and times, not provider geometry; reopened connection lines remain labelled
+approximate until another preview is requested. See the [update/run commands](milestone-4/server-routing-update.md).
+
 `GET /health/traveltracker` contains aggregate queue/cache/request counters only.
 Launcher polling uses this private endpoint and never triggers Nominatim requests.
 Ready means Ktor is running, not that a particular provider/feed/route is available.

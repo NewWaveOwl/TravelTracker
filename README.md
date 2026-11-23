@@ -125,6 +125,13 @@ Use the base URL without an API suffix. Configure the same TravelTracker Auth
 project in the server's TravelTracker settings. See the [integration, public-service
 rules and Windows update guide](docs/public-nominatim-integration.md).
 
+In **Map tools → Transport**, use **Load routing options**, then choose origin,
+destination, departure and a supported mode. Find and select a route, review its
+stops/times, then **Confirm selected route** to apply mode and exact times to an
+adjacent connection. Cancel preserves the draft. Save persists the chosen plan;
+provider geometry stays in the current session. See the [server update and full
+app commands](docs/milestone-4/server-routing-update.md).
+
 **Profile pictures:** Account → Edit profile → **Upload photo** uses the protected Users picture API and migration merged in [PR #137](https://github.com/NewWaveOwl/TravelTracker/pull/137), now included from `milestone_4`. Choose one static PNG or JPEG up to 1 MiB and 512 × 512 pixels. File selection saves the photo separately from profile text edits; a rejected upload keeps the previous photo. See [picture UI behavior and validation](docs/milestone-4/profile-picture-ui.md).
 
 ### Troubleshooting database login

@@ -1118,7 +1118,7 @@ public sealed class TripPlannerTests : BunitContext
 
         Click(page, "Back to editor");
         page.Find("button[aria-label^='Edit connection 1:']").Click();
-        var times = page.FindAll(".leg-panel input[type=datetime-local]");
+        var times = page.FindAll(".leg-fields input[type=datetime-local]");
         Assert.All(times, input => Assert.Equal("60", input.GetAttribute("step")));
         times[0].Change("2026-11-14T10:05:59.123");
         Click(page, "Review trip");
@@ -2410,6 +2410,114 @@ public sealed class TripPlannerTests : BunitContext
         Assert.Single(page.FindAll(".trip-stop"));
         Assert.Contains("Map-picked museum", page.Markup);
         Assert.Empty(page.FindAll(".trip-place input[type=number][required]"));
+    }
+
+    [Theory]
+    [InlineData("America/Toronto")]
+    [InlineData("Eastern Standard Time")]
+    public async Task ConfirmedRouteAppliesExactSecondsSupportsUndoAndPersistsWithoutLosingSessionGeometry(string timeZone)
+    {
+        var original = Saved with { TimeZone = timeZone };
+        SaveTripRequest? savedRequest = null;
+        var catalogueWrites = 0;
+        Configure(async (request, token) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/v1/routes/capabilities") return RoutingFixtures.Json(RoutingFixtures.Capabilities);
+            if (path == "/v1/routes/plan")
+            {
+                var query = (await request.Content!.ReadFromJsonAsync<RoutePlanRequest>(token))!;
+                Assert.DoesNotContain("Standard Time", query.TimeZone);
+                return RoutingFixtures.Json(RoutingFixtures.Success(query));
+            }
+            if (path.StartsWith("/api/v1/transport-modes"))
+            {
+                if (request.Method != HttpMethod.Get) catalogueWrites++;
+                return path.EndsWith(Train.TransportModeId.ToString(), StringComparison.Ordinal)
+                    ? RoutingFixtures.Json(RoutingFixtures.Train) : RoutingFixtures.Json(new[] { RoutingFixtures.Train });
+            }
+            Assert.Equal($"/api/v1/trips/{TripId:D}", path);
+            if (request.Method == HttpMethod.Get) return Json(original);
+            savedRequest = (await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token))!;
+            var leg = Assert.Single(savedRequest.Legs);
+            return Json(original with { Legs = [original.Legs[0] with { Departure = leg.Departure, Arrival = leg.Arrival }] });
+        }, routing: true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        page.Find("button[aria-label^='Edit connection 1:']").Click();
+        Click(page, "Load routing options");
+        page.WaitForAssertion(() => Assert.False(page.Find("#route-mode option[value=train]").HasAttribute("disabled")));
+        Click(page, "Find routes");
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".route-options > li")));
+        page.Find(".route-options > li > button").Click();
+        Assert.Equal(2, page.FindAll(".provider-route").Count);
+        Assert.StartsWith("2026-11-14T10:00", page.FindAll(".leg-fields input[type=datetime-local]")[0].GetAttribute("value"));
+        Assert.Null(savedRequest);
+        Click(page, "Cancel route preview");
+        Assert.Empty(page.FindAll(".provider-route"));
+        Click(page, "Find routes");
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".route-options > li")));
+        page.Find(".route-options > li > button").Click();
+        Click(page, "Confirm selected route");
+        page.WaitForAssertion(() => Assert.Contains("Selected route applied", page.Markup));
+        Assert.Equal(RoutingFixtures.Departure, page.FindComponent<TravelTracker.Frontend.Components.Trips.RoutePlannerPanel>().Instance.InitialRequest!.DepartureTime);
+        Assert.Contains("10:07:37", page.Find(".trip-message.success").TextContent);
+        Assert.Equal(2, page.FindAll(".provider-route").Count);
+        page.Find("[data-trip-undo]").Click();
+        Assert.StartsWith("2026-11-14T10:00", page.FindAll(".leg-fields input[type=datetime-local]")[0].GetAttribute("value"));
+        Assert.Empty(page.FindAll(".provider-route"));
+        Click(page, "Find routes");
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".route-options > li")));
+        page.Find(".route-options > li > button").Click();
+        Click(page, "Confirm selected route");
+        page.WaitForAssertion(() => Assert.Contains("Selected route applied", page.Markup));
+        Click(page, "Review trip");
+        Click(page, "Save trip");
+        page.WaitForAssertion(() => Assert.NotNull(savedRequest));
+        Assert.Equal(RoutingFixtures.Departure, Assert.Single(savedRequest!.Legs).Departure);
+        Assert.Equal(RoutingFixtures.Arrival, savedRequest.Legs[0].Arrival);
+        Assert.Equal(timeZone, savedRequest.TimeZone);
+        Assert.Equal(Train.TransportModeId, savedRequest.Legs[0].TransportModeId);
+        Assert.Equal(0, catalogueWrites);
+        Assert.Equal(2, page.FindAll(".provider-route").Count);
+        Assert.Equal(new[] { "Hotel", "Museum" }, page.FindComponent<TravelTracker.Frontend.Components.Trips.TripMapCanvas>().Instance.Stops.Select(stop => stop.Name));
+    }
+
+    [Fact]
+    public void WrongSavedModeIdWithTheSameCodeCannotReplaceTheSelectedModeDuringConfirmation()
+    {
+        var detailReads = 0;
+        Configure((request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path == "/v1/routes/capabilities") return Task.FromResult(RoutingFixtures.Json(RoutingFixtures.Capabilities));
+            if (path == "/v1/routes/plan") return Task.FromResult(RoutingFixtures.Json(RoutingFixtures.Success()));
+            if (path.StartsWith("/api/v1/transport-modes"))
+            {
+                if (path.EndsWith(Train.TransportModeId.ToString(), StringComparison.Ordinal))
+                {
+                    detailReads++;
+                    return Task.FromResult(RoutingFixtures.Json(RoutingFixtures.Train with { TransportModeId = Guid.NewGuid() }));
+                }
+                return Task.FromResult(RoutingFixtures.Json(new[] { RoutingFixtures.Train }));
+            }
+            Assert.Equal(HttpMethod.Get, request.Method);
+            return Task.FromResult(Json(Saved));
+        }, routing: true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/map/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        page.Find("button[aria-label^='Edit connection 1:']").Click();
+        Click(page, "Load routing options");
+        page.WaitForAssertion(() => Assert.False(page.Find("#route-mode option[value=train]").HasAttribute("disabled")));
+        Click(page, "Find routes");
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".route-options > li")));
+        page.Find(".route-options > li > button").Click();
+        Click(page, "Confirm selected route");
+        page.WaitForAssertion(() => Assert.Equal(1, detailReads));
+        Assert.Contains("route was not applied", page.Markup);
+        Assert.StartsWith("2026-11-14T10:00", page.FindAll(".leg-fields input[type=datetime-local]")[0].GetAttribute("value"));
+        Assert.StartsWith("2026-11-14T11:00", page.FindAll(".leg-fields input[type=datetime-local]")[1].GetAttribute("value"));
+        Assert.False(page.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
     }
 
     void ConfigureBrowserDraftStorage(bool signedIn = true)

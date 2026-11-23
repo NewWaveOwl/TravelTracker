@@ -70,7 +70,7 @@ public sealed partial class ServiceDirectory(IReadOnlyDictionary<string, string>
     [GeneratedRegex("^/api/v1/[a-z0-9/-]+$", RegexOptions.IgnoreCase)]
     private static partial Regex ProtectedPath();
 
-    [GeneratedRegex("^/v1/(?:places/(?:search|reverse)|routes/plan)$")]
+    [GeneratedRegex("^/v1/(?:places/(?:search|reverse)|routes/(?:plan|capabilities))$")]
     private static partial Regex RoutingPath();
 
     [GeneratedRegex("^name=(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})*$")]

@@ -409,6 +409,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Replaces all trip-specific buffers after an approved new-trip action or navigation. */
     void ResetPlannerDraft()
     {
+        ClearRoutingGeometry();
         browseSaved = false;
         draft = new();
         ResetBrowserDraftTracking();
@@ -709,6 +710,7 @@ public partial class NewTrip : IAsyncDisposable
 
     void MarkEdited()
     {
+        routingRevision++;
         dirty = true;
         savedReview = false;
         notice = null;
@@ -721,12 +723,14 @@ public partial class NewTrip : IAsyncDisposable
     void RememberEdit()
     {
         var restoreDraft = draft.CaptureUndo();
+        var restoreRouting = CaptureRoutingUndo();
         var state = (selected, insertAfter, dirty, markerNumber);
         if (undoHistory.Count == UndoLimit)
             undoHistory.RemoveAt(0);
         undoHistory.Add(() =>
         {
             restoreDraft();
+            restoreRouting();
             (selected, insertAfter, dirty, markerNumber) = state;
         });
     }
@@ -1125,6 +1129,7 @@ public partial class NewTrip : IAsyncDisposable
                 return;
             var saved = revision.Trip;
             draft = TripPlannerDraft.FromSaved(revision);
+            ClearRoutingGeometry();
             availableModeCodes = null;
             browseSaved = false;
             ResetBrowserDraftTracking();
@@ -1220,7 +1225,7 @@ public partial class NewTrip : IAsyncDisposable
             }
             var saved = revision.Trip;
             var checkpoint = draft.Id is null ? newBrowserDraft : null;
-            draft = TripPlannerDraft.FromSaved(revision);
+            draft = RebindRoutingGeometry(TripPlannerDraft.FromSaved(revision));
             availableModeCodes = null;
             ResetBrowserDraftTracking();
             undoHistory.Clear();

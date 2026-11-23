@@ -8,7 +8,7 @@
     {
         <p>Choose a connection, transport and departure time to preview routes. Resolve any repeated-time UTC offset first.</p>
     }
-    <button type="button" class="secondary" disabled="@(Request is null || loading)" @onclick="LoadAsync">@(loading ? "Finding routes…" : "Find routes")</button>
+    <button type="button" class="secondary" disabled="@(Request is null || loading || !CanSearch)" @onclick="LoadAsync">@(loading ? "Finding routes…" : "Find routes")</button>
     @if (loading)
     {
         <button type="button" class="secondary" @onclick="CancelPreview">Cancel route lookup</button>
@@ -23,8 +23,38 @@
                 <button type="button" class="secondary" aria-pressed="@(route == chosen ? "true" : "false")" @onclick="() => SelectAsync(route)">
                     <strong>@($"{Math.Ceiling(route.DurationSeconds / 60)} min · {route.DistanceMeters / 1000:0.0} km")</strong>
                     <span>@TimingLabel(route.TimingBasis)</span>
+                    <span>Departs @TimeLabel(route.Legs[0].DepartureTime) · Arrives @TimeLabel(route.Legs[^1].ArrivalTime)</span>
+                    @if (Request is { } requested && route.Legs[0].DepartureTime > requested.DepartureTime)
+                    {
+                        <span>Wait before departure: @Math.Ceiling((route.Legs[0].DepartureTime - requested.DepartureTime).TotalMinutes) min</span>
+                    }
                     <span>@string.Join(" → ", route.Legs.Select(leg => leg.RouteName ?? leg.Mode))</span>
+                    <span>@(route.TransferCount is { } transfers ? $"{transfers} transfer{(transfers == 1 ? "" : "s")}" : "Transfer details unavailable")</span>
                 </button>
+                <details class="route-leg-details"><summary>Stops and times</summary>
+                    <ol>
+                    @foreach (var leg in route.Legs)
+                    {
+                        <li>
+                            <strong>@(leg.RouteName ?? ModeLabel(leg.Mode))</strong>
+                            @if (!string.IsNullOrWhiteSpace(leg.Headsign)) { <span>Towards @leg.Headsign</span> }
+                            <span>@(leg.From?.Name ?? "Start") → @(leg.To?.Name ?? "Destination")</span>
+                            <span>@TimeLabel(leg.DepartureTime) → @TimeLabel(leg.ArrivalTime)</span>
+                            <small>@(leg.Realtime ? "Realtime prediction" : leg.Mode is "BUS" or "RAIL" ? "Scheduled service" : "Estimated travel")</small>
+                            @if (leg.Realtime && leg.ScheduledDepartureTime is { } scheduledDeparture && leg.ScheduledArrivalTime is { } scheduledArrival)
+                            {
+                                <small>Timetable: @TimeLabel(scheduledDeparture) → @TimeLabel(scheduledArrival)</small>
+                            }
+                            @if (leg.IntermediateStops is { Count: > 0 } stops)
+                            {
+                                <details><summary>@stops.Count intermediate stops</summary><ol>
+                                    @foreach (var stop in stops) { <li>@(stop.Name ?? "Unnamed transit stop") @if (stop.StopId is { } stopId) { <small>@stopId</small> }</li> }
+                                </ol></details>
+                            }
+                        </li>
+                    }
+                    </ol>
+                </details>
             </li>
         }
         </ul>
@@ -36,6 +66,7 @@
     [Parameter] public RoutingClient? Client { get; set; }
     [Parameter] public RoutePlanRequest? Request { get; set; }
     [Parameter] public EventCallback<RouteItinerary?> Selected { get; set; }
+    [Parameter] public bool CanSearch { get; set; } = true;
 
     CancellationTokenSource? pending;
     RoutePlanRequest? previous;
@@ -59,7 +90,7 @@
     {
         CancelPending();
         await Selected.InvokeAsync(null);
-        if (Request is null) return;
+        if (Request is null || !CanSearch) return;
         if (Client is null)
         {
             message = "Route preview is unavailable. Keep planning with your entered times.";
@@ -75,7 +106,11 @@
             var result = await Client.PlanAsync(Request, token);
             if (disposed || token.IsCancellationRequested || requestVersion != version) return;
             routes = result.Itineraries;
-            message = result.Status == "unsupported" ? "This mode or coverage is not supported by the routing server. Your entered times are unchanged."
+            message = result.Reason == "outside_service_period" ? "No loaded transit timetable covers this departure date. Your entered times are unchanged."
+                : result.Reason == "outside_coverage" ? "These endpoints are outside the loaded routing area. Your entered times are unchanged."
+                : result.Reason == "location_not_found" ? "A chosen location could not be matched to a routable point. Your entered times are unchanged."
+                : result.Reason == "no_stops_in_range" ? "No transit stops are within range of these endpoints. Your entered times are unchanged."
+                : result.Status == "unsupported" ? "This mode or coverage is not supported by the routing server. Your entered times are unchanged."
                 : routes.Count == 0 ? "No route found for this mode, area or service date. Your entered times are unchanged."
                 : "Choose a candidate to display its route on the map. Preview times are not saved to the trip.";
         }
@@ -123,6 +158,15 @@
         "realtime" => "Includes realtime transit predictions",
         "scheduled" => "Scheduled transit times",
         _ => "Estimated travel time; no live road traffic",
+    };
+
+    string TimeLabel(DateTimeOffset time) => Request?.TimeZone is { } zoneId && TimeZoneInfo.TryFindSystemTimeZoneById(zoneId, out var zone)
+        ? TimeZoneInfo.ConvertTime(time, zone).ToString("MMM d HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture)
+        : time.ToString("MMM d HH:mm:ss zzz", System.Globalization.CultureInfo.InvariantCulture);
+
+    static string ModeLabel(string mode) => mode switch
+    {
+        "WALK" => "Walk", "BICYCLE" => "Bike", "CAR" => "Car", "BUS" => "Bus", "RAIL" => "Train", _ => mode,
     };
 
     /** Cancels a provider request when its connection panel closes. */

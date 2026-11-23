@@ -18,7 +18,7 @@ public sealed class RoutePreviewTests : BunitContext
     static readonly DateTimeOffset Departure = DateTimeOffset.Parse("2026-11-23T10:00:00-05:00");
     static readonly RoutePlanRequest Request = new(new(45.5m, -73.6m), new(45.6m, -73.7m), "bus", Departure);
     static readonly RouteItinerary Candidate = new("route-1", 600, 1200, "scheduled",
-        [new("BUS", 600, 1200, Departure, Departure.AddMinutes(10), "_p~iF~ps|U_ulLnnqC_mqNvxq\u0060@", "Bus 10", false)]);
+        [new("BUS", 600, 1200, Departure, Departure.AddMinutes(10), "_vutG~~e\u0060M_pR~oR", "Bus 10", false)]);
 
     RoutingClient Client(StubHandler handler)
     {
@@ -100,7 +100,7 @@ public sealed class RoutePreviewTests : BunitContext
     [Fact]
     public void GeometryDecoderProducesCompleteCoordinates()
     {
-        Assert.Equal(new[] { (38.5m, -120.2m), (40.7m, -120.95m), (43.252m, -126.453m) }, RouteGeometry.Decode(Candidate.Legs[0].Geometry));
+        Assert.Equal(new[] { (38.5m, -120.2m), (40.7m, -120.95m), (43.252m, -126.453m) }, RouteGeometry.Decode("_p~iF~ps|U_ulLnnqC_mqNvxq\u0060@"));
     }
 
     [Theory]
