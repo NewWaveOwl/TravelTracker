@@ -127,12 +127,35 @@ remain distinct from malformed-provider, timeout and outage failures. No fallbac
 straight line or invented travel time replaces a failed route.
 
 Itineraries contain `id`, `durationSeconds`, `distanceMeters`, `timingBasis`
-(`estimated`, `scheduled`, `realtime`) and `legs`. Legs contain `mode`,
-`durationSeconds`, `distanceMeters`, ISO-offset `departureTime`/`arrivalTime`,
-encoded-polyline `geometry`, optional `routeName`, and `realtime`. Geometry/timing
+(`estimated`, `scheduled`, `realtime`), actual `departureTime`/`arrivalTime`,
+`transferCount`, `initialWaitSeconds`, `elapsedFromRequestedDepartureSeconds` and
+`legs`. Duration spans the first departure through final arrival; elapsed time
+also includes waiting between the requested instant and that first departure.
+Legs contain `mode`, `durationSeconds`, `distanceMeters`, ISO-offset effective
+`departureTime`/`arrivalTime`, original scheduled times, encoded-polyline `geometry`,
+optional route name/ID/headsign, timing basis and `realtime`. Geometry/timing
 must be connected and valid. Previews preserve manually entered trip times; route
 geometry is temporary draft data, not a new persisted trip field. No live road
 traffic is claimed.
+
+Car/transit previews (#108) use actual OTP CAR, BUS or RAIL routing. Successful
+routes include `coverage` when metadata is available and `reason: null`.
+Unsupported mode/dataset returns no itinerary with `unsupported_mode` or
+`mode_not_in_dataset`. Actual router no-route errors distinguish
+`outside_service_period`, `location_not_found`, `no_stops_in_range` and `no_route`.
+The global service-date union alone never rejects a journey; the router decides
+whether that selected date has service. Optional metadata failure leaves coverage
+unknown and does not falsely declare a mode unsupported.
+
+Leg `from`/`to` contain `name`, numeric `lat`/`lon` and optional `stopId`, using
+reported provider positions or verified geometry endpoints when absent.
+`intermediateStops` uses the same shape: null means not supplied, whereas an empty
+array means no reported intermediate stops. Transfer counts retain the provider's
+count where present and otherwise distinguish interlined vehicle legs. Walking
+access/egress, stop names and scheduled/effective times stay visible separately;
+estimated street times never become live road-traffic claims. The shared backend
+uses a dedicated TravelTracker query; the existing Android generation query is
+unchanged.
 
 ## Planner controls and explicit acceptance (#127)
 

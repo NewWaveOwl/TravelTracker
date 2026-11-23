@@ -116,3 +116,28 @@ Windows/no-slash IANA zone compatibility, DST choices, options gating, stale and
 nonadjacent selection, malformed legacy geometry, wrong catalogue ID and the full
 Cancel → Confirm → Undo → Confirm → Save path. Read-only review found no remaining
 issues. Responsive browser verification is recorded separately after inspection.
+
+## Car and scheduled public transport (#108)
+
+The adapter uses verified actual CAR/BUS/RAIL modes and exposes explicit unsupported
+mode/dataset outcomes. The TravelTracker-specific query adds provider positions,
+boarding/alighting IDs, intermediate stops, interline/transfer data and headsigns
+without changing Android's query. Effective and scheduled times remain distinct.
+Itinerary duration spans actual first departure to final arrival; initial wait
+and elapsed time from the requested departure are separate fields. Coverage can
+be unknown when optional metadata fails. Actual router errors, rather than a
+global calendar union, decide missing-date/location/stop/no-route reasons.
+
+The dedicated query was exercised against the real isolated Montreal graph:
+all five modes succeeded with unchanged metrics, named transit endpoints and
+provider coordinates; bus alternatives reported 15–17 intermediate stops. The
+sampled rail route had no intermediate stops. Those live samples had zero
+transfers; deterministic multi-leg fixtures cover transfer/interline behavior.
+Raw evidence is in RNDbackend's ignored
+`backend/build/routing-evidence/M4-108-root-tt-query-20261122/` directory.
+
+Validation: 132 backend and 60 launcher tests passed without compiler warnings,
+failures/errors or skips. The 21 new cases cover car fallback, missing rail data,
+service dates, multi-vehicle/interline transfers, stop metadata, incomplete
+realtime, no-route and outages. The opt-in offline replay normalized all 11 real
+alternatives across the five modes through the current production adapter.

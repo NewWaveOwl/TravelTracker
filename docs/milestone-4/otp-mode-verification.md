@@ -72,6 +72,14 @@ selected regional OSM/STM/optional EXO inputs and writes a build manifest; it
 refuses an existing destination. Its existing-directory safety check passed. A
 fresh full graph build was not run during this verification.
 
+The later #108 TravelTracker-only query was captured separately under
+`backend/build/routing-evidence/M4-108-root-tt-query-20261122/`; all five modes and
+11 alternatives passed live queries and offline production-adapter normalization.
+That query supplies named transit stop IDs, positions and intermediate stops;
+the sampled bus alternatives reported 15–17 intermediate stops. The verification
+script now defaults to `traveltracker-plan.graphql`; use its `-QueryFile` option
+with `backend/src/main/resources/plan.graphql` to select the historical #106 query.
+
 This proves the sampled journeys on this exact graph/date. It does not prove
 national coverage, every point/date, the user's installed graph, production memory
 capacity, authenticated tunnel integration or deployment. Runtime capability
