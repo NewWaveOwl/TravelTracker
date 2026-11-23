@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TravelTracker.Security.Authentication;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Api.Services;
+using TravelTracker.Users.Data.Repositories.Credentials;
 using TravelTracker.Users.Domain.Models;
 using TravelTracker.Users.Domain.Types;
 using IUserRepository = TravelTracker.Users.Data.Repositories.IUserRepository;
@@ -19,13 +21,14 @@ namespace TravelTracker.Users.Api.Controllers;
  * @param profiles Resolves accounts for the internal access contract.
  * @param userProfiles Coordinates self-service profile operations.
  * @param bootstrap Verifies and performs first-admin setup.
+ * @param credentials Password credential store for the caller's own password change.
  * @param configuration Operator-owned service credential.
  * @param logger Records rejected service calls and role decisions without identities or credentials.
  */
 [ApiController]
 [Route("api/v1/users")]
 public sealed class UsersController(IUserRepository repository, ProfileRepository profiles, UserProfileService userProfiles,
-    BootstrapService bootstrap, IConfiguration configuration, ILogger<UsersController> logger) : ControllerBase
+    BootstrapService bootstrap, ICredentialRepository credentials, IConfiguration configuration, ILogger<UsersController> logger) : ControllerBase
 {
     private const string PicturePath = "/api/v1/users/me/picture";
 
@@ -111,6 +114,49 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
 
         var result = await userProfiles.UpdateOwnProfileAsync(identity, request, HttpContext.RequestAborted);
         return MapProfileResult(result);
+    }
+
+    /**
+     * Replaces the caller's own password after the current one is verified. The session token stays valid until it expires.
+     * @param request The current password and its replacement.
+     * @return 204 once the new hash is saved, or a validation, authorization or standing failure.
+     */
+    [HttpPost("me/password")]
+    [Authorize(Policy = ScopePolicies.UsersWrite)]
+    public async Task<IResult> ChangePassword(ChangePasswordRequest request)
+    {
+        Response.Headers.CacheControl = "private, no-store";
+        if (!Request.IsHttps) return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Account access requires HTTPS.");
+        if (CurrentIdentity() is not { } identity) return Results.Unauthorized();
+        var cancellationToken = HttpContext.RequestAborted;
+        var currentPassword = request.CurrentPassword ?? "";
+        var newPassword = request.NewPassword ?? "";
+        var errors = new Dictionary<string, string[]>();
+        if (currentPassword.Length == 0) errors["currentPassword"] = ["Enter your current password."];
+        if (PasswordCredentials.Validate(newPassword) is { } newPasswordError) errors["newPassword"] = [newPasswordError];
+        if (errors.Count != 0) return Results.ValidationProblem(errors);
+
+        // the lookup uses the caller's own validated identity, so no other account can be reached from here
+        var stored = await credentials.FindByIdentityAsync(identity, cancellationToken);
+        if (stored is null)
+        {
+            logger.LogWarning("Password change refused: the account has no password credential.");
+            return Results.Forbid();
+        }
+        if (stored.Account.Status != UserStatus.Active)
+        {
+            logger.LogWarning("Password change refused: the account is {Status}.", stored.Account.Status);
+            return Results.Forbid();
+        }
+        if (PasswordCredentials.Verify(stored.PasswordHash, currentPassword) == PasswordVerificationResult.Failed)
+        {
+            logger.LogWarning("Password change refused: the current password did not match.");
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["currentPassword"] = ["The current password is not correct."] });
+        }
+
+        await credentials.UpdateHashAsync(stored.Account.PublicId, PasswordCredentials.Hash(newPassword), cancellationToken);
+        logger.LogInformation("Password changed for the signed-in account.");
+        return Results.NoContent();
     }
 
     /**

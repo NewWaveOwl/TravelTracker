@@ -70,6 +70,15 @@ public sealed class CredentialRepository(IDbContextFactory<UsersDbContext> facto
     }
 
     /** @inheritdoc */
+    public async Task<StoredCredential?> FindByIdentityAsync(ProviderIdentity identity, CancellationToken cancellationToken)
+    {
+        await using var database = await factory.CreateDbContextAsync(cancellationToken);
+        var record = await database.Accounts.AsNoTracking().SingleOrDefaultAsync(
+            item => item.Issuer == identity.Issuer && item.Subject == identity.Subject && item.PasswordHash != null, cancellationToken);
+        return record is null ? null : new StoredCredential(ToAccount(record), record.PasswordHash!);
+    }
+
+    /** @inheritdoc */
     public async Task UpdateHashAsync(Guid publicId, string passwordHash, CancellationToken cancellationToken)
     {
         await using var database = await factory.CreateDbContextAsync(cancellationToken);

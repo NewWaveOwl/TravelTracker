@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Data.Repositories.Credentials;
@@ -24,15 +23,8 @@ namespace TravelTracker.Users.Api.Controllers;
 public sealed class AuthController(ICredentialRepository credentials, TokenIssuer tokens, IConfiguration configuration,
     TimeProvider timeProvider, ILogger<AuthController> logger) : ControllerBase
 {
-    private const int MinimumPasswordLength = 6;
-
-    /** Stored hashes from a lower count are re-hashed at the next successful login. */
-    public const int PasswordIterations = 1 << 18;
-
-    private static readonly PasswordHasher<object> Hasher = new(Options.Create(new PasswordHasherOptions { IterationCount = PasswordIterations }));
-
     /** Hash checked when the login is unknown, so a miss costs the same as a wrong password. */
-    private static readonly string DummyHash = Hasher.HashPassword(new object(), "not-a-real-password");
+    private static readonly string DummyHash = PasswordCredentials.Hash("not-a-real-password");
 
     /**
      * Creates a traveller account and signs it in.
@@ -49,11 +41,11 @@ public sealed class AuthController(ICredentialRepository credentials, TokenIssue
         var probe = new UserAccount(Guid.CreateVersion7(), new ProviderIdentity("registration", "probe"), UserRole.User, UserStatus.Active, timeProvider.GetUtcNow(), username);
         if (username.Length == 0) errors["username"] = ["Enter a username."];
         else if (probe.Validate().TryGetValue("username", out var usernameErrors)) errors["username"] = usernameErrors;
-        if (request.Password.Length < MinimumPasswordLength) errors["password"] = [$"Use at least {MinimumPasswordLength} characters."];
+        if (PasswordCredentials.Validate(request.Password) is { } passwordError) errors["password"] = [passwordError];
         if (errors.Count != 0) return Results.ValidationProblem(errors);
 
         var issuer = configuration["Authentication:Bearer:Issuer"]!;
-        var account = await credentials.RegisterAsync(issuer, username, Hasher.HashPassword(new object(), request.Password),
+        var account = await credentials.RegisterAsync(issuer, username, PasswordCredentials.Hash(request.Password),
             timeProvider.GetUtcNow(), HttpContext.RequestAborted);
         if (account is null)
         {
@@ -74,14 +66,14 @@ public sealed class AuthController(ICredentialRepository credentials, TokenIssue
     {
         if (Unavailable() is { } unavailable) return unavailable;
         var stored = await credentials.FindAsync(request.Username, HttpContext.RequestAborted);
-        var result = Hasher.VerifyHashedPassword(new object(), stored?.PasswordHash ?? DummyHash, request.Password);
+        var result = PasswordCredentials.Verify(stored?.PasswordHash ?? DummyHash, request.Password);
         if (stored is null || result == PasswordVerificationResult.Failed)
         {
             logger.LogWarning("Sign-in refused: unknown username or wrong password.");
             return Results.Unauthorized();
         }
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
-            await credentials.UpdateHashAsync(stored.Account.PublicId, Hasher.HashPassword(new object(), request.Password), HttpContext.RequestAborted);
+            await credentials.UpdateHashAsync(stored.Account.PublicId, PasswordCredentials.Hash(request.Password), HttpContext.RequestAborted);
         if (tokens.ForAccount(stored.Account) is not { } token)
         {
             logger.LogWarning("Sign-in refused: the account is {Status}.", stored.Account.Status);

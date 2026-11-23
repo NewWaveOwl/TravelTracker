@@ -1,4 +1,5 @@
 using TravelTracker.Users.Domain.Models;
+using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Data.Repositories.Credentials;
 
@@ -27,7 +28,15 @@ public interface ICredentialRepository
     Task<StoredCredential?> FindAsync(string username, CancellationToken cancellationToken);
 
     /**
-     * Replaces the hash when the hasher asks for a stronger one.
+     * Finds the password credential for the identity a validated token names.
+     * @param identity The issuer and subject of the authenticated caller.
+     * @param cancellationToken Cancels the lookup.
+     * @return The account and hash, or null when that account has no password credential.
+     */
+    Task<StoredCredential?> FindByIdentityAsync(ProviderIdentity identity, CancellationToken cancellationToken);
+
+    /**
+     * Replaces the hash when the hasher asks for a stronger one or the owner changes the password.
      * @param publicId The account whose hash changes.
      * @param passwordHash The new hash.
      * @param cancellationToken Cancels the save.

@@ -46,6 +46,13 @@ public sealed class MemoryCredentialRepository : ICredentialRepository
         return Task.FromResult(Find(login));
     }
 
+    public Task<StoredCredential?> FindByIdentityAsync(ProviderIdentity identity, CancellationToken cancellationToken)
+    {
+        Calls++;
+        return Task.FromResult(entries.Select(entry => entry.Credential)
+            .FirstOrDefault(credential => credential.Account.ProviderIdentity == identity));
+    }
+
     public Task UpdateHashAsync(Guid publicId, string passwordHash, CancellationToken cancellationToken)
     {
         var index = entries.FindIndex(entry => entry.Credential.Account.PublicId == publicId);
