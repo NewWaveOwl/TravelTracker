@@ -30,7 +30,7 @@
 .movable-panel[data-collapsed] .movable-panel-controls { padding: 0; }
 .movable-panel[data-collapsed] .movable-panel-label { display: none; }
 .movable-panel-body[hidden] { display: none; }
-@media(max-width:700px) {
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
     .movable-panel:has(.movable-panel-handle):not([data-panel-ready]) { width: 56px; min-width: 56px; background: transparent; }
     .movable-panel:has(.movable-panel-handle):not([data-panel-ready]) .movable-panel-controls { padding: 0; }
     .movable-panel:has(.movable-panel-handle):not([data-panel-ready]) .movable-panel-label,

@@ -2,6 +2,12 @@
 
 TravelTracker is a .NET 10 trip planner with a Blazor frontend, six local APIs, Supabase Auth, and PostgreSQL storage on Supabase. Supabase Auth owns sign-in identities and passwords; the Users API still owns TravelTracker profiles, account status and roles.
 
+**Live demo:** [Open TravelTracker](https://traveltracker-frontend.politebush-89a65c90.canadacentral.azurecontainerapps.io).
+Sign in to save trips and view History. Address lookup and route previews require
+the Windows routing server and tunnel to be running. See the
+[Azure demo deployment guide](docs/azure-demo-deployment.md) for operation,
+service-token renewal, and hosting limits.
+
 | To do this | Start here |
 | --- | --- |
 | Preview the UI, map, and manual markers | [Run only the frontend](#run-only-the-frontend) |
@@ -104,6 +110,8 @@ The launcher prints the internal service token's expiry. Restart before it expir
 In **Map View**, each floating panel has a box icon. Click it to collapse or expand the panel. Double-click or double-tap it, or press **Home**, to restore the panel's position and expand it without clearing trip edits. Drag the header or icon with a mouse or touch; keyboard users can focus the icon and use arrow keys (Shift for larger steps). On phones, panels start collapsed. **New trip** and **Save trip** stay at the top right of the map. The **Trip** tab keeps its panels in place without movement controls. See [the current UI reference](docs/milestone-4/canonical-ui-alignment.md).
 
 In the **Map** and **Trip** workspaces, choose the beginning and ending days together in the **Trip duration** calendar. A newly selected range includes both full days in the trip's time zone; each connection keeps its own departure and arrival times. The map's **Recenter** control returns to the first trip stop, or the initial map position when the trip has no stops.
+
+Phones use larger map controls, wrapping form actions and scrollable menus. Map panels start collapsed in portrait and short touch-screen landscape layouts; tap a panel icon to open it. See [phone layout guidance and browser verification](docs/milestone-4/phone-layout.md).
 
 Place forms show the **street address** prominently, with the selected map position underneath in smaller gray text. Search explicitly for an address or choose a point on the interactive map, then confirm it. Attractions, accommodations, transport points and trip markers support map entry without typing numeric coordinates. Optional numeric adjustments remain in closed Advanced details. An unknown address keeps its location unselected until you choose it.
 
