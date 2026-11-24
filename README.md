@@ -2,6 +2,12 @@
 
 TravelTracker is a .NET 10 trip planner with a Blazor frontend, six local APIs, Supabase Auth, and PostgreSQL storage on Supabase. Supabase Auth owns sign-in identities and passwords; the Users API still owns TravelTracker profiles, account status and roles.
 
+**Live demo:** [Open TravelTracker](https://traveltracker-frontend.politebush-89a65c90.canadacentral.azurecontainerapps.io).
+Sign in to save trips and view History. Address lookup and route previews require
+the Windows routing server and tunnel to be running. See the
+[Azure demo deployment guide](docs/azure-demo-deployment.md) for operation,
+service-token renewal, and hosting limits.
+
 | To do this | Start here |
 | --- | --- |
 | Preview the UI, map, and manual markers | [Run only the frontend](#run-only-the-frontend) |
