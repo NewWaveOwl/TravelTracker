@@ -10,8 +10,9 @@ the process that consumes them.
 | --- | --- | --- |
 | `ConnectionStrings__<Service>` | Each of Users, Attractions, Transport, Accommodations, Settings and Trips | Development launcher or per-host secret-store injection. In Production use a service database, explicit username and `SSL Mode=VerifyFull` with the correct trust chain. |
 | `Authentication__Bearer__Authority`, `Authentication__Bearer__Issuer`, `Authentication__Bearer__Audience` | API hosts | Deployment configuration, with credential-free HTTPS authority and issuer. |
-| `Users__InternalBaseUrl` and `Users__ServiceAccessToken` | Attractions, Transport, Accommodations and Settings | HTTPS Users address and a scoped backend credential supplied to those processes. |
-| `TripReferences__UsersBaseUrl` and `TripReferences__UsersServiceAccessToken` | Trips | HTTPS Users address and backend credential. The other three `TripReferences__<Service>BaseUrl` values carry traveller bearer tokens, so use HTTPS in Production. |
+| `Users__InternalBaseUrl` and `Users__ServiceAccessToken` | Attractions, Transport, Accommodations and Settings | HTTPS Users address and a static or bootstrap backend credential when automatic Supabase service-token refresh is not configured. |
+| `TripReferences__UsersBaseUrl` and `TripReferences__UsersServiceAccessToken` | Trips | HTTPS Users address and static or bootstrap backend credential. The other three `TripReferences__<Service>BaseUrl` values carry traveller bearer tokens, so use HTTPS in Production. |
+| `Supabase__ServiceEmail`, `Supabase__ServicePassword` | Attractions, Transport, Accommodations, Settings and Trips | Optional dedicated `users.access` service-account credentials injected via secret store so `SupabaseServiceAccessTokenProvider` refreshes the internal Users bearer token before expiry. |
 | `Services__<Service>` | Frontend server | All six HTTPS service addresses in Production. |
 | `Authentication__Provider`, `Auth0__Domain`, `Auth0__ClientId`, `Auth0__Audience`, `Auth0__ClientSecret` | Frontend server using Auth0 | Select Auth0 explicitly. Supply the confidential client secret from the secret store in Production. |
 | `Supabase__Url`, `Supabase__PublishableKey` | Supabase sign-in frontend and Users provider integration | Public project settings. Use a publishable or legacy anon key, never a secret or service-role key. |

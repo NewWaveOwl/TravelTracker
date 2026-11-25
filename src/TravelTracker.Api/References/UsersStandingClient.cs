@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TravelTracker.Api.Trips;
+using TravelTracker.Security.Authentication;
 
 namespace TravelTracker.Api.References;
 
@@ -13,8 +14,9 @@ namespace TravelTracker.Api.References;
  * @param sender Sends the requests and logs transport and status failures.
  * @param options Supplies the backend Users credential.
  * @param logger Records answers that are present but outside the Users contract.
+ * @param tokenProvider Optional auto-refreshing token provider for Supabase service credentials.
  */
-public sealed class UsersStandingClient(HttpClient http, ReferenceSender sender, IOptions<TripReferenceOptions> options, ILogger<UsersStandingClient> logger)
+public sealed class UsersStandingClient(HttpClient http, ReferenceSender sender, IOptions<TripReferenceOptions> options, ILogger<UsersStandingClient> logger, IServiceAccessTokenProvider? tokenProvider = null)
 {
     /**
      * Resolves the caller and reads the account's current standing, without caching.
@@ -25,7 +27,9 @@ public sealed class UsersStandingClient(HttpClient http, ReferenceSender sender,
      */
     public async Task<ReferenceResult<AccountStanding>> GetStandingAsync(CallerIdentity caller, CancellationToken cancellationToken)
     {
-        var credential = options.Value.UsersServiceAccessToken;
+        var credential = tokenProvider is not null
+            ? await tokenProvider.GetTokenAsync(cancellationToken)
+            : options.Value.UsersServiceAccessToken;
         if (string.IsNullOrWhiteSpace(credential))
         {
             logger.LogError("Users standing check cannot run: TripReferences:UsersServiceAccessToken is not configured.");

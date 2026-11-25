@@ -6,7 +6,7 @@ TravelTracker is a .NET 10 trip planner with a Blazor frontend, six local APIs, 
 Sign in to save trips and view History. Address lookup and route previews require
 the Windows routing server and tunnel to be running. See the
 [Azure demo deployment guide](docs/azure-demo-deployment.md) for operation,
-service-token renewal, and hosting limits.
+credential rotation, and hosting limits.
 
 | To do this | Start here |
 | --- | --- |

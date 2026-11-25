@@ -38,6 +38,7 @@ public class TransportProgram
         builder.Services.AddScoped<IRoutePointRepository, EfRoutePointRepository>();
         builder.Services.AddScoped<ITransportModeService, TransportModeService>();
         builder.Services.AddScoped<IRoutePointService, RoutePointService>();
+        builder.Services.AddServiceAccessTokenProvider();
         builder.Services.AddHttpClient<UsersAccessClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
             .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });

@@ -84,21 +84,25 @@ pwsh -File deploy/azure/Deploy-Demo.ps1 `
   -RoutingUrl 'https://YOUR-WINDOWS-ROUTING-BASE-ADDRESS'
 ```
 
-The script prints the website address and service-token expiry. Images use a
-unique timestamp tag; retain a known-good tag for rollback. Secrets are held in
-Azure Container Apps secrets and referenced by environment variable name. The
-root certificate is mounted at `/app/certs/supabase.crt`, and Npgsql uses
-`SSL Mode=VerifyFull`. The temporary ARM parameter file is under an owner-only
-directory in ignored `.artifacts/azure/` and removed in `finally`. A crash can
-leave that private directory behind; remove that exact directory after verifying
-its path. Do not publish it. Do not enable shell transcription/debug tracing or
-Azure CLI `--debug` while entering or deploying credentials.
+The script prints the website address and confirms automatic backend service-token
+renewal. Images use a unique timestamp tag; retain a known-good tag for rollback.
+Secrets are held in Azure Container Apps secrets and referenced by environment
+variable name. The root certificate is mounted at `/app/certs/supabase.crt`, and
+Npgsql uses `SSL Mode=VerifyFull`. The temporary ARM parameter file is under an
+owner-only directory in ignored `.artifacts/azure/` and removed in `finally`. A
+crash can leave that private directory behind; remove that exact directory after
+verifying its path. Do not publish it. Do not enable shell transcription/debug
+tracing or Azure CLI `--debug` while entering or deploying credentials.
 
 Before accepting the service token, the script checks its asymmetric signature
 against the trusted project's JWKS, exact issuer, audience, expiry, subject,
 role, non-anonymous identity and `users.access`-only scope, then verifies the
 confirmed current user with Supabase. Privileged Supabase keys are refused.
-There is no automatic service-token renewal yet. Before its printed expiry:
+The five dependent backend APIs receive `Supabase__ServiceEmail` and the secret
+`Supabase__ServicePassword` (`service-password` secret) alongside the initial
+`users-token` so `SupabaseServiceAccessTokenProvider` caches and automatically
+refreshes their `users.access` bearer token five minutes before expiry. To rotate
+credentials or replica settings without rebuilding images:
 
 ```powershell
 pwsh -File deploy/azure/Deploy-Demo.ps1 -RefreshOnly `
@@ -107,11 +111,10 @@ pwsh -File deploy/azure/Deploy-Demo.ps1 -RefreshOnly `
 
 This retains the saved image tag, prompts again for credentials, and updates a
 non-secret credential version in the five dependent API templates so they start
-new revisions with the new secret. Changing a Container Apps secret alone does
-not update a running process. Expired
-service credentials cause protected operations to fail closed; do not extend
-JWT lifetimes or bypass Users checks to conceal expiry. Unattended hosting needs
-a separately reviewed renewable service-credential design.
+new revisions with the new secrets. Changing a Container Apps secret alone does
+not update a running process. Expired or revoked service credentials still cause
+protected operations to fail closed; do not extend JWT lifetimes or bypass Users
+checks to conceal credential failures.
 
 ## Verification and operation
 
@@ -208,10 +211,10 @@ The operator subsequently verified trip saving and History, and authenticated
 server checks verified address lookup and route previews, as recorded below.
 Live picture persistence, independent-device sign-in and the browser routing
 journey still require verification. Health and layout checks do not prove these
-behaviors. The first
-service token expires at `2026-11-24T01:29:58Z`; use `-RefreshOnly` before expiry
-and record the replacement's expiry. This initial deployment does not add
-automatic service-token renewal.
+behaviors. The first service token expired at `2026-11-24T01:29:58Z` on that initial image.
+A subsequent deployment (`20261124032208`) configured `SupabaseServiceAccessTokenProvider`
+with the dedicated `users.access` service credentials in the five dependent APIs so
+backend tokens renew automatically before expiry without manual `-RefreshOnly` runs.
 
 ### Email confirmation destination
 

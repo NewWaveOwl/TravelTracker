@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using TravelTracker.Security.Authentication;
 
 namespace TravelTracker.Settings.Api.Access;
 
@@ -8,8 +9,9 @@ namespace TravelTracker.Settings.Api.Access;
  * @param http the bounded-timeout HTTP client.
  * @param configuration deployment-owned base address and service credential.
  * @param logger safe dependency diagnostics without identity or credential details.
+ * @param tokenProvider optional auto-refreshing token provider for Supabase service credentials.
  */
-public sealed class UsersAccessClient(HttpClient http, IConfiguration configuration, ILogger<UsersAccessClient> logger)
+public sealed class UsersAccessClient(HttpClient http, IConfiguration configuration, ILogger<UsersAccessClient> logger, IServiceAccessTokenProvider? tokenProvider = null)
 {
     private static readonly TimeSpan LookupBudget = TimeSpan.FromSeconds(5);
 
@@ -28,7 +30,9 @@ public sealed class UsersAccessClient(HttpClient http, IConfiguration configurat
             logger.LogError("Users access configuration is invalid: an absolute HTTPS base URL is required.");
             return null;
         }
-        var credential = configuration["Users:ServiceAccessToken"];
+        var credential = tokenProvider is not null
+            ? await tokenProvider.GetTokenAsync(cancellationToken)
+            : configuration["Users:ServiceAccessToken"];
         if (string.IsNullOrWhiteSpace(credential))
         {
             logger.LogError("Users access configuration is invalid: a service credential is required.");

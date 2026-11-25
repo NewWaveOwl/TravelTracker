@@ -56,6 +56,7 @@ public class SettingsProgram
         builder.Services.AddScoped<ISettingsRepository, EfSettingsRepository>();
         builder.Services.AddScoped<ISettingsService, SettingsService>();
         builder.Services.AddScoped<CallerContext>();
+        builder.Services.AddServiceAccessTokenProvider();
         builder.Services.AddHttpClient<UsersAccessClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
             .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });

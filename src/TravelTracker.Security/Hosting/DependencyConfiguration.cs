@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Hosting;
+using TravelTracker.Security.Authentication;
 
 namespace TravelTracker.Security.Hosting;
 
@@ -7,7 +8,7 @@ namespace TravelTracker.Security.Hosting;
 public static class DependencyConfiguration
 {
     /**
-     * Requires the Users credential and a credential-free HTTPS endpoint in Production.
+     * Requires the Users credential (static token or auto-refreshing Supabase service account) and a credential-free HTTPS endpoint in Production.
      * @param builder The dependent service host.
      */
     public static void ValidateUsersDependency(this WebApplicationBuilder builder)
@@ -15,6 +16,8 @@ public static class DependencyConfiguration
         if (!builder.Environment.IsProduction())
             return;
         RequireHttps(builder.Configuration["Users:InternalBaseUrl"], "Users:InternalBaseUrl");
+        if (SupabaseServiceAccessTokenProvider.HasRefreshCredentials(builder.Configuration))
+            return;
         var token = builder.Configuration["Users:ServiceAccessToken"];
         if (string.IsNullOrWhiteSpace(token) || token.Any(char.IsWhiteSpace))
             throw new InvalidOperationException("Users:ServiceAccessToken must contain one bearer token in Production.");
