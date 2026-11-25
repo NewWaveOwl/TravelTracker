@@ -64,6 +64,7 @@ function Get-ServiceSession {
     }
     $headers = @{apikey = $Config.PublishableKey}
     $password = Read-PrivateValue 'Supabase dedicated Auth SERVICE ACCOUNT password (not database password)'
+    $verifiedPassword = $password
     try {
         $body = @{email = $Config.ServiceEmail; password = $password} | ConvertTo-Json -Compress
         try {
@@ -115,7 +116,7 @@ function Get-ServiceSession {
         $identity = Invoke-RestMethod "$origin/auth/v1/user" -Headers @{apikey=$Config.PublishableKey; Authorization="Bearer $($session.access_token)"} -MaximumRedirection 0 -TimeoutSec 20
     } catch { throw 'Supabase could not verify the service session.' }
     if ($identity.id -cne $claims.sub -or !$identity.email_confirmed_at) { throw 'The service user must be confirmed and match the verified JWT.' }
-    return @{Token = $session.access_token; Subject = $claims.sub; Expires = [DateTimeOffset]::FromUnixTimeSeconds($claims.exp)}
+    return @{Token = $session.access_token; Password = $verifiedPassword; Subject = $claims.sub; Expires = [DateTimeOffset]::FromUnixTimeSeconds($claims.exp)}
 }
 
 Push-Location $repo
@@ -179,7 +180,8 @@ try {
         pullIdentityName=$infrastructure.pullIdentityName.value; imageTag=$imageTag
         supabaseUrl=$config.SupabaseUrl.TrimEnd('/'); publishableKey=$config.PublishableKey
         databaseConnections=$connections; databaseCertificate=[IO.File]::ReadAllText($config.RootCertificate)
-        serviceAccessToken=$serviceSession.Token; serviceSubject=$serviceSession.Subject
+        serviceAccessToken=$serviceSession.Token; serviceEmail=$config.ServiceEmail
+        servicePassword=$serviceSession.Password; serviceSubject=$serviceSession.Subject
         routingUrl=$RoutingUrl.AbsoluteUri.TrimEnd('/'); applyMigrations=[bool]$ApplyMigrations
         apiMinReplicas=$ApiMinReplicas
     }
@@ -201,7 +203,7 @@ try {
     @{imageTag=$imageTag; tokenExpires=$serviceSession.Expires.ToString('O')} | ConvertTo-Json | Set-Content $statePath
     $website = Invoke-Azure @('deployment', 'group', 'show', '--resource-group', $ResourceGroup, '--name', 'traveltracker-apps', '--query', 'properties.outputs.websiteUrl.value', '--output', 'tsv')
     Write-Host "Website: $website"
-    Write-Host "Service token expires $($serviceSession.Expires.ToString('u')). Run with -RefreshOnly before that time."
+    Write-Host "Backend services are configured to auto-refresh their Supabase service token automatically."
 } finally {
     $parameters=$null; $wrapped=$null; $connections=$null; $serviceSession=$null
     if ($privateDirectory -and (Test-Path -LiteralPath $privateDirectory)) {

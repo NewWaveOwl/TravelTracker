@@ -12,7 +12,10 @@ param databaseConnections object
 @secure()
 param databaseCertificate string
 @secure()
-param serviceAccessToken string
+param serviceAccessToken string = ''
+param serviceEmail string
+@secure()
+param servicePassword string
 param serviceSubject string
 // Secret changes alone do not restart running replicas. Roll only the five consumers.
 param serviceCredentialVersion string = utcNow('yyyyMMddHHmmss')
@@ -77,6 +80,7 @@ resource apps 'Microsoft.App/containerApps@2024-03-01' = [for service in service
         { name: 'database-certificate', value: databaseCertificate }
       ], service == 'Frontend' || service == 'Users' ? [] : [
         { name: 'users-token', value: serviceAccessToken }
+        { name: 'service-password', value: servicePassword }
       ])
     }
     template: {
@@ -105,6 +109,8 @@ resource apps 'Microsoft.App/containerApps@2024-03-01' = [for service in service
           // Allow backend cold starts during a demonstration.
           { name: 'TripReferences__Timeout', value: '00:00:30' }
         ] : [], service == 'Frontend' || service == 'Users' ? [] : [
+          { name: 'Supabase__ServiceEmail', value: serviceEmail }
+          { name: 'Supabase__ServicePassword', secretRef: 'service-password' }
           { name: 'Deployment__ServiceCredentialVersion', value: serviceCredentialVersion }
         ])
         volumeMounts: service == 'Frontend' ? [] : [{ volumeName: 'database-certificate', mountPath: '/app/certs' }]

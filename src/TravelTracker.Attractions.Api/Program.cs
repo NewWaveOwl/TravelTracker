@@ -39,6 +39,7 @@ public partial class AttractionsProgram
         builder.Services.AddScoped<IAttractionRepository, EfAttractionRepository>();
         builder.Services.AddScoped<IAttractionService, AttractionService>();
         builder.Services.AddScoped<CallerContext>();
+        builder.Services.AddServiceAccessTokenProvider();
         builder.Services.AddHttpClient<UsersAccessClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
             .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });

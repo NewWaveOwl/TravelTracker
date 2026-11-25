@@ -11,5 +11,6 @@
     <ProjectReference Include="..\TravelTracker.Domain\TravelTracker.Domain.csproj" />
     <ProjectReference Include="..\TravelTracker.Trips.Domain\TravelTracker.Trips.Domain.csproj" />
     <ProjectReference Include="..\TravelTracker.Trips.Data\TravelTracker.Trips.Data.csproj" />
+    <ProjectReference Include="..\TravelTracker.Security\TravelTracker.Security.csproj" />
   </ItemGroup>
 </Project>

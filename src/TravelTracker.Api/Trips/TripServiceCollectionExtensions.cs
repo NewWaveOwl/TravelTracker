@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TravelTracker.Api.References;
+using TravelTracker.Security.Authentication;
 
 namespace TravelTracker.Api.Trips;
 
@@ -31,11 +32,12 @@ public static class TripServiceCollectionExtensions
                 "TripReferences:TransportBaseUrl must be an absolute http or https URL.")
             .Validate(options => IsAbsoluteUrl(options.UsersBaseUrl, allowHttp: false),
                 "TripReferences:UsersBaseUrl must be an absolute HTTPS URL.")
-            .Validate(options => IsBearerToken(options.UsersServiceAccessToken),
+            .Validate(options => IsBearerToken(options.UsersServiceAccessToken) || SupabaseServiceAccessTokenProvider.HasRefreshCredentials(configuration),
                 "TripReferences:UsersServiceAccessToken is required and must be one bearer token with no spaces.")
             .Validate(options => options.Timeout > TimeSpan.Zero && options.Timeout <= TimeSpan.FromSeconds(60),
                 "TripReferences:Timeout must be greater than zero and at most 60 seconds.")
             .ValidateOnStart();
+        services.AddServiceAccessTokenProvider("TripReferences:UsersServiceAccessToken", configuration);
         // plain http is allowed for local catalogue hosts only; say so loudly because the caller's own token travels to them.
         services.AddOptions<TripReferenceOptions>().PostConfigure<ILoggerFactory>((options, loggerFactory) =>
         {

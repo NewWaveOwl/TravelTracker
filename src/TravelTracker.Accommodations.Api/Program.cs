@@ -56,6 +56,7 @@ public class AccommodationsProgram
         builder.Services.AddScoped<IAccommodationRepository, EfAccommodationRepository>();
         builder.Services.AddScoped<IAccommodationService, AccommodationService>();
         builder.Services.AddScoped<CallerContext>();
+        builder.Services.AddServiceAccessTokenProvider();
         builder.Services.AddHttpClient<UsersAccessClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
             .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
