@@ -38,12 +38,30 @@ public sealed class LoginThrottleTests
     }
 
     [Fact]
-    public void UnseenUsernamesStillLockWhenTheTrackerIsFull()
+    public void LockLastsTheFullDurationFromTheFifthFailure()
+    {
+        var clock = new ManualClock();
+        var throttle = new LoginThrottle(clock);
+        foreach (var minutes in new[] { 3, 3, 3, 5 })
+        {
+            throttle.RecordFailure("ada");
+            clock.Advance(TimeSpan.FromMinutes(minutes));
+        }
+        throttle.RecordFailure("ada");
+        clock.Advance(LoginThrottle.LockDuration - TimeSpan.FromMinutes(1));
+        Assert.True(throttle.RetryAfter("ada") > TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.Null(throttle.RetryAfter("ada"));
+    }
+
+    [Fact]
+    public void AFullTrackerStillLocksNewUsernamesWithoutLockingOthers()
     {
         var throttle = new LoginThrottle(new ManualClock());
         for (var index = 0; index < 10_000; index++) throttle.RecordFailure($"user{index}");
         for (var attempt = 0; attempt < LoginThrottle.MaxFailures; attempt++) throttle.RecordFailure("newcomer");
         Assert.True(throttle.RetryAfter("newcomer") > TimeSpan.Zero);
+        Assert.Null(throttle.RetryAfter("bystander"));
     }
 
     [Fact]

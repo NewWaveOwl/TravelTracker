@@ -16,10 +16,7 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
     private const int MaxTrackedUsernames = 10_000;
 
     private readonly object gate = new();
-    private readonly Dictionary<string, Queue<DateTimeOffset>> entries = new();
-
-    // shared by every username that shows up once the tracker is full, so the cap cannot be used to dodge the lockout
-    private readonly Queue<DateTimeOffset> overflow = new();
+    private readonly Dictionary<string, Entry> entries = new();
 
     /**
      * Reports whether a username is currently locked.
@@ -30,16 +27,14 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
     {
         lock (gate)
         {
-            var now = timeProvider.GetUtcNow();
-            var failures = entries.TryGetValue(Key(username), out var entry) ? entry : entries.Count >= MaxTrackedUsernames ? overflow : null;
-            if (failures is null) return null;
-            Expire(failures, now);
-            return failures.Count < MaxFailures ? null : failures.Peek() + LockDuration - now;
+            if (!entries.TryGetValue(Key(username), out var entry)) return null;
+            var remaining = entry.LockedUntil - timeProvider.GetUtcNow();
+            return remaining > TimeSpan.Zero ? remaining : null;
         }
     }
 
     /**
-     * Counts a failed sign-in. The username locks once it has MaxFailures failures inside the lock duration.
+     * Counts a failed sign-in. The username locks for the lock duration once it has MaxFailures failures inside that window.
      * @param username The submitted username.
      */
     public void RecordFailure(string username)
@@ -48,16 +43,17 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
         {
             var now = timeProvider.GetUtcNow();
             var key = Key(username);
-            if (entries.Count >= MaxTrackedUsernames) Prune(now);
-            // ponytail: past the cap unseen usernames share one counter; a shared store would track them separately
-            if (!entries.TryGetValue(key, out var failures))
+            if (!entries.TryGetValue(key, out var entry))
             {
-                if (entries.Count >= MaxTrackedUsernames) failures = overflow;
-                else entries[key] = failures = new Queue<DateTimeOffset>();
+                if (entries.Count >= MaxTrackedUsernames) MakeRoom(now);
+                // ponytail: only if every tracked username is locked, so a new one goes uncounted; the per-address limit still applies
+                if (entries.Count >= MaxTrackedUsernames) return;
+                entries[key] = entry = new Entry();
             }
-            Expire(failures, now);
-            failures.Enqueue(now);
-            if (failures.Count > MaxFailures) failures.Dequeue();
+            while (entry.Failures.Count > 0 && now - entry.Failures.Peek() >= LockDuration) entry.Failures.Dequeue();
+            entry.Failures.Enqueue(now);
+            if (entry.Failures.Count > MaxFailures) entry.Failures.Dequeue();
+            if (entry.Failures.Count == MaxFailures) entry.LockedUntil = now + LockDuration;
         }
     }
 
@@ -71,19 +67,26 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
             entries.Remove(Key(username));
     }
 
-    private static void Expire(Queue<DateTimeOffset> failures, DateTimeOffset now)
+    // drops expired entries, then the quietest unlocked one if that was not enough; locked usernames are never evicted
+    private void MakeRoom(DateTimeOffset now)
     {
-        while (failures.Count > 0 && now - failures.Peek() >= LockDuration) failures.Dequeue();
-    }
-
-    private void Prune(DateTimeOffset now)
-    {
-        foreach (var key in entries.Keys.ToList())
+        string? quietest = null;
+        var quietestFailure = DateTimeOffset.MaxValue;
+        foreach (var (key, entry) in entries.ToList())
         {
-            Expire(entries[key], now);
-            if (entries[key].Count == 0) entries.Remove(key);
+            var lastFailure = entry.Failures.Count > 0 ? entry.Failures.Last() : DateTimeOffset.MinValue;
+            if (entry.LockedUntil > now) continue;
+            if (now - lastFailure >= LockDuration) entries.Remove(key);
+            else if (lastFailure < quietestFailure) (quietest, quietestFailure) = (key, lastFailure);
         }
+        if (entries.Count >= MaxTrackedUsernames && quietest is not null) entries.Remove(quietest);
     }
 
     private static string Key(string username) => username.Trim().ToUpperInvariant();
+
+    private sealed class Entry
+    {
+        public readonly Queue<DateTimeOffset> Failures = new();
+        public DateTimeOffset LockedUntil;
+    }
 }
