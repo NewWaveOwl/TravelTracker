@@ -75,4 +75,16 @@ public sealed class LoginThrottleTests
         await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => Task.Run(() => throttle.RecordFailure("ada"))));
         Assert.True(throttle.RetryAfter("ada") > TimeSpan.Zero);
     }
+
+    [Fact]
+    public void UsernamesKeepIndependentState()
+    {
+        var throttle = new LoginThrottle(new ManualClock());
+        for (var index = 0; index < 2_000; index++) throttle.RecordFailure($"victim{index}");
+        for (var attempt = 0; attempt < LoginThrottle.MaxFailures - 1; attempt++) throttle.RecordFailure("ada");
+        for (var index = 0; index < 2_000; index++) throttle.Reset($"other{index}");
+        for (var index = 0; index < 2_000; index++) Assert.Null(throttle.RetryAfter($"victim{index}"));
+        throttle.RecordFailure("ada");
+        Assert.True(throttle.RetryAfter("ada") > TimeSpan.Zero);
+    }
 }
