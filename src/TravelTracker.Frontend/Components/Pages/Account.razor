@@ -95,7 +95,6 @@ else
             <ProfilePicture @key="generation" Profile="profile" Editable="CanEdit" Editing="editing" Disabled="busy" />
             @if (editing && editModel is not null && editContext is not null)
             {
-                <p class="profile-help">@(Setup.Supabase is not null ? "Your email is the verified email you use to sign in. Change it below with email verification." : "Email is contact information and does not change your sign-in email or password.")</p>
                 @if (saveError is not null && !writeDenied)
                 {
                     <p class="profile-error" role="alert">@saveError</p>
@@ -103,27 +102,6 @@ else
                 <EditForm EditContext="editContext" OnValidSubmit="SaveAsync">
                     <DataAnnotationsValidator />
                     <ValidationSummary class="profile-validation-summary" />
-                    <div class="profile-field">
-                        <label for="profile-username">Username</label>
-                        <InputText id="profile-username" @bind-Value="editModel.Username" autocomplete="username" maxlength="32" aria-describedby="profile-username-help" disabled="@(busy || writeDenied)" />
-                        <small id="profile-username-help">3 to 32 characters: letters, numbers, periods, underscores or hyphens.</small>
-                        <ValidationMessage For="() => editModel.Username" />
-                    </div>
-                    <div class="profile-field">
-                        @if (Setup.Supabase is not null)
-                        {
-                            <label for="profile-email">Email</label>
-                            <input id="profile-email" type="email" value="@signInEmail" readonly aria-describedby="profile-email-help" />
-                            <small id="profile-email-help"><a href="#profile-credentials">Change email with verification</a></small>
-                        }
-                        else
-                        {
-                        <label for="profile-email">Contact email</label>
-                        <InputText id="profile-email" type="email" @bind-Value="editModel.Email" autocomplete="email" maxlength="254" aria-describedby="profile-email-help" disabled="@(busy || writeDenied)" />
-                        <small id="profile-email-help">You can’t remove a contact email here. This is not your verified sign-in email.</small>
-                        <ValidationMessage For="() => editModel.Email" />
-                        }
-                    </div>
                     <div class="profile-field">
                         <label for="profile-address">Address <span class="profile-optional">(optional)</span></label>
                         <InputTextArea id="profile-address" @bind-Value="editModel.Address" maxlength="500" aria-describedby="profile-address-help" disabled="@(busy || writeDenied)" />
@@ -139,8 +117,14 @@ else
             else
             {
                 <dl class="profile-details">
-                    <dt>Username</dt><dd>@Display(profile.Username)</dd>
-                    <dt>@(Setup.Supabase is not null ? "Email" : "Contact email")</dt><dd>@Display(Setup.Supabase is not null ? signInEmail : profile.Email)</dd>
+                    @if (Setup.Supabase is not null)
+                    {
+                        <dt>Email</dt><dd>@Display(signInEmail)</dd>
+                    }
+                    else
+                    {
+                        <dt>Username</dt><dd>@Display(profile.Username)</dd>
+                    }
                     <dt>Address</dt><dd>@Display(profile.Address)</dd>
                     <dt>Account type</dt><dd>@RoleLabel(profile.Role)</dd>
                     <dt>Account status</dt><dd>@StatusLabel(profile.Status)</dd>
@@ -190,6 +174,43 @@ else
                         </fieldset>
                     </form>
                 </details>
+            </section>
+        }
+
+        @if (CanEdit && Setup.Supabase is null && passwordModel is not null && passwordContext is not null)
+        {
+            <section class="profile-card" aria-labelledby="password-heading" aria-busy="@passwordBusy.ToString().ToLowerInvariant()">
+                <h2 id="password-heading">Change password</h2>
+                <p id="password-help">Enter your current password, then a new password of 6 to 128 characters. Your session stays signed in after the change.</p>
+                @if (passwordError is not null)
+                {
+                    <p class="profile-error" role="alert">@passwordError</p>
+                }
+                @if (passwordStatus is not null)
+                {
+                    <p class="profile-status" role="status">@passwordStatus</p>
+                }
+                <EditForm EditContext="passwordContext" OnValidSubmit="ChangePasswordAsync">
+                    <DataAnnotationsValidator />
+                    <div class="profile-field">
+                        <label for="password-current">Current password</label>
+                        <InputText id="password-current" type="password" autocomplete="current-password" @bind-Value="passwordModel.CurrentPassword" disabled="@passwordBusy" />
+                        <ValidationMessage For="() => passwordModel.CurrentPassword" />
+                    </div>
+                    <div class="profile-field">
+                        <label for="password-new">New password</label>
+                        <InputText id="password-new" type="password" autocomplete="new-password" maxlength="128" aria-describedby="password-help" @bind-Value="passwordModel.NewPassword" disabled="@passwordBusy" />
+                        <ValidationMessage For="() => passwordModel.NewPassword" />
+                    </div>
+                    <div class="profile-field">
+                        <label for="password-confirm">Confirm new password</label>
+                        <InputText id="password-confirm" type="password" autocomplete="new-password" maxlength="128" @bind-Value="passwordModel.ConfirmPassword" disabled="@passwordBusy" />
+                        <ValidationMessage For="() => passwordModel.ConfirmPassword" />
+                    </div>
+                    <div class="actions">
+                        <button type="submit" disabled="@passwordBusy">@(passwordBusy ? "Changing password…" : "Change password")</button>
+                    </div>
+                </EditForm>
             </section>
         }
 

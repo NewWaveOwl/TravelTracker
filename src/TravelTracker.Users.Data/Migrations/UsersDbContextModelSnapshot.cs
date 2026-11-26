@@ -113,14 +113,14 @@ namespace TravelTracker.Users.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Email")
-                        .HasColumnType("text");
-
                     b.Property<string>("Issuer")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("NormalizedUsername")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PasswordHash")
                         .HasColumnType("text");
 
                     b.Property<Guid>("PublicId")
@@ -146,9 +146,6 @@ namespace TravelTracker.Users.Data.Migrations
                     b.Property<string>("Username")
                         .HasColumnType("text");
 
-                    b.Property<string>("VerifiedEmail")
-                        .HasColumnType("text");
-
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedUsername")
@@ -166,8 +163,6 @@ namespace TravelTracker.Users.Data.Migrations
 
                     b.ToTable("UserAccounts", null, t =>
                         {
-                            t.HasCheckConstraint("CK_UserAccounts_Email", "\"Email\" IS NULL OR length(btrim(\"Email\")) > 0");
-
                             t.HasCheckConstraint("CK_UserAccounts_Identity", "length(btrim(\"Issuer\")) > 0 AND length(btrim(\"Subject\")) > 0");
 
                             t.HasCheckConstraint("CK_UserAccounts_Role", "\"Role\" IN ('traveller', 'administrator')");

@@ -14,15 +14,15 @@ namespace TravelTracker.Frontend.Tests;
 
 public sealed class AccountTests : BunitContext
 {
-    static readonly string Profile = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller_1","email":"traveller@example.test","address":"1 Main St"}""";
+    static readonly string Profile = """{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"traveller_1","address":"1 Main St"}""";
     readonly FakeTimeProvider clock = new(DateTimeOffset.Parse("2026-11-04T10:00:00Z"));
     readonly SwitchableAuthentication authentication;
 
     public AccountTests() => authentication = new(new SessionRegistry(clock));
 
-    void Configure(bool configured = true, StubHandler? handler = null, bool pictureEndpoint = false, bool supabase = false)
+    void Configure(bool configured = true, StubHandler? handler = null, bool pictureEndpoint = false)
     {
-        Services.AddSingleton(new AuthSetup(configured, supabase ? new(FakeSupabaseAuth.Origin, "sb_publishable_fixture") : null));
+        Services.AddSingleton(new AuthSetup(configured));
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         Services.AddSingleton<TimeProvider>(clock);
         Services.AddSingleton(authentication.Sessions);
@@ -39,69 +39,23 @@ public sealed class AccountTests : BunitContext
         Services.AddLogging();
     }
 
-    [Fact]
-    public void SupabaseProfileEmailChangesUseTheVerifiedCredentialFormAndNeverPatchASeparateContactEmail()
-    {
-        var handler = new StubHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            { Content = new StringContent(Profile, System.Text.Encoding.UTF8, "application/json") }));
-        Configure(handler: handler, supabase: true);
-        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
-        ((System.Security.Claims.ClaimsIdentity)authentication.User.Identity!).AddClaim(new("email", "login@example.test"));
-        var page = Render<Account>();
-        page.FindAll("button").Single(button => button.TextContent == "Edit profile").Click();
-
-        Assert.Equal("login@example.test", page.Find("#profile-email").GetAttribute("value"));
-        Assert.True(page.Find("#profile-email").HasAttribute("readonly"));
-        Assert.Equal("login@example.test", page.Find("#email-change-current").GetAttribute("value"));
-        Assert.Equal("/auth/change-credential", page.Find("#email-change-new").Closest("form")!.GetAttribute("action"));
-        page.Find("#profile-username").Change("updated_name");
-        page.Find(".profile-editor form button[type=submit]").Click();
-
-        page.WaitForAssertion(() => Assert.Contains("Your profile has been updated", page.Markup));
-        Assert.All(page.FindAll(".credential-fields"), fields => Assert.False(fields.HasAttribute("disabled")));
-        using var patch = JsonDocument.Parse(handler.LastRequestBody!);
-        Assert.Equal("updated_name", patch.RootElement.GetProperty("username").GetString());
-        Assert.False(patch.RootElement.TryGetProperty("email", out _));
-    }
-
-    [Fact]
-    public void ProfileEditingLocksCredentialFormsBeforeAnyDraftFieldChangesAndCancelUnlocksThem()
-    {
-        Configure(supabase: true);
-        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
-        var page = Render<Account>();
-        Assert.All(page.FindAll(".credential-fields"), fields => Assert.False(fields.HasAttribute("disabled")));
-
-        page.FindAll("button").Single(button => button.TextContent == "Edit profile").Click();
-
-        Assert.Equal(2, page.FindAll(".credential-fields[disabled]").Count);
-        Assert.Contains("Save or cancel your profile edits", page.Find("#credential-edit-hint").TextContent);
-        page.Find("#profile-username").Change("unsaved_name");
-        page.FindAll("button").Single(button => button.TextContent == "Cancel").Click();
-        Assert.All(page.FindAll(".credential-fields"), fields => Assert.False(fields.HasAttribute("disabled")));
-        Assert.DoesNotContain("unsaved_name", page.Markup);
-    }
-
     [Theory]
     [InlineData(400)]
     [InlineData(503)]
-    public void FailedProfileSaveRetainsTheDraftAndKeepsCredentialNavigationUnavailable(int status)
+    public void FailedProfileSaveRetainsTheDraft(int status)
     {
-        Configure(supabase: true, handler: new StubHandler((request, _) => Task.FromResult(request.Method == HttpMethod.Patch
+        Configure(handler: new StubHandler((request, _) => Task.FromResult(request.Method == HttpMethod.Patch
             ? new HttpResponseMessage((HttpStatusCode)status)
             : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile, System.Text.Encoding.UTF8, "application/json") })));
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         page.FindAll("button").Single(button => button.TextContent == "Edit profile").Click();
-        page.Find("#profile-username").Change("unsaved_name");
         page.Find("#profile-address").Change("Unsaved address");
 
         page.Find(".profile-editor form button[type=submit]").Click();
 
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".profile-error[role=alert]")));
-        Assert.Equal("unsaved_name", page.Find("#profile-username").GetAttribute("value"));
         Assert.Equal("Unsaved address", page.Find("#profile-address").GetAttribute("value"));
-        Assert.Equal(2, page.FindAll(".credential-fields[disabled]").Count);
         Assert.DoesNotContain("Your profile has been updated", page.Markup);
     }
 
@@ -143,7 +97,7 @@ public sealed class AccountTests : BunitContext
         var page = Render<Account>();
         var widget = page.FindComponent<TravelTracker.Frontend.Components.Users.ProfilePicture>().Instance;
         page.Find("button").Click();
-        page.Find("#profile-username").Change("unsaved_text_name");
+        page.Find("#profile-address").Change("unsaved text address");
         var file = Bunit.InputFileContent.CreateFromBinary(png, "private.png", contentType: "image/png");
         page.FindComponent<Microsoft.AspNetCore.Components.Forms.InputFile>().UploadFiles(file);
         page.WaitForAssertion(() => Assert.Contains("Photo saved.", page.Markup));
@@ -152,7 +106,7 @@ public sealed class AccountTests : BunitContext
 
         Assert.Same(widget, page.FindComponent<TravelTracker.Frontend.Components.Users.ProfilePicture>().Instance);
         Assert.Equal("data:image/png;base64," + Convert.ToBase64String(png), page.Find(".profile-picture img").GetAttribute("src"));
-        Assert.DoesNotContain("unsaved_text_name", page.Markup);
+        Assert.DoesNotContain("unsaved text address", page.Markup);
         Assert.Equal(0, profileWrites);
     }
 
@@ -217,13 +171,12 @@ public sealed class AccountTests : BunitContext
         var page = Render<Account>();
         page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
         page.Find("button").Click();
-        page.Find("#profile-username").Change("unsaved_draft");
+        page.Find("#profile-address").Change("unsaved_draft");
 
         clock.Advance(TimeSpan.FromMinutes(5));
 
         page.WaitForAssertion(() => Assert.Contains("Sign in to view your profile", page.Markup));
         Assert.DoesNotContain("traveller_1", page.Markup);
-        Assert.DoesNotContain("traveller@example.test", page.Markup);
         Assert.DoesNotContain("1 Main St", page.Markup);
         Assert.DoesNotContain("unsaved_draft", page.Markup);
     }
@@ -235,11 +188,12 @@ public sealed class AccountTests : BunitContext
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         Assert.Contains("traveller_1", page.Markup);
-        Assert.Contains("Contact email", page.Markup);
+        Assert.DoesNotContain("email", page.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Traveller", page.Markup);
         Assert.Contains("Active", page.Markup);
         page.Find("button").Click();
-        Assert.NotNull(page.Find("#profile-username"));
+        Assert.NotNull(page.Find("#profile-address"));
+        Assert.Empty(page.FindAll("#profile-username"));
         Assert.Empty(page.FindAll("input[name='role'], input[name='status']"));
     }
 
@@ -289,7 +243,7 @@ public sealed class AccountTests : BunitContext
             if (request.Method == HttpMethod.Patch)
             {
                 patched = request;
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"new_name","email":"Traveller@example.test","address":null}""") });
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"publicId":"00000000-0000-0000-0000-000000000101","role":"traveller","status":"active","username":"new_name","address":null}""") });
             }
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) });
         });
@@ -297,16 +251,12 @@ public sealed class AccountTests : BunitContext
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         page.Find("button").Click();
-        page.Find("#profile-username").Change("new_name");
-        page.Find("#profile-email").Change("Traveller@example.test");
         page.Find("#profile-address").Change("");
         page.Find("button[type='submit']").Click();
         page.WaitForAssertion(() => Assert.Contains("Your profile has been updated", page.Markup));
         Assert.Equal("PATCH", patched!.Method.Method);
         Assert.Equal("/api/v1/users/me", patched.RequestUri!.AbsolutePath);
         using var body = JsonDocument.Parse(handler.LastRequestBody!);
-        Assert.Equal("new_name", body.RootElement.GetProperty("username").GetString());
-        Assert.Equal("Traveller@example.test", body.RootElement.GetProperty("email").GetString());
         Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("address").ValueKind);
         Assert.DoesNotContain("role", body.RootElement.GetRawText());
         Assert.DoesNotContain("status", body.RootElement.GetRawText());
@@ -322,12 +272,12 @@ public sealed class AccountTests : BunitContext
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         page.Find("button").Click();
-        page.Find("#profile-username").Change("draft_username");
+        page.Find("#profile-address").Change("draft_username");
 
         page.Find("button[type='submit']").Click();
 
         page.WaitForAssertion(() => Assert.Contains("no longer permits profile changes", page.Markup));
-        Assert.Equal("draft_username", page.Find("#profile-username").GetAttribute("value"));
+        Assert.Equal("draft_username", page.Find("#profile-address").GetAttribute("value"));
         Assert.DoesNotContain("Your profile has been updated", page.Markup);
     }
 
@@ -345,29 +295,28 @@ public sealed class AccountTests : BunitContext
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         page.Find("button").Click();
-        page.Find("#profile-username").Change("draft_username");
+        page.Find("#profile-address").Change("draft_username");
 
         page.Find("button[type='submit']").Click();
 
         page.WaitForAssertion(() => Assert.Contains("Profile access denied", page.Markup));
         Assert.DoesNotContain("traveller_1", page.Markup);
-        Assert.DoesNotContain("traveller@example.test", page.Markup);
         Assert.DoesNotContain("1 Main St", page.Markup);
         Assert.DoesNotContain("draft_username", page.Markup);
         Assert.DoesNotContain("Edit profile", page.Markup);
     }
 
     [Fact]
-    public void ValidationKeepsFormAndDoesNotSendInvalidUsername()
+    public void ValidationKeepsFormAndDoesNotSendAnOverlongAddress()
     {
         var handler = StubHandler.Status(200, Profile);
         Configure(handler: handler);
         authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
         var page = Render<Account>();
         page.Find("button").Click();
-        page.Find("#profile-username").Change("abc!");
+        page.Find("#profile-address").Change(new string('x', 501));
         page.Find("button[type='submit']").Click();
-        Assert.Contains("Use only letters", page.Markup);
+        Assert.Contains("500 characters or fewer", page.Markup);
         Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
     }
 
@@ -391,5 +340,113 @@ public sealed class AccountTests : BunitContext
         Assert.Contains("Deactivated", page.Markup);
         Assert.DoesNotContain("does not have permission to edit", page.Markup);
         Assert.DoesNotContain(page.FindAll("button"), button => button.TextContent.Contains("Edit profile", StringComparison.Ordinal));
+    }
+
+    static void FillPasswordForm(IRenderedComponent<Account> page, string current, string next, string confirm)
+    {
+        page.Find("#password-current").Change(current);
+        page.Find("#password-new").Change(next);
+        page.Find("#password-confirm").Change(confirm);
+    }
+
+    static void SubmitPasswordForm(IRenderedComponent<Account> page) =>
+        page.FindAll("button").Single(button => button.TextContent.Trim() == "Change password").Click();
+
+    [Fact]
+    public void PasswordFormIsOfferedOnlyWithTheWriteScope()
+    {
+        Configure();
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5), "users.read");
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        Assert.DoesNotContain("Change password", page.Markup);
+    }
+
+    [Fact]
+    public void PasswordChangeIsReportedOnlyAfterTheServerConfirms()
+    {
+        var release = new TaskCompletionSource<HttpResponseMessage>();
+        string? posted = null;
+        var handler = new StubHandler(async (request, token) =>
+        {
+            if (request.Method != HttpMethod.Post) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) };
+            posted = await request.Content!.ReadAsStringAsync(token);
+            return await release.Task;
+        });
+        Configure(handler: handler);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        FillPasswordForm(page, "old secret", "new secret", "new secret");
+
+        SubmitPasswordForm(page);
+
+        page.WaitForAssertion(() => Assert.NotNull(posted));
+        Assert.DoesNotContain("has been changed", page.Markup);
+        release.SetResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        page.WaitForAssertion(() => Assert.Contains("Your password has been changed", page.Markup));
+        Assert.Contains("\"currentPassword\":\"old secret\"", posted);
+        Assert.DoesNotContain("old secret", page.Markup);
+        Assert.DoesNotContain("new secret", page.Markup);
+    }
+
+    [Fact]
+    public void WrongCurrentPasswordShowsServerMessageAndKeepsTypedProfileDraft()
+    {
+        var handler = new StubHandler((request, _) => Task.FromResult(request.Method == HttpMethod.Post
+            ? new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("""{"errors":{"currentPassword":["The current password is not correct."]}}""", System.Text.Encoding.UTF8, "application/json") }
+            : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) }));
+        Configure(handler: handler);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        page.Find("button").Click();
+        page.Find("#profile-address").Change("draft address");
+        FillPasswordForm(page, "wrong secret", "new secret", "new secret");
+
+        SubmitPasswordForm(page);
+
+        page.WaitForAssertion(() => Assert.Contains("The current password is not correct.", page.Markup));
+        Assert.Contains("draft address", page.Markup);
+        Assert.DoesNotContain("Your password has been changed", page.Markup);
+    }
+
+    [Fact]
+    public void ServerFailureIsNeverReportedAsSuccess()
+    {
+        var handler = new StubHandler((request, _) => Task.FromResult(request.Method == HttpMethod.Post
+            ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) }));
+        Configure(handler: handler);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        FillPasswordForm(page, "old secret", "new secret", "new secret");
+
+        SubmitPasswordForm(page);
+
+        page.WaitForAssertion(() => Assert.Contains("role=\"alert\"", page.Markup));
+        Assert.DoesNotContain("has been changed", page.Markup);
+    }
+
+    [Fact]
+    public void MismatchedConfirmationIsRejectedBeforeAnyRequest()
+    {
+        var posts = 0;
+        var handler = new StubHandler((request, _) =>
+        {
+            if (request.Method == HttpMethod.Post) posts++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Profile) });
+        });
+        Configure(handler: handler);
+        authentication.SignIn("token", clock.GetUtcNow().AddMinutes(5));
+        var page = Render<Account>();
+        page.WaitForAssertion(() => Assert.Contains("traveller_1", page.Markup));
+        FillPasswordForm(page, "old secret", "new secret", "new secre");
+
+        SubmitPasswordForm(page);
+
+        page.WaitForAssertion(() => Assert.Contains("do not match", page.Markup));
+        Assert.Equal(0, posts);
     }
 }

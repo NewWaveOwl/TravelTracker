@@ -15,9 +15,10 @@ namespace TravelTracker.Journey.Tests.Support;
  * outbound HTTP (issuer discovery, Users, catalogue references) goes through the in-process router instead of the network.
  * @param settings host specific configuration, such as the connection string and upstream addresses.
  * @param router resolves a host name to the in-process handler that serves it.
+ * @param identity the shared issuer whose signing key every host verifies tokens against.
  * @typeparam TProgram the host's entry point type.
  */
-internal sealed class JourneyHost<TProgram>(Dictionary<string, string?> settings, HostRouter router) : WebApplicationFactory<TProgram>
+internal sealed class JourneyHost<TProgram>(Dictionary<string, string?> settings, HostRouter router, JourneyIdentity identity) : WebApplicationFactory<TProgram>
     where TProgram : class
 {
     /**
@@ -33,7 +34,8 @@ internal sealed class JourneyHost<TProgram>(Dictionary<string, string?> settings
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Authentication:Bearer:Authority"] = JourneyIdentity.Issuer,
+                ["Authentication:Bearer:PublicKey"] = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).ExportSubjectPublicKeyInfoPem(),
+                ["Authentication:Bearer:ValidAlgorithms:0"] = "RS256",
                 ["Authentication:Bearer:Issuer"] = JourneyIdentity.Issuer,
                 ["Authentication:Bearer:Audience"] = JourneyIdentity.Audience,
                 ["Authentication:Bearer:ScopeClaimType"] = "scope",
@@ -49,7 +51,8 @@ internal sealed class JourneyHost<TProgram>(Dictionary<string, string?> settings
         {
             // hosts configure their own primary handlers, so the router is forced in after every client's builder has run
             services.AddSingleton<IHttpMessageHandlerBuilderFilter>(new RouterFilter(router));
-            services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options => options.Backchannel = new HttpClient(router));
+            services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+                options.TokenValidationParameters.IssuerSigningKeys = [.. options.TokenValidationParameters.IssuerSigningKeys, identity.VerificationKey]);
         });
         builder.ConfigureLogging(logging =>
         {

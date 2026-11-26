@@ -35,7 +35,7 @@ public sealed class UsersStartupTests
         // bearer settings are still required at startup (ValidateOnStart); ConnectionStrings:Users is deliberately absent.
         using var factory = DevelopmentHost(new Dictionary<string, string?>
         {
-            ["Authentication:Bearer:Authority"] = Authority,
+            ["Authentication:Bearer:PublicKey"] = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).ExportSubjectPublicKeyInfoPem(),
             ["Authentication:Bearer:Issuer"] = Authority,
             ["Authentication:Bearer:Audience"] = "traveltracker-api"
         });
@@ -55,7 +55,7 @@ public sealed class UsersStartupTests
         using var factory = DevelopmentHost(new Dictionary<string, string?>
         {
             ["ConnectionStrings:Users"] = "Host=unused.test;Database=unused",
-            ["Authentication:Bearer:Authority"] = Authority,
+            ["Authentication:Bearer:PublicKey"] = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).ExportSubjectPublicKeyInfoPem(),
             ["Authentication:Bearer:Issuer"] = Authority,
             ["Authentication:Bearer:Audience"] = "traveltracker-api"
         });
@@ -71,7 +71,7 @@ public sealed class UsersStartupTests
     {
         using var factory = DevelopmentHost(new Dictionary<string, string?>
         {
-            ["Authentication:Bearer:Authority"] = Authority,
+            ["Authentication:Bearer:PublicKey"] = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).ExportSubjectPublicKeyInfoPem(),
             ["Authentication:Bearer:Issuer"] = Authority,
             ["Authentication:Bearer:Audience"] = "traveltracker-api"
         });

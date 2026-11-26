@@ -1,197 +1,47 @@
-# Supabase Auth
+# Supabase Auth (optional provider)
 
-The owner selected Supabase Auth to replace Auth0 on 2026-11-12. Supabase manages
-login identities, verified email and passwords. TravelTracker's Users API keeps
-application profiles, administrator roles, bans, deactivation and audit history.
-The other services continue to own their databases and enforce private ownership.
+TravelTracker signs travellers in one of two ways, chosen per deployment. **Local** is the default: the Users API checks passwords against its own PostgreSQL database and issues the tokens (see [API authentication](authentication.md)). **Supabase** hands login, passwords and email confirmation to Supabase Auth. In both cases the Users service keeps profiles, administrator roles, bans and audit history, and every other API only verifies bearer tokens.
+
+A deployment uses exactly one provider. Accounts are keyed by the token's issuer and subject, so Local and Supabase accounts never merge, and changing the provider starts everyone with a fresh account.
+
+## Select it
+
+Set these on every host (environment variables use `__` for `:`):
+
+| Setting | Hosts | Value |
+| --- | --- | --- |
+| `Authentication:Provider` | Frontend | `Supabase` (`Local` is the default). Any other value fails startup. |
+| `Authentication:Bearer:Provider` | Every API | `Supabase` (`Local` is the default). |
+| `Authentication:Bearer:Authority` | Every API | `https://PROJECT.supabase.co/auth/v1` |
+| `Authentication:Bearer:Issuer` | Every API | The same URL, with no trailing slash. |
+| `Authentication:Bearer:Audience` | Every API | `authenticated` |
+| `Authentication:Bearer:ValidAlgorithms` | Every API | `["ES256", "RS256"]`, matching the project's asymmetric signing key. |
+| `Supabase:Url`, `Supabase:PublishableKey` | Frontend and Users API | The project URL and the publishable (or legacy anon) key. A secret or `service_role` key is rejected. |
+| `Bootstrap:Email`, `Bootstrap:Issuer`, `Bootstrap:Secret` | Users API | First administrator setup. `Bootstrap:Issuer` is the Issuer above. See [administrator setup](first-administrator-setup.md). |
+
+`Authentication:Bearer:PublicKey` and `Authentication:Issuer:PrivateKey` are Local settings and are ignored here. With Supabase selected the Users API no longer serves `POST /api/v1/auth/register`, `login` or `service-token` (they answer `404`), and the Account page offers Supabase's email and password changes instead of the Users API password form. The launcher (`scripts/StartDev.cs`) only wires Local sign-in; pass the settings above through environment variables or user secrets to run the stack against Supabase. `deploy/azure/apps.bicep` already sets them.
 
 ## Configure the Supabase project once
 
-1. In the existing Supabase project, enable email/password authentication and email
-   confirmation. Configure the email provider/SMTP and Site URL for the environment.
-   Local development uses `http://localhost:5100/`. Deployments must use HTTPS.
-   Set the **Confirm signup** email template's confirmation link to
-   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`.
-   The confirmation page requires an explicit protected form submission before
-   verification; it never automatically signs in or puts access/refresh tokens in
-   the browser URL. The traveller signs in normally after confirmation.
-   Keep **Secure email change** enabled and use
-   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change`
-   in the **Change Email Address** template. Both inboxes must confirm the change.
-2. Under Auth signing keys, use an asymmetric signing key (ES256 or RS256).
-   The application validates keys from
-   `https://PROJECT.supabase.co/auth/v1/.well-known/jwks.json`, exact issuer
-   `https://PROJECT.supabase.co/auth/v1`, audience `authenticated`, and token expiry.
-   Legacy HS256 signing secrets are not supported by this integration.
-3. Run [supabase-auth-hook.sql](../src/Database/supabase-auth-hook.sql) in the
-   project's **postgres** database. Select `public.traveltracker_access_token_hook`
-   under Authentication > Hooks > Custom Access Token. Preserve any existing hook
-   behavior deliberately; only one selected custom-access-token hook runs.
-4. Create a separate, confirmed Auth user for calls between services. In its
-   administrator-managed **app_metadata**, set `"traveltracker_service": true`.
-   This user receives only `users.access`, never traveller permissions. Use a
-   unique strong password and do not use this account for interactive browsing.
-5. Obtain the project URL, public publishable key (or legacy **anon** key), and
-   service-account email. Share non-secret setup values with the team. Distribute
-   the service password and database credentials privately. The frontend never
-   needs a Supabase secret key or `service_role` key.
+1. Enable email/password sign-in and email confirmation, and configure SMTP and the Site URL (`http://localhost:5100/` locally, HTTPS in deployments). Set the **Confirm signup** template's link to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` and the **Change Email Address** template's link to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change`, with **Secure email change** on. The confirmation page needs an explicit form submission; it never signs in or puts tokens in the URL.
+2. Use an asymmetric signing key (ES256 or RS256). The APIs read the keys from `https://PROJECT.supabase.co/auth/v1/.well-known/jwks.json` and check the exact issuer, audience and expiry. Legacy HS256 secrets are not supported.
+3. Run [supabase-auth-hook.sql](../src/Database/supabase-auth-hook.sql) in the project's `postgres` database and select `public.traveltracker_access_token_hook` under Authentication > Hooks > Custom Access Token. Only one custom access token hook runs, so merge it with any existing one on purpose.
+4. Create a confirmed Auth user for calls between services and set `"traveltracker_service": true` in its administrator-managed `app_metadata`. It receives only `users.access`. Sign in as it to get an access token, and give that token to the other backends as `Users:ServiceAccessToken` or `TripReferences:UsersServiceAccessToken`; it expires, so refresh it before then (`deploy/azure/Deploy-Demo.ps1 -RefreshOnly` does this for the Azure demo). Its subject must be listed in `UsersAccess:AllowedServiceSubjects`.
 
-Ordinary confirmed travellers receive `catalogue.read`, `catalogue.write`,
-`users.read`, `users.write`, `settings.read`, `settings.write`, `trips.read` and
-`trips.write`. These permissions enable features, not administrator authority;
-Users checks live role and standing. `users.admin` is supported for account
-administration but is never part of ordinary traveller defaults. Grant it only
-through administrator-managed `app_metadata.traveltracker_scopes` to an account
-that is also an active administrator in the Users database. The API checks both
-scope and live role, so the token grant alone cannot administer accounts.
-Promoting an account in Users does not update Supabase metadata automatically;
-the trusted scope grant must be synchronized before that administrator receives
-a token containing `users.admin`. Operators can restrict an account by setting
-`app_metadata.traveltracker_scopes` to an array of exact supported strings. An
-empty array grants none. Unknown strings and `users.access` are excluded from
-traveller grants; the service identity receives only `users.access`.
-User-editable `user_metadata` never grants permissions.
-Anonymous users receive no TravelTracker scopes. Sign in again after permission
-changes; an already issued access token retains its claims until expiry.
+## Scopes
 
-## Run on each developer machine
+The hook grants ordinary confirmed travellers `catalogue.read`, `catalogue.write`, `users.read`, `users.write`, `settings.read`, `settings.write`, `trips.read` and `trips.write`. `users.admin` is never a default: grant it through `app_metadata.traveltracker_scopes` to an account that is also an active administrator in the Users database, because the API checks both the scope and the live role. Setting `traveltracker_scopes` to an array of exact scope names restricts an account, and an empty array grants nothing. `user_metadata` never grants anything, and anonymous users receive no scopes. A changed grant reaches the token at the next sign-in.
 
-Install .NET 10, check out the branch containing this migration, and run from the
-repository root. Trust the Users HTTPS development certificate once:
+## Behavior in the app
 
-```sh
-dotnet dev-certs https --trust
-dotnet run --file scripts/StartSupabaseDev.cs -- --setup
-dotnet run --file scripts/StartSupabaseDev.cs
-```
+- Sign-in and registration use the email address, with passwords of at least 8 characters. A new account must confirm its email before it can sign in.
+- Tokens stay in the encrypted HttpOnly session cookie, never in browser storage. There is no automatic renewal, so sign in again after expiry.
+- The profile shows the verified Supabase email. The Users database stores no email address, only the issuer and subject, a role, the standing and the address. A Supabase account has no username.
+- **Sign-in credentials** on the Account page changes the email or password. Each request reauthenticates with the current password, checks the new session belongs to the same subject, then ends the current TravelTracker session.
+- Bootstrap confirms the email with the Supabase Auth user endpoint (`email_confirmed_at` must be set and the subject must match) and compares it, ignoring case, with `Bootstrap:Email`.
 
-The launcher supplies each API's Supabase bearer settings and allows the verified
-service-account subject to call the internal Users access endpoint. The public
-key is supplied to Users for verified identity lookup. Enter the **Auth service
-account password** and **PostgreSQL database password** at their separate hidden
-prompts. They are different credentials and are never saved in launch settings.
+## Tests
 
-The six `traveltracker_*` databases and valid Session pooler credentials are still
-required. Supabase Auth lives in the managed `auth` schema in `postgres`; it does
-not automatically create the service databases. A PostgreSQL `28P01` remains a
-database-password/role/project mismatch and is not repaired by changing Auth0.
-The launcher checks configuration separately from actual credential validity.
+`SupabaseBearerHost` (Transport), `SupabaseSignInTests` (Frontend) and `SupabaseIdentityTests` and `SupabaseModeTests` (Users) run the real handlers against signed test tokens and a fake Auth service. `scripts/TestSupabaseAuthHook.sql` runs in CI against a disposable PostgreSQL database and checks the hook's grants, spoofing and execution permissions. None of these prove a live project: hook selection, SMTP and the service user still need a staging check.
 
-Open `http://localhost:5100/account`, choose Sign in, or register a new account.
-Confirm its email before signing in. Login and registration use server-side
-requests to Supabase; tokens are kept in the encrypted HttpOnly application
-session cookie rather than browser local/session storage. Session revocation and
-expiry continue to invalidate open application circuits. No automatic session
-renewal is provided; sign in again after expiry or restarting the frontend.
-
-In **Your profile**, the displayed email is the current verified Supabase sign-in
-email. There is one email-change flow under **Sign-in credentials**, linked from
-the profile editor. Username and address remain editable through the Users API;
-its legacy contact-email field remains compatible but is not edited by the
-Supabase profile UI. Each credential request checks
-live account standing, reauthenticates with the current sign-in email and
-password, and checks that the new session belongs to the same provider subject.
-Supabase applies its password policy and confirms login-email changes through
-its email links. A successful request ends the current TravelTracker session,
-including other tabs sharing that session. Separate device sessions follow
-provider policy, and issued access tokens remain subject to their expiry.
-Credential changes never write to the Users profile.
-
-While the profile editor is open or saving, both credential forms are disabled.
-Save or cancel the profile edits before requesting an email or password change.
-A rejected profile save keeps the typed username/address and the credential
-forms disabled, so a credential redirect cannot discard the profile draft.
-
-For frontend-only development, configure `Authentication:Provider=Supabase`,
-`Supabase:Url` and `Supabase:PublishableKey` through .NET user-secrets or the matching
-environment variables (`Authentication__Provider`, `Supabase__Url`,
-`Supabase__PublishableKey`), then run:
-
-```sh
-dotnet run --project src/TravelTracker.Frontend --launch-profile http
-```
-
-Without auth settings this remains a UI preview. With them, sign-in requires
-Supabase connectivity; profiles and saved data also require their running APIs.
-The earlier [Auth0 guide](frontend-auth0.md) describes the explicit compatibility
-path and historical verification, not the new launcher's setup.
-
-## Move existing users without losing their private data
-
-Do this during a maintenance window with **all application processes stopped**.
-Back up the Users, Attractions, Accommodations, Settings and Trips databases.
-Transport has no owner identity columns to migrate. Do not delete Auth0 users or
-revoke the old application until the new setup and old-account access are proven.
-
-1. Export/import Auth0 identities following Supabase's official
-   [Auth0 migration guide](https://supabase.com/kb/guides/migrate-from-auth0).
-   Existing Auth0 passwords do not automatically work in Supabase. Compatible
-   password hashes require an authorized Auth0 export; otherwise use a verified
-   account invitation/password recovery procedure. Never ask teammates to send
-   passwords or export files in Teams.
-2. Establish an explicit operator-verified mapping from each old `(issuer, subject)`
-   to the corresponding Supabase user UUID. **Do not auto-link by email**, which
-   could connect unrelated accounts. Include banned/deactivated accounts and retain
-   their standing. Preserve administrator roles in the Users database.
-3. For each mapping, use [MigrateSupabaseIdentity.sql](../scripts/MigrateSupabaseIdentity.sql)
-   with psql `-v old_issuer=... -v old_subject=... -v new_issuer=... -v new_subject=...`
-   against each service database. It defaults to a preview; review the counts,
-   then supply `-v apply=true` to apply that database's transaction. Run against
-   Attractions, Accommodations, Settings, Trips, then Users. Supply the database
-   connection/password securely using your usual psql configuration, not source.
-4. The script preserves public account IDs, profiles, roles, standing, trip IDs,
-   catalogue IDs, snapshots, and administrator audit records. It updates the
-   permanent bootstrap identity too. Existing destination records cause a collision
-   error rather than an implicit account merge. A repeat after success is a no-op.
-5. There is **no distributed transaction across these databases**. Keep the app
-   stopped until all five updates succeed for every mapping. If any fails, repair
-   and resume or restore the coordinated backups before restarting. Do not allow
-   first-login provisioning to create duplicate accounts during the cutover.
-6. Update first-administrator deployment settings to the new verified issuer/email
-   if applicable; a migrated administrator retains its existing role and does not
-   need bootstrap again. Sign in and verify old trips, private catalogue entries,
-   settings, profile, bans and admin visibility before disabling the old provider.
-
-The migration SQL is an operator tool, not an automatically executed startup
-migration. No passwords, identity exports or live database rows are changed by
-building or testing this branch. The actual project hook selection, service-user
-metadata, account import and ownership cutover must be completed in the authorized
-Supabase project before calling the live migration complete.
-
-## Evidence and remaining checks
-
-Local migration verification on 2026-11-12:
-
-- Full Release solution build: zero warnings and errors.
-- Direct xUnit execution: 1,123 application/domain cases passed, zero failed or
-  skipped, including 405 frontend cases. Standard VSTest's loopback test-host
-  transport is restricted in this environment, so the existing in-process runner
-  executed the built assemblies with PostgreSQL-marked cases excluded.
-- Guided launcher: 21 offline configuration checks passed.
-- PostgreSQL 17.11, isolated single-user test cluster: eight hook permission
-  assertions and restricted hook-role execution passed. The identity-cutover SQL
-  was exercised against five separate fixture databases: preview made no changes,
-  apply preserved IDs/snapshots/roles/standing/audit, and repeat was idempotent.
-  Single-user execution does not establish multi-session concurrency or EF
-  persistence behavior. The broader PostgreSQL-marked suites remain unrun locally
-  because loopback database connections are restricted.
-- Independent read-only security review reported no actionable findings.
-
-Automated tests use controlled provider/JWKS responses and signed test tokens.
-They establish protocol, validation and application behavior, not a completed
-production account import. Before rollout, test verified/unverified login,
-registration and confirmation, wrong password, sign-out across tabs, expiry,
-service-account authorization, API 401/403, provider outage and access to an old
-account's data. Run the PostgreSQL relational suites with an isolated database;
-SQL cutover and hook execution need a PostgreSQL/Supabase staging validation.
-
-CI runs `scripts/TestSupabaseAuthHook.sql` (the Supabase access-token hook step in `.github/workflows/ci.yml`) against a fresh disposable
-PostgreSQL database. It checks traveller defaults, service-only access, metadata
-spoofing, scope restrictions, anonymous/privileged-role rejection and execution
-grants. This fixture verifies SQL behavior; live Supabase hook selection and
-database-owner identity cutover still require staging verification.
-
-Official references: [JWTs and JWKS](https://supabase.com/docs/guides/auth/jwts),
-[custom access-token hooks](https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook),
-[sign in](https://supabase.com/docs/reference/javascript/auth-signinwithpassword),
-and [registration](https://supabase.com/docs/reference/javascript/auth-signup).
+Official references: [JWTs and JWKS](https://supabase.com/docs/guides/auth/jwts), [custom access token hooks](https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook).

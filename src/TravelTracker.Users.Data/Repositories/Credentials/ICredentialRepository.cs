@@ -1,0 +1,46 @@
+using TravelTracker.Users.Domain.Models;
+using TravelTracker.Users.Domain.Types;
+
+namespace TravelTracker.Users.Data.Repositories.Credentials;
+
+/**
+ * Stores and reads password sign-in credentials alongside the account they belong to.
+ */
+public interface ICredentialRepository
+{
+    /**
+     * Creates an active traveller that can sign in with the given username.
+     * @param issuer Issuer recorded on the new account.
+     * @param username Sign-in name, compared case-insensitively.
+     * @param passwordHash Already-hashed password.
+     * @param createdAt The application time for the new account.
+     * @param cancellationToken Cancels the save.
+     * @return The new account, or null when the username is already registered.
+     */
+    Task<UserAccount?> RegisterAsync(string issuer, string username, string passwordHash, DateTimeOffset createdAt, CancellationToken cancellationToken);
+
+    /**
+     * Finds the account and stored password hash for a username.
+     * @param username Sign-in name, compared case-insensitively.
+     * @param cancellationToken Cancels the lookup.
+     * @return The account and hash, or null when no password account has that username.
+     */
+    Task<StoredCredential?> FindAsync(string username, CancellationToken cancellationToken);
+
+    /**
+     * Finds the password credential for the identity a validated token names.
+     * @param identity The issuer and subject of the authenticated caller.
+     * @param cancellationToken Cancels the lookup.
+     * @return The account and hash, or null when that account has no password credential.
+     */
+    Task<StoredCredential?> FindByIdentityAsync(ProviderIdentity identity, CancellationToken cancellationToken);
+
+    /**
+     * Replaces the hash when the hasher asks for a stronger one or the owner changes the password.
+     * @param publicId The account whose hash changes.
+     * @param passwordHash The new hash.
+     * @param cancellationToken Cancels the save.
+     * @return A task that completes when the hash is saved.
+     */
+    Task UpdateHashAsync(Guid publicId, string passwordHash, CancellationToken cancellationToken);
+}

@@ -63,10 +63,7 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractio
     internal string ScopeClaimType { get; init; } = "scope";
     internal int ClockSkewSeconds { get; init; } = 30;
     internal string[] ValidAlgorithms { get; init; } = ["RS256"];
-    internal string MetadataIssuer { get; init; } = Issuer;
     internal string ExpectedIssuer { get; init; } = Issuer;
-    internal DiscoveryBackchannelHandler? Discovery { get; private set; }
-    private HttpClient? backchannel;
 
     /**
      * Issues a test-only RSA-signed token; production still uses provider discovery.
@@ -109,7 +106,8 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractio
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
             new Dictionary<string, string?>
             {
-                ["Authentication:Bearer:Authority"] = Issuer,
+                ["Authentication:Bearer:PublicKey"] = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).ExportSubjectPublicKeyInfoPem(),
+                ["Authentication:Bearer:ValidAlgorithms:0"] = "RS256",
                 ["ConnectionStrings:Attractions"] = databaseConnection ?? "Host=unused.test;Database=unused",
                 ["Database:ApplyMigrations"] = (databaseConnection is not null).ToString(),
                 ["Database:SeedExamples"] = SeedExamples.ToString(),
@@ -139,12 +137,8 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractio
             }
             Users = new UsersBackchannelHandler(UsersUnavailable);
             services.AddHttpClient<UsersAccessClient>().ConfigurePrimaryHttpMessageHandler(() => Users);
-            services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
-            {
-                Discovery = new DiscoveryBackchannelHandler(signingKey.ExportParameters(false), MetadataIssuer);
-                backchannel = new HttpClient(Discovery);
-                options.Backchannel = backchannel;
-            });
+            services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+                options.TokenValidationParameters.IssuerSigningKeys = [.. options.TokenValidationParameters.IssuerSigningKeys, new RsaSecurityKey(signingKey)]);
             services.AddControllers().AddApplicationPart(typeof(IdentityProbeController).Assembly);
         });
         builder.ConfigureLogging(logging => logging.ClearProviders());
@@ -169,7 +163,6 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Attractio
         base.Dispose(disposing);
         if (disposing)
         {
-            backchannel?.Dispose();
             signingKey.Dispose();
             ownedDatabase?.Dispose();
         }

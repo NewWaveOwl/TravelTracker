@@ -40,8 +40,7 @@ public sealed class TicketDocumentProxyTests
         using var host = fixture.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             services.AddHttpClient<ServiceClient>().ConfigurePrimaryHttpMessageHandler(() => handler)));
         using var browser = host.CreateDefaultClient(new CookieJarHandler(fixture.Clock));
-        await fixture.StartSignInAsync(browser);
-        var signedIn = await fixture.CompleteSignInAsync(browser);
+        var signedIn = await fixture.SignInAsync(browser);
         Assert.Equal(HttpStatusCode.Redirect, signedIn.StatusCode);
 
         var response = await browser.GetAsync(Path);
@@ -67,8 +66,7 @@ public sealed class TicketDocumentProxyTests
         using var host = fixture.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             services.AddHttpClient<ServiceClient>().ConfigurePrimaryHttpMessageHandler(() => handler)));
         using var browser = host.CreateDefaultClient(new CookieJarHandler(fixture.Clock));
-        await fixture.StartSignInAsync(browser);
-        await fixture.CompleteSignInAsync(browser);
+        await fixture.SignInAsync(browser);
 
         var response = await browser.GetAsync(Path);
 

@@ -31,7 +31,6 @@ internal sealed class ApiFactory(string? connectionString = null) : WebApplicati
 
     private readonly RSA signingKey = RSA.Create(2048);
     private readonly string memoryDatabaseName = Guid.NewGuid().ToString("N");
-    private HttpClient? discoveryClient;
 
     internal UsersBackchannelHandler? Users { get; private set; }
 
@@ -87,7 +86,8 @@ internal sealed class ApiFactory(string? connectionString = null) : WebApplicati
         builder.UseEnvironment("Testing");
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Authentication:Bearer:Authority"] = Issuer,
+            ["Authentication:Bearer:PublicKey"] = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).ExportSubjectPublicKeyInfoPem(),
+            ["Authentication:Bearer:ValidAlgorithms:0"] = "RS256",
             ["Authentication:Bearer:Issuer"] = Issuer,
             ["Authentication:Bearer:Audience"] = Audience,
             ["Authentication:Bearer:ScopeClaimType"] = "scope",
@@ -114,11 +114,8 @@ internal sealed class ApiFactory(string? connectionString = null) : WebApplicati
             services.AddControllers().AddApplicationPart(typeof(FallbackProbeController).Assembly);
             Users = new UsersBackchannelHandler();
             services.AddHttpClient<UsersAccessClient>().ConfigurePrimaryHttpMessageHandler(() => Users);
-            services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
-            {
-                discoveryClient = new HttpClient(new DiscoveryBackchannelHandler(signingKey.ExportParameters(false), Issuer));
-                options.Backchannel = discoveryClient;
-            });
+            services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+                options.TokenValidationParameters.IssuerSigningKeys = [.. options.TokenValidationParameters.IssuerSigningKeys, new RsaSecurityKey(signingKey)]);
         });
         builder.ConfigureLogging(logging => logging.ClearProviders());
     }
@@ -131,7 +128,6 @@ internal sealed class ApiFactory(string? connectionString = null) : WebApplicati
     {
         base.Dispose(disposing);
         if (!disposing) return;
-        discoveryClient?.Dispose();
         signingKey.Dispose();
     }
 }

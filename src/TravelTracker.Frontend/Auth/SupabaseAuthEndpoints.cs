@@ -127,7 +127,7 @@ public static class SupabaseAuthEndpoints
 
             sessions.Revoke(SessionRegistry.IdFor(user));
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            await EndProviderSessionAsync(auth, token);
+            await EndProviderSessionAsync(auth, token, context.RequestServices);
             return Results.Redirect(operation == "email" ? "/account?credential=verify-email" : "/account?credential=password-changed");
         }
         catch (ApiError error) when (error.Status is 401 or 403)
@@ -136,11 +136,12 @@ public static class SupabaseAuthEndpoints
         }
         catch (Exception error) when (error is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
         {
+            LogFailure(context, "Credential change", error);
             return Results.Redirect("/account?credential=unavailable");
         }
         finally
         {
-            if (fresh is not null) await EndProviderSessionAsync(auth, fresh.AccessToken);
+            if (fresh is not null) await EndProviderSessionAsync(auth, fresh.AccessToken, context.RequestServices);
         }
     }
 
@@ -148,14 +149,28 @@ public static class SupabaseAuthEndpoints
      * Attempts bounded provider cleanup even after the browser disconnects.
      * @param auth Supabase Auth client.
      * @param token The token for the provider session to close.
+     * @param services Locates the logger for a failed cleanup.
      * @return A task that completes without leaking provider diagnostics.
      */
-    static async Task EndProviderSessionAsync(SupabaseAuthClient auth, string token)
+    static async Task EndProviderSessionAsync(SupabaseAuthClient auth, string token, IServiceProvider services)
     {
         try { await auth.SignOutAsync(token, CancellationToken.None); }
-        catch (HttpRequestException) { }
-        catch (OperationCanceledException) { }
+        catch (Exception error) when (error is HttpRequestException or OperationCanceledException)
+        {
+            Logger(services).LogWarning("Provider session cleanup failed ({FailureType}); the local session is already ended.", error.GetType().Name);
+        }
     }
+
+    /**
+     * Records a provider failure by type only, because provider responses can carry sensitive identity data.
+     * @param context The request that failed.
+     * @param operation The action that could not reach the provider.
+     * @param error The failure.
+     */
+    static void LogFailure(HttpContext context, string operation, Exception error) =>
+        Logger(context.RequestServices).LogError("{Operation} could not reach Supabase Auth ({FailureType}).", operation, error.GetType().Name);
+
+    static ILogger Logger(IServiceProvider services) => services.GetRequiredService<ILoggerFactory>().CreateLogger("TravelTracker.Frontend.Auth");
 
     /**
      * Validates an antiforgery-protected password form and issues a revocable local session.
@@ -197,7 +212,7 @@ public static class SupabaseAuthEndpoints
         }
         catch (Exception error) when (error is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
         {
-            // Do not log exception details: auth provider responses can contain sensitive identity data.
+            LogFailure(context, "Sign-in", error);
             return Results.Redirect("/sign-in?error=unavailable");
         }
     }
@@ -229,6 +244,7 @@ public static class SupabaseAuthEndpoints
         }
         catch (Exception error) when (error is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
         {
+            LogFailure(context, "Registration", error);
             return Results.Redirect("/sign-in?mode=register&error=unavailable");
         }
     }
@@ -255,6 +271,7 @@ public static class SupabaseAuthEndpoints
         }
         catch (Exception error) when (error is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
         {
+            LogFailure(context, "Provider sign-out", error);
             return Results.Redirect("/account?signedout=local");
         }
         return Results.Redirect("/account");
@@ -288,6 +305,7 @@ public static class SupabaseAuthEndpoints
         }
         catch (Exception error) when (error is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
         {
+            LogFailure(context, "Email confirmation", error);
             return Results.Redirect("/sign-in?error=unavailable");
         }
     }

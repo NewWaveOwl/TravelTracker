@@ -13,5 +13,5 @@ public static class TripsDatabase
      * @return completion after migrations are applied.
      */
     public static Task InitializeAsync(TripsDbContext database, CancellationToken cancellationToken = default) =>
-        database.Database.MigrateAsync(cancellationToken);
+        database.Database.MigrateWithoutFirstRunNoiseAsync(cancellationToken);
 }

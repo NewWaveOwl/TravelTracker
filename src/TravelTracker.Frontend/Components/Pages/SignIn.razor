@@ -6,9 +6,9 @@
 <PageTitle>@(Register ? "Create account" : "Sign in") | TravelTracker</PageTitle>
 <PageHeading Title="@(Register ? "Create your account" : "Sign in")" />
 
-@if (Setup.Supabase is null)
+@if (!Setup.Configured)
 {
-    <Feedback Kind="FeedbackKind.Unavailable">Supabase sign-in is not configured.</Feedback>
+    <Feedback Kind="FeedbackKind.Unavailable">Sign-in is not configured.</Feedback>
 }
 else
 {
@@ -27,9 +27,13 @@ else
         {
             <p role="alert">The confirmation link is invalid or expired. Request a new confirmation email or contact the project administrator.</p>
         }
-        else if (Error is not null)
+        else if (Error is not null && Supabase)
         {
             <p role="alert">@(Register ? "Registration could not be completed. Check your email and matching passwords (at least 8 characters), or try signing in." : "Sign-in failed. Check your email and password, and confirm your email before signing in.")</p>
+        }
+        else if (Error is not null)
+        {
+            <p role="alert">@(Register ? "Registration could not be completed. Check your username (3 to 32 letters, numbers, periods, underscores or hyphens) and matching passwords (at least 6 characters), or try signing in if you already have an account." : "Sign-in failed. Check your username and password.")</p>
         }
         @if (Message == "confirmation")
         {
@@ -42,18 +46,26 @@ else
         <form method="post" action="@(Register ? "/auth/register" : "/auth/login")">
             <AntiforgeryToken />
             <div class="profile-field">
-                <label for="sign-in-email">Email</label>
-                <input id="sign-in-email" name="email" type="email" autocomplete="email" maxlength="254" required />
+                @if (Supabase)
+                {
+                    <label for="sign-in-email">Email</label>
+                    <input id="sign-in-email" name="email" type="email" autocomplete="email" maxlength="254" required />
+                }
+                else
+                {
+                    <label for="sign-in-username">Username</label>
+                    <input id="sign-in-username" name="username" type="text" autocomplete="username" minlength="@(Register ? "3" : null)" maxlength="32" required />
+                }
             </div>
             <div class="profile-field">
                 <label for="sign-in-password">Password</label>
-                <input id="sign-in-password" name="password" type="password" autocomplete="@(Register ? "new-password" : "current-password")" minlength="@(Register ? "8" : null)" maxlength="128" required />
+                <input id="sign-in-password" name="password" type="password" autocomplete="@(Register ? "new-password" : "current-password")" minlength="@(Register ? MinimumPasswordLength : null)" maxlength="128" required />
             </div>
             @if (Register)
             {
                 <div class="profile-field">
                     <label for="sign-in-confirmation">Confirm password</label>
-                    <input id="sign-in-confirmation" name="passwordConfirmation" type="password" autocomplete="new-password" minlength="8" maxlength="128" required />
+                    <input id="sign-in-confirmation" name="passwordConfirmation" type="password" autocomplete="new-password" minlength="@MinimumPasswordLength" maxlength="128" required />
                 </div>
             }
             <button type="submit">@(Register ? "Create account" : "Sign in")</button>
@@ -71,4 +83,6 @@ else
     [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
     [SupplyParameterFromQuery(Name = "message")] public string? Message { get; set; }
     bool Register => Mode == "register";
+    bool Supabase => Setup.Supabase is not null;
+    string MinimumPasswordLength => Supabase ? "8" : "6";
 }

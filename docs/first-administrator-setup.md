@@ -1,11 +1,6 @@
 # First administrator setup
 
-**Current provider: Supabase Auth.** Use [Supabase setup and identity cutover](supabase-auth.md).
-Set `Bootstrap:Issuer` to the new `/auth/v1` issuer; verified email is fetched from
-the trusted Supabase user endpoint. Application administrator roles remain in
-Users. The Auth0-specific setup and live evidence below are historical; they do
-not establish a completed Supabase cutover. A migrated administrator keeps its
-public account ID, role and durable bootstrap marker and must not be re-created.
+**Current identity: built-in password accounts** (see [API authentication](authentication.md)). Register the account that should become the administrator, set `Bootstrap:Username` to its username and `Bootstrap:Issuer` to the configured `Authentication:Bearer:Issuer`, then complete the setup action below. The Users API finds the account registered under `Bootstrap:Username` and requires the token to belong to it; the setup secret is the proof of ownership, since a username alone proves nothing about who registered it. With Supabase Auth selected instead ([Supabase Auth](supabase-auth.md)), set `Bootstrap:Email` to the administrator's address and `Bootstrap:Issuer` to the Supabase issuer: the Users API then confirms that email through Supabase before promoting the account. The Auth0 and OIDC details further down are historical. An existing administrator keeps its public account ID, role and durable bootstrap marker and must not be re-created.
 
 Owner explicitly approved implementing a one-time first-administrator setup after requesting promotion of a named account. New Users Domain/Data/Api projects and tests under tests/TravelTracker.Users.Tests are assigned to the corresponding layer agents; frontend and solution wiring are handled by the coordinating agent.
 
@@ -19,7 +14,7 @@ Verification includes pure domain tests, real bearer bootstrap rejection/success
 
 ## Local configuration and operation
 
-The Users host runs at `https://localhost:5101`; use a trusted localhost development certificate. Configure its user-secrets (`traveltracker-users`) with `Authentication:Bearer:Authority`, `Issuer`, `Audience`, `ConnectionStrings:Users`, `Database:ApplyMigrations=true`, `Bootstrap:Email`, `Bootstrap:Issuer`, `Bootstrap:Secret` and the separate `UsersAccess:ServiceToken`. Secrets must have at least 32 characters; generate unpredictable values and do not commit them. Role changes are never selected from request bodies or unverified email text.
+The Users host runs at `https://localhost:5101`; use a trusted localhost development certificate. Configure its user-secrets (`traveltracker-users`) with `Authentication:Bearer:Authority`, `Issuer`, `Audience`, `ConnectionStrings:Users`, `Database:ApplyMigrations=true`, `Bootstrap:Username`, `Bootstrap:Issuer`, `Bootstrap:Secret` and the separate `UsersAccess:ServiceToken`. Secrets must have at least 32 characters; generate unpredictable values and do not commit them. Role changes are never selected from request bodies or unverified email text.
 
 Configure the frontend user-secrets with `Services:Users=https://localhost:5101` and `AdminBootstrap:Secret` matching the operator secret. Open `/admin-setup`, sign in as the selected verified account, then choose **Make this account administrator**. The frontend sends the credential only to the configured HTTPS bootstrap path and never renders it. Read the confirmed role from `/api/v1/users/me`; do not infer success from a clicked button. Once completed, remove/disable the bootstrap secrets. The durable marker prevents reuse even if the administrator is later demoted or deleted.
 
@@ -45,7 +40,7 @@ The owner approved listing TravelTracker accounts and promoting/demoting adminis
 
 `/administrator` lists application accounts only for an active persisted administrator. Auth0 tenant identities are not fetched through a Management API; a user becomes a TravelTracker account after a validated sign-in profile read verifies its provider identity and email. First-use provisioning always creates a traveller and never overwrites an existing role/status.
 
-GET `/api/v1/users` returns public userId/email/role/status only. PATCH `/api/v1/users/{id}/role` accepts exactly role, expectedRole and a trimmed 1 to 500 character reason. Authentication uses the existing valid audience and the `users.admin` session grant; the additional authority for account administration is the live Users administrator role, not catalogue.write or token role claims. This does not change catalogue API permission checks.
+GET `/api/v1/users` returns public userId/username/role/status only. PATCH `/api/v1/users/{id}/role` accepts exactly role, expectedRole and a trimmed 1 to 500 character reason. Authentication uses the existing valid audience and the `users.admin` scope, which the Users API puts only in an administrator's token; the additional authority for account administration is the live Users administrator role, not catalogue.write or token role claims. This does not change catalogue API permission checks.
 
 Every list and mutation checks live standing. Role changes share the PostgreSQL transaction advisory lock with bootstrap, recheck the actor, verify the last-observed target role, protect the last active administrator, and write actor/target/old/new/reason audit evidence atomically. Same-role or stale requests return conflict without a new audit. Nonactive accounts cannot be promoted. Self-demotion is allowed only when another active administrator remains; subsequent panel reads are forbidden.
 

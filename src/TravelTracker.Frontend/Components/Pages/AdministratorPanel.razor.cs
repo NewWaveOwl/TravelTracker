@@ -80,11 +80,11 @@ public partial class AdministratorPanel : IDisposable
     }
 
     /**
-     * Labels accounts with their contact email, falling back to the public ID when no email is shared.
+     * Labels accounts with their username, falling back to the public ID when none is set.
      * @param user The account returned by the administrator API.
-     * @return The contact email or public ID.
+     * @return The username or public ID.
      */
-    static string AccountLabel(UserProfile user) => user.Email ?? user.UserId.ToString();
+    static string AccountLabel(UserProfile user) => user.Username ?? user.UserId.ToString();
 
     bool LastActiveAdministrator(UserProfile user) => user is { Role: AdminAccessState.AdministratorRole, Status: AdminAccessState.ActiveStatus } && users.Count(candidate => candidate is { Role: AdminAccessState.AdministratorRole, Status: AdminAccessState.ActiveStatus }) <= 1;
     static bool InactiveTraveller(UserProfile user) => user.Role != AdminAccessState.AdministratorRole && user.Status != AdminAccessState.ActiveStatus;

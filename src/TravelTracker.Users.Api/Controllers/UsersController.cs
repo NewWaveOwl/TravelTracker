@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TravelTracker.Security.Authentication;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Api.Services;
+using TravelTracker.Users.Data.Repositories.Credentials;
 using TravelTracker.Users.Domain.Models;
 using TravelTracker.Users.Domain.Types;
 using IUserRepository = TravelTracker.Users.Data.Repositories.IUserRepository;
@@ -19,13 +21,14 @@ namespace TravelTracker.Users.Api.Controllers;
  * @param profiles Resolves accounts for the internal access contract.
  * @param userProfiles Coordinates self-service profile operations.
  * @param bootstrap Verifies and performs first-admin setup.
+ * @param credentials Password credential store for the caller's own password change.
  * @param configuration Operator-owned service credential.
  * @param logger Records rejected service calls and role decisions without identities or credentials.
  */
 [ApiController]
 [Route("api/v1/users")]
 public sealed class UsersController(IUserRepository repository, ProfileRepository profiles, UserProfileService userProfiles,
-    BootstrapService bootstrap, IConfiguration configuration, ILogger<UsersController> logger) : ControllerBase
+    BootstrapService bootstrap, ICredentialRepository credentials, IConfiguration configuration, ILogger<UsersController> logger) : ControllerBase
 {
     private const string PicturePath = "/api/v1/users/me/picture";
 
@@ -114,6 +117,49 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
     }
 
     /**
+     * Replaces the caller's own password after the current one is verified. The session token stays valid until it expires.
+     * @param request The current password and its replacement.
+     * @return 204 once the new hash is saved, or a validation, authorization or standing failure.
+     */
+    [HttpPost("me/password")]
+    [Authorize(Policy = ScopePolicies.UsersWrite)]
+    public async Task<IResult> ChangePassword(ChangePasswordRequest request)
+    {
+        Response.Headers.CacheControl = "private, no-store";
+        if (!Request.IsHttps) return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Account access requires HTTPS.");
+        if (CurrentIdentity() is not { } identity) return Results.Unauthorized();
+        var cancellationToken = HttpContext.RequestAborted;
+        var currentPassword = request.CurrentPassword ?? "";
+        var newPassword = request.NewPassword ?? "";
+        var errors = new Dictionary<string, string[]>();
+        if (currentPassword.Length == 0) errors["currentPassword"] = ["Enter your current password."];
+        if (PasswordCredentials.Validate(newPassword) is { } newPasswordError) errors["newPassword"] = [newPasswordError];
+        if (errors.Count != 0) return Results.ValidationProblem(errors);
+
+        // the lookup uses the caller's own validated identity, so no other account can be reached from here
+        var stored = await credentials.FindByIdentityAsync(identity, cancellationToken);
+        if (stored is null)
+        {
+            logger.LogWarning("Password change refused: the account has no password credential.");
+            return Results.Forbid();
+        }
+        if (stored.Account.Status != UserStatus.Active)
+        {
+            logger.LogWarning("Password change refused: the account is {Status}.", stored.Account.Status);
+            return Results.Forbid();
+        }
+        if (PasswordCredentials.Verify(stored.PasswordHash, currentPassword) == PasswordVerificationResult.Failed)
+        {
+            logger.LogWarning("Password change refused: the current password did not match.");
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["currentPassword"] = ["The current password is not correct."] });
+        }
+
+        await credentials.UpdateHashAsync(stored.Account.PublicId, PasswordCredentials.Hash(newPassword), cancellationToken);
+        logger.LogInformation("Password changed for the signed-in account.");
+        return Results.NoContent();
+    }
+
+    /**
      * Looks up current account standing for an authorized backend.
      * @param userId The server-issued public account identifier.
      * @return Minimal account standing or 404 when the account does not exist.
@@ -162,7 +208,7 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
      * @return Editable fields and public account metadata.
      */
     private static SelfProfileResponse SelfProfile(UserAccount account) =>
-        new(account.PublicId, account.Username, account.Email, account.Address,
+        new(account.PublicId, account.Username, account.Address,
             RoleCode(account), account.Status.ToString().ToLowerInvariant(), account.CreatedAt, account.UpdatedAt);
 
     /**
@@ -175,8 +221,6 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
         UserProfileResultKind.Success when result.Account is { } account => Results.Ok(SelfProfile(account)),
         UserProfileResultKind.Forbidden => Results.Forbid(),
         UserProfileResultKind.ValidationFailure when result.ValidationErrors is { } errors => Results.ValidationProblem(errors),
-        UserProfileResultKind.UsernameConflict => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "That username is already in use.",
-            extensions: new Dictionary<string, object?> { ["code"] = "username_conflict" }),
         UserProfileResultKind.ConcurrencyConflict => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "The profile changed. Reload it before trying again.",
             extensions: new Dictionary<string, object?> { ["code"] = "profile_concurrency_conflict" }),
         _ => Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Account profile operation could not be confirmed.")

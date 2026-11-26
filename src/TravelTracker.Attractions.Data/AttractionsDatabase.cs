@@ -18,7 +18,7 @@ public static class AttractionsDatabase
      */
     public static async Task<int> InitializeAsync(AttractionsDbContext database, bool seedExamples, CancellationToken cancellationToken = default)
     {
-        await database.Database.MigrateAsync(cancellationToken);
+        await database.Database.MigrateWithoutFirstRunNoiseAsync(cancellationToken);
         if (!seedExamples || await database.Attractions.AnyAsync(cancellationToken)) return 0;
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         var repository = new EfAttractionRepository(database);

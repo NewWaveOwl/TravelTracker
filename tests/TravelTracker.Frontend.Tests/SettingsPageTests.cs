@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using Bunit;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
@@ -40,7 +42,11 @@ public sealed class SettingsPageTests : BunitContext
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         Services.AddSingleton(new SettingsClient(client));
         Services.AddScoped<UserPreferences>();
+        Services.AddSingleton<IDataProtectionProvider, EphemeralDataProtectionProvider>();
+        Services.AddScoped<ProtectedLocalStorage>();
+        Services.AddScoped<MapQualityPreference>();
         Services.AddLogging();
+        JSInterop.Mode = JSRuntimeMode.Loose;
         return authentication;
     }
 
@@ -49,6 +55,36 @@ public sealed class SettingsPageTests : BunitContext
      * @param page The rendered settings page.
      */
     static void WaitForForm(IRenderedComponent<Settings> page) => page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("form.settings-form")));
+
+    [Fact]
+    public void MapQualityIsSavedInThisBrowserWithoutWritingAccountSettings()
+    {
+        Configure();
+        var page = Render<Settings>();
+        WaitForForm(page);
+        Assert.Equal("automatic", page.Find("#settings-map-quality").GetAttribute("value"));
+
+        page.Find("#settings-map-quality").Change("low");
+
+        Assert.Equal("low", page.Find("#settings-map-quality").GetAttribute("value"));
+        Assert.Contains(JSInterop.Invocations["localStorage.setItem"], call => Equals(call.Arguments[0], "traveltracker-map-quality-v1"));
+        Assert.DoesNotContain(service.Requests, request => request.Method == HttpMethod.Put);
+    }
+
+    [Fact]
+    public async Task SavedMapQualityIsShownAgainOnThisBrowser()
+    {
+        Configure();
+        var storage = Services.GetRequiredService<ProtectedLocalStorage>();
+        await storage.SetAsync("traveltracker-map-quality-v1", "standard");
+        var stored = Assert.Single(JSInterop.Invocations["localStorage.setItem"]);
+        JSInterop.Setup<string>("localStorage.getItem", _ => true).SetResult(Assert.IsType<string>(stored.Arguments[1]));
+
+        var page = Render<Settings>();
+        WaitForForm(page);
+
+        Assert.Equal("standard", page.Find("#settings-map-quality").GetAttribute("value"));
+    }
 
     [Fact]
     public void ShowsDocumentedDefaultsBeforeFirstSave()

@@ -20,11 +20,10 @@ public interface IUserRepository
      * Atomically creates the first administrator and permanent completion/audit rows.
      * @param issuer Validated issuer, approved by the bootstrap application workflow.
      * @param subject Validated subject bound to the verified profile.
-     * @param email Verified allowed email.
      * @param cancellationToken Request cancellation.
      * @return Saved account, or the original account on exact-identity replay without re-elevation; null when setup is consumed by another identity or prohibited.
      */
-    Task<UserAccount?> BootstrapAsync(string issuer, string subject, string email, CancellationToken cancellationToken);
+    Task<UserAccount?> BootstrapAsync(string issuer, string subject, CancellationToken cancellationToken);
 
     /**
      * Lists local accounts only for a currently active administrator.

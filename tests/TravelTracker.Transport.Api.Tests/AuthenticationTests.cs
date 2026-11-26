@@ -21,39 +21,10 @@ namespace TravelTracker.Transport.Api.Tests;
  */
 public sealed class AuthenticationTests
 {
-    [Fact]
-    public async Task PostValidation_MetadataFailureLogsSafeDiagnosticAndRejectsIdentity()
-    {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["Authentication:Bearer:Authority"] = ApiFactory.Issuer,
-            ["Authentication:Bearer:Issuer"] = ApiFactory.Issuer,
-            ["Authentication:Bearer:Audience"] = ApiFactory.Audience
-        }).Build();
-        using var logs = new AuthenticationLogCapture();
-        var services = new ServiceCollection();
-        services.AddLogging(logging => logging.ClearProviders().AddProvider(logs));
-        services.AddApiBearerAuthentication(configuration);
-        using var provider = services.BuildServiceProvider();
-        var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get(JwtBearerDefaults.AuthenticationScheme);
-        options.ConfigurationManager = new UnavailableConfigurationManager();
-        var context = new TokenValidatedContext(new DefaultHttpContext { RequestServices = provider },
-            new AuthenticationScheme(JwtBearerDefaults.AuthenticationScheme, null, typeof(JwtBearerHandler)), options);
-
-        await options.Events.OnTokenValidated(context);
-
-        Assert.NotNull(context.Result?.Failure);
-        Assert.Contains(logs.Messages, message => message.Contains("discovery metadata retrieval failed (HttpRequestException)"));
-        Assert.DoesNotContain(logs.Messages, message => message.Contains("sensitive-test-marker"));
-        Assert.Empty(logs.Exceptions);
-        Assert.DoesNotContain("sensitive-test-marker", context.Result.Failure.Message);
-    }
-
     [Theory]
-    [InlineData("Authority", "")]
-    [InlineData("Authority", "http://issuer.example.test")]
+    [InlineData("PublicKey", "")]
+    [InlineData("PublicKey", "not a key")]
     [InlineData("Issuer", "")]
-    [InlineData("Issuer", "http://issuer.example.test")]
     [InlineData("Audience", "")]
     [InlineData("ScopeClaimType", " ")]
     [InlineData("ClockSkewSeconds", "-1")]
@@ -65,7 +36,8 @@ public sealed class AuthenticationTests
     {
         var settings = new Dictionary<string, string?>
         {
-            ["Authentication:Bearer:Authority"] = ApiFactory.Issuer,
+            ["Authentication:Bearer:PublicKey"] = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).ExportSubjectPublicKeyInfoPem(),
+            ["Authentication:Bearer:ValidAlgorithms:0"] = "RS256",
             ["Authentication:Bearer:Issuer"] = ApiFactory.Issuer,
             ["Authentication:Bearer:Audience"] = ApiFactory.Audience,
             ["Authentication:Bearer:ScopeClaimType"] = "scope"
@@ -105,7 +77,7 @@ public sealed class AuthenticationTests
                     ["ConnectionStrings:Transport"] = "Host=db.example.test;Database=unused;Username=runtime;SSL Mode=VerifyFull",
                     ["Users:InternalBaseUrl"] = "https://users.example.test",
                     ["Users:ServiceAccessToken"] = "test-fixture-token",
-                    ["Authentication:Bearer:Authority"] = "",
+                    ["Authentication:Bearer:PublicKey"] = "",
                     ["Authentication:Bearer:Issuer"] = "",
                     ["Authentication:Bearer:Audience"] = ""
                 }));
@@ -158,34 +130,10 @@ public sealed class AuthenticationTests
     }
 
     [Fact]
-    public async Task Discovery_RetrievesConfiguredAuthorityAndPublicSigningKeys()
-    {
-        using var factory = new ApiFactory();
-        using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/test/identity");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.NotNull(factory.Discovery);
-        Assert.Equal(new[] { $"{ApiFactory.Issuer}/.well-known/openid-configuration", $"{ApiFactory.Issuer}/keys" },
-            factory.Discovery.RequestedUrls);
-    }
-
-    [Theory]
-    [InlineData("https://issuer.example.test/", 401)]
-    [InlineData("https://issuer.example.test/v2", 401)]
-    public async Task Discovery_RejectsConfiguredIssuerMismatch(string metadataIssuer, int status)
-    {
-        using var factory = new ApiFactory { MetadataIssuer = metadataIssuer };
-        using var client = factory.CreateClient();
-        using var response = await client.GetAsync("/test/identity");
-        Assert.Equal((HttpStatusCode)status, response.StatusCode);
-        Assert.DoesNotContain(response.Headers.WwwAuthenticate, header => header.Parameter?.Contains("error_description") == true);
-    }
-
-    [Fact]
-    public async Task Discovery_AllowsDistinctAuthorityWhenMetadataAndTokenMatchExpectedIssuer()
+    public async Task Token_IsAcceptedWhenItsIssuerMatchesTheConfiguredIssuer()
     {
         const string expected = "https://tokens.example.test/v2";
-        using var factory = new ApiFactory { ExpectedIssuer = expected, MetadataIssuer = expected };
+        using var factory = new ApiFactory { ExpectedIssuer = expected };
         using var client = factory.CreateClient();
         using var response = await client.GetAsync("/test/identity");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

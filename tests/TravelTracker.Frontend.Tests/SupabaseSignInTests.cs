@@ -12,40 +12,6 @@ namespace TravelTracker.Frontend.Tests;
 public sealed class SupabaseSignInTests
 {
     [Fact]
-    public async Task IndependentSignInReadsTheStoredPictureAfterTheFirstSessionSignsOut()
-    {
-        using var backend = new AccountWorkflowBackend();
-        using var host = new SupabaseFrontendFactory(accountBackend: backend);
-        using var first = host.CreateBrowser();
-        using var firstLogin = await LoginAsync(first);
-        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1cAAAAASUVORK5CYII=");
-        using var simulatedApi = new HttpMessageInvoker(backend, disposeHandler: false);
-        using var upload = new HttpRequestMessage(HttpMethod.Put, "https://localhost:5101/api/v1/users/me/picture")
-            { Content = new ByteArrayContent(png) };
-        upload.Headers.Authorization = new("Bearer", host.Provider.LastAccessToken);
-        using var stored = await simulatedApi.SendAsync(upload, CancellationToken.None);
-        Assert.Equal(HttpStatusCode.NoContent, stored.StatusCode);
-        var firstPage = WebUtility.HtmlDecode(await first.GetStringAsync("/account"));
-        var image = "data:image/png;base64," + Convert.ToBase64String(png);
-        Assert.Contains(image, firstPage);
-
-        using var second = host.CreateBrowser();
-        Assert.Contains("Sign in to view your profile", await second.GetStringAsync("/account"));
-        using var secondLogin = await LoginAsync(second);
-        Assert.NotEqual(firstLogin.Headers.GetValues("Set-Cookie"), secondLogin.Headers.GetValues("Set-Cookie"));
-        Assert.Contains(image, WebUtility.HtmlDecode(await second.GetStringAsync("/account")));
-        using var logout = await first.PostAsync("/auth/logout", new FormUrlEncodedContent(new Dictionary<string, string>
-            { ["__RequestVerificationToken"] = FrontendFactory.AntiforgeryTokenFrom(firstPage) }));
-        Assert.DoesNotContain(image, await first.GetStringAsync("/account"));
-        Assert.Contains(image, WebUtility.HtmlDecode(await second.GetStringAsync("/account")));
-
-        host.Provider.CurrentSubject = Guid.NewGuid().ToString();
-        using var otherOwner = host.CreateBrowser();
-        using var otherLogin = await LoginAsync(otherOwner);
-        Assert.DoesNotContain(image, WebUtility.HtmlDecode(await otherOwner.GetStringAsync("/account")));
-    }
-
-    [Fact]
     public async Task ProfileAndCredentialFormsUseTheCurrentVerifiedEmailInsteadOfAnOlderTokenOrContactEmail()
     {
         using var host = new SupabaseFrontendFactory();
@@ -381,17 +347,21 @@ public sealed class SupabaseSignInTests
         Assert.Null(SupabaseSettings.TryRead(configuration));
     }
 
-    [Theory]
-    [InlineData("Supabase", false)]
-    [InlineData(null, false)]
-    [InlineData("unknown-provider", true)]
-    public async Task InvalidProviderConfigurationCannotDowngradeToLegacyAuth0(string? provider, bool validSettings)
+    [Fact]
+    public async Task InvalidSupabaseSettingsLeaveSignInUnavailableInsteadOfFallingBackToPasswordSignIn()
     {
-        using var host = new SupabaseFrontendFactory(provider, validSettings);
+        using var host = new SupabaseFrontendFactory(validSettings: false);
         var browser = host.CreateBrowser();
         var response = await browser.GetAsync("/auth/login");
         Assert.Null(response.Headers.Location);
         Assert.Contains("Sign-in is temporarily unavailable", await browser.GetStringAsync("/account"));
+    }
+
+    [Fact]
+    public void AnUnknownProviderFailsStartupInsteadOfPickingOne()
+    {
+        using var host = new SupabaseFrontendFactory("unknown-provider");
+        Assert.Throws<InvalidOperationException>(() => host.CreateBrowser());
     }
 
     [Fact]

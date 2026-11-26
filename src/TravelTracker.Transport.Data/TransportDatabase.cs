@@ -19,7 +19,7 @@ public static class TransportDatabase
      */
     public static async Task<int> InitializeAsync(TransportDbContext database, bool seedExamples, CancellationToken cancellationToken = default)
     {
-        await database.Database.MigrateAsync(cancellationToken);
+        await database.Database.MigrateWithoutFirstRunNoiseAsync(cancellationToken);
         if (!seedExamples) return 0;
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         var modeRepository = new EfTransportModeRepository(database);

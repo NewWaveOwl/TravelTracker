@@ -33,7 +33,7 @@ public sealed class MemoryUserRepository : IUserRepository, ProfileRepository
         return Task.FromResult(accounts.Values.SingleOrDefault(account => account.ProviderIdentity == new ProviderIdentity(issuer, subject)));
     }
 
-    public async Task<UserAccount?> BootstrapAsync(string issuer, string subject, string email, CancellationToken cancellationToken)
+    public async Task<UserAccount?> BootstrapAsync(string issuer, string subject, CancellationToken cancellationToken)
     {
         BootstrapCalls++;
         var existing = await FindAsync(issuer, subject, cancellationToken);
@@ -42,7 +42,6 @@ public sealed class MemoryUserRepository : IUserRepository, ProfileRepository
         var account = existing is null
             ? UserAccount.CreateAdministrator(new ProviderIdentity(issuer, subject), DateTimeOffset.Parse("2026-11-04T12:00:00Z"))
             : existing with { Role = UserRole.Administrator };
-        account = account with { VerifiedEmail = email };
         accounts[account.PublicId] = account;
         bootstrapAccount = account.PublicId;
         return account;
@@ -98,7 +97,7 @@ public sealed class MemoryUserRepository : IUserRepository, ProfileRepository
     }
 
     public async Task<UserAccount?> UpdateProfileAsync(
-        ProviderIdentity identity, string? username, string? email, string? address, bool addressSpecified,
+        ProviderIdentity identity, string? address, bool addressSpecified,
         DateTimeOffset updatedAt, CancellationToken cancellationToken)
     {
         var existing = await FindByProviderIdentityAsync(identity, cancellationToken);
@@ -106,8 +105,6 @@ public sealed class MemoryUserRepository : IUserRepository, ProfileRepository
         if (ProfileUpdateFailure is { } failure) throw failure;
         var account = existing with
         {
-            Username = username ?? existing.Username,
-            Email = email ?? existing.Email,
             Address = addressSpecified ? address : existing.Address,
             UpdatedAt = updatedAt
         };

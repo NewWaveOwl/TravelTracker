@@ -25,7 +25,7 @@ public class UsersProgram
         builder.Services.AddApiBearerAuthentication(builder.Configuration);
         // lazy so late configuration overrides are honored; read once, not per request
         var allowedServiceSubjects = new Lazy<HashSet<string?>>(() => builder.Configuration.GetSection("UsersAccess:AllowedServiceSubjects")
-            .GetChildren().Select(entry => entry.Value).Where(value => !string.IsNullOrWhiteSpace(value)).ToHashSet(StringComparer.Ordinal));
+            .GetChildren().Select(entry => entry.Value).Where(value => !string.IsNullOrWhiteSpace(value)).Append(TokenIssuer.ServiceSubject).ToHashSet(StringComparer.Ordinal));
         builder.Services.AddOptions<AuthorizationOptions>().Configure<IOptions<BearerSettings>>((options, settings) =>
         {
             options.AddPolicy(ScopePolicies.FirstAdministratorBootstrap, policy => policy.RequireAuthenticatedUser()
@@ -42,6 +42,10 @@ public class UsersProgram
         builder.Services.AddScoped<IUserRepository, EfUserRepository>();
         builder.Services.AddScoped<TravelTracker.Users.Data.Repositories.Profile.IUserRepository,
             TravelTracker.Users.Data.Repositories.Profile.UserRepository>();
+        builder.Services.AddScoped<TravelTracker.Users.Data.Repositories.Credentials.ICredentialRepository,
+            TravelTracker.Users.Data.Repositories.Credentials.CredentialRepository>();
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton<TokenIssuer>();
         builder.Services.AddScoped<UserProfileService>();
         builder.Services.AddScoped<BootstrapService>();
         builder.Services.AddHttpClient<VerifiedIdentityClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
@@ -50,14 +54,15 @@ public class UsersProgram
         var app = builder.Build();
         if (app.Environment.IsProduction())
             builder.RequireDatabaseConnection("Users");
-        app.Logger.LogInformation("Users host starting; ApplyMigrations={ApplyMigrations}, AllowedServiceSubjects={ServiceSubjectCount}, Bootstrap configured={BootstrapConfigured}, ServiceToken configured={ServiceTokenConfigured}.",
+        app.Logger.LogInformation("Users host starting; AuthProvider={AuthProvider}, ApplyMigrations={ApplyMigrations}, AllowedServiceSubjects={ServiceSubjectCount}, Bootstrap configured={BootstrapConfigured}, ServiceToken configured={ServiceTokenConfigured}.",
+            app.Services.GetRequiredService<IOptions<BearerSettings>>().Value.Provider,
             app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"), allowedServiceSubjects.Value.Count,
-            !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Email"]) && !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Issuer"]) && app.Configuration["Bootstrap:Secret"] is { Length: >= 32 },
+            !string.IsNullOrWhiteSpace(app.Configuration[app.Configuration["Authentication:Bearer:Provider"] == BearerSettings.SupabaseProvider ? "Bootstrap:Email" : "Bootstrap:Username"]) && !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Issuer"]) && app.Configuration["Bootstrap:Secret"] is { Length: >= 32 },
             app.Configuration["UsersAccess:ServiceToken"] is { Length: >= 32 });
         if (app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"))
         {
             await using var scope = app.Services.CreateAsyncScope();
-            await DatabaseConfiguration.RunMigrationAsync(() => scope.ServiceProvider.GetRequiredService<UsersDbContext>().Database.MigrateAsync());
+            await DatabaseConfiguration.RunMigrationAsync(() => scope.ServiceProvider.GetRequiredService<UsersDbContext>().Database.MigrateWithoutFirstRunNoiseAsync());
             app.Logger.LogInformation("Users database migrations applied.");
         }
         app.Use(async (context, next) =>

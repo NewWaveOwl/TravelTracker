@@ -30,10 +30,8 @@ public sealed class UserProfilePostgreSqlTests
             var provisioned = await caller.GetFromJsonAsync<SelfProfileResponse>(Me);
             barrier.Enabled = true;
             var responses = await Task.WhenAll(
-                caller.PatchAsJsonAsync(Me, new { email = "edited@example.test" }),
-                caller.PatchAsJsonAsync(Me, new { address = "1 Test Avenue" }));
-            using var emailResponse = responses[0];
-            using var addressResponse = responses[1];
+                caller.PatchAsJsonAsync(Me, new { address = "1 Test Avenue" }),
+                caller.PatchAsJsonAsync(Me, new { address = "2 Test Avenue" }));
             var updated = Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
             var stale = Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
             var problem = await stale.Content.ReadFromJsonAsync<JsonElement>();
@@ -41,17 +39,7 @@ public sealed class UserProfilePostgreSqlTests
 
             saved = (await updated.Content.ReadFromJsonAsync<SelfProfileResponse>())!;
             Assert.Equal(provisioned?.PublicId, saved.PublicId);
-            if (emailResponse.StatusCode == HttpStatusCode.OK)
-            {
-                Assert.Equal("edited@example.test", saved.Email);
-                Assert.Null(saved.Address);
-            }
-            else
-            {
-                Assert.Null(saved.Email);
-                Assert.Equal("1 Test Avenue", saved.Address);
-            }
-
+            Assert.Contains(saved.Address, new[] { "1 Test Avenue", "2 Test Avenue" });
             Assert.NotNull(saved.UpdatedAt);
         }
 

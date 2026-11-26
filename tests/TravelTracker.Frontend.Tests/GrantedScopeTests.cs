@@ -2,25 +2,19 @@ using TravelTracker.Frontend.Tests.Support;
 
 namespace TravelTracker.Frontend.Tests;
 
-/** verifies scope metadata through the real OIDC callback and encrypted session cookie. */
+/** verifies the granted scopes in the session come from the issued token response and nothing else. */
 public sealed class GrantedScopeTests
 {
     [Theory]
-    [InlineData("openid catalogue.read", "openid catalogue.read")]
-    [InlineData("openid catalogue.read catalogue.write", "openid catalogue.read catalogue.write")]
-    [InlineData(null, "openid profile email catalogue.read users.read users.write")]
+    [InlineData("catalogue.read", "catalogue.read")]
+    [InlineData("catalogue.read trips.write", "catalogue.read trips.write")]
     [InlineData("", "")]
-    public async Task SessionUsesTokenEndpointGrantInsteadOfProviderSuppliedServerClaim(string? grant, string expected)
+    public async Task SessionKeepsTheScopeTheUsersApiGranted(string grant, string expected)
     {
         using var factory = new FrontendFactory();
-        factory.Auth0.GrantedScope = grant;
-        factory.Auth0.SpoofedGrantedScope = "catalogue.write impersonated-provider-claim";
+        factory.Users.Scope = grant;
         using var browser = factory.CreateBrowser();
-        var authorize = await factory.StartSignInAsync(browser);
-        Assert.Equal(FrontendFactory.RequestedScope, System.Web.HttpUtility.ParseQueryString(authorize.Query)["scope"]);
-        await factory.CompleteSignInAsync(browser);
-        var scopes = await browser.GetStringAsync("/test/granted-scope");
-        Assert.Equal(expected, scopes);
-        Assert.DoesNotContain("impersonated", scopes);
+        await factory.SignInAsync(browser);
+        Assert.Equal(expected, await browser.GetStringAsync("/test/granted-scope"));
     }
 }

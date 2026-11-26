@@ -5,6 +5,8 @@ using AngleSharp.Dom;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
@@ -59,6 +61,9 @@ public sealed class NewTripPageTests : BunitContext
         Services.AddSingleton(new TripsClient(client));
         Services.AddSingleton(new SettingsClient(client));
         Services.AddScoped<UserPreferences>();
+        Services.AddSingleton<IDataProtectionProvider, EphemeralDataProtectionProvider>();
+        Services.AddScoped<ProtectedLocalStorage>();
+        Services.AddScoped<MapQualityPreference>();
         Services.AddLogging();
         return authentication;
     }

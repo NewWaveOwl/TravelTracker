@@ -94,6 +94,7 @@ The Blazor client reads and saves preferences at `/settings` through its own typ
 - Saves send `If-Match` with the ETag from the last read. A `412` or `428` keeps the traveller's edits, blocks Save and offers **Reload saved settings**, which replaces the form with the saved values. A `400` maps field errors beside their inputs; `401`, `403`, `503` and network failures keep the edits and never show success. An unconfirmed network save asks the traveller to reload before saving again.
 - The saved transport mode is applied now: it is the default mode for new transport catalogue entries. Theme, default map view and time zone are saved but not yet applied, because the client has no dark palette, no map and no trip times; the page says so.
 - Client validation mirrors these rules so bad input is caught before a request. The service remains the authority.
+- Map quality (`Automatic`, `Standard` or `Low`) is a per-device choice saved in this browser only, through the same protected local storage as the saved map draft. It is not part of this contract, because the automatic default depends on the device's WebGL support, memory, processor count and touch input. The trip map has the same control, and changing it rebuilds only the basemap, never the trip draft. Low quality flattens the basemap (no 3D layers, one pixel per point, no fades); markers, routes and attribution are unchanged. A lost WebGL context or a failed basemap shows the "Map background unavailable." status with a Retry map button, and the stops and routes stay drawn.
 
 ## Not implemented
 

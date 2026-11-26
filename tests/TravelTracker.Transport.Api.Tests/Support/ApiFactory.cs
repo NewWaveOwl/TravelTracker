@@ -34,12 +34,9 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Transport
     internal string ScopeClaimType { get; init; } = "scope";
     internal int ClockSkewSeconds { get; init; } = 30;
     internal string[] ValidAlgorithms { get; init; } = ["RS256"];
-    internal string MetadataIssuer { get; init; } = Issuer;
     internal string ExpectedIssuer { get; init; } = Issuer;
-    internal DiscoveryBackchannelHandler? Discovery { get; private set; }
     internal UsersAccessBackchannelHandler Users { get; } = new();
     internal const string UsersServiceToken = "test-transport-users-access-service-token";
-    private HttpClient? backchannel;
 
     /**
      * Issues a test-only RSA-signed token; production still uses provider discovery.
@@ -87,7 +84,8 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Transport
                 ["ConnectionStrings:Transport"] = PostgresConnection ?? "Host=localhost;Database=unused",
                 ["Database:ApplyMigrations"] = (PostgresConnection is not null).ToString(),
                 ["Database:SeedExamples"] = SeedExamples.ToString(),
-                ["Authentication:Bearer:Authority"] = Issuer,
+                ["Authentication:Bearer:PublicKey"] = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).ExportSubjectPublicKeyInfoPem(),
+                ["Authentication:Bearer:ValidAlgorithms:0"] = "RS256",
                 ["Authentication:Bearer:Issuer"] = ExpectedIssuer,
                 ["Authentication:Bearer:Audience"] = Audience,
                 ["Authentication:Bearer:ScopeClaimType"] = ScopeClaimType,
@@ -106,12 +104,8 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Transport
                 if (PostgresConnection is null) options.UseInMemoryDatabase(databaseName);
                 else options.UseNpgsql(PostgresConnection);
             });
-            services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
-            {
-                Discovery = new DiscoveryBackchannelHandler(signingKey.ExportParameters(false), MetadataIssuer);
-                backchannel = new HttpClient(Discovery);
-                options.Backchannel = backchannel;
-            });
+            services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+                options.TokenValidationParameters.IssuerSigningKeys = [.. options.TokenValidationParameters.IssuerSigningKeys, new RsaSecurityKey(signingKey)]);
             services.AddControllers().AddApplicationPart(typeof(IdentityProbeController).Assembly);
             services.AddHttpClient<UsersAccessClient>()
                 .ConfigurePrimaryHttpMessageHandler(() => Users);
@@ -149,7 +143,6 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Transport
         base.Dispose(disposing);
         if (disposing)
         {
-            backchannel?.Dispose();
             signingKey.Dispose();
         }
     }

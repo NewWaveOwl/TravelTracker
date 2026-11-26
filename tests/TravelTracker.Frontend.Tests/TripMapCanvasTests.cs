@@ -2,6 +2,7 @@ using Bunit;
 using Microsoft.AspNetCore.Components.Web;
 using TravelTracker.Frontend.Api.Trips;
 using TravelTracker.Frontend.Components.Trips;
+using TravelTracker.Frontend.Features.Trips;
 
 namespace TravelTracker.Frontend.Tests;
 
@@ -176,6 +177,27 @@ public sealed class TripMapCanvasTests : BunitContext
         Assert.Equal("assets/trip-map/pin-accommodation.svg", pin.GetAttribute("href"));
     }
 
+    [Theory]
+    [InlineData(MapQuality.Standard)]
+    [InlineData(MapQuality.Low)]
+    public async Task BasemapFailureKeepsStopsVisibleAndSelectableInEveryQuality(string quality)
+    {
+        var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 45.5019m, -73.5674m);
+        var selected = -1;
+        var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
+        module.SetupModule("watchViewport", _ => true);
+        var map = Render<TripMapCanvas>(parameters => parameters
+            .Add(component => component.Stops, [hotel])
+            .Add(component => component.QualityPreference, quality)
+            .Add(component => component.StopSelected, index => selected = index));
+
+        await map.InvokeAsync(() => map.Instance.SetBasemapReady(false));
+
+        Assert.Equal("Map background unavailable.", map.Find(".map-status [aria-live]").TextContent);
+        map.Find("[aria-label='Stop 1: Hotel']").Click();
+        Assert.Equal(0, selected);
+    }
+
     [Fact]
     public async Task BasemapFollowsPlannerZoomAndCanRetryAfterLoadFailure()
     {
@@ -336,5 +358,52 @@ public sealed class TripMapCanvasTests : BunitContext
         var call = module.VerifyInvoke("viewBoxPoint");
         Assert.Equal(173d, call.Arguments[1]);
         Assert.Equal(82d, call.Arguments[2]);
+    }
+
+    [Theory]
+    [InlineData(true, 16, 12, false, "standard")]
+    [InlineData(true, 6, 8, true, "low")]
+    [InlineData(false, 16, 12, false, "low")]
+    public void AutomaticQualityFollowsTheDeviceWhenTheBasemapStarts(bool webGl, double memory, int cores, bool coarse, string expected)
+    {
+        var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
+        module.Setup<MapCapabilities>("mapCapabilities", _ => true)
+            .SetResult(new MapCapabilities(webGl, memory, cores, coarse));
+        module.SetupModule("watchViewport", _ => true);
+
+        Render<TripMapCanvas>();
+
+        Assert.Equal(expected, module.VerifyInvoke("watchViewport").Arguments[4]);
+    }
+
+    [Fact]
+    public void UnreportedCapabilitiesUseLowQuality()
+    {
+        var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
+        module.SetupModule("watchViewport", _ => true);
+
+        Render<TripMapCanvas>();
+
+        Assert.Equal("low", module.VerifyInvoke("watchViewport").Arguments[4]);
+    }
+
+    [Fact]
+    public void ChangingQualityRebuildsTheBasemapWithoutMovingTheCamera()
+    {
+        var module = JSInterop.SetupModule("./Components/Trips/TripMapCanvas.razor.js");
+        module.Setup<MapCapabilities>("mapCapabilities", _ => true)
+            .SetResult(new MapCapabilities(WebGl: true, DeviceMemoryGigabytes: 16, LogicalCores: 12, CoarsePointer: false));
+        var viewport = module.SetupModule("watchViewport", _ => true);
+        viewport.SetupVoid("setCamera", _ => true).SetVoidResult();
+        viewport.SetupVoid("setQuality", _ => true).SetVoidResult();
+        var map = Render<TripMapCanvas>();
+        var cameraChanges = viewport.Invocations["setCamera"].Count;
+
+        map.Render(parameters => parameters.Add(component => component.QualityPreference, MapQuality.Low));
+
+        Assert.Equal("low", Assert.Single(viewport.Invocations["setQuality"]).Arguments[0]);
+        Assert.Equal(cameraChanges, viewport.Invocations["setCamera"].Count);
+        map.Render(parameters => parameters.Add(component => component.QualityPreference, MapQuality.Low));
+        Assert.Single(viewport.Invocations["setQuality"]);
     }
 }

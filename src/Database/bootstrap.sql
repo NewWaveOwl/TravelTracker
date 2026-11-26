@@ -1,4 +1,4 @@
--- Run with psql against the Supabase project's postgres database as a role with CREATEDB.
+-- Run with psql against any PostgreSQL server's postgres database as a role with CREATEDB.
 -- psql executes each CREATE DATABASE separately, outside a transaction.
 \set ON_ERROR_STOP on
 

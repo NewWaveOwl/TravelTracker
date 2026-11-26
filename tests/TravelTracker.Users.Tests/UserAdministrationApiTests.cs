@@ -16,7 +16,7 @@ public sealed class UserAdministrationApiTests
     static readonly DateTimeOffset Created = DateTimeOffset.Parse("2026-11-04T12:00:00Z");
 
     static UserAccount Account(string role = "traveller") => new(TargetId, new ProviderIdentity(UsersApiFactory.Issuer, "target"),
-        role == "administrator" ? UserRole.Administrator : UserRole.User, UserStatus.Active, Created) { VerifiedEmail = "target@example.test" };
+        role == "administrator" ? UserRole.Administrator : UserRole.User, UserStatus.Active, Created) { Username = "target" };
 
     static Task<HttpResponseMessage> Change(HttpClient client, Guid id, string role = "administrator", string expectedRole = "traveller", string reason = "Trusted application administrator") =>
         client.PatchAsJsonAsync($"/api/v1/users/{id}/role", new { role, expectedRole, reason });
@@ -40,7 +40,7 @@ public sealed class UserAdministrationApiTests
         using var client = app.Browser(app.Token(subject: "actor", scope: "users.admin", role: "administrator"));
         var list = await client.GetAsync("/api/v1/users");
         Assert.Equal(HttpStatusCode.Forbidden, list.StatusCode);
-        Assert.DoesNotContain("target@example.test", await list.Content.ReadAsStringAsync());
+        Assert.DoesNotContain("target", await list.Content.ReadAsStringAsync());
         Assert.Equal((UsersApiFactory.Issuer, "actor"), app.Repository.AdministratorListRequest!.Value);
     }
 
@@ -49,16 +49,16 @@ public sealed class UserAdministrationApiTests
     {
         using var app = new UsersApiFactory();
         // deliberately retain the repository's order rather than introducing controller-side sorting.
-        app.Repository.AdministratorListResult = [Account(), Account() with { PublicId = Guid.Parse("019ac550-1000-7000-8000-000000000003"), VerifiedEmail = "another@example.test" }];
+        app.Repository.AdministratorListResult = [Account(), Account() with { PublicId = Guid.Parse("019ac550-1000-7000-8000-000000000003"), Username = "another" }];
         using var client = app.Browser(app.Token(subject: "actor", scope: "users.admin"));
         var response = await client.GetAsync("/api/v1/users");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal((UsersApiFactory.Issuer, "actor"), app.Repository.AdministratorListRequest!.Value);
         var profiles = await response.Content.ReadFromJsonAsync<List<UserProfileResponse>>();
-        Assert.Equal(new[] { "target@example.test", "another@example.test" }, profiles!.Select(profile => profile.Email));
+        Assert.Equal(new[] { "target", "another" }, profiles!.Select(profile => profile.Username));
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         foreach (var account in json.RootElement.EnumerateArray())
-            Assert.Equal(new[] { "email", "role", "status", "userId" }, account.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+            Assert.Equal(new[] { "role", "status", "userId", "username" }, account.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
     }
 
     [Theory]
@@ -73,7 +73,7 @@ public sealed class UserAdministrationApiTests
         const string reason = "  Approved account access change  ";
         var response = await Change(client, TargetId, role, expectedRole, reason);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(new UserProfileResponse(saved.PublicId, saved.VerifiedEmail, role, "active"), await response.Content.ReadFromJsonAsync<UserProfileResponse>());
+        Assert.Equal(new UserProfileResponse(saved.PublicId, saved.Username, role, "active"), await response.Content.ReadFromJsonAsync<UserProfileResponse>());
         Assert.Equal((UsersApiFactory.Issuer, "actor", TargetId, role, expectedRole, reason), app.Repository.RoleChangeRequest!.Value);
         Assert.Equal(1, app.Repository.RoleChangeCalls);
     }
@@ -90,7 +90,7 @@ public sealed class UserAdministrationApiTests
         Assert.Equal(expectedStatus, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         Assert.Empty(body);
-        Assert.DoesNotContain("target@example.test", body);
+        Assert.DoesNotContain("target", body);
         Assert.Equal(1, app.Repository.RoleChangeCalls);
     }
 
@@ -109,7 +109,7 @@ public sealed class UserAdministrationApiTests
         Assert.Equal(expectedStatus, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains(message, body);
-        Assert.DoesNotContain("target@example.test", body);
+        Assert.DoesNotContain("target", body);
         Assert.Equal(1, app.Repository.RoleChangeCalls);
     }
 

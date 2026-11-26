@@ -1,7 +1,10 @@
 using System.Security.Cryptography;
+using System.Text;
 using TravelTracker.Api.References;
 using TravelTracker.Api.Trips;
 using TravelTracker.Trips.Api.Contracts;
+using TravelTracker.Trips.Domain.Models;
+using TravelTracker.Trips.Domain.TicketImport;
 using TravelTracker.Trips.Data.Repositories;
 using TravelTracker.Trips.Data.TicketImports;
 
@@ -18,6 +21,78 @@ namespace TravelTracker.Trips.Api.TicketImports;
 public sealed class TicketImportService(ITripRepository trips, UsersStandingClient usersStanding, ITicketPdfParser parser,
     ITicketImportStore documents, TicketImportCapacity capacity)
 {
+    /** largest pasted body in bytes; 4,000 UTF-16 units encode to at most 12,000 UTF-8 bytes. */
+    public const int MaximumTextBytes = 12_000;
+
+    /** shared refusal for pasted text over the byte bound. */
+    private const string TextTooLarge = "The pasted ticket text must be no larger than 12,000 bytes (4,000 characters).";
+
+    /**
+     * Reads pasted plain ticket text into a review draft for an owned trip. Nothing is stored and the trip is not changed.
+     * @param caller Validated issuer and subject, never request-supplied identity fields.
+     * @param tripId Existing owned trip identifier.
+     * @param source Raw text/plain request body, read no further than the byte bound.
+     * @param contentType Request media type; only text/plain with UTF-8 or no charset is accepted.
+     * @param contentLength Advertised length, checked again while reading.
+     * @param cancellationToken Cancels reads and account or trip lookups.
+     * @return A 200 draft in the PDF import's field shape, or a safe validation, permission or dependency outcome.
+     */
+    public async Task<TicketImportResult<TicketTextDraftResponse>> ParseTextAsync(CallerIdentity? caller, Guid tripId,
+        Stream source, string? contentType, long? contentLength, CancellationToken cancellationToken)
+    {
+        var access = await CheckAccessAsync(caller, tripId, true, cancellationToken);
+        if (access.StatusCode != 200) return new(access.StatusCode, Error: access.Error);
+        if (!IsPlainUtf8Text(contentType))
+            return new(415, Error: "Paste the ticket as plain text in UTF-8.");
+        if (contentLength > MaximumTextBytes) return new(413, Error: TextTooLarge);
+
+        var buffer = new byte[MaximumTextBytes + 1];
+        var length = 0;
+        try
+        {
+            while (length < buffer.Length)
+            {
+                var read = await source.ReadAsync(buffer.AsMemory(length), cancellationToken);
+                if (read == 0) break;
+                length += read;
+            }
+        }
+        catch (BadHttpRequestException exception) when (exception.StatusCode == 413)
+        {
+            return new(413, Error: TextTooLarge);
+        }
+        if (length > MaximumTextBytes) return new(413, Error: TextTooLarge);
+
+        string text;
+        try { text = new UTF8Encoding(false, true).GetString(buffer, 0, length); }
+        catch (DecoderFallbackException) { return new(400, Error: "The pasted ticket text must be valid UTF-8."); }
+
+        try
+        {
+            // a byte order mark would otherwise stick to the first label and hide it.
+            var draft = TicketTextParser.Parse(text.TrimStart('﻿'));
+            return new(200, new(tripId, TicketTextFieldMapper.Map(draft)));
+        }
+        catch (TripValidationException exception)
+        {
+            return new(400, Error: exception.Errors[0].Message);
+        }
+    }
+
+    /**
+     * Accepts only plain text whose charset, when stated, is UTF-8; anything else is refused rather than guessed.
+     * @param contentType Raw Content-Type header value.
+     * @return True when the body may be decoded as UTF-8 text.
+     */
+    private static bool IsPlainUtf8Text(string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType)) return false;
+        var parts = contentType.Split(';', StringSplitOptions.TrimEntries);
+        if (!string.Equals(parts[0], "text/plain", StringComparison.OrdinalIgnoreCase)) return false;
+        return parts.Skip(1).All(part => !part.StartsWith("charset=", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(part, "charset=utf-8", StringComparison.OrdinalIgnoreCase));
+    }
+
     /**
      * Authorizes an owned active trip before reading or parsing the uploaded body.
      * @param caller Validated issuer and subject, never request-supplied identity fields.

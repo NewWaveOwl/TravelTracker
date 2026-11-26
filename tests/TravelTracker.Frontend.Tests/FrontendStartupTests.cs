@@ -64,7 +64,7 @@ public sealed class FrontendStartupTests
     }
 
     /**
-     * Loads the real app settings with HTTPS core-service and existing Auth0 test settings.
+     * Loads the real app settings with HTTPS core-service settings.
      * @param environment The host environment selecting its checked-in JSON defaults.
      * @param routing An explicit deployment override, or null to retain the checked-in default.
      * @return An isolated frontend host that never needs external services during these startup checks.
@@ -75,11 +75,6 @@ public sealed class FrontendStartupTests
             builder.UseEnvironment(environment);
             var settings = new Dictionary<string, string?>
             {
-                ["Authentication:Provider"] = "Auth0",
-                ["Auth0:Domain"] = "tenant.example.test",
-                ["Auth0:ClientId"] = "test-client",
-                ["Auth0:ClientSecret"] = "startup-test-secret",
-                ["Auth0:Audience"] = "traveltracker-api",
                 ["Services:Accommodations"] = "https://accommodations.example.test",
                 ["Services:Attractions"] = "https://attractions.example.test",
                 ["Services:Settings"] = "https://settings.example.test",

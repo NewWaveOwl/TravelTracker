@@ -1,5 +1,6 @@
 @page "/settings"
 @using TravelTracker.Frontend.Features.Settings
+@using TravelTracker.Frontend.Features.Trips
 @using TravelTracker.Frontend.Api
 @using TravelTracker.Frontend.Api.Transport
 @implements IDisposable
@@ -7,6 +8,24 @@
 <PageHeading Title="Settings" />
 <div class="settings-page">
 <p class="settings-intro">Manage your TravelTracker preferences.</p>
+<section class="settings-group settings-device" aria-labelledby="device-preferences-heading">
+    <h2 id="device-preferences-heading">This device</h2>
+    <div class="settings-field">
+        <label for="settings-map-quality">Map quality
+            <select id="settings-map-quality" value="@mapQuality" @onchange="SaveMapQualityAsync">
+                @foreach (var choice in MapQuality.Choices)
+                {
+                    <option value="@choice">@MapQuality.Label(choice)</option>
+                }
+            </select>
+        </label>
+        <small class="settings-hint">Saved in this browser only. Automatic uses low quality on phones, tablets and devices with limited WebGL, memory or processors.</small>
+    </div>
+    @if (mapQualityNotice is not null)
+    {
+        <p class="settings-status" role="status">@mapQualityNotice</p>
+    }
+</section>
 @if (!signedIn && !hasValues && loaded)
 {
     <Feedback Kind="FeedbackKind.Permission" Title="Sign in to manage your settings"><a href="account">Go to your account</a> to sign in.</Feedback>

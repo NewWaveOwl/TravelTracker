@@ -126,20 +126,15 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
     /**
      * Saves only supplied profile fields for an active owner and advances the concurrency token.
      * @param identity The validated owner identity.
-     * @param username The replacement username, or null to preserve it.
-     * @param email The replacement email, or null to preserve it.
      * @param address The replacement address, or null to clear it when supplied.
      * @param addressSpecified Whether the address field was supplied.
      * @param updatedAt The application time for this update.
      * @param cancellationToken Cancels the read or save.
      * @return Saved profile, unchanged inactive account, or null when absent.
      * @throws DbUpdateConcurrencyException when another writer changed the record after it was loaded.
-     * @throws UserProfileUsernameConflictException when the normalized username belongs to another account.
      */
     public async Task<UserAccount?> UpdateProfileAsync(
         ProviderIdentity identity,
-        string? username,
-        string? email,
         string? address,
         bool addressSpecified,
         DateTimeOffset updatedAt,
@@ -151,24 +146,10 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
         if (record is null) return null;
         if (record.Status != "active") return ToAccount(record);
 
-        if (username is not null)
-        {
-            record.Username = username;
-            record.NormalizedUsername = username.ToUpperInvariant();
-        }
-        if (email is not null) record.Email = email;
         if (addressSpecified) record.Address = address;
         record.UpdatedAt = ToPersistedUtc(updatedAt);
         record.ConcurrencyToken = Guid.NewGuid();
-        try
-        {
-            await database.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (exception.InnerException is PostgresException
-            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_UserAccounts_NormalizedUsername" })
-        {
-            throw new UserProfileUsernameConflictException(exception);
-        }
+        await database.SaveChangesAsync(cancellationToken);
         return ToAccount(record);
     }
 
@@ -185,9 +166,8 @@ public sealed class UserRepository(IDbContextFactory<UsersDbContext> factory) : 
             ParseStatus(record.Status),
             record.CreatedAt,
             record.Username,
-            record.Email,
             record.Address,
-            record.UpdatedAt) { VerifiedEmail = record.VerifiedEmail };
+            record.UpdatedAt);
 
     /**
      * Converts a persisted role code to its domain value.

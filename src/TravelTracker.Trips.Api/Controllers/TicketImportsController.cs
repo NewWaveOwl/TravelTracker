@@ -48,6 +48,26 @@ public sealed class TicketImportsController(TicketImportService imports) : Contr
     }
 
     /**
+     * Turns one pasted plain-text ticket into a review draft. Nothing is stored and the trip is not changed.
+     * @param tripId Existing owned trip.
+     * @return 200 with proposed fields, or safe 400/401/403/404/413/415/503 outcomes.
+     */
+    [HttpPost("text")]
+    [Authorize(Policy = ScopePolicies.TripsWrite)]
+    [RequestSizeLimit(TicketImportService.MaximumTextBytes)]
+    [ProducesResponseType(typeof(TicketTextDraftResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status413PayloadTooLarge)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status415UnsupportedMediaType)]
+    public async Task<IActionResult> ParseText(Guid tripId)
+    {
+        PrivateResponse();
+        var result = await imports.ParseTextAsync(Caller(), tripId, Request.Body, Request.ContentType, Request.ContentLength,
+            HttpContext.RequestAborted);
+        return result.StatusCode == 200 ? Ok(result.Value) : Failure(result.StatusCode, result.Error);
+    }
+
+    /**
      * Downloads a still-private temporary source for comparison during review.
      * @param tripId Existing owned trip.
      * @param importId Opaque temporary document identifier.

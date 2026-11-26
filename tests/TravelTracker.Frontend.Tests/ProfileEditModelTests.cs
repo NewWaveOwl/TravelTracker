@@ -7,47 +7,36 @@ namespace TravelTracker.Frontend.Tests;
 public sealed class ProfileEditModelTests
 {
     [Fact]
-    public void MissingInitialUsernameAndEmailStayOptionalWhenAddressChanges()
+    public void MissingInitialAddressStaysOptionalAndIsOmittedUntilItChanges()
     {
-        var model = new ProfileEditModel(new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009001"), "traveller", "active", null, null));
+        var original = new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009001"), "traveller", "active", "traveller");
+        var model = new ProfileEditModel(original);
+
+        Assert.False(model.HasChanges);
         model.Address = "1 Main Street";
 
         Assert.Empty(Validate(model));
-        var body = new UpdateSelfProfileRequest(model.Username, model.Email, model.Address)
-            .ChangedFields(new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009002"), "traveller", "active", null, null));
-        Assert.Equal(["address"], body.Keys);
+        Assert.True(model.HasChanges);
+        Assert.Equal(["address"], new UpdateSelfProfileRequest(model.Address).ChangedFields(original).Keys);
     }
 
     [Fact]
-    public void ExistingUsernameAndEmailCannotBeCleared()
+    public void OverlongAddressProducesFieldAssociatedError()
     {
-        var model = new ProfileEditModel(new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009003"), "traveller", "active", "traveller", "traveller@example.test"));
-        model.Username = " ";
-        model.Email = " ";
+        var model = new ProfileEditModel(new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009002"), "traveller", "active", "traveller"))
+        {
+            Address = new string('x', 501)
+        };
 
-        var errors = Validate(model);
-        Assert.Contains(errors, error => error.MemberNames.Contains(nameof(model.Username)));
-        Assert.Contains(errors, error => error.MemberNames.Contains(nameof(model.Email)));
+        Assert.Contains(Validate(model), error => error.MemberNames.Contains(nameof(model.Address)));
     }
 
     [Fact]
-    public void InvalidUsernameProducesFieldAssociatedError()
+    public void UpdateRequestClearsOnlyTheAddressExplicitly()
     {
-        var model = new ProfileEditModel(new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009004"), "traveller", "active", "traveller", "traveller@example.test"));
-        model.Username = "abc!";
+        var original = new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009003"), "traveller", "active", "traveller", "1 Main St");
 
-        var errors = Validate(model);
-
-        Assert.Contains(errors, error => error.MemberNames.Contains(nameof(model.Username))
-            && error.ErrorMessage!.StartsWith("Use only letters", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void UpdateRequestPreservesOmittedValuesAndClearsOnlyAddressExplicitly()
-    {
-        var original = new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009005"), "traveller", "active", "traveller", "traveller@example.test", "1 Main St");
-
-        var fields = new UpdateSelfProfileRequest("traveller", "traveller@example.test", " ").ChangedFields(original);
+        var fields = new UpdateSelfProfileRequest(" ").ChangedFields(original);
 
         Assert.Single(fields);
         Assert.True(fields.ContainsKey("address"));
@@ -55,18 +44,11 @@ public sealed class ProfileEditModelTests
     }
 
     [Fact]
-    public void CaseOnlyContactEmailChangeIsDetectedAndIncludedInPatch()
+    public void AnUnchangedAddressSendsNothing()
     {
-        var original = new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009006"), "traveller", "active", "traveller", "traveller@example.test");
-        var model = new ProfileEditModel(original) { Email = "Traveller@example.test" };
+        var original = new SelfUserProfile(Guid.Parse("00000000-0000-0000-0000-000000009004"), "traveller", "active", "traveller", "1 Main St");
 
-        Assert.True(model.HasChanges);
-        Assert.Empty(Validate(model));
-
-        var fields = new UpdateSelfProfileRequest(model.Username, model.Email, model.Address).ChangedFields(original);
-
-        Assert.Equal("Traveller@example.test", fields["email"]);
-        Assert.Single(fields);
+        Assert.Empty(new UpdateSelfProfileRequest(" 1 Main St ").ChangedFields(original));
     }
 
     static List<ValidationResult> Validate(ProfileEditModel model)

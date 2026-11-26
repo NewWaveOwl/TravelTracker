@@ -1,4 +1,3 @@
-using System.Net.Mail;
 using TravelTracker.Users.Domain.Types;
 
 namespace TravelTracker.Users.Domain.Models;
@@ -13,8 +12,6 @@ public sealed record UserAccount
     public UserRole Role { get; init; }
     public UserStatus Status { get; init; }
     public string? Username { get; init; }
-    public string? Email { get; init; }
-    public string? VerifiedEmail { get; init; }
     public string? Address { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? UpdatedAt { get; init; }
@@ -27,7 +24,6 @@ public sealed record UserAccount
      * @param status The server-assigned account standing.
      * @param createdAt The account creation time.
      * @param username The optional username.
-     * @param email The optional email address.
      * @param address The optional postal address.
      * @param updatedAt The time of the most recent profile update, if any.
      */
@@ -38,7 +34,6 @@ public sealed record UserAccount
         UserStatus status,
         DateTimeOffset createdAt,
         string? username = null,
-        string? email = null,
         string? address = null,
         DateTimeOffset? updatedAt = null)
     {
@@ -48,7 +43,6 @@ public sealed record UserAccount
         Status = status;
         CreatedAt = createdAt;
         Username = username;
-        Email = email;
         Address = address;
         UpdatedAt = updatedAt;
     }
@@ -111,7 +105,6 @@ public sealed record UserAccount
         }
 
         ValidateUsername(Username, AddError);
-        ValidateEmail(Email, AddError);
         ValidateAddress(Address, AddError);
 
         return errors.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.Ordinal);
@@ -138,36 +131,6 @@ public sealed record UserAccount
                 !(character is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '.' or '_' or '-')))
         {
             addError("username", "Username may contain only ASCII letters, digits, '.', '_' or '-'.");
-        }
-    }
-
-    private static void ValidateEmail(string? email, Action<string, string> addError)
-    {
-        if (email is null)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            addError("email", "Email must not be blank.");
-            return;
-        }
-
-        if (email.Length > 254)
-        {
-            addError("email", "Email must not exceed 254 characters.");
-        }
-
-        if (!string.Equals(email, email.Trim(), StringComparison.Ordinal))
-        {
-            addError("email", "Email must be trimmed.");
-        }
-
-        if (!MailAddress.TryCreate(email, out var parsed) ||
-            !string.Equals(parsed.Address, email, StringComparison.Ordinal))
-        {
-            addError("email", "Email must be a valid email address.");
         }
     }
 

@@ -11,15 +11,14 @@ namespace TravelTracker.Users.Tests;
 public sealed class RolePersistenceTests
 {
     const string Issuer = "https://identity.example.test/";
-    const string AdminEmail = "first-admin@example.test";
 
     [Fact]
     public async Task AdministratorListsPersistedAccountsAndPromotionRecordsActorAndReason()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
-        var admin = await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
-        var target = await Traveller(database, "traveller", "traveller@example.test");
+        var admin = await repository.BootstrapAsync(Issuer, "admin", default);
+        var target = await Traveller(database, "traveller", "traveller");
         Assert.Null(await repository.ListForAdministratorAsync(Issuer, "traveller", default));
         var changed = await repository.ChangeRoleAsync(Issuer, "admin", target.PublicId, "administrator", "traveller", "  Approved account administrator  ", default);
         Assert.Equal("changed", changed.Code);
@@ -41,7 +40,7 @@ public sealed class RolePersistenceTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
-        var admin = await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
+        var admin = await repository.BootstrapAsync(Issuer, "admin", default);
         var result = await repository.ChangeRoleAsync(Issuer, "admin", admin!.PublicId, "traveller", "administrator", "Requested role removal", default);
         Assert.Equal("last-administrator", result.Code);
         Assert.Equal(UserRole.Administrator, (await repository.FindAsync(Issuer, "admin", default))!.Role);
@@ -53,8 +52,8 @@ public sealed class RolePersistenceTests
     public async Task ConcurrentSelfDemotionsLeaveOneActiveAdministrator()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        var first = await database.Repository().BootstrapAsync(Issuer, "first", AdminEmail, default);
-        var second = await Traveller(database, "second", "second@example.test");
+        var first = await database.Repository().BootstrapAsync(Issuer, "first", default);
+        var second = await Traveller(database, "second", "second");
         Assert.Equal("changed", (await database.Repository().ChangeRoleAsync(Issuer, "first", second.PublicId, "administrator", "traveller", "Appoint second administrator", default)).Code);
         // both demotions reach the provisioning lock before either takes it, so they really contend for the last-admin check.
         var barrier = new AdvisoryLockBarrier(2);
@@ -73,8 +72,8 @@ public sealed class RolePersistenceTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
-        var first = await repository.BootstrapAsync(Issuer, "first", AdminEmail, default);
-        var second = await Traveller(database, "second", "second@example.test");
+        var first = await repository.BootstrapAsync(Issuer, "first", default);
+        var second = await Traveller(database, "second", "second");
         await repository.ChangeRoleAsync(Issuer, "first", second.PublicId, "administrator", "traveller", "Appoint another administrator", default);
         Assert.Equal("changed", (await repository.ChangeRoleAsync(Issuer, "first", first!.PublicId, "traveller", "administrator", "Hand over administration", default)).Code);
         Assert.Null(await repository.ListForAdministratorAsync(Issuer, "first", default));
@@ -86,8 +85,8 @@ public sealed class RolePersistenceTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
-        await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
-        var traveller = await Traveller(database, "traveller", "traveller@example.test");
+        await repository.BootstrapAsync(Issuer, "admin", default);
+        var traveller = await Traveller(database, "traveller", "traveller");
         Assert.Equal("conflict", (await repository.ChangeRoleAsync(Issuer, "admin", traveller.PublicId, "administrator", "administrator", "Stale role form", default)).Code);
         Assert.Equal("unchanged", (await repository.ChangeRoleAsync(Issuer, "admin", traveller.PublicId, "traveller", "traveller", "No change requested", default)).Code);
         Assert.Equal(UserRole.User, (await repository.FindAsync(Issuer, "traveller", default))!.Role);
@@ -100,8 +99,8 @@ public sealed class RolePersistenceTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
-        var admin = await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
-        var traveller = await Traveller(database, "traveller", "traveller@example.test");
+        var admin = await repository.BootstrapAsync(Issuer, "admin", default);
+        var traveller = await Traveller(database, "traveller", "traveller");
         await using (var update = database.Context())
             await update.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"UserAccounts\" SET \"Status\" = 'banned' WHERE \"UserId\" = {traveller.PublicId}");
         Assert.Equal("invalid", (await repository.ChangeRoleAsync(Issuer, "admin", traveller.PublicId, "administrator", "traveller", "Cannot promote a banned account", default)).Code);
@@ -112,10 +111,10 @@ public sealed class RolePersistenceTests
     }
 
     [Fact]
-    public async Task RepeatedProvisioningDoesNotOverwriteRoleEmailOrStanding()
+    public async Task RepeatedProvisioningDoesNotOverwriteRoleUsernameOrStanding()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        var admin = await database.Repository().BootstrapAsync(Issuer, "admin", AdminEmail, default);
+        var admin = await database.Repository().BootstrapAsync(Issuer, "admin", default);
         var existing = await database.Profiles().GetOrCreateAsync(new ProviderIdentity(Issuer, "admin"), DateTimeOffset.UtcNow, default);
         Assert.Equal(admin, existing);
         // both first sign-ins reach the provisioning lock before either takes it, so one insert and one replay really race.
@@ -127,11 +126,11 @@ public sealed class RolePersistenceTests
         Assert.Equal(attempts[0], attempts[1]);
         Assert.All(attempts, account => Assert.Equal(UserRole.User, account.Role));
         await using (var update = database.Context())
-            await update.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"UserAccounts\" SET \"VerifiedEmail\" = 'traveller@example.test', \"Status\" = 'banned' WHERE \"UserId\" = {attempts[0].PublicId}");
+            await update.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"UserAccounts\" SET \"Username\" = 'traveller', \"Status\" = 'banned' WHERE \"UserId\" = {attempts[0].PublicId}");
         var repeated = await database.Profiles().GetOrCreateAsync(new ProviderIdentity(Issuer, "traveller"), DateTimeOffset.UtcNow, default);
         Assert.Equal(UserStatus.Banned, repeated.Status);
         Assert.Equal(UserRole.User, repeated.Role);
-        Assert.Equal("traveller@example.test", repeated.VerifiedEmail);
+        Assert.Equal("traveller", repeated.Username);
     }
 
     [Fact]
@@ -139,8 +138,8 @@ public sealed class RolePersistenceTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
-        await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
-        var traveller = await Traveller(database, "traveller", "traveller@example.test");
+        await repository.BootstrapAsync(Issuer, "admin", default);
+        var traveller = await Traveller(database, "traveller", "traveller");
         await using (var update = database.Context())
             await update.Database.ExecuteSqlRawAsync("ALTER TABLE \"AdministratorAudit\" ADD CONSTRAINT reject_test_roles CHECK (\"Action\" <> 'role-change')");
         await Assert.ThrowsAsync<DbUpdateException>(() => repository.ChangeRoleAsync(Issuer, "admin", traveller.PublicId, "administrator", "traveller", "Rejected audit must roll back", default));
@@ -156,26 +155,26 @@ public sealed class RolePersistenceTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var repository = database.Repository();
-        await repository.BootstrapAsync(Issuer, "admin", AdminEmail, default);
-        var traveller = await Traveller(database, "traveller", "traveller@example.test");
+        await repository.BootstrapAsync(Issuer, "admin", default);
+        var traveller = await Traveller(database, "traveller", "traveller");
         Assert.Equal("invalid", (await repository.ChangeRoleAsync(Issuer, "admin", traveller.PublicId, role, expectedRole, reason, default)).Code);
         Assert.Equal(UserRole.User, (await repository.FindAsync(Issuer, "traveller", default))!.Role);
     }
 
     /**
-     * Provisions a traveller through the self-profile path, then records its verified email the way the provider would supply it.
+     * Provisions a traveller through the self-profile path, then records its username.
      *
      * @param database The isolated test database.
      * @param subject The provider subject.
-     * @param email The verified email to store.
+     * @param username The username to store.
      * @return The provisioned account.
      */
-    static async Task<UserAccount> Traveller(PostgresTestDatabase database, string subject, string email)
+    static async Task<UserAccount> Traveller(PostgresTestDatabase database, string subject, string username)
     {
         var identity = new ProviderIdentity(Issuer, subject);
         await database.Profiles().GetOrCreateAsync(identity, DateTimeOffset.UtcNow, default);
         await using var update = database.Context();
-        await update.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"UserAccounts\" SET \"VerifiedEmail\" = {email} WHERE \"Subject\" = {subject} AND \"Issuer\" = {Issuer}");
+        await update.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"UserAccounts\" SET \"Username\" = {username}, \"NormalizedUsername\" = {username.ToUpperInvariant()} WHERE \"Subject\" = {subject} AND \"Issuer\" = {Issuer}");
         return (await database.Profiles().FindByProviderIdentityAsync(identity, default))!;
     }
 

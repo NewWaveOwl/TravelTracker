@@ -81,7 +81,7 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
     /**
      * Updates only changed own-profile fields and returns the server-confirmed representation.
      * @param current The latest server-confirmed profile used to omit unchanged values.
-     * @param update The caller-editable username, contact email and address values.
+     * @param update The caller-editable address value.
      * @param cancellationToken Cancels the pending request.
      * @return The updated profile returned by the Users API.
      */
@@ -92,6 +92,16 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
         return await client.SendJsonAsync<SelfUserProfile>("Users", HttpMethod.Patch, "/api/v1/users/me", fields, cancellationToken)
             ?? throw new ApiError(FailureKind.Unexpected, "The Users service did not confirm the profile update.");
     }
+
+    /**
+     * Sends the password change; the Users API verifies the current password before it saves the new one.
+     * @param currentPassword The password the account has now. It is sent once over HTTPS and never kept by the frontend.
+     * @param newPassword The replacement password.
+     * @param cancellationToken Cancels the pending request.
+     * @return Completion only after the API confirms the change with 204; failures throw ApiError with any field errors.
+     */
+    public Task ChangePasswordAsync(string currentPassword, string newPassword, CancellationToken cancellationToken = default) =>
+        client.SendJsonAsync<object>("Users", HttpMethod.Post, "/api/v1/users/me/password", new { currentPassword, newPassword }, cancellationToken);
 
     /**
      * Lists application accounts after the service checks the current administrator's standing.
@@ -131,7 +141,7 @@ public sealed class UsersClient(ProtectedClient client, IConfiguration configura
     }
 
     /**
-     * Applies bootstrap only after the API independently verifies identity, allowed email and one-time state.
+     * Applies bootstrap only after the API independently verifies identity, allowed username and one-time state.
      * @param cancellationToken Cancels the view.
      * @return The confirmed profile, never an optimistic client-side role.
      */

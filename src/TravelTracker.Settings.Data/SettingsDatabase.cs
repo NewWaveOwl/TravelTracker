@@ -12,5 +12,5 @@ public static class SettingsDatabase
      * @return completion after migrations are applied.
      */
     public static Task InitializeAsync(SettingsDbContext database, CancellationToken cancellationToken = default) =>
-        database.Database.MigrateAsync(cancellationToken);
+        database.Database.MigrateWithoutFirstRunNoiseAsync(cancellationToken);
 }
