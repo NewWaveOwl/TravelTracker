@@ -12,6 +12,61 @@ public sealed class FlexibleTripSaveTests
 {
     private static readonly Guid Station = Guid.Parse("0196a1b2-0000-7000-8000-000000000003");
 
+    [Fact]
+    public async Task ConfirmedGeometry_RoundTripsAndCanBeReplacedWithAManualConnection()
+    {
+        using var factory = CreateFactory();
+        using var owner = factory.CreateClientFor();
+        var body = JourneyBody("accommodation", "attraction");
+        const string polyline = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
+        body["legs"]![0]!["encodedPolyline"] = polyline;
+
+        using var created = await owner.PostAsJsonAsync("/api/v1/trips", body);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var reloaded = await owner.GetFromJsonAsync<TripResponse>(created.Headers.Location);
+        Assert.Equal(polyline, Assert.Single(reloaded!.Legs).EncodedPolyline);
+
+        body["legs"]![0]!.AsObject().Remove("encodedPolyline");
+        owner.DefaultRequestHeaders.IfMatch.Add(created.Headers.ETag!);
+        using var replaced = await owner.PutAsJsonAsync(created.Headers.Location, body);
+        Assert.Equal(HttpStatusCode.OK, replaced.StatusCode);
+        reloaded = await owner.GetFromJsonAsync<TripResponse>(created.Headers.Location);
+        Assert.Null(Assert.Single(reloaded!.Legs).EncodedPolyline);
+    }
+
+    [Theory]
+    [InlineData("??")]
+    [InlineData("????_")]
+    [InlineData("????!")]
+    [InlineData("~~~~~~B???")]
+    public async Task MalformedRouteGeometry_ReturnsFieldErrorWithoutWriting(string geometry)
+    {
+        using var factory = CreateFactory();
+        using var owner = factory.CreateClientFor();
+        var body = JourneyBody("accommodation", "attraction");
+        body["legs"]![0]!["encodedPolyline"] = geometry;
+        using var response = await owner.PostAsJsonAsync("/api/v1/trips", body);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("legs[0].encodedPolyline", await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, factory.Repository.Count);
+    }
+
+    [Theory]
+    [InlineData(200000, HttpStatusCode.Created)]
+    [InlineData(200002, HttpStatusCode.BadRequest)]
+    public async Task RouteGeometry_EnforcesTheStorageLimit(int length, HttpStatusCode expected)
+    {
+        using var factory = CreateFactory();
+        using var owner = factory.CreateClientFor();
+        var body = JourneyBody("accommodation", "attraction");
+        body["legs"]![0]!["encodedPolyline"] = new string('?', length);
+
+        using var response = await owner.PostAsJsonAsync("/api/v1/trips", body);
+
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Equal(expected == HttpStatusCode.Created ? 1 : 0, factory.Repository.Count);
+    }
+
     [Theory]
     [InlineData("accommodation", "accommodation")]
     [InlineData("accommodation", "attraction")]

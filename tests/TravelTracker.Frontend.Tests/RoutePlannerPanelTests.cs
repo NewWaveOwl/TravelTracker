@@ -147,7 +147,7 @@ public sealed class RoutePlannerPanelTests : BunitContext
         var panel = Panel(new StubHandler((request, _) => Task.FromResult(request.RequestUri!.AbsolutePath == "/v1/routes/capabilities"
             ? Json(Capabilities with { Modes = [new("train", status)] }) : Json(new[] { Train }))));
         panel.WaitForAssertion(() => Assert.Contains(status == "unknown" ? "support unknown" : "unsupported by loaded router", panel.Find(".routing-modes").TextContent));
-        Assert.True(panel.Find("#route-mode option[value=train]").HasAttribute("disabled"));
+        Assert.False(panel.Find("#route-mode option[value=train]").HasAttribute("disabled"));
         Assert.True(panel.FindAll("button").Single(button => button.TextContent == "Find routes").HasAttribute("disabled"));
     }
 

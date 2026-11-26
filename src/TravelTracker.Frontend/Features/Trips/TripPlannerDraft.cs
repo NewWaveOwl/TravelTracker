@@ -66,8 +66,37 @@ internal sealed class TripPlannerDraft
         internal OffsetChoice? DepartureOffset { get; set; }
         internal OffsetChoice? ArrivalOffset { get; set; }
 
+        internal BoundPath? Path { get; set; }
+
         internal Leg Copy() => (Leg)MemberwiseClone();
     }
+
+    /** The route only applies to the mode, endpoints and schedule that produced it. */
+    internal sealed record BoundPath(string Encoded, Guid ModeId, decimal FromLat, decimal FromLon,
+        decimal ToLat, decimal ToLon, DateTimeOffset Departure, DateTimeOffset Arrival, string Zone);
+
+    internal void SetPath(int destination, string encoded, DateTimeOffset departure, DateTimeOffset arrival)
+    {
+        var from = stops[destination - 1].Place;
+        var to = stops[destination].Place;
+        var leg = LegTo(destination);
+        leg.Path = new(encoded, leg.Mode!.TransportModeId, from.Lat, from.Lon, to.Lat, to.Lon,
+            departure, arrival, TimeZone.Trim());
+    }
+
+    internal string? PathFor(int destination)
+    {
+        var leg = LegTo(destination);
+        if (leg.Path is not { } path) return null;
+        var from = stops[destination - 1].Place;
+        var to = stops[destination].Place;
+        return leg.Mode?.TransportModeId == path.ModeId && path.Zone == TimeZone.Trim() &&
+            (from.Lat, from.Lon, to.Lat, to.Lon) == (path.FromLat, path.FromLon, path.ToLat, path.ToLon) &&
+            DepartureFor(leg) == path.Departure && DurationFor(leg) == path.Arrival - path.Departure
+            ? path.Encoded : null;
+    }
+
+    internal void RemoveConnection(int destination) => legs.Remove((stops[destination - 1], stops[destination]));
 
     internal sealed record BrowserSnapshot(Guid? Id, string? ETag, string Name, string TimeZone,
         DateTime? Start, DateTime? End, DateTimeOffset? SavedStart, DateTimeOffset? SavedEnd, string? SavedZone,
@@ -77,7 +106,7 @@ internal sealed class TripPlannerDraft
 
     internal sealed record BrowserLeg(int From, int To, TripDto.Mode? Mode, DateTime? Departure, DateTime? Arrival,
         int? DurationMinutes, DateTimeOffset? SavedDeparture, DateTimeOffset? SavedArrival,
-        OffsetChoice? DepartureOffset, OffsetChoice? ArrivalOffset);
+        OffsetChoice? DepartureOffset, OffsetChoice? ArrivalOffset, BoundPath? Path = null);
 
     /** Captures the editable map, including disconnected stops and unfinished legs. */
     internal BrowserSnapshot CaptureBrowserSnapshot()
@@ -91,7 +120,7 @@ internal sealed class TripPlannerDraft
         }).ToArray();
         var savedLegs = legs.Select(pair => new BrowserLeg(indices[pair.Key.From], indices[pair.Key.To], pair.Value.Mode,
             pair.Value.Departure, pair.Value.Arrival, pair.Value.DurationMinutes, pair.Value.SavedDeparture,
-            pair.Value.SavedArrival, pair.Value.DepartureOffset, pair.Value.ArrivalOffset)).ToArray();
+            pair.Value.SavedArrival, pair.Value.DepartureOffset, pair.Value.ArrivalOffset, pair.Value.Path)).ToArray();
         return new(Id, ETag, Name, TimeZone, Start, End, SavedStart, SavedEnd, savedZone,
             StartOffset, EndOffset, roundTrip, savedStops, savedLegs);
     }
@@ -127,7 +156,7 @@ internal sealed class TripPlannerDraft
             {
                 Mode = leg.Mode, Departure = leg.Departure, Arrival = leg.Arrival, DurationMinutes = leg.DurationMinutes,
                 SavedDeparture = leg.SavedDeparture, SavedArrival = leg.SavedArrival,
-                DepartureOffset = leg.DepartureOffset, ArrivalOffset = leg.ArrivalOffset
+                DepartureOffset = leg.DepartureOffset, ArrivalOffset = leg.ArrivalOffset, Path = leg.Path
             }))
                 throw new InvalidDataException("The browser draft contains a duplicate connection.");
         }
@@ -320,6 +349,8 @@ internal sealed class TripPlannerDraft
                 SavedArrival = leg.Arrival
             };
             draft.stops.Add(destination);
+            if (leg.EncodedPolyline is { } encoded)
+                draft.SetPath(draft.stops.Count - 1, encoded, leg.Departure, leg.Arrival);
         }
         if (draft.RoundTrip != trip.IsRoundTrip)
             draft.RoundTrip = trip.IsRoundTrip;
@@ -448,11 +479,15 @@ internal sealed class TripPlannerDraft
         var errors = new List<string>();
         if (string.IsNullOrWhiteSpace(Name))
             errors.Add("Enter a trip name.");
+        else if (Name.Trim().Length > TripDraft.MaxNameLength)
+            errors.Add($"Use {TripDraft.MaxNameLength} characters or fewer for the trip name.");
         var zoneId = TimeZone.Trim();
         if (!TimeZoneInfo.TryFindSystemTimeZoneById(zoneId, out var zone))
             errors.Add("Enter a valid time zone, such as America/Toronto.");
-        var start = Resolve(Start, SavedStart, StartOffset, "Trip start");
-        var end = Resolve(End, SavedEnd, EndOffset, "Trip end");
+        if (Start is null || End is null)
+            errors.Add("Choose a start and end date in the trip calendar.");
+        var start = Start.HasValue ? Resolve(Start, SavedStart, StartOffset, "Trip start") : null;
+        var end = End.HasValue ? Resolve(End, SavedEnd, EndOffset, "Trip end") : null;
         if (start > end)
             errors.Add("Trip end must be at or after trip start.");
 
@@ -493,7 +528,7 @@ internal sealed class TripPlannerDraft
             previousArrival = arrival;
             if (leg.Mode is not null && departure is not null && arrival is not null)
                 requestLegs.Add(new(index, Reference(stops[index - 1].Place), Reference(stops[index].Place),
-                    leg.Mode.TransportModeId, departure.Value, arrival.Value));
+                    leg.Mode.TransportModeId, departure.Value, arrival.Value, PathFor(index)));
         }
 
         return errors.Count == 0 && start is not null && end is not null

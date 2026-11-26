@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.JSInterop;
 using Microsoft.AspNetCore.Components.Web;
+using TravelTracker.Frontend.Components.Trips;
 using TravelTracker.Frontend.Api;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
@@ -35,12 +36,13 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
     IReadOnlyDictionary<string, string[]> errors = new Dictionary<string, string[]>();
     IReadOnlyList<TransportDto> modes = [];
     ApiError? saveError;
-    string? modeFailure, pendingTarget;
+    string? modeFailure;
     int step = 1;
-    bool signedIn, canWrite, loaded, saving, completed, focusDialog, focusHeading, focusAddLeg, focusProgress;
+    bool signedIn, canWrite, loaded, saving, completed, focusHeading, focusAddLeg;
     int generation;
     bool disposed;
-    ElementReference leaveDialog, stepHeading, addLegButton, progressList;
+    TripDiscardDialog leaveDialog = default!;
+    ElementReference stepHeading, addLegButton;
     readonly CancellationTokenSource lifetime = new();
     ElementReference editorElement;
     Task<IJSObjectReference?>? saveShortcut;
@@ -86,7 +88,6 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
         draft = new();
         errors = new Dictionary<string, string[]>();
         saveError = null;
-        pendingTarget = null;
         // step 1 unmounts the itinerary's PlaceSelectors, which drops their results and searches with them
         step = 1;
         saving = false;
@@ -122,8 +123,8 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
         {
             case "name": return "trip-name";
             case "timeZone": return "trip-timezone";
-            case "start": return "trip-start";
-            case "end": return "trip-end";
+            case "start":
+            case "end": return "trip-dates";
         }
         var match = LegField().Match(key);
         if (!match.Success) return "legs-heading";
@@ -138,6 +139,8 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
             _ => $"leg-{leg}-heading",
         };
     }
+
+    string FieldLink(string id) => $"{Navigation.ToAbsoluteUri(Navigation.Uri).GetLeftPart(UriPartial.Query)}#{id}";
 
     [GeneratedRegex(@"^legs\[(\d+)\](?:\.(\w+))?$")]
     private static partial Regex LegField();
@@ -218,7 +221,7 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
      */
     async Task SaveAsync()
     {
-        if (saving || !canWrite || completed || pendingTarget is not null || lifetime.IsCancellationRequested) return;
+        if (saving || !canWrite || completed || lifetime.IsCancellationRequested) return;
         saveError = null;
         var local = draft.ValidateBasics();
         foreach (var (key, value) in draft.ValidateItinerary()) local[key] = value;
@@ -276,13 +279,22 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
      * stops a navigation away from unsaved entries and asks first.
      * @param context The pending navigation.
      */
-    Task ConfirmLeaveAsync(LocationChangingContext context)
+    async Task ConfirmLeaveAsync(LocationChangingContext context)
     {
-        if (!Dirty) return Task.CompletedTask;
-        context.PreventNavigation();
-        pendingTarget = context.TargetLocation;
-        focusDialog = true;
-        return Task.CompletedTask;
+        var target = Navigation.ToAbsoluteUri(context.TargetLocation);
+        var current = Navigation.ToAbsoluteUri(Navigation.Uri);
+        if (!Dirty || target.GetLeftPart(UriPartial.Query) == current.GetLeftPart(UriPartial.Query))
+            return;
+        try
+        {
+            if (!await leaveDialog.ConfirmAsync("Leaving will discard the changes you made to this trip.", context.CancellationToken))
+                context.PreventNavigation();
+        }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested) { }
+        catch (JSException)
+        {
+            context.PreventNavigation();
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -292,12 +304,7 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
             saveShortcut = RegisterSaveShortcutAsync();
             await saveShortcut;
         }
-        if (focusDialog && pendingTarget is not null)
-        {
-            focusDialog = false;
-            await leaveDialog.FocusAsync();
-        }
-        else if (focusHeading)
+        if (focusHeading)
         {
             focusHeading = false;
             if (step > 1) await stepHeading.FocusAsync();
@@ -309,35 +316,6 @@ public sealed partial class TripFormPlanner : IAsyncDisposable
             await addLegButton.FocusAsync();
         }
 
-        // the dialog's focused button is removed on dismissal, so focus moves to the progress list that stays on screen
-        if (focusProgress)
-        {
-            focusProgress = false;
-            await progressList.FocusAsync();
-        }
-    }
-
-    void KeepEditing()
-    {
-        pendingTarget = null;
-        focusProgress = true;
-    }
-
-    /**
-     * lets Escape dismiss the leave confirmation like Keep editing.
-     * @param eventArgs The key pressed while focus is inside the dialog.
-     */
-    void HandleDialogKeyDown(KeyboardEventArgs eventArgs)
-    {
-        if (eventArgs.Key == "Escape") KeepEditing();
-    }
-
-    void LeaveWithoutSaving()
-    {
-        var target = pendingTarget;
-        pendingTarget = null;
-        completed = true;
-        if (target is not null) Navigation.NavigateTo(target);
     }
 
     /**

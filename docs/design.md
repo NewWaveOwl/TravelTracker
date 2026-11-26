@@ -84,7 +84,7 @@ Every account is a traveller or an administrator, and is active, banned or deact
 | Time block (M3) | A period the traveller marks as rest or unavailable |
 | Settings | Theme, default map view, preferred transport, time zone; later interests and available hours |
 
-- **Places** are private to their creator unless an administrator adds them to the shared catalogue. Travellers can add their own places while planning. A place that should no longer be chosen is archived, never deleted, so old trips keep working.
+- **Places** are private to their creator by default. Sharing a trip’s places from History publishes the owner’s selected itinerary locations to the shared catalogue. Administrators can also create shared catalogue locations directly. Travellers can add their own places while planning. A place that should no longer be chosen is archived, never deleted, so old trips keep working.
 - **Saved copies.** A trip keeps its own copy of each place's name and location. Editing the catalogue never moves an old trip's markers.
 - **Trip status** (upcoming, current, past) is worked out from the trip's dates when viewed. It reflects the plan, not proof the traveller went.
 - **Concurrent edits.** If two people or two tabs change the same record, the later save is refused and the user can reload or review their changes rather than overwriting.
@@ -158,14 +158,14 @@ scheduled and realtime timing and preserve manually entered times. See the
 - Place search shows shared and private places, with Add Place when nothing matches.
 - Legs can be added, removed and reordered (with a keyboard alternative to dragging). A broken connection is impossible by construction, because each leg's departure is the previous leg's destination. Reordering shows the resulting chain and highlights time clashes but never fixes them silently.
 - Errors appear next to each field and in a summary that jumps to the first problem.
-- **Save trip (#119)** stays prominent in the Map and Trip workspaces on desktop and mobile, including the step-by-step form. Ctrl+S and Cmd+S invoke the same save action while the editor is active; other pages keep the browser shortcut. Saving, saved and failure feedback stays visible beside the action. New catalogue entries still require explicit confirmation before a trip can be saved.
+- **Save trip (#119)** stays prominent in the Map and Trip workspaces on desktop and mobile, including the step-by-step form. Ctrl+S and Cmd+S invoke the same save action while the editor is active; other pages keep the browser shortcut. Saving, saved and failure feedback stays visible beside the action. The same action resolves new catalogue entries before submitting the trip.
 - Saving works only when the form is valid, cannot be double-submitted, and moves on only after the save is confirmed.
 - If saving fails, nothing typed is lost. Unsaved work is kept only in memory, so leaving the editor asks first.
 
 **Other screens**
 
 - **Trip details:** status, dates, legs, stays, visits and notes, with Edit, View on Map and Delete (with confirmation). A current-trip panel highlights the active or next planned event, based on the plan, not location.
-- **History:** readable trip names, date ranges, planned status and an explicit Open trip action. Past trips appear first, newest on top; local search, overlapping date range, status, ordering and paging apply to the owner's saved summaries. The same browser appears under Trip → Open saved. Empty history, no matching filters, loading and failed reads have distinct states. Later, several trips can be shown together on the map.
+- **History:** readable trip names, date ranges, planned status and an explicit Open trip action. Past trips appear first, newest on top; local search, overlapping date range, status, ordering and paging apply to the owner's saved summaries. Expanding a trip shows its itinerary and time zone. Owners can override the date-derived status and publish the places on that trip to the global catalogue. The same browser appears under Trip → Open saved. Empty history, no matching filters, loading and failed reads have distinct states. Later, several trips can be shown together on the map.
 - **User and Settings:** profile and password are separate forms; settings cover theme, default map view, preferred transport and time zone.
 - **Admin:** search accounts, change status with a reason, and see audit and cleanup progress. Nothing shows success until it is confirmed.
 - Banned users see a read-only notice and no editing controls.

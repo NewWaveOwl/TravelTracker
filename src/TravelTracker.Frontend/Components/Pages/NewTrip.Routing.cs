@@ -20,27 +20,19 @@ public partial class NewTrip
         (latitude, longitude, placeAddress) = (position.Lat, position.Lon, "");
         reverseAddressVersion = ++addressLookupSequence;
     }
-    readonly Dictionary<(TripPlannerDraft.Stop From, TripPlannerDraft.Stop To), ConfirmedGeometry> confirmedGeometry = [];
     RouteSelection? previewSelection;
     TripPlannerDraft? previewDraft;
     long routingRevision, previewRevision;
     int previewRouteVersion;
-
-    sealed record ConfirmedGeometry(RoutePlanRequest Request, RouteItinerary Itinerary, Guid TransportId);
 
     RoutePlanRequest? CurrentRouteRequest => CurrentLeg is { Mode: { } mode } leg && selected > 0 &&
         draft.DepartureFor(leg) is { } departure
         ? new(new(draft.Stops[selected - 1].Place.Lat, draft.Stops[selected - 1].Place.Lon),
             new(draft.Stops[selected].Place.Lat, draft.Stops[selected].Place.Lon), mode.Code, departure, RouteLocalTime.RouterZone(draft.TimeZone)) : null;
 
-    IReadOnlyDictionary<int, RouteItinerary> MapConfirmedRoutes
-    {
-        get
-        {
-            return confirmedGeometry.Where(pair => GeometryMatches(draft, pair.Key.From, pair.Key.To, pair.Value))
-                .ToDictionary(pair => draft.Stops.ToList().IndexOf(pair.Key.To), pair => pair.Value.Itinerary);
-        }
-    }
+    IReadOnlyDictionary<int, string> MapConfirmedRoutes => Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1))
+        .Select(index => (Index: index, Path: draft.PathFor(index))).Where(pair => pair.Path is not null)
+        .ToDictionary(pair => pair.Index, pair => pair.Path!);
 
     RouteItinerary? MapRoutePreview => previewSelection is { } selectedRoute && PreviewStillCurrent(selectedRoute)
         ? selectedRoute.Itinerary : null;
@@ -90,8 +82,6 @@ public partial class NewTrip
             if (ends <= starts) return false;
             var localDeparture = TimeZoneInfo.ConvertTime(starts, zone);
             var localArrival = TimeZoneInfo.ConvertTime(ends, zone);
-            var from = draft.Stops[selection.OriginIndex];
-            var to = draft.Stops[selection.DestinationIndex];
             var leg = draft.LegTo(selection.DestinationIndex);
             RememberEdit();
             leg.Mode = new(mode.TransportModeId, mode.Code, mode.Name);
@@ -104,9 +94,11 @@ public partial class NewTrip
             previewSelection = null;
             CancelConnection();
             MarkEdited();
-            confirmedGeometry[(from, to)] = new(selection.Request with { DepartureTime = starts },
-                selection.Itinerary, mode.TransportModeId);
-            notice = $"Selected route applied: {localDeparture:MMM d HH:mm:ss zzz} → {localArrival:MMM d HH:mm:ss zzz}. Save the trip when ready. Route geometry is kept for this session.";
+            var path = RouteGeometry.Combine(selection.Itinerary.Legs.Select(section => section.Geometry));
+            leg.Path = null;
+            if (path is not null) draft.SetPath(selected, path, starts, ends);
+            var geometryNotice = path is null ? " The path exceeds the storage limit. Only the connection and times will be saved." : "";
+            notice = $"Selected route applied: {localDeparture:MMM d HH:mm:ss zzz} → {localArrival:MMM d HH:mm:ss zzz}.{geometryNotice}";
             return true;
         }
         catch (ApiError error) when (version == routeVersion)
@@ -124,50 +116,10 @@ public partial class NewTrip
         }
     }
 
-    static bool GeometryMatches(TripPlannerDraft candidate, TripPlannerDraft.Stop from, TripPlannerDraft.Stop to, ConfirmedGeometry geometry)
-    {
-        var index = candidate.Stops.ToList().IndexOf(from);
-        if (index < 0 || index + 1 >= candidate.Stops.Count || !ReferenceEquals(candidate.Stops[index + 1], to)) return false;
-        var leg = candidate.LegTo(index + 1);
-        return leg.Mode?.TransportModeId == geometry.TransportId && leg.Mode.Code == geometry.Request.Mode &&
-            candidate.DepartureFor(leg) == geometry.Request.DepartureTime &&
-            candidate.DurationFor(leg) == geometry.Itinerary.Legs[^1].ArrivalTime - geometry.Itinerary.Legs[0].DepartureTime &&
-            (from.Place.Lat, from.Place.Lon) == (geometry.Request.Origin.Lat, geometry.Request.Origin.Lon) &&
-            (to.Place.Lat, to.Place.Lon) == (geometry.Request.Destination.Lat, geometry.Request.Destination.Lon) &&
-            RouteLocalTime.RouterZone(candidate.TimeZone) == geometry.Request.TimeZone;
-    }
-
-    Action CaptureRoutingUndo()
-    {
-        var snapshot = confirmedGeometry.ToArray();
-        return () =>
-        {
-            confirmedGeometry.Clear();
-            foreach (var pair in snapshot) confirmedGeometry.Add(pair.Key, pair.Value);
-            previewSelection = null;
-            routingRevision++;
-        };
-    }
-
     void ClearRoutingGeometry()
     {
         previewSelection = null;
-        confirmedGeometry.Clear();
         routingRevision++;
-    }
-
-    /** Rebinds still-matching transient geometry after the server returns fresh saved stop objects. */
-    TripPlannerDraft RebindRoutingGeometry(TripPlannerDraft replacement)
-    {
-        var previous = confirmedGeometry.Where(pair => GeometryMatches(draft, pair.Key.From, pair.Key.To, pair.Value))
-            .Select(pair => (Index: draft.Stops.ToList().IndexOf(pair.Key.From), pair.Value)).ToArray();
-        confirmedGeometry.Clear();
-        previewSelection = null;
-        foreach (var item in previous)
-            if (item.Index >= 0 && item.Index + 1 < replacement.Stops.Count &&
-                GeometryMatches(replacement, replacement.Stops[item.Index], replacement.Stops[item.Index + 1], item.Value))
-                confirmedGeometry[(replacement.Stops[item.Index], replacement.Stops[item.Index + 1])] = item.Value;
-        return replacement;
     }
 
     /**

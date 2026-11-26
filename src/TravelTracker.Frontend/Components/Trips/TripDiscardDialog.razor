@@ -1,0 +1,19 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JavaScript
+
+<dialog @ref="dialog" class="trip-confirm" aria-labelledby="trip-confirm-title" aria-describedby="trip-confirm-description">
+    <h2 id="trip-confirm-title">Unsaved changes</h2>
+    <p id="trip-confirm-description"></p>
+    <form method="dialog" class="actions">
+        <button type="submit" value="stay" autofocus>Keep editing</button>
+        <button type="submit" value="discard" class="secondary">Discard changes</button>
+    </form>
+</dialog>
+
+@code {
+    ElementReference dialog;
+
+    /** Opens the native modal and returns the traveller's choice for this navigation attempt. */
+    public ValueTask<bool> ConfirmAsync(string message, CancellationToken token) =>
+        JavaScript.InvokeAsync<bool>("confirmTripChanges", token, dialog, message);
+}

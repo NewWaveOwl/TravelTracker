@@ -186,7 +186,7 @@ else
             {
                 candidates = result.Candidates;
                 candidateControls = new ElementReference[candidates.Count];
-                message = $"{candidates.Count} matching addresses. Choose an address to preview its map position. Apply marker details to confirm.";
+                message = $"{candidates.Count} matching addresses. Choose an address to preview its map position. Apply marker details or save the trip to keep this location.";
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -214,7 +214,7 @@ else
         text = previousValue = candidate.Label;
         await ValueChanged.InvokeAsync(text);
         await CandidateSelected.InvokeAsync(candidate);
-        message = "Address selected for preview. Apply marker details to confirm.";
+        message = "Address selected for preview. Apply marker details or save the trip to keep this location.";
     }
 
     void CancelLookup()

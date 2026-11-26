@@ -142,9 +142,8 @@ also includes waiting between the requested instant and that first departure.
 Legs contain `mode`, `durationSeconds`, `distanceMeters`, ISO-offset effective
 `departureTime`/`arrivalTime`, original scheduled times, encoded-polyline `geometry`,
 optional route name/ID/headsign, timing basis and `realtime`. Geometry/timing
-must be connected and valid. Previews preserve manually entered trip times; route
-geometry is temporary draft data, not a new persisted trip field. No live road
-traffic is claimed.
+must be connected and valid. Previews preserve manually entered trip times. Confirming a route and saving the
+trip stores its encoded path with the connection. Live road traffic is outside this contract.
 
 Car/transit previews (#108) use actual OTP CAR, BUS or RAIL routing. Successful
 routes include `coverage` when metadata is available and `reason: null`.
@@ -192,11 +191,10 @@ itinerary reorder before confirmation. Cancel, outdated requests and provider
 failure preserve the itinerary. Confirmation supports Undo and does not itself
 save a catalogue record or trip.
 
-Confirmed geometry remains within the current session and survives a matching
-Save response. Changing positions/mode/times, opening a different trip, signing
-out or starting a new draft invalidates it. Existing trip persistence stores the
-mode and times, not provider geometry; reopened connection lines remain labelled
-approximate until another preview is requested. See the [update/run commands](milestone-4/server-routing-update.md).
+A saved connection carries its confirmed route in the optional `encodedPolyline`
+field. On reopen the map can draw that path without another provider request.
+Changing its endpoints, mode or timing invalidates the confirmation. Older trips
+and manual connections display an approximate line. See the [update/run commands](milestone-4/server-routing-update.md).
 
 `GET /health/traveltracker` contains aggregate queue/cache/request counters only.
 Launcher polling uses this private endpoint and never triggers Nominatim requests.

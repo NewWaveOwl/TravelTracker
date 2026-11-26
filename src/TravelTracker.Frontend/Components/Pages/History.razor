@@ -65,7 +65,7 @@ else
     </div>
     @if (InvalidDates)
     {
-        <p role="alert">From date must be on or before through date.</p>
+        <p class="trip-alert" role="alert">From date must be on or before through date.</p>
     }
     else if (matches.Count == 0)
     {
@@ -78,13 +78,50 @@ else
         @foreach (var trip in matches.Skip(pageIndex * PageSize).Take(PageSize))
         {
             <li @key="trip.TripId" class="history-card">
-                <div>
-                    <h3>@TripName(trip)</h3>
+                <div class="history-summary">
+                    <h3><button class="history-toggle" aria-expanded="@(expanded == trip.TripId ? "true" : "false")"
+                            @onclick="e => e.Detail <= 1 ? ToggleAsync(trip.TripId) : Task.CompletedTask"
+                            @ondblclick='() => Navigation.NavigateTo($"trips/{trip.TripId:D}")'>@TripName(trip)</button></h3>
                     <p><time datetime="@trip.Start.ToString("O")">@trip.Start.ToString("MMM d, yyyy")</time>
                         – <time datetime="@trip.End.ToString("O")">@trip.End.ToString("MMM d, yyyy")</time></p>
                     <span class="history-status" data-status="@Status(trip)">@StatusLabel(trip)</span>
                 </div>
-                <a class="button" href="@($"map/{trip.TripId:D}")" aria-label="@($"Open {TripName(trip)}")">Open trip</a>
+                <a class="button" href="@($"map/{trip.TripId:D}")" aria-label="@($"Open {TripName(trip)} on map")">Open map</a>
+                @if (expanded == trip.TripId)
+                {
+                    <section class="history-detail" aria-label="@($"Details for {TripName(trip)}")">
+                        <a class="button secondary" href="@($"trips/{trip.TripId:D}")">Open text itinerary</a>
+                        @if (detailError is not null) { <p class="trip-alert failure" role="alert">@detailError</p> }
+                        @if (detail is { } itinerary)
+                        {
+                            <p>@(itinerary.IsRoundTrip ? "Round trip" : "One way") · @itinerary.TimeZone</p>
+                            @if (itinerary.Legs.Count > 0)
+                            {
+                                <ol>@foreach (var leg in itinerary.Legs)
+                                {
+                                    <li><strong>@leg.From.Name → @leg.To.Name</strong><br />
+                                        @leg.Transport.Name · @leg.Departure.ToString("g") – @leg.Arrival.ToString("g")</li>
+                                }</ol>
+                            }
+                            else { <p>@(itinerary.Stops is { Count: > 0 } stops ? string.Join(" → ", stops.Select(stop => stop.Name)) : "No stops planned yet.")</p> }
+                            @if (canShare)
+                            {
+                                <TravelTracker.Frontend.Components.Trips.ShareTripPlaces @key="itinerary" Trip="itinerary" />
+                            }
+                            @if (canWrite)
+                            {
+                                <label>Trip status
+                                    <select value="@(trip.Status ?? "automatic")" @key="(trip.Status, updatingStatus)" disabled="@updatingStatus"
+                                            @onchange="e => ChangeStatusAsync(trip.TripId, e.Value?.ToString())">
+                                        <option value="automatic">Automatic (from dates)</option>
+                                        <option value="upcoming">Upcoming</option><option value="current">In progress</option><option value="completed">Completed</option>
+                                    </select>
+                                </label>
+                            }
+                        }
+                        else if (detailError is null) { <p role="status">Loading itinerary…</p> }
+                    </section>
+                }
             </li>
         }
     </ul>

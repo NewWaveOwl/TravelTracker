@@ -122,16 +122,21 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
     }
 
     /** {@inheritDoc} */
+    public async Task<bool> SetOwnedStatusAsync(Guid tripId, string ownerIssuer, string ownerSubject, string? status, CancellationToken cancellationToken) =>
+        await database.Trips.Where(row => row.TripId == tripId && row.OwnerIssuer == ownerIssuer && row.OwnerSubject == ownerSubject)
+            .ExecuteUpdateAsync(update => update.SetProperty(row => row.Status, status), cancellationToken) == 1;
+
+    /** {@inheritDoc} */
     public async Task<IReadOnlyList<TripHistoryEntry>> ListOwnedAsync(string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default)
     {
         var rows = await database.Trips.AsNoTracking()
             .Where(row => row.OwnerIssuer == ownerIssuer && row.OwnerSubject == ownerSubject)
             .OrderByDescending(row => row.StartAt)
             .ThenBy(row => row.TripId)
-            .Select(row => new { row.TripId, row.Name, row.StartAt, row.StartOffset, row.EndAt, row.EndOffset })
+            .Select(row => new { row.TripId, row.Name, row.StartAt, row.StartOffset, row.EndAt, row.EndOffset, row.Status })
             .ToListAsync(cancellationToken);
         return rows.Select(row => new TripHistoryEntry(row.TripId, row.Name,
-            row.StartAt.ToOffset(row.StartOffset), row.EndAt.ToOffset(row.EndOffset))).ToArray();
+            row.StartAt.ToOffset(row.StartOffset), row.EndAt.ToOffset(row.EndOffset), row.Status)).ToArray();
     }
 
     /**
@@ -172,7 +177,7 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
             new TripPlace(leg.ToPlaceId, leg.ToPlaceType, leg.ToPlaceName, leg.ToPlaceAddress, leg.ToLatitude, leg.ToLongitude),
             new TripTransport(leg.TransportModeId, leg.TransportCode, leg.TransportName),
             leg.DepartureAt.ToOffset(leg.DepartureOffset),
-            leg.ArrivalAt.ToOffset(leg.ArrivalOffset))),
+            leg.ArrivalAt.ToOffset(leg.ArrivalOffset), leg.EncodedPolyline)),
         row.TripId, row.Revision,
         row.Stops.Count == 0 ? null : row.Stops.OrderBy(stop => stop.Sequence)
             .Select(stop => new TripPlace(stop.PlaceId, stop.PlaceType, stop.PlaceName, stop.PlaceAddress, stop.Latitude, stop.Longitude)));
@@ -232,7 +237,8 @@ public sealed class EfTripRepository(TripsDbContext database) : ITripRepository
             DepartureAt = leg.Departure.ToUniversalTime(),
             DepartureOffset = leg.Departure.Offset,
             ArrivalAt = leg.Arrival.ToUniversalTime(),
-            ArrivalOffset = leg.Arrival.Offset
+            ArrivalOffset = leg.Arrival.Offset,
+            EncodedPolyline = leg.EncodedPolyline
         }).ToList()
     };
 }

@@ -5,6 +5,8 @@ namespace TravelTracker.Accommodations.Data.Repositories;
 /** Defines durable accommodation operations with visibility scoped to a validated caller. */
 public interface IAccommodationRepository
 {
+    Task<bool> ShareAsync(Guid id, string issuer, string subject, CancellationToken cancellationToken);
+
     /**
      * Loads only shared items allowed by the caller and the caller's own private records.
      * @param issuer The validated token issuer.

@@ -7,6 +7,17 @@ namespace TravelTracker.Accommodations.Data.Repositories;
 /** Loads and stores accommodations in the service-owned PostgreSQL database. */
 public sealed class EfAccommodationRepository(AccommodationsDbContext database) : IAccommodationRepository
 {
+    public async Task<bool> ShareAsync(Guid id, string issuer, string subject, CancellationToken cancellationToken)
+    {
+        var row = await database.Accommodations.SingleOrDefaultAsync(row => row.AccommodationId == id &&
+            (row.IsShared || row.OwnerIssuer == issuer && row.OwnerSubject == subject), cancellationToken);
+        if (row is null) return false;
+        if (row.IsShared) return true;
+        row.IsShared = true;
+        await database.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     /**
      * Applies private/shared visibility predicates in PostgreSQL before materializing records.
      * @param issuer The validated token issuer.

@@ -112,9 +112,9 @@ wait for routing options, choose the endpoints/date/mode, Find routes, select an
 alternative and **Confirm selected route**. Manual map selection remains available
 when geocoding or routing is unavailable. A route preview changes the itinerary
 only after its confirmation action; normal trip Save persists the chosen plan.
-Chosen mode and times use the existing trip-save contract. Provider geometry is
-a current-session preview; after reopening a saved trip, its connection lines are
-labelled approximate until you preview the route again.
+Save stores the chosen mode, times and confirmed route shape. On reopen, a
+connection with saved geometry follows that path. Manual connections and
+trips saved before the geometry migration display approximate lines.
 
 The package is built/tested locally. Actual server-PC application, authenticated
 Dev Tunnel journeys and live Public Nominatim results require that configured

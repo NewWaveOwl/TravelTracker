@@ -7,6 +7,7 @@
 <p>Build your itinerary, review the route and save when you are ready.</p>
 <p><a class="button secondary" href="new-trip">Open trip editor</a></p>
 <NavigationLock OnBeforeInternalNavigation="ConfirmLeaveAsync" ConfirmExternalNavigation="@Dirty" />
+<TripDiscardDialog @ref="leaveDialog" />
 <div @ref="editorElement" class="trip-page">
 @if (!loaded)
 {
@@ -18,23 +19,28 @@ else if (!signedIn)
 }
 else
 {
+    @if (step != 3 || saving || saveError is not null || errors.Count > 0)
+    {
     <div class="trip-form-save-controls">
         <div class="trip-actions" aria-label="Save trip">
-            <button type="button" data-trip-save aria-keyshortcuts="Control+S Meta+S"
-                    @onclick="SaveAsync" disabled="@(saving || !canWrite || completed || pendingTarget is not null)">@(saving ? "Saving…" : "Save trip")</button>
-            <small>Ctrl+S / ⌘S</small>
+            @if (step != 3)
+            {
+                @SaveControl
+                <small>Ctrl+S / ⌘S</small>
+            }
         </div>
         @if (saving) { <p class="trip-status" role="status">Saving trip…</p> }
         else if (saveError is not null)
         {
-            <p class="trip-save-error" role="status">Trip not saved. Your entries are still here. <a href="#trip-save-error-heading">Review error</a></p>
+            <p class="trip-save-error" role="status">Trip not saved. Your entries are still here. <a href="@FieldLink("trip-save-error-heading")">Review error</a></p>
         }
         else if (errors.Count > 0)
         {
-            <p class="trip-save-error" role="status">Check trip details before saving. <a href="#trip-errors-heading">Review details</a></p>
+            <p class="trip-save-error" role="status">Check trip details before saving. <a href="@FieldLink("trip-errors-heading")">Review details</a></p>
         }
     </div>
-    <ol class="trip-steps" aria-label="Trip progress" tabindex="-1" @ref="progressList">
+    }
+    <ol class="trip-steps" aria-label="Trip progress">
         @foreach (var (number, title) in Steps)
         {
             <li aria-current="@(number == step ? "step" : null)">@number. @title</li>
@@ -43,17 +49,6 @@ else
     @if (!canWrite)
     {
         <p class="trip-status" role="status">Saving trips requires the trips write permission. You can still prepare an itinerary.</p>
-    }
-    @if (pendingTarget is not null)
-    {
-        <section class="trip-dialog" role="alertdialog" aria-modal="true" aria-labelledby="leave-heading" aria-describedby="leave-text" tabindex="-1" @ref="leaveDialog" @onkeydown="HandleDialogKeyDown">
-            <h2 id="leave-heading">Leave without saving?</h2>
-            <p id="leave-text">Your trip has not been saved. If you leave now, what you entered is lost.</p>
-            <div class="trip-actions">
-                <button type="button" @onclick="KeepEditing">Keep editing</button>
-                <button type="button" class="secondary" @onclick="LeaveWithoutSaving">Leave without saving</button>
-            </div>
-        </section>
     }
     @if (saveError is not null)
     {
@@ -74,7 +69,7 @@ else
             <ul>
             @foreach (var field in VisibleErrors)
             {
-                <li><a href="@("#" + FieldId(field.Key))">@string.Join(" ", field.Value)</a></li>
+                <li><a href="@FieldLink(FieldId(field.Key))">@string.Join(" ", field.Value)</a></li>
             }
             </ul>
         </section>
@@ -86,7 +81,7 @@ else
             <fieldset disabled="@saving" class="trip-form-fields">
             <div class="trip-field">
                 <label for="trip-name">Trip name *</label>
-                <input id="trip-name" required aria-invalid="@Invalid("name")" @bind="draft.Name" @bind:event="oninput" />
+                <input id="trip-name" maxlength="@TripDraft.MaxNameLength" required aria-invalid="@Invalid("name")" @bind="draft.Name" @bind:event="oninput" />
                 <FieldError Messages="@Messages("name")" />
             </div>
             <div class="trip-field">
@@ -101,15 +96,10 @@ else
                 <small class="trip-hint">Every time in this trip is read in this zone. Nothing is converted for you.</small>
                 <FieldError Messages="@Messages("timeZone")" />
             </div>
-            <div class="trip-field">
-                <label for="trip-start">Trip starts *</label>
-                <input id="trip-start" type="datetime-local" step="60" aria-invalid="@Invalid("start")" value="@draft.Start" @onchange="change => draft.Start = change.Value?.ToString() ?? string.Empty" />
-                <FieldError Messages="@Messages("start")" />
-            </div>
-            <div class="trip-field">
-                <label for="trip-end">Trip ends *</label>
-                <input id="trip-end" type="datetime-local" step="60" aria-invalid="@Invalid("end")" value="@draft.End" @onchange="change => draft.End = change.Value?.ToString() ?? string.Empty" />
-                <FieldError Messages="@Messages("end")" />
+            <div class="trip-field" id="trip-dates" tabindex="-1">
+                <TripDateRangePicker Start="draft.Start" End="draft.End" Disabled="saving"
+                                     RangeChanged="range => (draft.Start, draft.End) = range" />
+                <FieldError Messages="@(Messages("start").Concat(Messages("end")).Distinct().ToArray())" />
             </div>
             <fieldset class="trip-kind">
                 <legend>Trip type *</legend>
@@ -176,8 +166,8 @@ else
             <dl>
                 <dt>Name</dt><dd>@draft.Name</dd>
                 <dt>Time zone</dt><dd>@draft.TimeZone</dd>
-                <dt>Starts</dt><dd>@draft.Start.Replace('T', ' ')</dd>
-                <dt>Ends</dt><dd>@draft.End.Replace('T', ' ')</dd>
+                <dt>Starts</dt><dd>@(draft.Start?.ToString("D"))</dd>
+                <dt>Ends</dt><dd>@(draft.End?.ToString("D"))</dd>
                 <dt>Type</dt><dd>@(draft.IsRoundTrip ? "Round trip" : "One way")</dd>
             </dl>
             <ol class="trip-legs">
@@ -188,8 +178,14 @@ else
             </ol>
             <div class="trip-actions">
                 <button type="button" class="secondary" @onclick="() => GoTo(2)" disabled="@saving">Back</button>
+                @SaveControl
             </div>
         </section>
     }
 }
 </div>
+
+@code {
+    RenderFragment SaveControl => @<button type="button" data-trip-save aria-keyshortcuts="Control+S Meta+S"
+        @onclick="SaveAsync" disabled="@(saving || !canWrite || completed)">@(saving ? "Saving…" : "Save trip")</button>;
+}

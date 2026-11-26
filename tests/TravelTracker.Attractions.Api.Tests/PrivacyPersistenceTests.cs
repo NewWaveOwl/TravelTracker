@@ -13,6 +13,29 @@ namespace TravelTracker.Attractions.Api.Tests;
 public sealed class PrivacyPersistenceTests
 {
     [Fact]
+    public async Task OnlyOwnerCanPublishPrivateAttractionAndSharedEditsRemainRestricted()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(subject: "alice"));
+        using var created = await client.PostAsJsonAsync("/api/v1/attractions", Place());
+        var location = created.Headers.Location!;
+        var share = location + "/share";
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(subject: "bob"));
+        using var hidden = await client.PostAsync(share, null);
+        Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(subject: "alice"));
+        using var published = await client.PostAsync(share, null);
+        Assert.Equal("shared", (await published.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("visibility").GetString());
+        using var edit = await client.PatchAsJsonAsync(location, new { name = "Change" });
+        Assert.Equal(HttpStatusCode.Forbidden, edit.StatusCode);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", factory.CreateToken(subject: "bob"));
+        using var repeated = await client.PostAsync(share, null);
+        Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+        Assert.Single((await client.GetFromJsonAsync<JsonElement[]>("/api/v1/attractions?name=Private%20place"))!);
+    }
+
+    [Fact]
     [Trait("Category", "PostgreSQL")]
     public async Task EnablingExampleSeeding_DoesNotOverwriteOrCollideWithAnExistingUnseededDatabase()
     {

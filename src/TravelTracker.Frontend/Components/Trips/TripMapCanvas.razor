@@ -149,11 +149,11 @@
     }
     @if (connections.Any(connection => connection.Routed))
     {
-        <p>Confirmed routes replace their straight connections. Their geometry is kept for this session.</p>
+        <p>Confirmed routes replace their straight connections. Saving the trip keeps these paths for the next visit.</p>
     }
     @if (PreviewRoute is not null)
     {
-        <p>Highlighted line: selected provider route geometry. Other connections remain approximate. Geometry is shown for this session.</p>
+        <p>The highlighted path is the current route preview. Confirm it to include the path when you save.</p>
     }
 </section>
 
@@ -173,7 +173,7 @@
     [Parameter] public IReadOnlyList<(string Code, string Label)> Legs { get; set; } = [];
     [Parameter] public RouteItinerary? PreviewRoute { get; set; }
     /** Confirmed provider routes keyed by the destination stop occurrence in the ordered itinerary. */
-    [Parameter] public IReadOnlyDictionary<int, RouteItinerary> RoutedConnections { get; set; } = new Dictionary<int, RouteItinerary>();
+    [Parameter] public IReadOnlyDictionary<int, string> RoutedConnections { get; set; } = new Dictionary<int, string>();
     [Parameter] public (decimal Lat, decimal Lon)? PreviewLocation { get; set; }
     /** the saved quality choice: automatic, standard or low. the device decides what automatic means. */
     [Parameter] public string QualityPreference { get; set; } = MapQuality.Automatic;
@@ -472,20 +472,16 @@
      */
     (string Path, double X, double Y)? RoutedPath(int destination)
     {
-        if (!RoutedConnections.TryGetValue(destination, out var route) || route.Legs.Count == 0) return null;
-        var paths = new List<string>();
+        if (!RoutedConnections.TryGetValue(destination, out var encoded)) return null;
+        var points = RouteGeometry.Decode(encoded).Select(point => ScreenPoint(point.Lat, point.Lon)).ToArray();
+        if (points.Length < 2) return null;
+        var path = string.Join(" ", points.Select((point, index) => $"{(index == 0 ? "M" : "L")} {Number(point.X)} {Number(point.Y)}"));
         var sections = new List<((double X, double Y) From, (double X, double Y) To, double Length)>();
-        foreach (var leg in route.Legs)
+        for (var index = 1; index < points.Length; index++)
         {
-            var points = RouteGeometry.Decode(leg.Geometry).Select(point => ScreenPoint(point.Lat, point.Lon)).ToArray();
-            if (points.Length < 2) return null;
-            paths.Add(string.Join(" ", points.Select((point, index) => $"{(index == 0 ? "M" : "L")} {Number(point.X)} {Number(point.Y)}")));
-            for (var index = 1; index < points.Length; index++)
-            {
-                var from = points[index - 1];
-                var to = points[index];
-                sections.Add((from, to, Math.Sqrt(Math.Pow(to.X - from.X, 2) + Math.Pow(to.Y - from.Y, 2))));
-            }
+            var from = points[index - 1];
+            var to = points[index];
+            sections.Add((from, to, Math.Sqrt(Math.Pow(to.X - from.X, 2) + Math.Pow(to.Y - from.Y, 2))));
         }
         var remaining = sections.Sum(section => section.Length) / 2;
         foreach (var section in sections)
@@ -493,7 +489,7 @@
             if (section.Length > 0 && remaining <= section.Length)
             {
                 var fraction = remaining / section.Length;
-                return (string.Join(" ", paths), section.From.X + fraction * (section.To.X - section.From.X),
+                return (path, section.From.X + fraction * (section.To.X - section.From.X),
                     section.From.Y + fraction * (section.To.Y - section.From.Y));
             }
             remaining -= section.Length;

@@ -156,7 +156,7 @@
                         </div>
                         </details>
                         <label for="new-point-source">Source public ID (optional)<input id="new-point-source" aria-describedby="@Described("sourceId", "new-point-source-error")" @bind="sourceId" /></label><TransportFieldError Errors="fieldErrors" Field="sourceId" Id="new-point-source-error" />
-                        <small>Saving creates a catalogue location for the selected endpoint before it can be added to your draft.</small><button type="submit" class="secondary" disabled="@pickingPoint">Save @(choosingDeparture ? "departure" : "destination") location</button>
+                        <small>Saving creates a private location visible only to you before it can be added to your draft.</small><button type="submit" class="secondary" disabled="@pickingPoint">Save @(choosingDeparture ? "departure" : "destination") location</button>
                     </fieldset></form></details>
                 }
                 else

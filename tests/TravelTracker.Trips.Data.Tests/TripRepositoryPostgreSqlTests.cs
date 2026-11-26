@@ -24,11 +24,15 @@ public sealed class TripRepositoryPostgreSqlTests
     public async Task SavedTrip_SurvivesContextRestart_WithSnapshotsAndEnteredOffsets()
     {
         await using var database = new PostgresTestDatabase();
-        var expected = SampleTrip();
+        var expected = SampleTrip(encodedPolyline: "_p~iF~ps|U_ulLnnqC_mqNvxq`@");
         await using (var context = CreateContext(database.ConnectionString))
         {
             await TripsDatabase.InitializeAsync(context);
-            await new EfTripRepository(context).AddAsync(expected, OwnerIssuer, "alice");
+            var writer = new EfTripRepository(context);
+            await writer.AddAsync(expected, OwnerIssuer, "alice");
+            Assert.Null(Assert.Single(await writer.ListOwnedAsync(OwnerIssuer, "alice")).Status);
+            Assert.True(await writer.SetOwnedStatusAsync(expected.TripId, OwnerIssuer, "alice", "completed", default));
+            Assert.False(await writer.SetOwnedStatusAsync(expected.TripId, OwnerIssuer, "bob", "upcoming", default));
         }
 
         await using var restarted = CreateContext(database.ConnectionString);
@@ -36,6 +40,7 @@ public sealed class TripRepositoryPostgreSqlTests
         var persisted = await repository.GetOwnedByIdAsync(expected.TripId, OwnerIssuer, "alice");
         var history = Assert.Single(await repository.ListOwnedAsync(OwnerIssuer, "alice"));
         Assert.Equal(expected.TripId, history.TripId);
+        Assert.Equal("completed", history.Status);
         Assert.Equal(expected.Name, history.Name);
         Assert.Equal(expected.Start.Offset, history.Start.Offset);
         Assert.Equal(expected.End.Offset, history.End.Offset);
@@ -56,6 +61,8 @@ public sealed class TripRepositoryPostgreSqlTests
         Assert.Equal(2, persisted.Legs.Count);
         var first = persisted.Legs[0];
         Assert.Equal(1, first.Sequence);
+        Assert.Equal(expected.Legs[0].EncodedPolyline, first.EncodedPolyline);
+        Assert.Null(persisted.Legs[1].EncodedPolyline);
         Assert.Equal("Hotel Lumiere", first.From.Name);
         Assert.Equal("1 rue de Rivoli", first.From.Address);
         Assert.Equal(48.85m, first.From.Latitude);
@@ -482,10 +489,11 @@ public sealed class TripRepositoryPostgreSqlTests
      * Builds a two-leg round trip from a stored accommodation to an attraction and back, copying the place values
      * the way the save path does.
      *
+     * @param encodedPolyline Optional path to persist on the outbound leg.
      * @param secondTransportCode Optional code for the second leg; longer than the column allows when testing rollback.
      * @return A valid trip with a new identifier.
      */
-    private static Trip SampleTrip(string secondTransportCode = "bus")
+    private static Trip SampleTrip(string secondTransportCode = "bus", string? encodedPolyline = null)
     {
         var hotel = new TripPlace(Guid.Parse("0196a1b2-0000-7000-8000-000000000001"), "accommodation", "Hotel Lumiere", "1 rue de Rivoli", 48.85m, 2.35m);
         var museum = new TripPlace(Guid.Parse("0196a1b2-0000-7000-8000-000000000002"), "attraction", "Louvre", "Rue de Rivoli", 48.86m, 2.34m);
@@ -493,7 +501,7 @@ public sealed class TripRepositoryPostgreSqlTests
         var bus = new TripTransport(Guid.Parse("0196a1b2-0000-7000-8000-000000000005"), secondTransportCode, "Bus");
         return Trip.Create("Paris weekend", Paris, Start, Start.AddHours(4), true,
         [
-            new(1, hotel, museum, train, Start.AddHours(1), Start.AddHours(2)),
+            new(1, hotel, museum, train, Start.AddHours(1), Start.AddHours(2), encodedPolyline),
             new(2, museum, hotel, bus, Start.AddHours(3), Start.AddHours(4))
         ]);
     }

@@ -6,6 +6,17 @@ namespace TravelTracker.Frontend.Api.Trips;
  */
 public sealed class TripsClient(ProtectedClient client)
 {
+    sealed record StatusResponse(string? Status);
+
+    public async Task<string?> SetStatusAsync(Guid tripId, string status, CancellationToken token)
+    {
+        var result = await client.SendJsonAsync<StatusResponse>("Trips", HttpMethod.Put,
+            $"{Path}/{tripId:D}/status", new { status }, token);
+        if (result is null || result.Status != (status == "automatic" ? null : status))
+            throw new ApiError(FailureKind.Unexpected, "The trip status update could not be confirmed.");
+        return result.Status;
+    }
+
     const string Path = "/api/v1/trips";
 
     /**

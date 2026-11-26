@@ -65,6 +65,15 @@ public sealed class FakeTripRepository : ITripRepository
         return Task.FromResult(TripReplacementStatus.Replaced);
     }
 
+    private readonly Dictionary<Guid, string?> statuses = [];
+
+    public Task<bool> SetOwnedStatusAsync(Guid tripId, string ownerIssuer, string ownerSubject, string? status, CancellationToken cancellationToken)
+    {
+        if (!owners.TryGetValue(tripId, out var owner) || owner != (ownerIssuer, ownerSubject)) return Task.FromResult(false);
+        statuses[tripId] = status;
+        return Task.FromResult(true);
+    }
+
     /** {@inheritDoc} */
     public async Task<long?> GetOwnedRevisionAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default) =>
         (await GetOwnedByIdAsync(tripId, ownerIssuer, ownerSubject, cancellationToken))?.Revision;
@@ -90,5 +99,5 @@ public sealed class FakeTripRepository : ITripRepository
         Task.FromResult<IReadOnlyList<TripHistoryEntry>>(stored
             .Where(trip => owners[trip.TripId] == (ownerIssuer, ownerSubject))
             .OrderByDescending(trip => trip.Start).ThenBy(trip => trip.TripId)
-            .Select(trip => new TripHistoryEntry(trip.TripId, trip.Name, trip.Start, trip.End)).ToArray());
+            .Select(trip => new TripHistoryEntry(trip.TripId, trip.Name, trip.Start, trip.End, statuses.GetValueOrDefault(trip.TripId))).ToArray());
 }

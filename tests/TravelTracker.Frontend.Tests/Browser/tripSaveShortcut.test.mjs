@@ -40,9 +40,12 @@ function fixture() {
     const undo = new EditorElement(root, "button");
     const calls = [];
     button.click = () => calls.push("save");
+    const remove = new EditorElement(root, "button");
+    remove.click = () => calls.push("delete");
     undo.click = () => calls.push("undo");
     input.addEventListener("change", () => calls.push("change"));
     root.querySelector = selector => selector === "[data-trip-save]" ? button
+        : selector === "[data-trip-delete]:enabled" ? remove
         : selector === "[data-trip-undo]:enabled" && !undo.disabled ? undo : null;
     return {
         root, input, button, undo, calls, document,
@@ -147,4 +150,18 @@ test("combined shortcut cleanup keeps the existing undo path and releases both h
     registration.disconnect();
     assert.equal(editor.key(editor.root, { key: "z" }).defaultPrevented, false);
     assert.equal(editor.key(editor.root).defaultPrevented, false);
+});
+
+test("Delete activates only the selected item and preserves native text editing", () => {
+    const editor = fixture();
+    const registration = watchEditorShortcuts(editor.root);
+    const press = (target, options = {}) => editor.key(target, { key: "Delete", ctrlKey: false, ...options }).defaultPrevented;
+    assert.equal(press(editor.input), false);
+    assert.equal(press(new EditorElement()), false);
+    assert.equal(press(editor.root, { repeat: true }), false);
+    assert.equal(press(editor.root, { shiftKey: true }), false);
+    assert.equal(press(editor.root), true);
+    assert.deepEqual(editor.calls, ["delete"]);
+    registration.disconnect();
+    assert.equal(press(editor.root), false);
 });

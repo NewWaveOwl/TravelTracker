@@ -3,6 +3,39 @@ namespace TravelTracker.Frontend.Features.Trips;
 /** Decodes bounded Google-format provider polylines into validated map coordinates. */
 public static class RouteGeometry
 {
+    /** Combines provider sections into a single bounded polyline5 for a saved connection. */
+    public static string? Combine(IEnumerable<string> sections)
+    {
+        var path = new System.Text.StringBuilder();
+        int latitude = 0, longitude = 0;
+        foreach (var section in sections)
+        {
+            var points = Decode(section);
+            if (points.Count < 2) return null;
+            foreach (var point in points)
+            {
+                var lat = (int)(point.Lat * 100000);
+                var lon = (int)(point.Lon * 100000);
+                AppendDelta(lat - latitude);
+                AppendDelta(lon - longitude);
+                (latitude, longitude) = (lat, lon);
+                if (path.Length > 200_000) return null;
+            }
+        }
+        return path.Length == 0 ? null : path.ToString();
+
+        void AppendDelta(int delta)
+        {
+            var value = (delta << 1) ^ (delta >> 31);
+            while (value >= 32)
+            {
+                path.Append((char)(((value & 31) | 32) + 63));
+                value >>= 5;
+            }
+            path.Append((char)(value + 63));
+        }
+    }
+
     /**
      * Decodes provider geometry without accepting incomplete or out-of-range coordinates.
      * @param encoded An encoded polyline with five decimal places.

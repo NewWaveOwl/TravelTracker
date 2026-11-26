@@ -19,5 +19,7 @@ public sealed class CreateRoutePointRequest
     public decimal? Lat { get; init; }
     [Required, Range(typeof(decimal), "-180", "180")]
     public decimal? Lon { get; init; }
+    [RegularExpression("^(private|shared)\\z")]
+    public string? Visibility { get; init; }
     public Guid? SourceId { get; init; }
 }

@@ -14,6 +14,19 @@ namespace TravelTracker.Accommodations.Api.Controllers;
 public sealed class AccommodationsController(IAccommodationService service) : ControllerBase
 {
     /**
+     * Publishes a visible location to the shared catalogue and acknowledges repeated shares.
+     * @param id The existing location identifier.
+     * @return Shared visibility, or 404 when the location is unavailable to the caller.
+     */
+    [HttpPost("{id:guid}/share")]
+    [Authorize(Policy = ScopePolicies.CatalogueWrite)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Share(Guid id) =>
+        await service.ShareAsync(id, HttpContext.RequestAborted)
+            ? Ok(new { visibility = "shared" }) : NotFound();
+
+    /**
      * Retrieves a visible accommodation by public identifier.
      * @param id Public accommodation identifier.
      * @return 200 with the record, or 404 when absent/private to another caller.

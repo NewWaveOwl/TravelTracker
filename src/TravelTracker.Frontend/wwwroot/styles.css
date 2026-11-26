@@ -557,7 +557,7 @@ body:has(.map-workspace) > header { z-index: 3; }
 .trip-dialog { display: flex; flex-direction: column; gap: 16px; padding: 24px; background: hsl(0, 0%, 100%); border-width: 2px; border-style: solid; border-color: hsl(120, 25%, 25%); }
 .trip-dialog h2, .trip-dialog p { margin: 0; }
 .trip-summary, .trip-page .trip-review dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0; }
-.trip-summary dd, .trip-page .trip-review dd { margin: 0; }
+.trip-summary dd, .trip-page .trip-review dd { margin: 0; overflow-wrap: anywhere; }
 .trip-legs { display: flex; flex-direction: column; gap: 16px; margin: 0; padding-left: 30px; }
 .trip-legs small { display: block; }
 

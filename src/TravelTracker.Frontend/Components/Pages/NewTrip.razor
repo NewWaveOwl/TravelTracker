@@ -12,6 +12,8 @@
 <PageTitle>@(openingRoute ? "Opening trip" : showMap ? TripTitle : "Trip Editor") | TravelTracker</PageTitle>
 <NavigationLock ConfirmExternalNavigation="HasUnsavedWork" OnBeforeInternalNavigation="ConfirmDraftNavigationAsync" />
 
+<TripDiscardDialog @ref="confirmationDialog" />
+
 <div @ref="plannerElement" class="trip-planner @(showMap ? "map-workspace" : review ? "standard-review" : stopsStep ? "standard-itinerary" : "standard-basics")">
 @if (openingRoute)
 {
@@ -55,8 +57,8 @@ else
     @if (errors.Count > 0)
     {
         <div class="trip-message @(actionFailed ? "failure" : "validation")" role="alert">
-            <strong>@(actionFailed ? "Action could not be completed" : "Check your trip details")</strong>
-            <p>Your draft is still here. Correct the details or retry.</p>
+            <strong>@(actionFailed ? "Something went wrong" : "Check your trip details")</strong>
+            <p>Your draft is still here.</p>
             <ul>
             @foreach (var error in errors)
             {
@@ -93,9 +95,17 @@ else
                 <p class="trip-progress" aria-live="polite">Step @(review ? 3 : stopsStep ? 2 : 1) of 3 &middot; @(review ? "Review and save" : stopsStep ? "Itinerary" : "Trip basics")</p>
             </div>
             <div class="trip-actions" role="group" aria-label="Trip view">
-                @if (draft.Id is null)
+                @if (draft.Id is null && !HasUnsavedWork)
                 {
                     <a class="button secondary" href="new-trip/form">Step-by-step form</a>
+                }
+                else
+                {
+                    <nav class="trip-actions trip-steps" aria-label="Trip planning steps">
+                        <button type="button" class="secondary" aria-current="@(!stopsStep && !review ? "step" : null)" disabled="@busy" @onclick="ShowTripBasics">Basics</button>
+                        <button type="button" class="secondary" aria-current="@(stopsStep && !review ? "step" : null)" disabled="@busy" @onclick="ShowTripItinerary">Itinerary</button>
+                        <button type="button" class="secondary" aria-current="@(review ? "step" : null)" disabled="@busy" @onclick="ShowReview">Review</button>
+                    </nav>
                 }
                 <button type="button" class="secondary" disabled="@busy" @onclick="() => SwitchView(true)">Map View</button>
                 <button type="button" class="secondary @(browseAccommodations ? "trip-tools-close" : null)" disabled="@busy" aria-expanded="@Pressed(browseAccommodations)"
@@ -115,13 +125,13 @@ else
     }
 
     <div class="trip-columns @(!MapVisible ? "editor" : null)">
-        <MovablePanel Label="Map view / Trip planning" Class="itinerary-panel" Enabled="showMap">
+        <MovablePanel Label="Map view / Trip planning" Icon="itinerary" Class="itinerary-panel" Enabled="showMap">
         <section class="trip-chain @(stopsStep ? "chain-stops" : "chain-basics")" aria-labelledby="trip-chain-title">
             @if (MapVisible)
             {
                 <small class="trip-eyebrow">Map view / Trip planning</small>
                 <h1>
-                    <input class="map-trip-name" aria-label="Map trip name" placeholder="Untitled trip" disabled="@busy"
+                    <input class="map-trip-name" maxlength="@TripDraft.MaxNameLength" aria-label="Map trip name" placeholder="Untitled trip" disabled="@busy"
                            @bind:get="draft.Name" @bind:set="value => EditTripValue(draft.Name, value ?? string.Empty, next => draft.Name = next)" />
                 </h1>
                 <div class="trip-actions trip-steps" role="group" aria-label="Planning steps">
@@ -163,6 +173,10 @@ else
                         {
                             var leg = draft.LegTo(first);
                             <div class="trip-leg-time">
+                                @if (!review && leg.Mode is not null)
+                                {
+                                    <button type="button" class="secondary" disabled="@busy" @onclick="() => EditConnection((first, false))">Edit transport</button>
+                                }
                                 <strong>@(leg.Mode?.Name ?? "Choose transport")</strong>
                                 <span>@TimeLabel(leg.Departure) → @TimeLabel(draft.ArrivalFor(leg))</span>
                             </div>
@@ -176,7 +190,12 @@ else
                         @for (var index = first + 1; index < end; index++)
                         {
                             var leg = draft.LegTo(index);
+                            var destination = index;
                             <div class="trip-leg-time trip-local-connection">
+                                @if (!review && leg.Mode is not null)
+                                {
+                                    <button type="button" class="secondary" disabled="@busy" @onclick="() => EditConnection((destination, false))">Edit transport</button>
+                                }
                                 @(leg.Mode?.Name ?? "Choose transport")
                                 @if (DisplayedDuration(leg) is { } minutes)
                                 {
@@ -190,7 +209,7 @@ else
                             <div class="trip-stop-actions">
                                 <button type="button" class="secondary" disabled="@(busy || stopIndex == 0)" @onclick="() => MoveStop(stopIndex, -1)">Move up</button>
                                 <button type="button" class="secondary" disabled="@(busy || stopIndex == draft.Stops.Count - 1)" @onclick="() => MoveStop(stopIndex, 1)">Move down</button>
-                                <button type="button" class="secondary" disabled="@busy" @onclick="() => RemoveStop(stopIndex)">Remove</button>
+                                <button type="button" class="secondary" data-trip-delete="@(!connectionSelected ? "stop" : null)" aria-keyshortcuts="Delete" disabled="@busy" @onclick="() => RemoveStop(stopIndex)">Remove</button>
                             </div>
                         }
                     </li>
@@ -209,7 +228,7 @@ else
 
         @if (showMap && !review)
         {
-            <MovablePanel Label="Map tools" Class="tools-panel" Enabled="showMap">
+            <MovablePanel Label="Map tools" Icon="map-tools" Class="tools-panel" Enabled="showMap">
             <section class="trip-tools" aria-label="Map tools">
                 <div class="trip-palette">
                     <button type="button" class="secondary" aria-pressed="@Pressed(mapTool == MapTool.Markers)" disabled="@busy" @onclick="OpenMarkers">
@@ -232,7 +251,7 @@ else
             </MovablePanel>
         }
 
-        <MovablePanel Label="Plan stops and routes" Class="editor-panel" Enabled="showMap" RevealVersion="editorRevealVersion">
+        <MovablePanel Label="Plan stops and routes" Icon="route" Class="editor-panel" Enabled="showMap" RevealVersion="editorRevealVersion">
         <div id="trip-tools-panel" class="trip-work">
             @if (review)
             {
@@ -252,19 +271,11 @@ else
                     </ol>
                     @if (!savedReview)
                     {
-                        @if (HasDraftTransportStops)
+                        @if (HasPendingCatalogueEntries)
                         {
-                            <p>Select each draft transport stop and replace it with a saved stop before saving the trip.</p>
+                            <p>Saving this trip also saves new locations privately in your catalogue. They stay in the catalogue even if you discard this trip.</p>
                         }
-                        else if (HasPendingCatalogueEntries)
-                        {
-                            <p>Check transport modes and save any new locations before saving the trip. They stay in the catalogue even if you discard this trip.</p>
-                            <button type="button" disabled="@(busy || savingCatalogue)" @onclick="SaveCatalogueEntriesAsync">@(savingCatalogue ? "Saving catalogue entries" : "Save catalogue entries")</button>
-                        }
-                        else
-                        {
-                            <button type="button" data-review-save disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</button>
-                        }
+                        <button type="button" data-review-save disabled="@(busy || savingCatalogue)" @onclick="SaveWorkspaceAsync">@(busy ? "Saving trip" : actionFailed ? "Retry save" : "Save trip")</button>
                     }
                     <button type="button" class="secondary" disabled="@busy" @onclick="BackFromReview">@(savedReview ? "Back to editor" : "Back to stops")</button>
                 </section>
@@ -306,16 +317,13 @@ else
                             {
                                 <div class="leg-transport">
                                     <span>Transport</span>
-                                    <output>
-                                        @if (selectedLeg.Mode is { } mode)
+                                    <select aria-label="Connection transport" value="@(selectedLeg.Mode?.Code ?? "")" @onchange="ReplaceTransport" disabled="@busy">
+                                        <option value="" disabled>Choose transport</option>
+                                        @foreach (var option in Modes)
                                         {
-                                            <img src="@Icon(mode.Code)" alt="" />@mode.Name
+                                            <option value="@option.Code">@option.Label</option>
                                         }
-                                        else
-                                        {
-                                            @:Choose from the transport palette
-                                        }
-                                    </output>
+                                    </select>
                                 </div>
                             }
                         }
@@ -361,16 +369,20 @@ else
                             </fieldset>
                             @if (showMap)
                             {
-                                <p>Choose transport, then select the start and destination in travel order.</p>
+                                <p>You can save a manual connection with its times even when route previews are unavailable.</p>
                                 <button type="button" disabled="@busy" @onclick="ApplyConnectionChanges">Apply connection changes</button>
                             }
+                        }
+                        @if (connectionSelected && CurrentLeg?.Mode is not null)
+                        {
+                            <button type="button" class="secondary" data-trip-delete="connection" aria-keyshortcuts="Delete" disabled="@busy" @onclick="RemoveSelectedConnection">Remove connection</button>
                         }
                         @if (pendingMode is null)
                         {
                             <RoutePlannerPanel Client="SharedRouting" Catalogue="Transport" Stops="@(draft.Stops.Select(stop => stop.Place).ToArray())"
                                                InitialRequest="CurrentRouteRequest" InitialMode="@(CurrentLeg?.Mode?.Code ?? "")" InitialDestination="selected" TimeZone="@draft.TimeZone"
                                                Context="@((draft, routeVersion, routingRevision))" Disabled="busy" CanConfirmContext="@(!HasUnconfirmedMarkerChanges)"
-                                               PreviewChanged="SelectRoutePreview" Confirmed="ConfirmRouteAsync" />
+                                               PreviewChanged="SelectRoutePreview" Confirmed="ConfirmRouteAsync" ManualConnection="ApplyManualConnection" />
                         }
                         @if (showMap)
                         {
@@ -443,7 +455,7 @@ else
         <fieldset class="trip-basic-fields" aria-labelledby="trip-basics-title" disabled="@busy">
             @if (!showMap)
             {
-            <label>Trip name <input type="text" @bind:get="draft.Name"
+            <label>Trip name <input type="text" maxlength="@TripDraft.MaxNameLength" @bind:get="draft.Name"
                                     @bind:set="value => EditTripValue(draft.Name, value ?? string.Empty, next => draft.Name = next)" placeholder="Name your trip" /></label>
             }
             <label>Time zone <input type="text" @bind:get="draft.TimeZone"
@@ -515,7 +527,7 @@ else
 
     RenderFragment MarkerEditor => @<div>
                 <section class="trip-panel marker-panel" aria-labelledby="marker-panel-title">
-                    <h2 id="marker-panel-title">@(editingStopDetails ? markerType == "transport_stop" ? "Replace transport stop" : "Edit stop details" : showMap ? "Add a marker" : "Markers")</h2>
+                    <h2 id="marker-panel-title">@(editingStopDetails ? "Edit stop details" : showMap ? "Add a marker" : "Markers")</h2>
                     <fieldset class="marker-fields" disabled="@busy">
                     @if (!showMap)
                     {
@@ -573,22 +585,14 @@ else
                                                CanPick="true" LocationPicked="PreviewManualPosition" />
                             }
                         }
-                        @if (activeMarker == "transport_stop" && !placing)
-                        {
-                            <p>Choose a saved transport stop to use in your trip. Map pins placed by hand can be kept in a browser draft.</p>
-                            @if (editingStopDetails)
-                            {
-                                <button type="button" class="secondary" @onclick="CancelMarkerDetails">Cancel</button>
-                            }
-                        }
-                        else if (!placing)
+                        @if (!placing)
                         {
                             <button type="button" class="secondary" @onclick="BeginPlacement">@(showMap ? "Pick a location on the map" : "Enter a location")</button>
                         }
                         else
                         {
                             <form class="trip-place" @onsubmit="AddPickedStop" @onsubmit:preventDefault>
-                                <p>@(editingStopDetails ? "Confirm your changes to update this stop. Changed locations must be saved to the catalogue before saving the trip." : "Choose an address result or select a point on the map.")</p>
+                                <p>@(editingStopDetails ? "Apply your changes to this stop. Saving the trip will save the changed location privately." : "Choose an address result or select a point on the map.")</p>
                                 <label>Place name <input @ref="stopNameInput" type="text" required @bind="placeName" /></label>
                                 <details class="location-coordinate-details">
                                 <summary>Map coordinates (optional adjustment)</summary>

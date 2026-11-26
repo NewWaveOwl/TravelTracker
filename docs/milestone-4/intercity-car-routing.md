@@ -22,6 +22,19 @@ no candidate is offered and Find routes remains usable. Repeating the same reque
 cannot supply missing map data. A road route requires an expanded graph; the
 application update alone preserves the existing graph.
 
+## Worldwide storage estimate (2026-11-26)
+
+The documented server budget of 16 GB RAM and roughly 100 GB of storage is too small for a worldwide routing deployment. TravelTracker currently requests map tiles and address lookups on demand, so simply displaying another country does not require downloading a planet file. [Server budget](../shared-routing-and-geocoding-plan.md#goal-and-constraints)
+
+| Capability | Capacity evidence |
+| --- | --- |
+| Download the world's streets and places | The 2026-11-16 compressed OpenStreetMap planet snapshot is listed at 89 GiB (about 96 GB). [OSM download index](https://planet.openstreetmap.org/pbf/) |
+| Host a world basemap | A ready-made vector basemap through zoom 15 is about 120 GB. This is an example for self-hosted display. [Protomaps downloads](https://docs.protomaps.com/basemaps/downloads) |
+| Compute routes | Our regional build below used a 156 MB street extract and produced a 356 MB scheduled graph. Applying that 2.28× ratio to the planet file gives an illustrative **203 GiB graph**, or **292 GiB with the source**. Keeping two graphs for replacement would take about **495 GiB with the source**, before build scratch space, worldwide timetable feeds, logs or backups. Network density and feed selection change this ratio substantially. OTP holds the graph in memory and cites 95 GB RAM for Germany alone. [OTP system requirements](https://docs.opentripplanner.org/en/latest/System-Requirements/) |
+| Also host world address search | Nominatim specifies at least 1 TB of disk and recommends 128 GB or more RAM for a full planet import. The app uses a hosted geocoder today. [Nominatim hardware requirements](https://nominatim.org/release-docs/latest/admin/Installation/#hardware) |
+
+The routing figures are extrapolations from the measured corridor. A worldwide graph has not been built or measured here. Scheduled bus and rail coverage also requires operator timetable feeds for the areas served. [OTP data inputs](https://docs.opentripplanner.org/en/latest/Basic-Tutorial/)
+
 ## Application update
 
 The new backend update is:

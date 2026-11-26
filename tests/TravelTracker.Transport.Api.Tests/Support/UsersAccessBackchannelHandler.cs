@@ -8,6 +8,7 @@ namespace TravelTracker.Transport.Api.Tests.Support;
 internal sealed class UsersAccessBackchannelHandler : HttpMessageHandler
 {
     internal static readonly Guid UserId = Guid.Parse("019ac550-1000-7000-8000-000000000099");
+    internal Guid ResolvedUserId { get; set; } = UserId;
     internal string Status { get; set; } = "active";
     internal string Role { get; set; } = "administrator";
     internal bool Unavailable { get; set; }
@@ -42,13 +43,13 @@ internal sealed class UsersAccessBackchannelHandler : HttpMessageHandler
             LastSubject = body.RootElement.GetProperty("subject").GetString();
             return UnknownIdentity
                 ? new HttpResponseMessage(HttpStatusCode.NotFound)
-                : JsonResponse(new { userId = UserId });
+                : JsonResponse(new { userId = ResolvedUserId });
         }
 
-        if (request.Method == HttpMethod.Get && request.RequestUri?.AbsolutePath == $"/internal/users/{UserId:D}/access")
+        if (request.Method == HttpMethod.Get && request.RequestUri?.AbsolutePath == $"/internal/users/{ResolvedUserId:D}/access")
         {
             if (InvalidResponse) return JsonResponse(new { status = "active", role = "administrator" });
-            return JsonResponse(new { userId = UserId, status = Status, role = Role });
+            return JsonResponse(new { userId = ResolvedUserId, status = Status, role = Role });
         }
 
         return new HttpResponseMessage(HttpStatusCode.NotFound);

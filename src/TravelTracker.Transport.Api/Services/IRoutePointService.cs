@@ -8,12 +8,21 @@ namespace TravelTracker.Transport.Api.Services;
 public interface IRoutePointService
 {
     /**
+     * Publishes an owned place or acknowledges a previously shared place.
+     * @param id Existing public identifier.
+     * @param viewerId Verified caller account.
+     * @param cancellationToken Cancels storage work.
+     * @return Whether the place is now shared.
+     */
+    Task<bool> ShareAsync(Guid id, Guid viewerId, CancellationToken cancellationToken);
+
+    /**
      * Reads a point.
      * @param routePointId Identifier to find.
      * @param cancellationToken Cancels storage I/O.
      * @return A task containing the point, or null when absent.
      */
-    Task<RoutePoint?> GetByIdAsync(Guid routePointId, CancellationToken cancellationToken = default);
+    Task<RoutePoint?> GetByIdAsync(Guid routePointId, Guid viewerId, CancellationToken cancellationToken = default);
 
     /**
      * Creates a point from validated fields.
@@ -21,7 +30,7 @@ public interface IRoutePointService
      * @param cancellationToken Cancels storage I/O.
      * @return A task containing the saved point.
      */
-    Task<RoutePoint> CreateAsync(RoutePoint point, CancellationToken cancellationToken = default);
+    Task<RoutePoint> CreateAsync(RoutePoint point, Guid? ownerId, CancellationToken cancellationToken = default);
 
     /**
      * Reads saved location candidates.
@@ -30,5 +39,5 @@ public interface IRoutePointService
      * @param cancellationToken Cancels I/O.
      * @return Saved reusable locations.
      */
-    Task<List<RoutePoint>> GetAllAsync(string? type = null, string? name = null, CancellationToken cancellationToken = default);
+    Task<List<RoutePoint>> GetAllAsync(Guid viewerId, string? type = null, string? name = null, CancellationToken cancellationToken = default);
 }

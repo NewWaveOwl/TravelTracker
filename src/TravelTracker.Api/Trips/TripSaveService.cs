@@ -84,6 +84,26 @@ public sealed class TripSaveService(TripReferenceValidator validator, ITripRepos
     }
 
     /**
+     * Updates only the active caller's History status.
+     * @param caller Validated issuer and subject.
+     * @param bearerToken Caller credential for the standing check.
+     * @param tripId Trip to update.
+     * @param status Requested status or automatic.
+     * @param cancellationToken Cancels the request.
+     * @return Outcome of standing, input and ownership checks.
+     */
+    public async Task<TripReferenceStatus> SetStatusAsync(CallerIdentity caller, string bearerToken, Guid tripId,
+        string status, CancellationToken cancellationToken)
+    {
+        var refusal = await validator.CheckCallerAsync(caller, bearerToken, cancellationToken);
+        if (refusal is not null) return refusal.Status;
+        if (status is not ("automatic" or "current" or "upcoming" or "completed")) return TripReferenceStatus.InvalidTrip;
+        var found = await trips.SetOwnedStatusAsync(tripId, caller.Issuer, caller.Subject,
+            status == "automatic" ? null : status, cancellationToken);
+        return found ? TripReferenceStatus.Ready : TripReferenceStatus.TripNotFound;
+    }
+
+    /**
      * Reports the same outcome for absent and inaccessible trips.
      *
      * @return A result with no trip data.

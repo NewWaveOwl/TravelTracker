@@ -57,6 +57,76 @@ public sealed class HistoryTests : BunitContext
     }
 
     [Fact]
+    public void ExpandingTripLoadsPrivateDetailsAndStatusChangeUpdatesHistory()
+    {
+        var trip = new TripSummaryDto(Guid.NewGuid(), "Weekend", Now.AddDays(2), Now.AddDays(3));
+        var stop = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "Private address", 10m, 20m);
+        var detail = new TripDto(trip.TripId, trip.Name, "America/Toronto", trip.Start, trip.End, false, [], [stop]);
+        var writes = 0;
+        Configure(async (request, token) =>
+        {
+            if (request.Method == HttpMethod.Put)
+            {
+                Assert.EndsWith($"/{trip.TripId:D}/status", request.RequestUri!.AbsolutePath);
+                Assert.Contains("completed", await request.Content!.ReadAsStringAsync(token));
+                writes++;
+                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { status = "completed" }) };
+            }
+            return new(HttpStatusCode.OK) { Content = request.RequestUri!.AbsolutePath.EndsWith("/trips")
+                ? JsonContent.Create(new[] { trip }) : JsonContent.Create(detail) };
+        }, canWrite: true);
+        var page = Render<History>();
+        Assert.Empty(page.FindAll(".history-detail"));
+        page.Find(".history-toggle").Click();
+        Assert.Contains("Hotel", page.Find(".history-detail").TextContent);
+        Assert.DoesNotContain(stop.Address, page.Find(".history-detail").TextContent);
+        page.Find(".history-detail select").Change("completed");
+        Assert.Equal(1, writes);
+        Assert.Equal("Completed", page.Find(".history-status").TextContent);
+        Assert.Equal($"trips/{trip.TripId:D}", page.Find(".history-detail a").GetAttribute("href"));
+        page.Find(".history-toggle").DoubleClick();
+        Assert.EndsWith($"/trips/{trip.TripId:D}", Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri);
+        page.Find(".history-toggle").Click();
+        Assert.Empty(page.FindAll(".history-detail"));
+    }
+
+    [Fact]
+    public void SharePublishesOnlyDistinctItineraryPlacesAndRetriesUnconfirmedOnes()
+    {
+        var summary = new TripSummaryDto(Guid.NewGuid(), "Weekend", Now, Now.AddDays(1));
+        var hotel = new TripPlaceDto(Guid.NewGuid(), "accommodation", "Hotel", "", 10m, 20m);
+        var museum = hotel with { PlaceId = Guid.NewGuid(), Type = "attraction", Name = "Museum" };
+        var station = hotel with { PlaceId = Guid.NewGuid(), Type = "transport_stop", Name = "Station" };
+        var leg = new TripDto.Leg(1, hotel, museum, new(Guid.NewGuid(), "train", "Train"), Now, Now.AddHours(1));
+        var detail = new TripDto(summary.TripId, summary.Name, "UTC", summary.Start, summary.End, false,
+            [leg], [hotel, museum, station, hotel]);
+        var writes = new List<string>();
+        Configure((request, _) =>
+        {
+            if (request.Method == HttpMethod.Get)
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content =
+                    request.RequestUri!.AbsolutePath.EndsWith("/trips") ? JsonContent.Create(new[] { summary }) : JsonContent.Create(detail) });
+            Assert.Equal(HttpMethod.Post, request.Method);
+            var path = request.RequestUri!.AbsolutePath;
+            writes.Add(path);
+            return Task.FromResult(writes.Count == 2 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { visibility = "shared" }) });
+        }, canShare: true);
+        var page = Render<History>();
+        page.Find(".history-toggle").Click();
+        Assert.Empty(writes);
+        Assert.Single(page.FindAll(".history-share"));
+        page.Find(".history-share button").Click();
+        var expected = new[] { $"/api/v1/accommodations/{hotel.PlaceId:D}/share",
+            $"/api/v1/attractions/{museum.PlaceId:D}/share", $"/api/v1/route-points/{station.PlaceId:D}/share" };
+        Assert.Equal(expected, writes);
+        Assert.Contains("Museum", page.Find(".history-share [role=alert]").TextContent);
+        page.Find(".history-share button").Click();
+        Assert.Equal(expected.Append(expected[1]), writes);
+        Assert.True(page.Find(".history-share button").HasAttribute("disabled"));
+    }
+
+    [Fact]
     public async Task HistoryShowsLoadingThenRecoverableErrorThenIntentionalEmptyState()
     {
         var response = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -90,18 +160,21 @@ public sealed class HistoryTests : BunitContext
      * @param respond Supplies the isolated service response.
      * @param signedIn Whether an authenticated session is available.
      */
-    void Configure(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond, bool signedIn = true)
+    void Configure(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond, bool signedIn = true, bool canWrite = false, bool canShare = false)
     {
         var clock = new FakeTimeProvider(Now);
         var sessions = new SessionRegistry(clock);
         var authentication = new SwitchableAuthentication(sessions);
-        if (signedIn) authentication.SignIn("history-token", Now.AddMinutes(10), "trips.read");
-        var directory = new ServiceDirectory(new Dictionary<string, string> { ["Trips"] = "http://localhost:5108" });
+        if (signedIn) authentication.SignIn("history-token", Now.AddMinutes(10), "trips.read" + (canWrite ? " trips.write" : "") + (canShare ? " catalogue.write" : ""));
+        var directory = new ServiceDirectory(new Dictionary<string, string> {
+            ["Trips"] = "http://localhost:5108", ["Accommodations"] = "http://localhost:5106",
+            ["Attractions"] = "http://localhost:5104", ["Transport"] = "http://localhost:5105" });
         var service = new ServiceClient(new HttpClient(new StubHandler(respond)), NullLogger<ServiceClient>.Instance);
         var client = new ProtectedClient(authentication, directory, service, clock, NullLogger<ProtectedClient>.Instance, sessions);
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         Services.AddSingleton<TimeProvider>(clock);
         Services.AddSingleton(new TripsClient(client));
+        Services.AddSingleton(new TripPlaceSharingClient(client));
     }
 
     [Fact]

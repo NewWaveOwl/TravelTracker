@@ -9,6 +9,14 @@ namespace TravelTracker.Attractions.Api.Services;
 public interface IAttractionService
 {
     /**
+     * Publishes an owned place or acknowledges a previously shared place.
+     * @param id Existing public identifier.
+     * @param cancellationToken Cancels storage work.
+     * @return Whether the place is now shared.
+     */
+    Task<bool> ShareAsync(Guid id, CancellationToken cancellationToken);
+
+    /**
      * Retrieves every available attraction, optionally filtered by name.
      *
      * @param nameFilter Optional substring to match against attraction names (case-insensitive).

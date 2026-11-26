@@ -27,6 +27,10 @@ public sealed class CreateTripLegRequest
     [Required]
     public DateTimeOffset? Departure { get; init; }
 
+    /** Optional five-decimal encoded path of the selected route. */
+    [MaxLength(TravelTracker.Trips.Domain.Models.TripPath.MaxEncodedLength)]
+    public string? EncodedPolyline { get; init; }
+
     /** when the journey reaches To, with its offset. */
     [Required]
     public DateTimeOffset? Arrival { get; init; }

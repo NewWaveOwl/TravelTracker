@@ -14,6 +14,7 @@ using TravelTracker.Frontend.Api.Accommodations;
 using TravelTracker.Frontend.Api.Transport;
 using TravelTracker.Frontend.Api.Trips;
 using TravelTracker.Frontend.Components.Shared;
+using TravelTracker.Frontend.Components.Trips;
 using TravelTracker.Frontend.Features.Trips;
 using TravelTracker.Frontend.Services;
 
@@ -59,6 +60,7 @@ public partial class NewTrip : IAsyncDisposable
     IReadOnlyList<TripPlaceDto> places = [];
     IReadOnlyList<string> errors = [];
     int selected = -1;
+    bool connectionSelected;
 
     bool showMap;
     bool browseAccommodations;
@@ -118,16 +120,16 @@ public partial class NewTrip : IAsyncDisposable
     bool HasUnconfirmedMarkerChanges => editingMarker is { } marker
         ? placeName != marker.Place.Name || placeAddress != marker.Place.Address || latitude != marker.Place.Lat || longitude != marker.Place.Lon
         : placing && (placeName.Length > 0 || placeAddress.Length > 0 || latitude is not null || longitude is not null);
-    bool HasDraftTransportStops => draft.Stops.Any(stop =>
-        stop.Place.Type == "transport_stop" && stop.Place.PlaceId == Guid.Empty);
+    TripDiscardDialog confirmationDialog = default!;
+
 
     bool HasPendingCatalogueEntries => HasPendingModes || draft.Stops.Any(stop => stop.Place.PlaceId == Guid.Empty);
     bool HasPendingModes =>
         Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(draft.LegTo)
             .Any(leg => leg.Mode?.TransportModeId == Guid.Empty);
-    string ConnectionHint => pendingMode is null ? "Choose a mode, then select a starting stop and a destination."
+    string ConnectionHint => pendingMode is null ? "Choose a mode, then select a connection or its two stops."
         : connectionFrom is { } from ? $"From {draft.Stops[from].Place.Name}. Select any other stop as the destination."
-        : "Select the starting stop.";
+        : "Select an existing connection to change its transport, or select the starting stop.";
 
     (string Code, string Label)[] MapLegs => Enumerable.Range(1, Math.Max(0, draft.Stops.Count - 1)).Select(index =>
     {
@@ -150,8 +152,11 @@ public partial class NewTrip : IAsyncDisposable
         if (busy || review || destination <= 0 || destination >= draft.Stops.Count)
             return;
 
+        var replacement = pendingMode;
         ShowStops();
         selected = destination;
+        connectionSelected = true;
+        if (replacement is { } mode) SelectMode(mode);
         focusDuration = fromKeyboard;
     }
 
@@ -264,16 +269,17 @@ public partial class NewTrip : IAsyncDisposable
         var zoneId = draft.TimeZone.Trim();
         if (TimeZoneInfo.TryFindSystemTimeZoneById(zoneId, out var zone))
         {
-            while (zone.IsInvalidTime(start) && DateOnly.FromDateTime(start) == range.Start && start < DateTime.MaxValue.AddMinutes(-1)) start = start.AddMinutes(1);
-            while (zone.IsInvalidTime(end) && DateOnly.FromDateTime(end) == range.End && end > DateTime.MinValue.AddMinutes(1)) end = end.AddMinutes(-1);
-            if (DateOnly.FromDateTime(start) != range.Start || DateOnly.FromDateTime(end) != range.End || start > end)
+            var first = TripDayBoundary.Resolve(range.Start, zone, end: false);
+            var last = TripDayBoundary.Resolve(range.End, zone, end: true);
+            if (first is null || last is null || first > last)
             {
                 errors = ["Choose dates that exist in the trip's time zone."];
                 actionFailed = false;
                 return;
             }
-            if (zone.IsAmbiguousTime(start)) startOffset = new(start, zoneId, zone.GetAmbiguousTimeOffsets(start).Max());
-            if (zone.IsAmbiguousTime(end)) endOffset = new(end, zoneId, zone.GetAmbiguousTimeOffsets(end).Min());
+            (start, end) = (first.Value.DateTime, last.Value.DateTime);
+            if (zone.IsAmbiguousTime(start)) startOffset = new(start, zoneId, first.Value.Offset);
+            if (zone.IsAmbiguousTime(end)) endOffset = new(end, zoneId, last.Value.Offset);
         }
         if (draft.Start == start && draft.End == end && draft.StartOffset == startOffset && draft.EndOffset == endOffset) return;
         RememberEdit();
@@ -437,8 +443,7 @@ public partial class NewTrip : IAsyncDisposable
     {
         if (busy) return;
         var version = routeVersion;
-        if (HasUnsavedWork && !await JavaScript.InvokeAsync<bool>("confirm", closed.Token,
-                "Discard your unsaved trip changes and create a new trip?"))
+        if (HasUnsavedWork && !await confirmationDialog.ConfirmAsync("Discard your unsaved trip changes and create a new trip?", closed.Token))
             return;
         if (version != routeVersion || closed.IsCancellationRequested) return;
         routeVersion++;
@@ -458,6 +463,7 @@ public partial class NewTrip : IAsyncDisposable
         availableModeCodes = null;
         routeId = null;
         selected = -1;
+        connectionSelected = false;
         pendingOpen = null;
         markerNumber = 0;
         openValue = "";
@@ -555,8 +561,7 @@ public partial class NewTrip : IAsyncDisposable
                 browserDraftNotice = "There is no saved map draft in this browser.";
                 return;
             }
-            if (dirty && !await JavaScript.InvokeAsync<bool>("confirm", token,
-                    "Replace your unsaved map edits with the browser draft?"))
+            if (dirty && !await confirmationDialog.ConfirmAsync("Replace your unsaved map edits with the browser draft?", token))
                 return;
             if (version != routeVersion || token.IsCancellationRequested)
                 return;
@@ -577,6 +582,7 @@ public partial class NewTrip : IAsyncDisposable
                 .Select(stop => PlaceDetails(stop.Place)));
             markerNumber = saved.MarkerNumber;
             selected = draft.Stops.Count > 0 ? 0 : -1;
+            connectionSelected = false;
             pendingPlaceCreates.Clear();
             foreach (var place in pendingPlaces)
                 pendingPlaceCreates.Add(place.Key, place.Value);
@@ -621,8 +627,7 @@ public partial class NewTrip : IAsyncDisposable
 
         try
         {
-            var discard = await JavaScript.InvokeAsync<bool>("confirm", context.CancellationToken,
-                "You have unsaved trip changes. Leave this page and discard them?");
+            var discard = await confirmationDialog.ConfirmAsync("You have unsaved trip changes. Leave this page and discard them?", context.CancellationToken);
             if (!discard)
                 context.PreventNavigation();
         }
@@ -674,8 +679,7 @@ public partial class NewTrip : IAsyncDisposable
     async Task SwitchView(bool map)
     {
         var version = routeVersion;
-        if (HasUnconfirmedMarkerChanges && !await JavaScript.InvokeAsync<bool>("confirm", closed.Token,
-                "Discard your unconfirmed marker details and switch editor views?"))
+        if (HasUnconfirmedMarkerChanges && !await confirmationDialog.ConfirmAsync("Discard your unconfirmed marker details and switch editor views?", closed.Token))
             return;
         if (version != routeVersion || closed.IsCancellationRequested) return;
         showMap = map;
@@ -763,15 +767,14 @@ public partial class NewTrip : IAsyncDisposable
     void RememberEdit()
     {
         var restoreDraft = draft.CaptureUndo();
-        var restoreRouting = CaptureRoutingUndo();
-        var state = (selected, insertAfter, dirty, markerNumber);
+        var state = (selected, insertAfter, dirty, markerNumber, connectionSelected);
         if (undoHistory.Count == UndoLimit)
             undoHistory.RemoveAt(0);
         undoHistory.Add(() =>
         {
             restoreDraft();
-            restoreRouting();
-            (selected, insertAfter, dirty, markerNumber) = state;
+            ClearRoutingGeometry();
+            (selected, insertAfter, dirty, markerNumber, connectionSelected) = state;
         });
     }
 
@@ -835,6 +838,7 @@ public partial class NewTrip : IAsyncDisposable
             return;
 
         selected = index;
+        connectionSelected = false;
         if (pendingMode is not { } mode)
         {
             if (!review && (showMap || draft.Stops[index].Place.Type == "transport_stop"))
@@ -853,6 +857,7 @@ public partial class NewTrip : IAsyncDisposable
 
         RememberEdit();
         selected = draft.JoinStops(from, index);
+        connectionSelected = true;
         var leg = draft.LegTo(selected);
         if (leg.Mode?.Code != mode.Code)
             leg.Mode = new(Guid.Empty, mode.Code, mode.Label);
@@ -869,6 +874,7 @@ public partial class NewTrip : IAsyncDisposable
         CancelConnection();
         draft.Swap(index, index + offset);
         selected = index + offset;
+        connectionSelected = false;
         MarkEdited();
     }
 
@@ -891,12 +897,50 @@ public partial class NewTrip : IAsyncDisposable
         var updated = previous with { PlaceId = Guid.Empty, Lat = move.Lat, Lon = move.Lon, Address = "" };
         draft.UpdatePlace(stop, updated);
         selected = move.Index;
+        connectionSelected = false;
         CancelConnection();
         if (retainEditor)
             (latitude, longitude, placeAddress) = (move.Lat, move.Lon, "");
         MarkEdited();
         if (!retainEditor) EditSelectedStop();
         reverseAddressVersion = ++addressLookupSequence;
+    }
+
+    void RemoveSelectedConnection()
+    {
+        if (review || busy || CurrentLeg?.Mode is null) return;
+        RememberEdit();
+        draft.RemoveConnection(selected);
+        CancelConnection();
+        MarkEdited();
+        notice = "Connection removed. Reconnect the stops or remove an unused stop before saving the trip.";
+    }
+
+    void ReplaceTransport(ChangeEventArgs change)
+    {
+        var option = Modes.FirstOrDefault(mode => mode.Code == change.Value?.ToString());
+        if (option.Code is null || busy || review) return;
+        connectionSelected = true;
+        SelectMode(option);
+    }
+
+    void ApplyManualConnection((int Destination, TransportDto Transport, DateTimeOffset? Departure) link)
+    {
+        if (busy || review || HasUnconfirmedMarkerChanges || link.Destination <= 0 || link.Destination >= draft.Stops.Count) return;
+        RememberEdit();
+        selected = link.Destination;
+        connectionSelected = true;
+        var leg = draft.LegTo(selected);
+        leg.Mode = new(link.Transport.TransportModeId, link.Transport.Code, link.Transport.Name);
+        leg.Path = null;
+        if (link.Departure is { } departure)
+        {
+            leg.Departure = departure.DateTime;
+            leg.DepartureOffset = new(departure.DateTime, draft.TimeZone.Trim(), departure.Offset);
+        }
+        CancelConnection();
+        MarkEdited();
+        notice = "Manual connection applied. Check its departure and arrival before saving.";
     }
 
     void RemoveStop(int index)
@@ -910,6 +954,7 @@ public partial class NewTrip : IAsyncDisposable
             ClearMarkerDetails();
         draft.Remove(index);
         selected = Math.Min(index, draft.Stops.Count - 1);
+        connectionSelected = false;
         insertAfter = selected;
         MarkEdited();
     }
@@ -917,6 +962,7 @@ public partial class NewTrip : IAsyncDisposable
     void AddStop(TripPlaceDto place, int? after = null, bool returnToStart = false)
     {
         RememberEdit();
+        connectionSelected = false;
         selected = returnToStart ? draft.AddReturnToStart() : draft.Add(place, after);
         insertAfter = selected;
         placing = false;
@@ -1175,6 +1221,7 @@ public partial class NewTrip : IAsyncDisposable
             ResetBrowserDraftTracking();
             undoHistory.Clear();
             selected = draft.Stops.Count > 0 ? 0 : -1;
+            connectionSelected = false;
             placing = false;
             review = false;
             dirty = false;
@@ -1212,7 +1259,7 @@ public partial class NewTrip : IAsyncDisposable
 
     /**
      * Runs the workspace button and keyboard save through the same validation and save path.
-     * @return A task completing after validation or the trip request, without creating catalogue entries.
+     * @return A task completing after validation or the trip request, including any required catalogue writes.
      */
     async Task SaveWorkspaceAsync()
     {
@@ -1226,14 +1273,20 @@ public partial class NewTrip : IAsyncDisposable
             review = false;
             savedReview = false;
             mapTool = MapTool.Markers;
-            errors = ["Apply or cancel your marker details before saving the trip. Your edits are still here."];
-            actionFailed = false;
-            return;
+            AddPickedStop();
+            if (HasUnconfirmedMarkerChanges)
+                return;
         }
 
         ShowReview();
-        if (!HasPendingCatalogueEntries)
-            await SaveAsync();
+        if (HasPendingCatalogueEntries)
+        {
+            var version = routeVersion;
+            await SaveCatalogueEntriesAsync();
+            if (version != routeVersion || HasPendingCatalogueEntries || errors.Count != 0)
+                return;
+        }
+        await SaveAsync();
     }
 
     /**
@@ -1265,7 +1318,8 @@ public partial class NewTrip : IAsyncDisposable
             }
             var saved = revision.Trip;
             var checkpoint = draft.Id is null ? newBrowserDraft : null;
-            draft = RebindRoutingGeometry(TripPlannerDraft.FromSaved(revision));
+            ClearRoutingGeometry();
+            draft = TripPlannerDraft.FromSaved(revision);
             availableModeCodes = null;
             ResetBrowserDraftTracking();
             undoHistory.Clear();
@@ -1287,7 +1341,7 @@ public partial class NewTrip : IAsyncDisposable
             }
 
             errors = error.Status == 403
-                ? ["The Trips API denied this save. Check that your sign-in has trips.write and catalogue.read, then sign out and back in after any permission change. You can still save a map draft in this browser."]
+                ? ["Your account cannot save this trip. You can keep a draft in this browser. If your access recently changed, sign out and sign in again."]
                 : error.Errors.Count == 0
                 ? [error.Message]
                 : error.Errors.Values.SelectMany(messages => messages).Where(message => message.Length > 0).DefaultIfEmpty(error.Message)
@@ -1338,7 +1392,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Confirms catalogue references independently of saving the itinerary. */
     async Task SaveCatalogueEntriesAsync()
     {
-        if (busy || savingCatalogue || HasDraftTransportStops || !HasPendingCatalogueEntries)
+        if (busy || savingCatalogue || !HasPendingCatalogueEntries)
             return;
 
         var (request, problems) = draft.Build();
@@ -1431,7 +1485,7 @@ public partial class NewTrip : IAsyncDisposable
             if (recovered.Length == 0)
             {
                 pendingPlaceCreates.Remove(place);
-                throw new ApiError(FailureKind.Unexpected, $"No saved record matches {place.Name}. The earlier save may not have applied, so save catalogue entries again to retry.");
+                throw new ApiError(FailureKind.Unexpected, $"No saved record matches {place.Name}. The earlier save may not have applied, so save the trip again to retry.");
             }
             if (recovered.Length > 1)
                 throw UnconfirmedCatalogueEntry(place.Name);

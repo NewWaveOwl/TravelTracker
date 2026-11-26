@@ -58,5 +58,18 @@ export function watchSave(planner) {
 export function watchEditorShortcuts(planner) {
     const undo = watchUndo(planner);
     const save = watchSave(planner);
-    return { disconnect: () => { undo.disconnect(); save.disconnect(); } };
+    const events = new AbortController();
+    document.addEventListener("keydown", event => {
+        if (event.key !== "Delete" || event.defaultPrevented || event.repeat || event.isComposing ||
+            event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || !planner.isConnected) return;
+        const target = event.target;
+        if (!(target instanceof Element) || target.isContentEditable ||
+            target.matches("input, textarea, select") || target.closest("dialog, [role=dialog], [role=alertdialog]") ||
+            !planner.contains(target) && target !== document.body && target !== document.documentElement) return;
+        const button = planner.querySelector("[data-trip-delete]:enabled");
+        if (!button) return;
+        event.preventDefault();
+        button.click();
+    }, { signal: events.signal });
+    return { disconnect: () => { undo.disconnect(); save.disconnect(); events.abort(); } };
 }

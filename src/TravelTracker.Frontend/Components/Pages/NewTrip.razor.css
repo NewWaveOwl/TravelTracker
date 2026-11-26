@@ -1,4 +1,4 @@
-.trip-planner { color: var(--forest); font-size: 18px; --trip-peach: #ffccbd; --trip-panel-surface: #ece2ca; --trip-itinerary-surface: #3a4b37; --trip-ink: #293428; }
+.trip-planner { isolation: isolate; color: var(--forest); font-size: 18px; --trip-peach: #ffccbd; --trip-panel-surface: #ece2ca; --trip-itinerary-surface: #3a4b37; --trip-ink: #293428; }
 .trip-workspace-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; position: sticky; top: 0; z-index: 4; width: fit-content; max-width: 100%; background: var(--trip-panel-surface); padding: 8px 12px; border-radius: 12px; }
 .map-workspace .trip-workspace-actions { position: fixed; left: 27.34%; top: 144px; max-width: calc(44.74% - 24px); margin: 0; }
 .trip-planner [data-trip-save], .trip-planner [data-review-save] { min-height: 60px; padding: 12px 24px; font: clamp(18px, 1.46vw, 28px)/1.28 'Aldrich', sans-serif; }
@@ -35,7 +35,7 @@
 .trip-message { padding: 14px 18px; margin: 0 0 14px; border: 1px solid currentColor; border-radius: 5px; }
 .trip-message ul { margin: 8px 0 0; padding-left: 20px; }
 .trip-message a { margin-left: 10px; }
-.trip-message.validation { background: #fff1c4; color: #684b00; }
+.trip-message.validation { background: var(--warning-surface); color: var(--warning); }
 .trip-message.failure { background: #fce8e6; color: var(--error); }
 .trip-message.success { background: #e2eadc; }
 .trip-columns { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2.35fr); align-items: start; gap: 18px; }
@@ -82,7 +82,7 @@
 }
 
 .trip-palette img { flex: none; }
-.map-workspace { position: relative; min-height: calc(100dvh - 120px); isolation: isolate; }
+.map-workspace { position: relative; min-height: calc(100dvh - var(--site-header-height)); isolation: isolate; }
 .map-surface { position: absolute; inset: 0; z-index: 0; }
 .map-workspace .trip-columns {
     position: relative;
@@ -203,18 +203,18 @@
     .map-workspace ::deep .tools-panel { margin-top: 0; }
 }
 @media (max-width: 900px) {
-    .map-workspace .trip-columns ::deep .movable-panel { max-height: calc(100dvh - 100px); }
+    .map-workspace .trip-columns ::deep .movable-panel { max-height: calc(100dvh - var(--site-header-height)); }
     .map-workspace ::deep .tools-panel { grid-column: 1 / -1; grid-row: 1; justify-self: stretch; margin-top: 0; }
     .map-workspace ::deep .itinerary-panel { grid-column: 1; grid-row: 2; }
     .map-workspace ::deep .editor-panel { grid-column: 2; grid-row: 2; }
-    .map-workspace .map-surface { position: relative; height: calc(100dvh - 120px); min-height: 360px; }
+    .map-workspace .map-surface { position: relative; height: calc(100dvh - var(--site-header-height)); min-height: 360px; }
     .map-workspace .trip-columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: auto; }
     .map-workspace .trip-tools { position: static; max-width: 100%; }
     .map-workspace .trip-chain, .map-workspace .trip-work { grid-row: 1; max-height: none; }
     .map-workspace .trip-work { grid-column: 2; }
 }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
-    .map-workspace .map-surface { height: calc(100dvh - 100px); }
+    .map-workspace .map-surface { height: calc(100dvh - var(--site-header-height)); }
 }
 @media (max-width: 550px) {
     .map-workspace ::deep .itinerary-panel { grid-column: 1; grid-row: 2; }
@@ -366,7 +366,7 @@
 .trip-workspace-controls { position: sticky; top: 0; z-index: 10; width: fit-content; max-width: 100%; }
 .trip-workspace-controls .trip-workspace-actions { position: relative; top: auto; right: auto; left: auto; z-index: 1; margin-bottom: 0; align-items: center; }
 .trip-workspace-controls .trip-workspace-actions .button { padding: 8px 13px; min-height: 44px; font-size: 16px; line-height: 1.2; }
-.trip-workspace-controls .trip-message { margin: 8px 0 0; max-height: 35dvh; overflow: auto; background: var(--trip-panel-surface); }
+.trip-workspace-controls .trip-message { margin: 8px 0 0; max-height: 35dvh; overflow: auto; }
 .trip-workspace-controls .trip-message.failure { background: var(--error-surface, #fce8e6); }
 .trip-workspace-controls .trip-message.success { background: #e2eadc; }
 .trip-save-status { margin: 8px 0 0 !important; padding: 8px 12px; background: var(--trip-panel-surface); border-radius: 5px; }
@@ -377,3 +377,6 @@
     /* Keep save feedback above movable panels so it cannot cover their controls. */
     .map-workspace .trip-workspace-controls { position: relative; top: auto; right: auto; width: auto; max-width: none; margin: 0 8px; padding-top: 8px; }
 }
+
+.trip-review > p, .trip-heading h1 { overflow-wrap: anywhere; }
+.map-trip-name { max-width: 100%; min-width: 0; }

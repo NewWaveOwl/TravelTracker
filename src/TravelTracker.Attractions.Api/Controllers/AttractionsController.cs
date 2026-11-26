@@ -20,6 +20,19 @@ namespace TravelTracker.Attractions.Api.Controllers;
 public sealed class AttractionsController(IAttractionService service, ILogger<AttractionsController> logger) : ControllerBase
 {
     /**
+     * Publishes a visible location to the shared catalogue and acknowledges repeated shares.
+     * @param id The existing location identifier.
+     * @return Shared visibility, or 404 when the location is unavailable to the caller.
+     */
+    [HttpPost("{id:guid}/share")]
+    [Authorize(Policy = ScopePolicies.CatalogueWrite)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Share(Guid id) =>
+        await service.ShareAsync(id, HttpContext.RequestAborted)
+            ? Ok(new { visibility = "shared" }) : NotFound();
+
+    /**
      * Reads a resource by its generated GUID.
      * @param id Identifier to find.
      * @return 200 with its HTTP representation, or 404 when absent.

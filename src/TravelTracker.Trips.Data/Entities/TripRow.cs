@@ -16,6 +16,7 @@ internal sealed class TripRow
     public TimeSpan StartOffset { get; set; }
     public DateTimeOffset EndAt { get; set; }
     public TimeSpan EndOffset { get; set; }
+    public string? Status { get; set; }
     public bool IsRoundTrip { get; set; }
     public List<TripLegRow> Legs { get; set; } = [];
     public List<TripStopRow> Stops { get; set; } = [];

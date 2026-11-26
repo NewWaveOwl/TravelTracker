@@ -12,27 +12,78 @@ public partial class History : IDisposable
     [Parameter] public bool Embedded { get; set; }
     [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
     [Inject] TripsClient Trips { get; set; } = default!;
+    [Inject] NavigationManager Navigation { get; set; } = default!;
     [Inject] TimeProvider Clock { get; set; } = default!;
 
     IReadOnlyList<TripSummaryDto> trips = [];
     CancellationTokenSource? request;
     ApiError? failure;
-    bool loading = true, signedIn, disposed;
+    bool loading = true, signedIn, canWrite, canShare, disposed;
+    Guid? expanded;
+    TripDto? detail;
+    string? detailError;
+    bool updatingStatus;
+    int detailVersion;
+
     const int PageSize = 10;
     string search = "", status = "all", order = "past";
     DateTime? fromDate, throughDate;
     int pageIndex;
     bool InvalidDates => fromDate > throughDate;
 
+    async Task ToggleAsync(Guid id)
+    {
+        var version = ++detailVersion;
+        detail = null;
+        detailError = null;
+        if (expanded == id)
+        {
+            expanded = null;
+            return;
+        }
+        expanded = id;
+        var token = request!.Token;
+        try
+        {
+            var loaded = await Trips.GetAsync(id, token);
+            if (version == detailVersion && !token.IsCancellationRequested) detail = loaded;
+        }
+        catch (ApiError error)
+        {
+            if (version == detailVersion && !token.IsCancellationRequested) detailError = error.Message;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+    }
+
+    async Task ChangeStatusAsync(Guid id, string? value)
+    {
+        if (!canWrite || updatingStatus || expanded != id || value is not ("upcoming" or "current" or "completed" or "automatic")) return;
+        var token = request!.Token;
+        updatingStatus = true;
+        detailError = null;
+        try
+        {
+            var saved = await Trips.SetStatusAsync(id, value, token);
+            if (token.IsCancellationRequested) return;
+            trips = trips.Select(trip => trip.TripId == id ? trip with { Status = saved } : trip).ToArray();
+            pageIndex = Math.Min(pageIndex, Math.Max(0, (FilteredTrips().Count - 1) / PageSize));
+        }
+        catch (ApiError error)
+        {
+            if (!token.IsCancellationRequested && expanded == id) detailError = error.Message;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        finally { if (!token.IsCancellationRequested) updatingStatus = false; }
+    }
     static string TripName(TripSummaryDto trip) => string.IsNullOrWhiteSpace(trip.Name) ? "Untitled trip" : trip.Name;
 
     /**
-     * Derives the planned trip status from saved boundaries, without implying live location tracking.
+     * Uses the owner’s chosen status or derives it from the trip dates.
      * @param trip A summary returned by the owner-scoped Trips API.
      * @return Completed, current or upcoming status key.
      */
-    string Status(TripSummaryDto trip) => trip.End < Clock.GetUtcNow() ? "completed"
-        : trip.Start > Clock.GetUtcNow() ? "upcoming" : "current";
+    string Status(TripSummaryDto trip) => trip.Status ?? (trip.End < Clock.GetUtcNow() ? "completed"
+        : trip.Start > Clock.GetUtcNow() ? "upcoming" : "current");
 
     string StatusLabel(TripSummaryDto trip) => Status(trip) switch
     {
@@ -109,6 +160,10 @@ public partial class History : IDisposable
         var token = current.Token;
         loading = true;
         signedIn = false;
+        expanded = null;
+        detail = null;
+        detailVersion++;
+        updatingStatus = canWrite = canShare = false;
         trips = [];
         failure = null;
         ResetPage();
@@ -118,6 +173,9 @@ public partial class History : IDisposable
             if (token.IsCancellationRequested) return;
             signedIn = user.Identity?.IsAuthenticated == true;
             if (!signedIn) return;
+            var scopes = Auth.AccessTokenClaims.GrantedScopes(user);
+            canWrite = scopes.Contains("trips.write");
+            canShare = scopes.Contains("catalogue.write");
 
             var loaded = await Trips.ListAsync(token);
             if (!token.IsCancellationRequested) trips = loaded;

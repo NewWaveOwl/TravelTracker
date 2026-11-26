@@ -9,6 +9,7 @@ namespace TravelTracker.Api.Trips;
  * @param TransportModeId Public identifier of the transport mode in the Transport service.
  * @param Departure When the journey leaves From, with its offset.
  * @param Arrival When the journey reaches To, with its offset.
+ * @param EncodedPolyline Optional five-decimal encoded path of the selected route.
  */
 public sealed record TripLegDraft(int Sequence, TripPlaceReference From, TripPlaceReference To, Guid TransportModeId,
-    DateTimeOffset Departure, DateTimeOffset Arrival);
+    DateTimeOffset Departure, DateTimeOffset Arrival, string? EncodedPolyline = null);

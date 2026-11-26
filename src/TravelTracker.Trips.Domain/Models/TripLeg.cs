@@ -11,6 +11,7 @@ namespace TravelTracker.Trips.Domain.Models;
  * @param Transport the transport mode used for the journey.
  * @param Departure when the journey leaves From.
  * @param Arrival when the journey reaches To; must be after Departure.
+ * @param EncodedPolyline Optional five-decimal encoded path of the selected route.
  */
 public sealed record TripLeg(int Sequence, TripPlace From, TripPlace To, TripTransport Transport,
-    DateTimeOffset Departure, DateTimeOffset Arrival);
+    DateTimeOffset Departure, DateTimeOffset Arrival, string? EncodedPolyline = null);

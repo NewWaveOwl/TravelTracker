@@ -107,8 +107,9 @@ waiting and available stop/transfer details. Only explicit Confirm applies the
 saved transport and exact seconds to an adjacent connection. Preview/Cancel does
 not write the itinerary or reorder stops. Confirmation rechecks endpoint/revision,
 unconfirmed markers and the exact saved-mode ID, updates the parent immediately,
-and participates in Undo. Geometry stays within the circuit/session, is cleared
-for a different account/trip and is not a new persistence field.
+and participates in Undo. The initial #127 implementation kept geometry in the
+session. The Trips geometry migration now lets Save retain a confirmed path on
+its leg for the owner to reopen.
 
 Confirmed provider geometry replaces the matching leg's approximate connection,
 and its edit control follows the midpoint of the generated path. Other legs

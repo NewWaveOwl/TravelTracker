@@ -112,6 +112,8 @@ public sealed class Trip
             CheckPlace(leg.From, $"{path}.from", Fail);
             CheckPlace(leg.To, $"{path}.to", Fail);
             if (leg.Transport is null || leg.Transport.TransportModeId == Guid.Empty) Fail($"{path}.transport", "a transport mode is required.");
+            if (leg.EncodedPolyline is { } pathData && !TripPath.IsValid(pathData))
+                Fail($"{path}.encodedPolyline", $"Choose a valid route shape of up to {TripPath.MaxEncodedLength:N0} characters.");
             if (leg.Arrival <= leg.Departure) Fail($"{path}.arrival", "arrival must be after departure.");
             if (leg.Departure < start) Fail($"{path}.departure", "departure is before the trip start.");
             if (leg.Arrival > end) Fail($"{path}.arrival", "arrival is after the trip end.");

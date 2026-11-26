@@ -42,6 +42,10 @@ namespace TravelTracker.Trips.Data.Migrations
                     b.Property<TimeSpan>("DepartureOffset")
                         .HasColumnType("interval");
 
+                    b.Property<string>("EncodedPolyline")
+                        .HasMaxLength(200000)
+                        .HasColumnType("character varying(200000)");
+
                     b.Property<decimal>("FromLatitude")
                         .HasColumnType("numeric");
 
@@ -145,6 +149,9 @@ namespace TravelTracker.Trips.Data.Migrations
                     b.Property<TimeSpan>("StartOffset")
                         .HasColumnType("interval");
 
+                    b.Property<string>("Status")
+                        .HasColumnType("text");
+
                     b.Property<string>("TimeZoneId")
                         .IsRequired()
                         .HasColumnType("text");
@@ -162,6 +169,8 @@ namespace TravelTracker.Trips.Data.Migrations
                             t.HasCheckConstraint("CK_Trips_Owner", "length(btrim(\"OwnerIssuer\")) > 0 AND length(btrim(\"OwnerSubject\")) > 0");
 
                             t.HasCheckConstraint("CK_Trips_Revision", "\"Revision\" >= 1");
+
+                            t.HasCheckConstraint("CK_Trips_Status", "\"Status\" IN ('upcoming', 'current', 'completed')");
                         });
                 });
 

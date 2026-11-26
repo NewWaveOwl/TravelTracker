@@ -50,6 +50,8 @@ public sealed class CriticalJourneyTests : IDisposable
             "/api/v1/accommodations", new { name = "Hotel Lumiere", lat = 48.85m, lon = 2.35m }, "accommodationId");
         var museum = await CreateAsync(environment.ClientFor(environment.Attractions, "alice", TravellerScopes),
             "/api/v1/attractions", new { name = "Louvre", lat = 48.86m, lon = 2.34m, estimatedVisitMinutes = 120 }, "attractionId");
+        var station = await CreateAsync(environment.ClientFor(environment.Transport, "alice", TravellerScopes),
+            "/api/v1/route-points", new { type = "transport_stop", name = "North station", lat = 48.88m, lon = 2.35m }, "routePointId");
         var train = await CreateAsync(environment.ClientFor(environment.Transport, "catalogue-admin", TravellerScopes),
             "/api/v1/transport-modes", new { code = "train", name = "Train" }, "transportModeId");
 
@@ -72,6 +74,15 @@ public sealed class CriticalJourneyTests : IDisposable
                     transportModeId = train,
                     departure = start.AddHours(1),
                     arrival = start.AddHours(2)
+                },
+                new
+                {
+                    sequence = 2,
+                    from = new { placeId = museum, type = "attraction" },
+                    to = new { placeId = station, type = "transport_stop" },
+                    transportModeId = train,
+                    departure = start.AddHours(3),
+                    arrival = start.AddHours(4)
                 }
             }
         });
@@ -85,8 +96,31 @@ public sealed class CriticalJourneyTests : IDisposable
         Assert.Equal("Hotel Lumiere", trip.GetProperty("legs")[0].GetProperty("from").GetProperty("name").GetString());
 
         using var bobTrips = environment.ClientFor(environment.Trips, "bob", TravellerScopes);
+        await VerifyShareAsync(environment.ClientFor(environment.Accommodations, "alice", TravellerScopes),
+            environment.ClientFor(environment.Accommodations, "bob", TravellerScopes), $"/api/v1/accommodations/{hotel:D}");
+        await VerifyShareAsync(environment.ClientFor(environment.Attractions, "alice", TravellerScopes),
+            environment.ClientFor(environment.Attractions, "bob", TravellerScopes), $"/api/v1/attractions/{museum:D}");
+        await VerifyShareAsync(environment.ClientFor(environment.Transport, "alice", TravellerScopes),
+            environment.ClientFor(environment.Transport, "bob", TravellerScopes), $"/api/v1/route-points/{station:D}");
+
         using var bobTripRead = await bobTrips.GetAsync(location);
         Assert.Equal(HttpStatusCode.NotFound, bobTripRead.StatusCode);
+    }
+
+    static async Task VerifyShareAsync(HttpClient owner, HttpClient viewer, string place)
+    {
+        using (owner)
+        using (viewer)
+        {
+            using var hidden = await viewer.GetAsync(place);
+            Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+            using var rejected = await viewer.PostAsync(place + "/share", null);
+            Assert.Equal(HttpStatusCode.NotFound, rejected.StatusCode);
+            using var published = await owner.PostAsync(place + "/share", null);
+            Assert.Equal(HttpStatusCode.OK, published.StatusCode);
+            using var visible = await viewer.GetAsync(place);
+            Assert.Equal(HttpStatusCode.OK, visible.StatusCode);
+        }
     }
 
     /** every host refuses a request with no token, a bad token or too little scope, and the public health route stays open. */
