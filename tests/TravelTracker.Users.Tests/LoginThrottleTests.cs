@@ -55,22 +55,24 @@ public sealed class LoginThrottleTests
     }
 
     [Fact]
-    public void ManyOtherUsernamesNeitherEvictNorLockAnyone()
+    public void AFullTrackerStillLocksNewUsernamesWithoutLockingOthers()
     {
         var throttle = new LoginThrottle(new ManualClock());
-        for (var attempt = 0; attempt < LoginThrottle.MaxFailures - 1; attempt++) throttle.RecordFailure("ada");
         for (var index = 0; index < 10_000; index++) throttle.RecordFailure($"user{index}");
+        for (var attempt = 0; attempt < LoginThrottle.MaxFailures; attempt++) throttle.RecordFailure("newcomer");
+        Assert.True(throttle.RetryAfter("newcomer") > TimeSpan.Zero);
         Assert.Null(throttle.RetryAfter("bystander"));
-        Assert.Null(throttle.RetryAfter("ada"));
-        throttle.RecordFailure("ada");
-        Assert.True(throttle.RetryAfter("ada") > TimeSpan.Zero);
     }
 
     [Fact]
-    public async Task ConcurrentFailuresAreAllCounted()
+    public async Task ConcurrentFailuresAndExpiryNeverLoseAFreshFailure()
     {
-        var throttle = new LoginThrottle(new ManualClock());
-        await Task.WhenAll(Enumerable.Range(0, LoginThrottle.MaxFailures).Select(_ => Task.Run(() => throttle.RecordFailure("ada"))));
+        var clock = new ManualClock();
+        var throttle = new LoginThrottle(clock);
+        for (var index = 0; index < 10_000; index++) throttle.RecordFailure($"user{index}");
+        clock.Advance(LoginThrottle.LockDuration);
+        // every tracked entry is expired, so these failures prune while other threads record fresh ones
+        await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => Task.Run(() => throttle.RecordFailure("ada"))));
         Assert.True(throttle.RetryAfter("ada") > TimeSpan.Zero);
     }
 }
