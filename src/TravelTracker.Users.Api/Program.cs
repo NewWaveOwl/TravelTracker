@@ -46,6 +46,7 @@ public class UsersProgram
             TravelTracker.Users.Data.Repositories.Credentials.CredentialRepository>();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<TokenIssuer>();
+        builder.Services.AddSingleton<LoginThrottle>();
         builder.Services.AddScoped<UserProfileService>();
         builder.Services.AddScoped<BootstrapService>();
         builder.Services.AddHttpClient<VerifiedIdentityClient>(client => client.Timeout = TimeSpan.FromSeconds(5))

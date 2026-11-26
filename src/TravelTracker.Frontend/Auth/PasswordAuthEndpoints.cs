@@ -86,6 +86,11 @@ public static class PasswordAuthEndpoints
             await StartSessionAsync(context, session, sessions);
             return Results.Redirect("/account");
         }
+        catch (HttpRequestException error) when (error.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        {
+            // the Users API locked this username after repeated failures
+            return Results.Redirect("/sign-in?error=rate-limit");
+        }
         catch (Exception error) when (error is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
         {
             // the type only: responses can carry sensitive identity data
