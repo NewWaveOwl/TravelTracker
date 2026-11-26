@@ -34,6 +34,7 @@ builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationSta
 builder.Services.AddScoped<ProtectedClient>();
 builder.Services.AddScoped<TripsClient>();
 builder.Services.AddScoped<TicketImportsClient>();
+builder.Services.AddScoped<TravelTracker.Frontend.Features.TicketImports.ReviewedTicketTransfer>();
 builder.Services.AddScoped<TripPlacesClient>();
 builder.Services.AddScoped<TransportClient>();
 builder.Services.AddScoped<AttractionsClient>();

@@ -39,6 +39,36 @@ public sealed class TripPlannerTests : BunitContext
     static readonly TripDto Saved = new(TripId, "Weekend", "America/Toronto", Start, Start.AddHours(4),
         false, [new(1, Hotel, Museum, Train, Start.AddHours(1), Start.AddHours(2))]);
 
+    [Fact]
+    public async Task ReviewedTicketUpdatesOnlyTheChosenDraftConnectionUntilExplicitSave()
+    {
+        SaveTripRequest? submitted = null;
+        Configure(async (request, token) =>
+        {
+            if (request.Method == HttpMethod.Put)
+                submitted = await request.Content!.ReadFromJsonAsync<SaveTripRequest>(token);
+            return Json(Saved);
+        });
+        var transfer = new TravelTracker.Frontend.Features.TicketImports.ReviewedTicketTransfer();
+        Services.AddSingleton(transfer);
+        var user = (await Services.GetRequiredService<AuthenticationStateProvider>().GetAuthenticationStateAsync()).User;
+        var ticket = TravelTracker.Frontend.Features.TicketImports.TicketReviewDraft.FromFields([
+            new("timeZone", "America/Toronto", "extracted"), new("departureDate", "2026-11-14", "extracted"),
+            new("arrivalDate", "2026-11-14", "extracted"), new("departureTime", "10:15", "extracted"),
+            new("arrivalTime", "11:30", "extracted")]);
+        transfer.Set(TripId, SessionRegistry.IdFor(user)!, ticket);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"trip/{TripId:D}");
+        var page = Render<NewTrip>(parameters => parameters.Add(editor => editor.TripId, TripId));
+        page.Find("[aria-label='Reviewed ticket'] select").Change("1");
+        Click(page, "Apply reviewed times");
+        Assert.Null(submitted);
+        Assert.Empty(page.FindAll("[aria-label='Reviewed ticket']"));
+        Click(page, "Save trip");
+        var leg = Assert.Single(submitted!.Legs);
+        Assert.Equal(Start.AddMinutes(75), leg.Departure);
+        Assert.Equal(Start.AddMinutes(150), leg.Arrival);
+    }
+
     [Theory]
     [InlineData("Save trip")]
     [InlineData("Review trip")]

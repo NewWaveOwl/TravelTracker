@@ -56,6 +56,16 @@ public sealed class TicketImportsClient(ProtectedClient client)
         catch (ApiError error) { throw ForTicket(error); }
     }
 
+    sealed record TextResponse(Guid TripId, TicketFieldDto[] Fields);
+
+    public async Task<TicketFieldDto[]> ParseTextAsync(Guid tripId, string text, CancellationToken token)
+    {
+        var response = await client.ParseTicketTextAsync<TextResponse>($"{Path(tripId)}/text", text, token);
+        if (response?.TripId != tripId || response.Fields is null)
+            throw new ApiError(FailureKind.Unexpected, "The service returned an incomplete ticket review.");
+        return response.Fields;
+    }
+
     static string Path(Guid tripId) => $"/api/v1/trips/{tripId:D}/ticket-imports";
 
     static ApiError ForTicket(ApiError error) => new(error.Kind, error.Status switch
