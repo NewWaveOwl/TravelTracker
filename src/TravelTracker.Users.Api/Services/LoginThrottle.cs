@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-
 namespace TravelTracker.Users.Api.Services;
 
 /**
@@ -12,12 +10,16 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
     /** Failed attempts allowed inside the lock duration before the username locks. */
     public const int MaxFailures = 5;
 
-    /** How long a username stays locked, and how long a failure keeps counting. */
+    /** The window the failures are counted in, and so how long a username stays locked at most. */
     public static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(15);
 
     private const int MaxTrackedUsernames = 10_000;
 
-    private readonly ConcurrentDictionary<string, Entry> entries = new();
+    private readonly object gate = new();
+    private readonly Dictionary<string, Queue<DateTimeOffset>> entries = new();
+
+    // shared by every username that shows up once the tracker is full, so the cap cannot be used to dodge the lockout
+    private readonly Queue<DateTimeOffset> overflow = new();
 
     /**
      * Reports whether a username is currently locked.
@@ -26,31 +28,36 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
      */
     public TimeSpan? RetryAfter(string username)
     {
-        if (!entries.TryGetValue(Key(username), out var entry)) return null;
-        lock (entry)
+        lock (gate)
         {
-            var remaining = entry.LockedUntil - timeProvider.GetUtcNow();
-            return remaining > TimeSpan.Zero ? remaining : null;
+            var now = timeProvider.GetUtcNow();
+            var failures = entries.TryGetValue(Key(username), out var entry) ? entry : entries.Count >= MaxTrackedUsernames ? overflow : null;
+            if (failures is null) return null;
+            Expire(failures, now);
+            return failures.Count < MaxFailures ? null : failures.Peek() + LockDuration - now;
         }
     }
 
     /**
-     * Counts a failed sign-in and locks the username once it reaches the limit.
+     * Counts a failed sign-in. The username locks once it has MaxFailures failures inside the lock duration.
      * @param username The submitted username.
      */
     public void RecordFailure(string username)
     {
-        var now = timeProvider.GetUtcNow();
-        var key = Key(username);
-        if (entries.Count >= MaxTrackedUsernames) Prune(now);
-        // ponytail: past the cap new usernames go untracked; the per-address limit still applies, move to a shared store if it matters
-        if (entries.Count >= MaxTrackedUsernames && !entries.ContainsKey(key)) return;
-        var entry = entries.GetOrAdd(key, _ => new Entry());
-        lock (entry)
+        lock (gate)
         {
-            if (now - entry.LastFailure >= LockDuration) entry.Failures = 0;
-            entry.LastFailure = now;
-            if (++entry.Failures >= MaxFailures) entry.LockedUntil = now + LockDuration;
+            var now = timeProvider.GetUtcNow();
+            var key = Key(username);
+            if (entries.Count >= MaxTrackedUsernames) Prune(now);
+            // ponytail: past the cap unseen usernames share one counter; a shared store would track them separately
+            if (!entries.TryGetValue(key, out var failures))
+            {
+                if (entries.Count >= MaxTrackedUsernames) failures = overflow;
+                else entries[key] = failures = new Queue<DateTimeOffset>();
+            }
+            Expire(failures, now);
+            failures.Enqueue(now);
+            if (failures.Count > MaxFailures) failures.Dequeue();
         }
     }
 
@@ -58,20 +65,25 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
      * Forgets a username's failures after a successful sign-in.
      * @param username The submitted username.
      */
-    public void Reset(string username) => entries.TryRemove(Key(username), out _);
+    public void Reset(string username)
+    {
+        lock (gate)
+            entries.Remove(Key(username));
+    }
+
+    private static void Expire(Queue<DateTimeOffset> failures, DateTimeOffset now)
+    {
+        while (failures.Count > 0 && now - failures.Peek() >= LockDuration) failures.Dequeue();
+    }
 
     private void Prune(DateTimeOffset now)
     {
-        foreach (var pair in entries)
-            if (now - pair.Value.LastFailure >= LockDuration) entries.TryRemove(pair.Key, out _);
+        foreach (var key in entries.Keys.ToList())
+        {
+            Expire(entries[key], now);
+            if (entries[key].Count == 0) entries.Remove(key);
+        }
     }
 
     private static string Key(string username) => username.Trim().ToUpperInvariant();
-
-    private sealed class Entry
-    {
-        public int Failures;
-        public DateTimeOffset LastFailure;
-        public DateTimeOffset LockedUntil;
-    }
 }
