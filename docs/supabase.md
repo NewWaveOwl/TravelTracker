@@ -1,6 +1,6 @@
 # Supabase as the database
 
-TravelTracker does not use Supabase Auth. Sign-in is handled by the Users API against its own PostgreSQL database (see [API authentication](authentication.md)), so Supabase is only a PostgreSQL server here, exactly like a local container or any other host. The launcher's `--supabase` flag is a preset that builds the connection for you.
+This page covers Supabase as the PostgreSQL server only. By default sign-in is handled by the Users API against its own PostgreSQL database (see [API authentication](authentication.md)), so Supabase is just a database here, exactly like a local container or any other host. The launcher's `--supabase` flag is a preset that builds the connection for you. To use Supabase for sign-in as well, see [Supabase Auth](supabase-auth.md); the two uses are independent.
 
 ## Connect
 
@@ -35,6 +35,6 @@ psql -X -W "host=your-region.pooler.supabase.com port=5432 user=postgres.yourpro
 
 Then run `dotnet run --file scripts/StartDev.cs -- --supabase --apply-migrations` with a migration-capable role. Teammates use their assigned runtime role afterwards.
 
-## Leaving Supabase Auth
+## Switching between Local and Supabase sign-in
 
-Accounts that existed only in Supabase Auth were not carried over: their passwords were never in these databases, so each traveller registers again. Their old trips remain keyed to the previous Supabase user ID and stay hidden from a new account, because a matching email never merges accounts. The Supabase access-token hook, the service-user setup and the identity migration script are gone; the Supabase project's Auth settings can be left unused.
+Accounts are keyed by the token's issuer and subject, so switching provider never carries accounts over. A traveller's old trips stay keyed to the previous account and are hidden from the new one, because a matching email or username never merges accounts. The identity migration script was removed with the earlier switch to built-in sign-in, so moving existing data between providers is a manual operator task.

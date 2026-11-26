@@ -1,6 +1,6 @@
 # API bearer authentication (#34)
 
-**Identity: built in.** The Users API stores a password hash per account in its own PostgreSQL database and issues the access tokens; every other API is a resource server that verifies them. Nothing is delegated to an external identity provider (Supabase Auth and Auth0 were removed). The Users service stays the owner of TravelTracker profiles, roles and account standing.
+**Identity: built in by default, Supabase Auth optionally.** With the default `Local` provider the Users API stores a password hash per account in its own PostgreSQL database and issues the access tokens; every other API is a resource server that verifies them. Setting `Authentication:Bearer:Provider` to `Supabase` hands login to Supabase Auth instead and the APIs verify Supabase's tokens; see [Supabase Auth](supabase-auth.md). Everything below describes the Local provider unless it says otherwise. Auth0 was removed. The Users service stays the owner of TravelTracker profiles, roles and account standing in both cases.
 
 ## How a token is made
 
@@ -21,7 +21,8 @@ Every API host reads the same settings (environment variables use `__` for `:`):
 
 | Setting | Meaning |
 | --- | --- |
-| `Authentication:Bearer:PublicKey` | PEM public key (`-----BEGIN PUBLIC KEY-----`) that verifies signatures. Not secret. The Users API may leave it blank and derives it from its private key. |
+| `Authentication:Bearer:Provider` | `Local` (default) or `Supabase`. Supabase also needs `Authority` (the project's `/auth/v1` URL, the same as `Issuer`) and verifies tokens against its published signing keys instead of `PublicKey`. |
+| `Authentication:Bearer:PublicKey` | Local only. PEM public key (`-----BEGIN PUBLIC KEY-----`) that verifies signatures. Not secret. The Users API may leave it blank and derives it from its private key. |
 | `Authentication:Bearer:Issuer` | Exact `iss` the tokens must carry. The launcher uses the Users origin. |
 | `Authentication:Bearer:Audience` | The `aud` this API accepts. |
 | `Authentication:Bearer:ScopeClaimType` | Claim that carries scopes, `scope`. |

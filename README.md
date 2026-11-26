@@ -1,6 +1,6 @@
 # TravelTracker
 
-TravelTracker is a .NET 10 trip planner with a Blazor frontend, six local APIs and PostgreSQL storage. Sign-in is built in: the Users API checks passwords against its own PostgreSQL database and issues short-lived signed tokens that every other API verifies. No external identity provider is needed. Supabase works as an ordinary PostgreSQL server through a launcher preset.
+TravelTracker is a .NET 10 trip planner with a Blazor frontend, six local APIs and PostgreSQL storage. Sign-in is built in: the Users API checks passwords against its own PostgreSQL database and issues short-lived signed tokens that every other API verifies. No external identity provider is needed, but Supabase Auth can be selected instead per deployment. Supabase also works as an ordinary PostgreSQL server through a launcher preset.
 
 **Live demo:** [Open TravelTracker](https://traveltracker-frontend.politebush-89a65c90.canadacentral.azurecontainerapps.io).
 Sign in to save trips and view History. Address lookup and route previews require
@@ -152,6 +152,7 @@ For PostgreSQL tests, set `TRAVELTRACKER_TEST_POSTGRES` to an isolated PostgreSQ
 
 - [API authentication](docs/authentication.md)
 - [Supabase as the database](docs/supabase.md)
+- [Supabase Auth as the sign-in provider](docs/supabase-auth.md)
 - [Supabase PostgreSQL migration audit and staging verification](docs/supabase-migration-verification.md)
 - [Environment configuration and secrets](docs/environment-configuration.md)
 - [API contracts and service URLs](docs/api.md)

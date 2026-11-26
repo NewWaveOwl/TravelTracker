@@ -13,8 +13,9 @@ the process that consumes them.
 | `Users__InternalBaseUrl` and `Users__ServiceAccessToken` | Attractions, Transport, Accommodations and Settings | HTTPS Users address and a scoped backend credential supplied to those processes. |
 | `TripReferences__UsersBaseUrl` and `TripReferences__UsersServiceAccessToken` | Trips | HTTPS Users address and backend credential. The other three `TripReferences__<Service>BaseUrl` values carry traveller bearer tokens, so use HTTPS in Production. |
 | `Services__<Service>` | Frontend server | All six HTTPS service addresses in Production. |
-| `Authentication__Provider`, `Auth0__Domain`, `Auth0__ClientId`, `Auth0__Audience`, `Auth0__ClientSecret` | Frontend server using Auth0 | Select Auth0 explicitly. Supply the confidential client secret from the secret store in Production. |
-| `Supabase__Url`, `Supabase__PublishableKey` | Supabase sign-in frontend and Users provider integration | Public project settings. Use a publishable or legacy anon key, never a secret or service-role key. |
+| `Authentication__Provider` | Frontend server | `Local` (default) signs in through the Users API; `Supabase` signs in through Supabase Auth. Any other value fails startup. |
+| `Authentication__Bearer__Provider` | API hosts | `Local` (default) or `Supabase`; Supabase also needs `Authentication__Bearer__Authority`. See [Supabase Auth](supabase-auth.md). |
+| `Supabase__Url`, `Supabase__PublishableKey` | Frontend and Users API when the provider is Supabase | Public project settings. Use a publishable or legacy anon key, never a secret or service-role key. |
 | `Bootstrap__Secret`, `AdminBootstrap__Secret` | Users and, when enabled, frontend server | Operator-provisioned one-time setup credential. See [administrator setup](first-administrator-setup.md). |
 | Storage keys | Server component that owns a future private storage integration | No private storage key is read by the current hosts. Keep any future key in the runtime secret store and restrict it to that component. |
 
