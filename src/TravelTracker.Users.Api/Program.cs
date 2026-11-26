@@ -48,12 +48,16 @@ public class UsersProgram
         builder.Services.AddSingleton<TokenIssuer>();
         builder.Services.AddScoped<UserProfileService>();
         builder.Services.AddScoped<BootstrapService>();
+        builder.Services.AddHttpClient<VerifiedIdentityClient>(client => client.Timeout = TimeSpan.FromSeconds(5))
+            .RemoveAllLoggers()
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         var app = builder.Build();
         if (app.Environment.IsProduction())
             builder.RequireDatabaseConnection("Users");
-        app.Logger.LogInformation("Users host starting; ApplyMigrations={ApplyMigrations}, AllowedServiceSubjects={ServiceSubjectCount}, Bootstrap configured={BootstrapConfigured}, ServiceToken configured={ServiceTokenConfigured}.",
+        app.Logger.LogInformation("Users host starting; AuthProvider={AuthProvider}, ApplyMigrations={ApplyMigrations}, AllowedServiceSubjects={ServiceSubjectCount}, Bootstrap configured={BootstrapConfigured}, ServiceToken configured={ServiceTokenConfigured}.",
+            app.Services.GetRequiredService<IOptions<BearerSettings>>().Value.Provider,
             app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"), allowedServiceSubjects.Value.Count,
-            !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Username"]) && !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Issuer"]) && app.Configuration["Bootstrap:Secret"] is { Length: >= 32 },
+            !string.IsNullOrWhiteSpace(app.Configuration[app.Configuration["Authentication:Bearer:Provider"] == BearerSettings.SupabaseProvider ? "Bootstrap:Email" : "Bootstrap:Username"]) && !string.IsNullOrWhiteSpace(app.Configuration["Bootstrap:Issuer"]) && app.Configuration["Bootstrap:Secret"] is { Length: >= 32 },
             app.Configuration["UsersAccess:ServiceToken"] is { Length: >= 32 });
         if (app.Configuration.ReadDatabaseFlag("Database:ApplyMigrations"))
         {

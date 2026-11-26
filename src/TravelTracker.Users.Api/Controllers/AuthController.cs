@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using TravelTracker.Security.Authentication;
 using TravelTracker.Users.Api.Contracts;
 using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Data.Repositories.Credentials;
@@ -102,6 +103,8 @@ public sealed class AuthController(ICredentialRepository credentials, TokenIssue
 
     private IResult? Unavailable()
     {
+        if (configuration["Authentication:Bearer:Provider"] == BearerSettings.SupabaseProvider)
+            return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Password sign-in is handled by Supabase Auth.");
         if (!Request.IsHttps) return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Sign-in requires HTTPS.");
         if (tokens.Configured && !string.IsNullOrWhiteSpace(configuration["Authentication:Bearer:Issuer"])) return null;
         logger.LogError("Sign-in is unavailable: Authentication:Issuer:PrivateKey or Authentication:Bearer:Issuer is not configured.");

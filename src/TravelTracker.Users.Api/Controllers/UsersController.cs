@@ -299,7 +299,7 @@ public sealed class UsersController(IUserRepository repository, ProfileRepositor
     {
         if (!Request.IsHttps) return Task.FromResult<IResult>(Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Administrator setup requires HTTPS."));
         if (Request.Headers["X-Bootstrap-Secret"].Count != 1) return Task.FromResult<IResult>(Results.Forbid());
-        return bootstrap.CreateAsync(User, Request.Headers["X-Bootstrap-Secret"].ToString(), HttpContext.RequestAborted);
+        return bootstrap.CreateAsync(User, Request.Headers["X-Bootstrap-Secret"].ToString(), BearerToken(), HttpContext.RequestAborted);
     }
 
     /**

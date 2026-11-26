@@ -30,11 +30,13 @@ namespace TravelTracker.Users.Tests.Support;
 public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
 {
     public const string Issuer = "https://issuer.example.test/";
+    public const string SupabaseIssuer = "https://project.example.test/auth/v1";
     public const string Audience = "traveltracker-tests";
     public const string Secret = "test-bootstrap-credential-at-least-32-characters";
     public const string ServiceToken = "test-independent-service-credential-at-least-32";
     public const string ServiceSubject = "attractions-service";
     public const string Username = "initial-admin";
+    public const string Email = "initial-admin@example.test";
     readonly RSA key = RSA.Create(2048);
     // only needs to be a well-formed key: tests replace signature validation with the RSA key above
     readonly ECDsa signingKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -43,6 +45,11 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
     public MemoryCredentialRepository Credentials { get; } = WithAdministratorLogin();
     public UsersLogCapture Logs { get; } = new();
     public string ConfiguredSecret { get; set; } = Secret;
+    /** Runs the host with Supabase as the identity provider instead of the built-in password sign-in. */
+    public bool Supabase { get; init; }
+    /** The Supabase Auth user endpoint, used to confirm the email behind a token when Supabase is the provider. */
+    internal SupabaseIdentityHandler Identity { get; } = new();
+    string TokenIssuer => Supabase ? SupabaseIssuer : Issuer;
     public string? ProfileDatabaseConnection { get; init; }
     public IInterceptor? ProfileSaveInterceptor { get; init; }
 
@@ -66,11 +73,15 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
             ["ConnectionStrings:Users"] = ProfileDatabaseConnection ?? "Host=unused.test;Database=unused",
             ["Authentication:Bearer:PublicKey"] = signingKey.ExportSubjectPublicKeyInfoPem(),
             ["Authentication:Bearer:ValidAlgorithms:0"] = "RS256",
-            ["Authentication:Bearer:Issuer"] = Issuer,
+            ["Authentication:Bearer:Provider"] = Supabase ? "Supabase" : "Local",
+            ["Authentication:Bearer:Authority"] = Supabase ? SupabaseIssuer : "",
+            ["Authentication:Bearer:Issuer"] = TokenIssuer,
             ["Authentication:Bearer:Audience"] = Audience,
             ["Authentication:Bearer:ClockSkewSeconds"] = "0",
+            ["Supabase:PublishableKey"] = "sb_publishable_test-only",
             ["Bootstrap:Username"] = Username,
-            ["Bootstrap:Issuer"] = Issuer,
+            ["Bootstrap:Email"] = Email,
+            ["Bootstrap:Issuer"] = TokenIssuer,
             ["Bootstrap:Secret"] = ConfiguredSecret,
             ["UsersAccess:ServiceToken"] = ServiceToken,
             ["UsersAccess:AllowedServiceSubjects:0"] = ServiceSubject,
@@ -95,9 +106,10 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
             }
             services.RemoveAll<ICredentialRepository>();
             services.AddSingleton<ICredentialRepository>(Credentials);
+            services.AddHttpClient<VerifiedIdentityClient>().ConfigurePrimaryHttpMessageHandler(() => Identity);
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
-                var metadata = new OpenIdConnectConfiguration { Issuer = Issuer };
+                var metadata = new OpenIdConnectConfiguration { Issuer = TokenIssuer };
                 metadata.SigningKeys.Add(new RsaSecurityKey(key) { KeyId = "test-key" });
                 options.Configuration = metadata;
                 options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(metadata);
@@ -123,7 +135,7 @@ public sealed class UsersApiFactory : WebApplicationFactory<UsersProgram>
         var expires = failure == "no-expiry" ? (DateTime?)null : failure == "expired" ? now.AddMinutes(-1) : now.AddMinutes(failure == "future" ? 15 : 5);
         var notBefore = failure == "future" ? now.AddMinutes(5) : now.AddMinutes(-10);
         return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
-            failure == "issuer" ? "https://wrong.example.test/" : Issuer,
+            failure == "issuer" ? "https://wrong.example.test/" : TokenIssuer,
             failure == "audience" ? "wrong-audience" : Audience,
             claims, notBefore, expires,
             failure == "unsigned" ? null : new SigningCredentials(new RsaSecurityKey(failure == "signature" ? other : key) { KeyId = "test-key" }, SecurityAlgorithms.RsaSha256)));
