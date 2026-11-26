@@ -120,6 +120,17 @@ public sealed class PasswordSignInTests
     }
 
     [Fact]
+    public async Task ALockedUsernameShowsTheRateLimitMessage()
+    {
+        using var host = new FrontendFactory();
+        host.Users.Reject = HttpStatusCode.TooManyRequests;
+        var browser = host.CreateBrowser();
+        var token = FrontendFactory.AntiforgeryTokenFrom(await browser.GetStringAsync("/sign-in"));
+        var result = await browser.PostAsync("/auth/login", Form(token, ("username", "traveller_1"), ("password", "fixture-password")));
+        Assert.Equal("/sign-in?error=rate-limit", result.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
     public async Task ExcessiveCredentialSubmissionsAreRateLimitedBeforeCallingUsers()
     {
         using var host = new FrontendFactory();

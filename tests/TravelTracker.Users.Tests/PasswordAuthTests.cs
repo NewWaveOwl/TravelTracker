@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using TravelTracker.Users.Api.Services;
 using TravelTracker.Users.Domain.Models;
 using TravelTracker.Users.Tests.Support;
 
@@ -102,6 +103,35 @@ public sealed class PasswordAuthTests : IDisposable
         await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "ada", password = "correct horse" });
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { username, password });
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_LocksTheUsernameAfterRepeatedFailuresEvenForTheRightPassword()
+    {
+        using var client = Client();
+        await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "ada", password = "correct horse" });
+        for (var attempt = 0; attempt < LoginThrottle.MaxFailures; attempt++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/auth/login", new { username = "ada", password = "wrong" })).StatusCode);
+        var locked = await client.PostAsJsonAsync("/api/v1/auth/login", new { username = " ADA ", password = "correct horse" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, locked.StatusCode);
+        Assert.True(locked.Headers.RetryAfter?.Delta > TimeSpan.Zero);
+        // an unknown username locks the same way, so the response never says whether the account exists
+        for (var attempt = 0; attempt < LoginThrottle.MaxFailures; attempt++)
+            await client.PostAsJsonAsync("/api/v1/auth/login", new { username = "nobody", password = "wrong" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsJsonAsync("/api/v1/auth/login", new { username = "nobody", password = "wrong" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_ASuccessfulSignInClearsEarlierFailures()
+    {
+        using var client = Client();
+        await client.PostAsJsonAsync("/api/v1/auth/register", new { username = "ada", password = "correct horse" });
+        for (var round = 0; round < 2; round++)
+        {
+            for (var attempt = 0; attempt < LoginThrottle.MaxFailures - 1; attempt++)
+                await client.PostAsJsonAsync("/api/v1/auth/login", new { username = "ada", password = "wrong" });
+            Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/auth/login", new { username = "ada", password = "correct horse" })).StatusCode);
+        }
     }
 
     [Fact]

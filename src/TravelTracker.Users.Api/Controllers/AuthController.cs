@@ -16,13 +16,14 @@ namespace TravelTracker.Users.Api.Controllers;
  * @param tokens Signs the access tokens.
  * @param configuration Supplies the issuer and the service credential.
  * @param timeProvider Supplies the registration time.
+ * @param throttle Locks a username after repeated failed sign-ins.
  * @param logger Records outcomes without usernames, passwords or tokens.
  */
 [ApiController]
 [Route("api/v1/auth")]
 [AllowAnonymous]
 public sealed class AuthController(ICredentialRepository credentials, TokenIssuer tokens, IConfiguration configuration,
-    TimeProvider timeProvider, ILogger<AuthController> logger) : ControllerBase
+    TimeProvider timeProvider, LoginThrottle throttle, ILogger<AuthController> logger) : ControllerBase
 {
     /** Hash checked when the login is unknown, so a miss costs the same as a wrong password. */
     private static readonly string DummyHash = PasswordCredentials.Hash("not-a-real-password");
@@ -66,13 +67,21 @@ public sealed class AuthController(ICredentialRepository credentials, TokenIssue
     public async Task<IResult> Login(CredentialsRequest request)
     {
         if (Unavailable() is { } unavailable) return unavailable;
+        if (throttle.RetryAfter(request.Username) is { } retryAfter)
+        {
+            logger.LogWarning("Sign-in refused: the username is locked after repeated failures.");
+            Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+            return Results.Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "Too many failed sign-ins. Try again later.");
+        }
         var stored = await credentials.FindAsync(request.Username, HttpContext.RequestAborted);
         var result = PasswordCredentials.Verify(stored?.PasswordHash ?? DummyHash, request.Password);
         if (stored is null || result == PasswordVerificationResult.Failed)
         {
+            throttle.RecordFailure(request.Username);
             logger.LogWarning("Sign-in refused: unknown username or wrong password.");
             return Results.Unauthorized();
         }
+        throttle.Reset(request.Username);
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
             await credentials.UpdateHashAsync(stored.Account.PublicId, PasswordCredentials.Hash(request.Password), HttpContext.RequestAborted);
         if (tokens.ForAccount(stored.Account) is not { } token)
