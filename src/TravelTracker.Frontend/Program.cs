@@ -45,9 +45,20 @@ builder.Services.AddScoped<RoutingClient>();
 builder.Services.AddScoped<UserPreferences>();
 builder.Services.AddScoped<MapQualityPreference>();
 
+// Local signs in through the Users API (default); Supabase signs in through Supabase Auth
+var provider = builder.Configuration["Authentication:Provider"];
+var useSupabase = string.Equals(provider, "Supabase", StringComparison.OrdinalIgnoreCase);
+if (!useSupabase && !string.IsNullOrWhiteSpace(provider) && !string.Equals(provider, "Local", StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("Authentication:Provider must be Local or Supabase.");
+var supabase = useSupabase ? SupabaseSettings.TryRead(builder.Configuration) : null;
+if (useSupabase && supabase is null && production)
+    throw new InvalidOperationException("Production Supabase sign-in requires valid Supabase:Url and Supabase:PublishableKey.");
 var usersConfigured = serviceUrls.ContainsKey("Users");
-builder.Services.AddSingleton(new AuthSetup(usersConfigured));
-if (usersConfigured)
+var signInConfigured = useSupabase ? supabase is not null : usersConfigured;
+builder.Services.AddSingleton(new AuthSetup(signInConfigured, supabase));
+if (supabase is not null)
+    builder.Services.AddSupabaseAuth(supabase);
+else if (signInConfigured)
     builder.Services.AddPasswordAuth();
 else
     // no schemes registered: every request stays anonymous and navigation keeps working
@@ -58,7 +69,9 @@ var app = builder.Build();
 
 foreach (var (name, url) in serviceUrls)
     app.Logger.LogInformation("Configured service {Service} at {Url}", name, url);
-if (usersConfigured) app.Logger.LogInformation("Password sign-in goes through the Users API.");
+if (supabase is not null) app.Logger.LogInformation("Supabase sign-in configured for {Issuer}.", supabase.Issuer);
+else if (useSupabase) app.Logger.LogWarning("Supabase sign-in is not configured. Set Supabase:Url and Supabase:PublishableKey.");
+else if (usersConfigured) app.Logger.LogInformation("Password sign-in goes through the Users API.");
 else app.Logger.LogWarning("Sign-in is not configured. Add a Users entry to Services.");
 app.UseExceptionHandler(new ExceptionHandlerOptions
 {
@@ -85,11 +98,13 @@ app.Use(async (context, next) =>
 });
 app.UseAuthentication();
 app.UseAuthorization();
-if (usersConfigured) app.UseRateLimiter();
+if (signInConfigured) app.UseRateLimiter();
 app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapTicketDocument();
-if (usersConfigured)
+if (supabase is not null)
+    app.MapSupabaseAuthEndpoints();
+else if (signInConfigured)
     app.MapPasswordAuthEndpoints();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();

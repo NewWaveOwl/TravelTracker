@@ -11,6 +11,11 @@
 <PageHeading Title="@(editing ? "Edit profile" : "Your profile")" />
 <p>@(editing ? "Update your profile details." : "View and manage your TravelTracker profile.")</p>
 
+@if (CredentialMessage is not null)
+{
+    <p role="status">@CredentialMessage</p>
+}
+
 @if (!Setup.Configured)
 {
     <Feedback Kind="FeedbackKind.Unavailable">Sign-in is temporarily unavailable. Please try again later.</Feedback>
@@ -112,7 +117,14 @@ else
             else
             {
                 <dl class="profile-details">
-                    <dt>Username</dt><dd>@Display(profile.Username)</dd>
+                    @if (Setup.Supabase is not null)
+                    {
+                        <dt>Email</dt><dd>@Display(signInEmail)</dd>
+                    }
+                    else
+                    {
+                        <dt>Username</dt><dd>@Display(profile.Username)</dd>
+                    }
                     <dt>Address</dt><dd>@Display(profile.Address)</dd>
                     <dt>Account type</dt><dd>@RoleLabel(profile.Role)</dd>
                     <dt>Account status</dt><dd>@StatusLabel(profile.Status)</dd>
@@ -120,7 +132,52 @@ else
             }
         </section>
 
-        @if (CanEdit && passwordModel is not null && passwordContext is not null)
+        @if (CanEdit && Setup.Supabase is not null)
+        {
+            <section class="profile-card" aria-labelledby="profile-credentials">
+                <h2 id="profile-credentials">Sign-in credentials</h2>
+                @if (editing || busy)
+                {
+                    <p id="credential-edit-hint" role="status">Save or cancel your profile edits before changing sign-in details. Your edits stay here while you finish.</p>
+                }
+                <details>
+                    <summary>Change sign-in email</summary>
+                    <form method="post" action="/auth/change-credential" class="profile-editor">
+                        <AntiforgeryToken />
+                        <fieldset class="credential-fields" disabled="@(editing || busy)" aria-describedby="@(editing || busy ? "credential-edit-hint" : null)">
+                        <input type="hidden" name="operation" value="email" />
+                        <label for="email-change-current">Current sign-in email</label>
+                        <input id="email-change-current" type="email" name="loginEmail" value="@signInEmail" readonly="@(signInEmail is not null)" autocomplete="username" maxlength="254" required />
+                        <label for="email-change-password">Current password</label>
+                        <input id="email-change-password" type="password" name="currentPassword" autocomplete="current-password" maxlength="128" required />
+                        <label for="email-change-new">New sign-in email</label>
+                        <input id="email-change-new" type="email" name="newEmail" autocomplete="email" maxlength="254" required />
+                        <button type="submit">Request email change</button>
+                        </fieldset>
+                    </form>
+                </details>
+                <details>
+                    <summary>Change password</summary>
+                    <form method="post" action="/auth/change-credential" class="profile-editor">
+                        <AntiforgeryToken />
+                        <fieldset class="credential-fields" disabled="@(editing || busy)" aria-describedby="@(editing || busy ? "credential-edit-hint" : null)">
+                        <input type="hidden" name="operation" value="password" />
+                        <label for="password-change-email">Current sign-in email</label>
+                        <input id="password-change-email" type="email" name="loginEmail" value="@signInEmail" readonly="@(signInEmail is not null)" autocomplete="username" maxlength="254" required />
+                        <label for="password-change-current">Current password</label>
+                        <input id="password-change-current" type="password" name="currentPassword" autocomplete="current-password" maxlength="128" required />
+                        <label for="password-change-new">New password</label>
+                        <input id="password-change-new" type="password" name="newPassword" autocomplete="new-password" minlength="8" maxlength="128" required />
+                        <label for="password-change-confirm">Confirm new password</label>
+                        <input id="password-change-confirm" type="password" name="passwordConfirmation" autocomplete="new-password" minlength="8" maxlength="128" required />
+                        <button type="submit">Change password</button>
+                        </fieldset>
+                    </form>
+                </details>
+            </section>
+        }
+
+        @if (CanEdit && Setup.Supabase is null && passwordModel is not null && passwordContext is not null)
         {
             <section class="profile-card" aria-labelledby="password-heading" aria-busy="@passwordBusy.ToString().ToLowerInvariant()">
                 <h2 id="password-heading">Change password</h2>
