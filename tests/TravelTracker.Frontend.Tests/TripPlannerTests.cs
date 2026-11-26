@@ -2279,16 +2279,27 @@ public sealed class TripPlannerTests : BunitContext
     }
 
     [Fact]
-    public async Task MapPageServesItsFigmaIconsAndUndoShortcut()
+    public async Task MapPageServesItsMapAndPaletteIconsAndUndoShortcut()
     {
         await using var factory = new FrontendFactory();
         using var browser = factory.CreateBrowser();
         var page = await browser.GetStringAsync("/map");
-        var links = System.Text.RegularExpressions.Regex.Matches(page, @"assets/trip-map/[a-z0-9_.-]+\.svg");
-        Assert.Equal(5, links.Select(link => link.Value).Distinct().Count());
+        var links = System.Text.RegularExpressions.Regex.Matches(page, @"assets/(?:trip-map|icons(?:/material)?)/[a-z0-9_.-]+\.svg");
+        Assert.Contains("assets/icons/material/transport_stop.svg", page);
+        Assert.Contains("assets/icons/route.svg", page);
+        Assert.Contains("assets/icons/map-tools.svg", page);
+        Assert.Contains("assets/icons/itinerary.svg", page);
         var urls = links.Select(link => link.Value).Concat(new[]
         {
             "assets/trip-map/bike.svg",
+            "assets/icons/material/attraction.svg",
+            "assets/icons/material/accommodation.svg",
+            "assets/icons/material/pedestrian.svg",
+            "assets/icons/material/bike.svg",
+            "assets/icons/material/car.svg",
+            "assets/icons/material/bus.svg",
+            "assets/icons/material/train.svg",
+            "assets/icons/material/plane.svg",
             "assets/trip-map/pin-attraction.svg",
             "assets/trip-map/pin-accommodation.svg",
             "assets/trip-map/pin-transport_stop.svg"

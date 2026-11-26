@@ -231,11 +231,11 @@ else
             <MovablePanel Label="Map tools" Icon="map-tools" Class="tools-panel" Enabled="showMap">
             <section class="trip-tools" aria-label="Map tools">
                 <div class="trip-palette">
-                    <button type="button" class="secondary" aria-pressed="@Pressed(mapTool == MapTool.Markers)" disabled="@busy" @onclick="OpenMarkers">
-                        <img src="@Icon("transport_stop")" alt="" />Markers
+                    <button type="button" class="secondary" title="Markers" aria-label="Markers" aria-pressed="@Pressed(mapTool == MapTool.Markers)" disabled="@busy" @onclick="OpenMarkers">
+                        <img src="assets/icons/material/transport_stop.svg" alt="" /><span>Markers</span>
                     </button>
-                    <button type="button" class="secondary" aria-pressed="@Pressed(mapTool == MapTool.Transport)" disabled="@busy" @onclick="OpenTransport">
-                        <img src="@Icon("train")" alt="" />Transport
+                    <button type="button" class="secondary" title="Transport" aria-label="Transport" aria-pressed="@Pressed(mapTool == MapTool.Transport)" disabled="@busy" @onclick="OpenTransport">
+                        <img src="assets/icons/route.svg" alt="" /><span>Transport</span>
                     </button>
                 </div>
                 @if (mapTool == MapTool.Markers)
@@ -245,7 +245,6 @@ else
                 else if (mapTool == MapTool.Transport)
                 {
                     @TransportPalette
-                    <small>@ConnectionHint</small>
                 }
             </section>
             </MovablePanel>
@@ -476,7 +475,7 @@ else
                     <div class="trip-palette" aria-label="Marker palette">
                         @foreach (var option in Markers)
                         {
-                            <button type="button" class="secondary" aria-pressed="@Pressed(markerType == option.Code)" disabled="@busy" draggable="@(showMap && !busy ? "true" : null)" data-map-marker="@option.Code" @onclick="() => SelectMarker(option.Code)"><img src="@Icon(option.Code)" alt="" />@option.Label</button>
+                            <button type="button" class="secondary" title="@option.Label" aria-label="@option.Label" aria-pressed="@Pressed(markerType == option.Code)" disabled="@busy" draggable="@(showMap && !busy ? "true" : null)" data-map-marker="@option.Code" @onclick="() => SelectMarker(option.Code)"><img src="@($"assets/icons/material/{option.Code}.svg")" alt="" /><span>@option.Label</span></button>
                         }
                     </div>
     </div>;
@@ -490,7 +489,7 @@ else
                     <div class="trip-palette" aria-label="Transport palette">
                         @foreach (var option in Modes.Where(option => knownModes?.Contains(option.Code) != false))
                         {
-                            <button type="button" class="secondary" aria-pressed="@Pressed((showMap ? pendingMode?.Code ?? CurrentLeg?.Mode?.Code : CurrentLeg?.Mode?.Code) == option.Code)" @onclick="() => ChooseMode(option)"><img src="@Icon(option.Code)" alt="" />@option.Label</button>
+                            <button type="button" class="secondary" title="@option.Label" aria-label="@option.Label" aria-pressed="@Pressed((showMap ? pendingMode?.Code ?? CurrentLeg?.Mode?.Code : CurrentLeg?.Mode?.Code) == option.Code)" @onclick="() => ChooseMode(option)"><img src="@($"assets/icons/material/{option.Code}.svg")" alt="" /><span>@option.Label</span></button>
                         }
                     </div>
     </div>;
