@@ -22,11 +22,14 @@ public sealed class TicketReviewDraft
      * @return A fresh editable review with no default travel values.
      */
     public static TicketReviewDraft From(TicketImportDto? source)
+        => FromFields(source?.Fields);
+
+    public static TicketReviewDraft FromFields(TicketFieldDto[]? fields)
     {
         var draft = new TicketReviewDraft();
         foreach (var field in draft.Fields)
         {
-            var matches = source?.Fields.Where(candidate => candidate.Name == field.Name).ToArray();
+            var matches = fields?.Where(candidate => candidate.Name == field.Name).ToArray();
             if (matches is not { Length: 1 }) continue;
             var found = matches[0];
             field.Value = found.Value is { Length: <= 500 } ? found.Value : "";

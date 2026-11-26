@@ -90,6 +90,10 @@ public sealed partial class ServiceClient(HttpClient httpClient, ILogger<Service
         }
     }
 
+    public Task<T?> ParseTicketTextAsync<T>(string url, string text, CancellationToken cancellationToken, string accessToken) =>
+        SendTicketAsync(HttpMethod.Post, url, new StringContent(text, System.Text.Encoding.UTF8, "text/plain"), null,
+            cancellationToken, accessToken, (response, token) => response.Content.ReadFromJsonAsync<T>(token));
+
     /**
      * Uploads one PDF directly, without multipart buffering or retrying an uncertain upload.
      * @param url Validated Trips destination.

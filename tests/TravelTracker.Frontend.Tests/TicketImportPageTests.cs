@@ -48,6 +48,7 @@ public sealed class TicketImportPageTests : BunitContext
             NullLogger<ProtectedClient>.Instance, authentication.Sessions);
         Services.AddSingleton<AuthenticationStateProvider>(authentication);
         Services.AddSingleton<TimeProvider>(clock);
+        Services.AddScoped<ReviewedTicketTransfer>();
         Services.AddSingleton(new TripsClient(client));
         Services.AddSingleton(new TicketImportsClient(client));
         Services.AddSingleton(new UsersClient(client, new ConfigurationBuilder().Build()));
@@ -66,6 +67,44 @@ public sealed class TicketImportPageTests : BunitContext
         new("arrivalDate", "2026-11-22", "extracted"), new("arrivalTime", "09:00", "uncertain"),
         new("timeZone", "America/Toronto", "extracted"), new("seat", null, "missing")
     ]);
+
+    [Fact]
+    public void PastedTextUsesPrivatePlainTextContractAndRequiresConfirmation()
+    {
+        Configure(async (request, token) =>
+        {
+            Assert.EndsWith("/ticket-imports/text", request.RequestUri!.AbsolutePath);
+            Assert.Equal("text/plain", request.Content!.Headers.ContentType!.MediaType);
+            Assert.Equal("From: Airport", await request.Content.ReadAsStringAsync(token));
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { TripId, Extracted().Fields }) };
+        });
+        var page = Page();
+        page.Find("#ticket-text").Input("From: Airport");
+        page.FindAll("button").Single(button => button.TextContent == "Review pasted text").Click();
+        Assert.Contains("needs-check", page.Find("#ticket-arrivalTime").ClassName);
+        Assert.Empty(page.FindAll("a[target=_blank]"));
+        page.Find("form").Submit();
+        page.FindAll("button").Single(button => button.TextContent == "Use times in itinerary").Click();
+        Assert.EndsWith($"trip/{TripId:D}", Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri);
+        Assert.Equal(1, uploads);
+        Assert.Equal(0, otherWrites);
+    }
+
+    [Fact]
+    public void OversizedPasteIsRejectedLocallyAndFailedParseAllowsCorrection()
+    {
+        Configure((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)));
+        var page = Page();
+        page.Find("#ticket-text").Input(new string('a', 4001));
+        page.FindAll("button").Single(button => button.TextContent == "Review pasted text").Click();
+        Assert.Contains("limits", page.Find("[role=alert]").TextContent);
+        Assert.Equal(0, uploads);
+        page.Find("#ticket-text").Input("Unreadable");
+        page.FindAll("button").Single(button => button.TextContent == "Review pasted text").Click();
+        Assert.Contains("could not be read", page.Find("[role=alert]").TextContent);
+        Assert.Equal(1, uploads);
+        Assert.Equal(0, otherWrites);
+    }
 
     [Fact]
     public void SuccessfulUploadProducesEditableFlaggedDraftAndNeverSavesTrip()

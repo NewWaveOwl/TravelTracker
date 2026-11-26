@@ -19,7 +19,7 @@ public sealed class TicketDraftField(string name, string label, bool required, s
     public string Hint => Error ?? Status switch
     {
         "missing" => "Not found in this document. Enter it manually if needed.",
-        "uncertain" => "Check against the PDF before finishing your review.",
-        _ => "Compare with the original PDF."
+        "uncertain" => "Check against your ticket before finishing your review.",
+        _ => "Compare with the original ticket."
     };
 }

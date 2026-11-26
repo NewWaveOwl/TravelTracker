@@ -20,6 +20,12 @@ public partial class TicketImport : IAsyncDisposable
     [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
     [Inject] TimeProvider Clock { get; set; } = default!;
 
+    [Inject] NavigationManager Navigation { get; set; } = default!;
+    [Inject] ReviewedTicketTransfer Transfer { get; set; } = default!;
+    string pastedText = "";
+    string? textError;
+    bool readingText;
+
     enum ImportStage { Upload, Extracting, Review, Reviewed, Failed }
     ImportStage stage;
     TripDto? trip;
@@ -44,7 +50,7 @@ public partial class TicketImport : IAsyncDisposable
     };
     string Introduction => stage switch
     {
-        ImportStage.Extracting => "Keep this page open while the PDF is processed.",
+        ImportStage.Extracting => "Keep this page open while your ticket is processed.",
         ImportStage.Review => $"Check the extracted details for {trip?.Name} before using them.",
         ImportStage.Reviewed => "Your confirmed details are shown below. They have not been saved.",
         ImportStage.Failed => "No ticket has been added. Your existing trip is unchanged.",
@@ -176,6 +182,49 @@ public partial class TicketImport : IAsyncDisposable
         }
     }
 
+    async Task ParseTextAsync()
+    {
+        if (!canWrite || stage != ImportStage.Upload) return;
+        textError = null;
+        var text = pastedText.ReplaceLineEndings("\n");
+        if (string.IsNullOrWhiteSpace(text) || text.Length > 4000 || text.Split('\n').Length > 60 ||
+            text.Contains('\0') || System.Text.Encoding.UTF8.GetByteCount(text) > 12000)
+        {
+            textError = "Enter ticket text within the displayed limits.";
+            return;
+        }
+        var version = ++generation;
+        var token = request!.Token;
+        stage = ImportStage.Extracting;
+        readingText = true;
+        try
+        {
+            var fields = await Imports.ParseTextAsync(TripId, text, token);
+            if (disposed || generation != version) return;
+            draft = TicketReviewDraft.FromFields(fields);
+            pastedText = "";
+            stage = ImportStage.Review;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (ApiError error) when (!disposed && generation == version)
+        {
+            textError = "The ticket text could not be read. Check the text and try again, or enter the details manually.";
+            if (error.Status == 403) canWrite = false;
+            stage = ImportStage.Upload;
+        }
+        catch (ApiError) when (disposed || generation != version) { }
+        finally { if (generation == version) readingText = false; }
+    }
+
+    async Task OpenEditorAsync()
+    {
+        var version = generation;
+        var session = SessionRegistry.IdFor((await Authentication.GetAuthenticationStateAsync()).User);
+        if (session is null || version != generation || disposed || !canWrite || stage != ImportStage.Reviewed || draft is null) return;
+        Transfer.Set(TripId, session, draft);
+        Navigation.NavigateTo($"trip/{TripId:D}");
+    }
+
     void FinishReview()
     {
         if (draft is null) return;
@@ -222,7 +271,9 @@ public partial class TicketImport : IAsyncDisposable
         source = null;
         draft = null;
         sourceExpired = validationFailed = false;
-        fileName = notice = "";
+        readingText = false;
+        textError = null;
+        pastedText = fileName = notice = "";
         failure = null;
         stage = ImportStage.Upload;
         if (!keepTrip) trip = null;

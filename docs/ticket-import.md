@@ -1,6 +1,6 @@
 # PDF ticket drafts (#109)
 
-Ticket import reads a PDF on the Trips server and proposes editable fields. It never creates or replaces a trip, changes its revision, matches stations to catalogue places, or infers missing information. Saving reviewed tickets and inserting itinerary entries belong to [#122](https://github.com/NewWaveOwl/TravelTracker/issues/122); pasted-text extraction belongs to [#110](https://github.com/NewWaveOwl/TravelTracker/issues/110).
+Ticket import accepts a PDF or pasted ticket text for a saved trip. Review and correct the proposed fields, then choose **Use times in itinerary**. Select the matching connection and choose **Apply reviewed times** to update its draft departure and arrival. For a new connection, add its stops in the editor first. Only **Save trip** writes the itinerary. Booking references, traveller names and seat numbers remain temporary review fields.
 
 ## Design and entry point
 

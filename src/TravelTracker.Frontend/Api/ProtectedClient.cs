@@ -59,6 +59,10 @@ public sealed class ProtectedClient(AuthenticationStateProvider authentication, 
     public async Task<T?> BootstrapFirstAdministratorAsync<T>(string secret, CancellationToken cancellationToken = default) =>
         (await SendCoreAsync<T>("Users", HttpMethod.Post, "/api/v1/users/bootstrap-first-administrator", new { }, cancellationToken, secret)).Body;
 
+    public Task<T?> ParseTicketTextAsync<T>(string path, string text, CancellationToken cancellationToken) =>
+        SendAuthorizedAsync("Trips", HttpMethod.Post, path,
+            (url, token) => client.ParseTicketTextAsync<T>(url, text, cancellationToken, token), cancellationToken);
+
     /**
      * Sends a PDF using the same session and destination safeguards as JSON contracts.
      * @param path Versioned Trips import path.

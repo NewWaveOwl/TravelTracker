@@ -24,7 +24,7 @@
     {
         <p class="ticket-introduction">@Introduction</p>
         <ol class="ticket-steps" aria-label="Ticket import progress">
-            <li aria-current="@(stage is ImportStage.Upload or ImportStage.Extracting or ImportStage.Failed ? "step" : null)">1 <span>@(stage == ImportStage.Upload ? "Upload PDF" : "PDF selected")</span></li>
+            <li aria-current="@(stage is ImportStage.Upload or ImportStage.Extracting or ImportStage.Failed ? "step" : null)">1 <span>@(stage == ImportStage.Upload ? "Choose source" : "Source selected")</span></li>
             <li aria-current="@(stage == ImportStage.Review ? "step" : null)">2 <span>@(stage == ImportStage.Extracting ? "Extracting details" : stage == ImportStage.Failed ? "Extraction failed" : "Review details")</span></li>
             <li aria-current="@(stage == ImportStage.Reviewed ? "step" : null)">3 <span>Reviewed draft</span></li>
         </ol>
@@ -43,6 +43,13 @@
                 <small>Use a simple, text-based ticket PDF with labelled English fields. Other layouts, scans or password-protected PDFs need manual entry.</small>
                 <InputFile OnChange="ChoosePdfAsync" accept="application/pdf,.pdf" aria-label="Choose ticket PDF" aria-describedby="pdf-limits" />
             </div>
+            <section class="ticket-card">
+                <label for="ticket-text">Paste ticket text</label>
+                <small id="text-limits">Up to 4,000 characters and 60 lines (12,000 UTF-8 bytes).</small>
+                <textarea id="ticket-text" aria-describedby="text-limits" rows="5" @bind="pastedText" @bind:event="oninput"></textarea>
+                <button @onclick="ParseTextAsync" disabled="@string.IsNullOrWhiteSpace(pastedText)">Review pasted text</button>
+                @if (textError is not null) { <p class="ticket-feedback warning" role="alert">@textError</p> }
+            </section>
             <article class="ticket-card">
                 <h2>Your details, ready to review</h2>
                 <ol class="ticket-instructions"><li>Upload your ticket or booking PDF.</li><li>Review the travel details found in your document.</li><li>Correct anything missing, then finish your review.</li></ol>
@@ -52,9 +59,16 @@
         }
         else if (stage == ImportStage.Extracting)
         {
+            @if (readingText)
+            {
+                <p role="status">Reading pasted ticket details…</p>
+            }
+            else
+            {
             <div class="ticket-card ticket-document"><span class="ticket-pdf-badge">PDF</span><div><p>@fileName</p><small>@FileSize · Uploading and reading</small></div></div>
             <aside class="ticket-feedback" role="status"><small>LOADING</small><p>Extracting travel details from your PDF…</p></aside>
             <article class="ticket-card"><h2>Finding the important details</h2><p>Reading document text…<br />Next: identify travel details for your review</p><small>You’ll be able to edit dates, locations, times and booking references. Your trip stays unchanged.</small></article>
+            }
             <div class="ticket-actions"><button class="secondary" @onclick="CancelAsync">Cancel import</button></div>
         }
         else if (stage == ImportStage.Failed)
@@ -74,7 +88,7 @@
             }
             @if (stage == ImportStage.Review)
             {
-                <aside class="ticket-feedback warning" role="status"><small>CHECK YOUR INPUT</small><p>Compare every value with the original PDF. Missing and uncertain details are flagged. Nothing has been added to your trip.</p></aside>
+                <aside class="ticket-feedback warning" role="status"><small>CHECK YOUR INPUT</small><p>Compare every value with your ticket. Missing and uncertain details are flagged. Nothing has been added to your trip.</p></aside>
                 @if (validationFailed)
                 {
                     <aside class="ticket-feedback warning" role="alert"><p>Complete the highlighted required fields before finishing your review.</p><ul>@foreach (var field in draft.Fields.Where(field => field.Error is not null)) { <li><a href="@($"#ticket-{field.Name}")">@field.Label: @field.Error</a></li> }</ul></aside>
@@ -93,7 +107,7 @@
                                 </div>
                             }
                         </div>
-                        <small>Station and airport names are ticket details only. Choose matching accommodation or attraction places in the trip editor yourself. Review does not change the itinerary.</small>
+                        <small>In the trip editor, choose the connection that matches the ticket. Only its departure and arrival times will change.</small>
                     </article>
                     <div class="ticket-actions"><button type="submit">Finish review</button><button type="button" class="secondary" @onclick="CancelAsync">Cancel import</button></div>
                 </form>
@@ -109,8 +123,8 @@
                     <small>Times shown in @draft.Value("timeZone")</small>
                     <p>Booking reference: @(string.IsNullOrWhiteSpace(draft.Value("bookingReference")) ? "Not supplied" : draft.Value("bookingReference"))</p>
                 </article>
-                <p class="ticket-introduction">This reviewed draft is temporary and will be lost when you leave this page. Add confirmed details through the normal trip editor and save there.</p>
-                <div class="ticket-actions"><button @onclick="EditAgain">Edit details</button><a class="button secondary" href="@TripLink">View trip</a><button class="secondary" @onclick="ChooseAnotherAsync">Import another ticket</button></div>
+                <p class="ticket-introduction">This reviewed draft is temporary and will be lost when you leave this page. Choose a connection in the trip editor to apply the reviewed departure and arrival times.</p>
+                <div class="ticket-actions"><button @onclick="OpenEditorAsync">Use times in itinerary</button><button @onclick="EditAgain">Edit details</button><a class="button secondary" href="@TripLink">View trip</a><button class="secondary" @onclick="ChooseAnotherAsync">Import another ticket</button></div>
             }
         }
     }

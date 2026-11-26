@@ -39,6 +39,25 @@ else
             <a class="button secondary" href="@($"trips/{ticketTripId:D}")">Tickets &amp; bookings</a>
         }
     </div>
+    @if (reviewedTicket is { } ticket)
+    {
+        <section class="form-panel" aria-label="Reviewed ticket">
+            <h2>Apply ticket times</h2>
+            <p>@ticket.Value("from") to @ticket.Value("to") · @ticket.Value("departureDate") @ticket.Value("departureTime") to @ticket.Value("arrivalDate") @ticket.Value("arrivalTime") (@ticket.Value("timeZone"))</p>
+            <label>Connection to update
+                <select @bind="ticketConnection">
+                    <option value="0">Choose a connection</option>
+                    @for (var i = 1; i < draft.Stops.Count; i++)
+                    {
+                        <option value="@i">@i. @draft.Stops[i - 1].Place.Name to @draft.Stops[i].Place.Name</option>
+                    }
+                </select>
+            </label>
+            @if (draft.Stops.Count < 2) { <p>Add two stops in the itinerary to create a connection.</p> }
+            <div class="actions"><button disabled="@(busy || ticketConnection == 0)" @onclick="ApplyTicketTimes">Apply reviewed times</button>
+            <button class="secondary" @onclick="() => reviewedTicket = null">Cancel ticket import</button></div>
+        </section>
+    }
     @if (savingTrip) { <p class="trip-save-status" role="status">Saving trip…</p> }
     @if (notice is not null)
     {

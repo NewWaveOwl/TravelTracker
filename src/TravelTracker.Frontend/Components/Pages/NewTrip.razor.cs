@@ -1,4 +1,6 @@
 using System.Globalization;
+using TravelTracker.Frontend.Features.TicketImports;
+using TravelTracker.Frontend.Auth;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -449,6 +451,7 @@ public partial class NewTrip : IAsyncDisposable
     /** Replaces all trip-specific buffers after an approved new-trip action or navigation. */
     void ResetPlannerDraft()
     {
+        reviewedTicket = null;
         ClearRoutingGeometry();
         browseSaved = false;
         draft = new();
@@ -746,6 +749,51 @@ public partial class NewTrip : IAsyncDisposable
         }
         pendingMode = option;
         connectionFrom = null;
+    }
+
+    TicketReviewDraft? reviewedTicket;
+    int ticketConnection;
+
+    void ApplyTicketTimes()
+    {
+        if (busy || reviewedTicket is not { } ticket || ticketConnection < 1 || ticketConnection >= draft.Stops.Count) return;
+        var sourceZone = TimeZoneInfo.FindSystemTimeZoneById(ticket.Value("timeZone"));
+        if (!TimeZoneInfo.TryFindSystemTimeZoneById(draft.TimeZone, out var targetZone))
+        {
+            errors = ["Choose a valid trip time zone before applying ticket times."];
+            return;
+        }
+        DateTime Local(string prefix) => DateTime.ParseExact(ticket.Value(prefix + "Date") + " " + ticket.Value(prefix + "Time"),
+            "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        var departure = Local("departure");
+        var arrival = Local("arrival");
+        if (sourceZone.IsInvalidTime(departure) || sourceZone.IsInvalidTime(arrival) ||
+            sourceZone.Id != targetZone.Id && (sourceZone.IsAmbiguousTime(departure) || sourceZone.IsAmbiguousTime(arrival)))
+        {
+            errors = ["These ticket times fall in a clock change. Check the times and time zone on the ticket before applying them."];
+            return;
+        }
+        var leg = draft.LegTo(ticketConnection);
+        RememberEdit();
+        if (sourceZone.Id == targetZone.Id)
+        {
+            leg.Departure = departure;
+            leg.Arrival = arrival;
+            leg.DepartureOffset = leg.ArrivalOffset = null;
+        }
+        else
+        {
+            var start = TimeZoneInfo.ConvertTime(new DateTimeOffset(departure, sourceZone.GetUtcOffset(departure)), targetZone);
+            var end = TimeZoneInfo.ConvertTime(new DateTimeOffset(arrival, sourceZone.GetUtcOffset(arrival)), targetZone);
+            leg.Departure = start.DateTime;
+            leg.Arrival = end.DateTime;
+            leg.DepartureOffset = new(start.DateTime, draft.TimeZone, start.Offset);
+            leg.ArrivalOffset = new(end.DateTime, draft.TimeZone, end.Offset);
+        }
+        leg.DurationMinutes = null;
+        reviewedTicket = null;
+        MarkEdited();
+        notice = "Ticket times added to your draft. Save the trip when ready.";
     }
 
     void MarkEdited()
@@ -1178,6 +1226,10 @@ public partial class NewTrip : IAsyncDisposable
             placing = false;
             review = false;
             dirty = false;
+            var user = (await Authentication.GetAuthenticationStateAsync()).User;
+            if (version != routeVersion) return;
+            reviewedTicket = Services.GetService<ReviewedTicketTransfer>()?.Take(tripId, SessionRegistry.IdFor(user));
+            ticketConnection = 0;
             notice = $"Opened {saved.Name}.";
             UpdateLink(tripId);
         }

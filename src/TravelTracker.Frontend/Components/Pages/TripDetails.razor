@@ -51,7 +51,7 @@ else if (trip is not null)
         }
     </ol>
     <section class="trip-ticket-entry" aria-labelledby="tickets-heading">
-        <div><h2 id="tickets-heading">Tickets &amp; bookings</h2><p>Import a PDF and review its travel details.</p></div>
+        <div><h2 id="tickets-heading">Tickets &amp; bookings</h2><p>Upload a PDF or paste ticket text to review its travel details.</p></div>
         @if (canImport)
         {
             <a class="button" href="@($"trips/{trip.TripId:D}/ticket-import")">Import tickets</a>
