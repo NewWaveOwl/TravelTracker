@@ -13,10 +13,13 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
     /** The window the failures are counted in, and so how long a username stays locked at most. */
     public static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(15);
 
-    private const int MaxTrackedUsernames = 10_000;
+    // ponytail: usernames hash into a fixed table instead of a growing dictionary, so memory is bounded with no eviction or
+    // capacity cliff. two usernames can very rarely share a bucket (the per-process hash seed hides which), so one can lock
+    // the other; exact per-username state would need a shared store.
+    private const int BucketCount = 1 << 16;
 
     private readonly object gate = new();
-    private readonly Dictionary<string, Entry> entries = new();
+    private readonly Entry?[] buckets = new Entry?[BucketCount];
 
     /**
      * Reports whether a username is currently locked.
@@ -27,7 +30,7 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
     {
         lock (gate)
         {
-            if (!entries.TryGetValue(Key(username), out var entry)) return null;
+            if (buckets[Slot(username)] is not { } entry) return null;
             var remaining = entry.LockedUntil - timeProvider.GetUtcNow();
             return remaining > TimeSpan.Zero ? remaining : null;
         }
@@ -42,14 +45,7 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
         lock (gate)
         {
             var now = timeProvider.GetUtcNow();
-            var key = Key(username);
-            if (!entries.TryGetValue(key, out var entry))
-            {
-                if (entries.Count >= MaxTrackedUsernames) MakeRoom(now);
-                // ponytail: only if every tracked username is locked, so a new one goes uncounted; the per-address limit still applies
-                if (entries.Count >= MaxTrackedUsernames) return;
-                entries[key] = entry = new Entry();
-            }
+            var entry = buckets[Slot(username)] ??= new Entry();
             while (entry.Failures.Count > 0 && now - entry.Failures.Peek() >= LockDuration) entry.Failures.Dequeue();
             entry.Failures.Enqueue(now);
             if (entry.Failures.Count > MaxFailures) entry.Failures.Dequeue();
@@ -64,25 +60,10 @@ public sealed class LoginThrottle(TimeProvider timeProvider)
     public void Reset(string username)
     {
         lock (gate)
-            entries.Remove(Key(username));
+            buckets[Slot(username)] = null;
     }
 
-    // drops expired entries, then the quietest unlocked one if that was not enough; locked usernames are never evicted
-    private void MakeRoom(DateTimeOffset now)
-    {
-        string? quietest = null;
-        var quietestFailure = DateTimeOffset.MaxValue;
-        foreach (var (key, entry) in entries.ToList())
-        {
-            var lastFailure = entry.Failures.Count > 0 ? entry.Failures.Last() : DateTimeOffset.MinValue;
-            if (entry.LockedUntil > now) continue;
-            if (now - lastFailure >= LockDuration) entries.Remove(key);
-            else if (lastFailure < quietestFailure) (quietest, quietestFailure) = (key, lastFailure);
-        }
-        if (entries.Count >= MaxTrackedUsernames && quietest is not null) entries.Remove(quietest);
-    }
-
-    private static string Key(string username) => username.Trim().ToUpperInvariant();
+    private static int Slot(string username) => (username.Trim().ToUpperInvariant().GetHashCode() & int.MaxValue) % BucketCount;
 
     private sealed class Entry
     {
