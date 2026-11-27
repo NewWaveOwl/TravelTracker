@@ -2075,6 +2075,7 @@ public sealed class TripPlannerTests : BunitContext
         Assert.StartsWith("2026-11-14T11:15", page.FindAll(".leg-panel input[type=datetime-local]")[1].GetAttribute("value"));
         Click(page, "Review trip");
         Assert.Empty(page.FindAll("[role=alert]"));
+        Click(page, "Save map draft");
         Click(page, "Save trip");
         if (trainUnavailable)
         {
