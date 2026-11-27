@@ -25,7 +25,7 @@ Configure bearer authority/issuer/audience as described in [authentication](auth
 
 ## Private/shared access contract
 
-Creation adds one optional writable field: `visibility`, exactly `private` or `shared`. Omitted visibility defaults to **private**. Explicit null and unknown values are rejected. Existing request bodies otherwise remain valid and response JSON retains exactly `attractionId`, `name`, `description`, `rating`, `address`, `lat`, `lon`, `estimatedVisitMinutes`. Ownership/internal IDs are never exposed. Visibility is immutable through PATCH; a later promotion/archive workflow needs its own contract.
+Creation adds one optional writable field: `visibility`, exactly `private` or `shared`. Omitted visibility defaults to **private**. Explicit null and unknown values are rejected. Existing request bodies otherwise remain valid and response JSON retains exactly `attractionId`, `name`, `description`, `rating`, `address`, `lat`, `lon`, `estimatedVisitMinutes`. Ownership/internal IDs are never exposed. Visibility is immutable through PATCH. The active owner can publish a private attraction with a bodyless `POST /api/v1/attractions/{id}/share` and `catalogue.write`. It returns 200 with shared visibility, including for an already shared attraction. Other accounts receive 404 for private attractions.
 
 - A private attraction belongs to the token's validated `(iss, sub)`. Clients cannot submit owner fields. Only that identity can read/search/edit it; another traveller or administrator receives 404, including on PATCH.
 - Active callers see shared attractions plus their own private attractions. Administrators can create/edit shared attractions; ordinary travellers can view shared attractions but receive 403 when attempting to modify them.

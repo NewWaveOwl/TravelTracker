@@ -93,6 +93,8 @@ The requester confirmed retaining the required basics and adding optional stop r
 
 ### Create and replace body
 
+Each leg may include `encodedPolyline`, a polyline5 ASCII string with at least two valid latitude/longitude pairs and a maximum length of 200,000 characters. Detail returns the saved shape. Omit it or send null for a manual connection. Replacing a leg without its shape clears the previous geometry.
+
 Send all trip fields and every leg when replacing a trip. The route identifier selects the trip to edit.
 Successful reads, creates, and replacements include a strong `ETag` header. Send that tag as
 `If-Match` on replacement. When the tag is stale, reopen the trip and review the changes before saving.
@@ -232,9 +234,8 @@ The action shows saving, confirmed-save and error feedback. It blocks another
 submission while the first request is pending, and a failed request keeps the
 draft available for correction or retry. Empty and single-stop plans use the
 [minimal save contract](#minimal-draft-and-save-fields-105). Unconfirmed marker
-details and new catalogue entries still need the existing explicit review and
-confirmation steps; the shortcut does not invent a journey or automatically
-write catalogue records.
+details must be applied or cancelled first. Save trip checks transport modes,
+creates new private locations and then writes the trip using their confirmed IDs.
 
 In Map View, **Save map draft** stores a browser copy and keeps the undo history
 and unsaved-changes warning. Restoring a browser draft brings its edits back into
@@ -248,13 +249,10 @@ Map View keeps essential trip settings beside the itinerary. **Map tools**
 opens or closes the stop/connection editor without dropping the current edit
 buffer or selection. Marker and transport controls reopen this panel, and its
 slide transition respects reduced-motion preferences. Select a marker to edit
-its name, address and coordinates; confirm applies the draft and Cancel leaves
-the original place intact. Changed saved places are resolved through **Save
-catalogue entries** before saving the trip, so reopening uses the confirmed
-location snapshot. Transport stops are selected from the shared catalogue.
-Hand-placed transport pins can be kept in a browser draft. Before saving the
-trip, select each draft pin and choose a saved stop from the search results.
-Replacing a pin preserves its connections. Trip review checks draft transport
+its name, address and coordinates; Apply marker details or Save trip applies the draft and Cancel leaves
+the original place intact. **Save trip** creates private transport stops,
+accommodations and attractions from new or changed map pins. Travellers can
+also replace a pin with a visible saved stop while keeping its connections. Trip review checks draft transport
 modes against the shared catalogue before saving new places. If a mode is
 missing, the editor offers saved modes for the affected connections. An
 administrator can add shared modes and route points in the Transport
@@ -272,17 +270,17 @@ error. History and pasted saved links use these same loading rules.
 
 History (`/history` and Trip → **Open saved**) reads the owner's existing summary
 list over HTTP. Its responsive cards show names, date ranges, planned status
-and explicit **Open trip** links. Search, inclusive overlapping date ranges,
+and an **Open map** link. Click the trip name to expand its itinerary, sharing and status controls. Double-click the name or select **Open text itinerary** to read the saved trip. Search, inclusive overlapping date ranges,
 status filters, ordering and ten-item pages are applied locally to that list;
-the service contract is unchanged. Default ordering puts completed trips first,
+owners can override the date-derived status. `PUT /api/v1/trips/{id}/status` accepts a JSON object with a `status` of `upcoming`, `current`, `completed` or `automatic`. A successful response and the History summary carry the stored status (null for automatic). This write requires `trips.write` and active owner standing, and returns 404 for absent or inaccessible trips. Status writes and itinerary replacements update independent columns. The itinerary ETag continues to track only the itinerary. Default ordering puts completed trips first,
 newest first, followed by current/upcoming trips in start order. Loading, access
 denial, empty history, no filter matches and retryable read failures have
 separate messages. Account changes clear both summaries and filter state.
 
 In the form-only planner:
 
-- Places are picked from their owning catalogue and sent by public id: accommodations (`AccommodationsClient`), attractions (`AttractionsClient`) and transport stops (`TransportClient`, route points of type `transport_stop`). Any supported type may start or end a leg. A new leg starts where the previous one ended, and the traveller can change that, which shows the disconnected-leg error instead of repairing it. Empty itineraries are allowed; Map View also retains a single selected stop on save and reopen. With the optional `catalogue.write` grant, the accommodation picker also offers "Add a new accommodation": a private place saved through the Accommodations service, then selected by the id the service confirms. Shared places stay on the accommodation workspace (#46).
-- Times are entered as local times in the trip time zone. The client attaches the zone's offset. A time that does not exist (clocks skip forward) or happens twice (clocks go back) is refused with a message; the client never picks an offset. The service stays authoritative and its field errors (`legs[1].arrival`) are shown on the matching field.
+- Places are picked from their owning catalogue and sent by public id: accommodations (`AccommodationsClient`), attractions (`AttractionsClient`) and transport stops (`TransportClient`, route points of type `transport_stop`). Any supported type may start or end a leg. A new leg starts where the previous one ended, and the traveller can change that, which shows the disconnected-leg error instead of repairing it. Empty itineraries are allowed; Map View also retains a single selected stop on save and reopen. With the optional `catalogue.write` grant, the accommodation picker also offers "Add a new accommodation": a private place saved through the Accommodations service, then selected by the id the service confirms. Owners can publish places used on a saved trip from History.
+- The form and map use the same calendar for the inclusive trip date range. Leg times are entered as local times in the trip time zone. The client attaches the zone's offset. A time that does not exist (clocks skip forward) or happens twice (clocks go back) is refused with a message; the client never picks an offset. The service stays authoritative and its field errors (`legs[1].arrival`) are shown on the matching field.
 - The draft lives only in memory. A failed save (validation, permission, network or unavailable dependency) keeps every entry and shows what happened. The save button is disabled while a request is in flight and the handler ignores a second click, so one click sequence creates at most one request. The create has no idempotency key, so after a network failure the outcome is unknown; the message says so.
 - Leaving with entries asks first (in-app dialog for links, the browser's own prompt for closing the tab). The draft is dropped when the signed-in identity changes.
 - Open **History** to recover a saved trip link. Stays and visits, scheduled routes, and deletion remain outside these planner flows.

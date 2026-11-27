@@ -1,0 +1,73 @@
+@using TravelTracker.Frontend.Api.Trips
+@inject TripPlaceSharingClient Catalogue
+@implements IDisposable
+
+@if (places.Length > 0)
+{
+    <details class="history-share">
+        <summary>Share places</summary>
+        <p>These names come from your saved trip. Sharing publishes the current catalogue records, including addresses, map coordinates, and any attraction descriptions, ratings and visit times. Other travellers can find those details in the global catalogue. Only administrators can edit shared attractions. Your trip stays private.</p>
+        <ul>
+            @foreach (var place in places)
+            {
+                <li>@place.Name (@TypeLabel(place.Type)) @if (shared.Contains((place.Type, place.PlaceId))) { <span>· Shared</span> }</li>
+            }
+        </ul>
+        <button type="button" disabled="@(busy || shared.Count == places.Length)" @onclick="ShareAsync">@(busy ? "Sharing…" : shared.Count == places.Length ? "Places shared" : "Share to global catalogue")</button>
+        @if (failures.Count > 0)
+        {
+            <div class="trip-alert failure" role="alert">
+                <strong>Some places could not be shared</strong>
+                <ul>@foreach (var message in failures) { <li>@message</li> }</ul>
+            </div>
+        }
+        else if (shared.Count == places.Length) { <p role="status">All places are in the global catalogue.</p> }
+    </details>
+}
+
+@code {
+    [Parameter, EditorRequired] public TripDto Trip { get; set; } = default!;
+    TripPlaceDto[] places = [];
+    readonly HashSet<(string, Guid)> shared = [];
+    readonly List<string> failures = [];
+    readonly CancellationTokenSource closed = new();
+    bool busy;
+
+    protected override void OnInitialized()
+    {
+        places = (Trip.Stops ?? []).Concat(Trip.Legs.SelectMany(leg => new[] { leg.From, leg.To }))
+            .DistinctBy(place => (place.Type, place.PlaceId)).ToArray();
+    }
+
+    static string TypeLabel(string type) => type == "transport_stop" ? "transport stop" : type;
+
+    async Task ShareAsync()
+    {
+        if (busy) return;
+        busy = true;
+        failures.Clear();
+        var token = closed.Token;
+        try
+        {
+            foreach (var place in places)
+            {
+                var key = (place.Type, place.PlaceId);
+                if (shared.Contains(key)) continue;
+                try
+                {
+                    await Catalogue.ShareAsync(place, token);
+                    shared.Add(key);
+                }
+                catch (ApiError error)
+                {
+                    failures.Add($"{place.Name}: {error.Message}");
+                    if (error.Status == 401) break;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        finally { busy = false; }
+    }
+
+    public void Dispose() { closed.Cancel(); closed.Dispose(); }
+}

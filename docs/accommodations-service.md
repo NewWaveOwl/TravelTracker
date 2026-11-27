@@ -1,6 +1,6 @@
 # Independent Accommodations service (#38)
 
-The Accommodations service owns its Domain, Data and Api projects and its PostgreSQL database. It runs on port **5106** and does not read the historical shared accommodation table or another service's database. Its current scope is create, name search and detail; update, archive and delete are not implemented.
+The Accommodations service owns its Domain, Data and Api projects and its PostgreSQL database. It runs on port **5106** and does not read the historical shared accommodation table or another service's database. Its current scope is create, name search, detail and owner-initiated publication; update, archive and delete are not implemented.
 
 ## Start independently
 
@@ -37,6 +37,8 @@ The lookup has a five-second timeout and disables redirects/cookies. The service
 | `GET /api/v1/accommodations/{id}` | `catalogue.read` | `200` visible detail; malformed GUID `400`; absent or another user's private record `404`. |
 
 The response fields are `accommodationId`, `name`, `address`, `lat`, `lon` and `visibility`. POST accepts `name`, `address`, `lat`, `lon` and optional `visibility`. The server generates the UUIDv7 and gets owner identity, role and standing from trusted service-side sources; those fields and client-supplied IDs are not accepted. Name is trimmed and required. Latitude must be within -90..90 and longitude within -180..180. Omitted address defaults to an empty string; explicit null is invalid. Visibility defaults to `private`; only an active administrator may create `shared` records.
+
+The active owner can publish a private accommodation with a bodyless `POST /api/v1/accommodations/{id}/share` and `catalogue.write`. The response is 200 with shared visibility, including for an already shared accommodation. Other accounts receive 404 for private accommodations.
 
 Active users can search/read shared records and their own private records. Banned users may read only their own private records and cannot create. Other users' private records are omitted from search and look like `404` in detail, including for administrators. A valid bearer without the route's required scope receives `403`; no/invalid bearer receives `401`. Scope checks happen before request validation. Every resource endpoint has an explicit policy; health remains public.
 

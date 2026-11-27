@@ -1,3 +1,4 @@
+using TravelTracker.Transport.Api.Controllers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -8,7 +9,7 @@ namespace TravelTracker.Transport.Api.Access;
 public sealed class TransportAccessMiddleware(RequestDelegate next)
 {
     /**
-     * Requires an active account to read and an active administrator to write Transport catalogue records.
+     * Requires live active standing. Shared mode creation additionally requires administrator privileges.
      * @param context The authenticated HTTP request.
      * @param users The live Users access client.
      * @return Completion after rejecting the request or invoking its endpoint.
@@ -16,8 +17,9 @@ public sealed class TransportAccessMiddleware(RequestDelegate next)
     public async Task InvokeAsync(HttpContext context, UsersAccessClient users)
     {
         var endpoint = context.GetEndpoint();
-        if (endpoint?.Metadata.GetMetadata<ControllerActionDescriptor>() is null ||
-            endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null)
+        var action = endpoint?.Metadata.GetMetadata<ControllerActionDescriptor>();
+        if (action is null ||
+            endpoint!.Metadata.GetMetadata<IAllowAnonymous>() is not null)
         {
             await next(context);
             return;
@@ -42,8 +44,9 @@ public sealed class TransportAccessMiddleware(RequestDelegate next)
 
         var isRead = HttpMethods.IsGet(context.Request.Method);
         var isWrite = HttpMethods.IsPost(context.Request.Method);
+        var routePoint = action.ControllerTypeInfo.AsType() == typeof(RoutePointsController);
         var allowed = access.Status == "active" &&
-            (isRead || isWrite && access.Role == "administrator");
+            (isRead || isWrite && (routePoint || access.Role == "administrator"));
         if (!allowed)
         {
             await Results.Problem(statusCode: StatusCodes.Status403Forbidden,
@@ -51,6 +54,7 @@ public sealed class TransportAccessMiddleware(RequestDelegate next)
             return;
         }
 
+        context.Features.Set(access);
         await next(context);
     }
 }

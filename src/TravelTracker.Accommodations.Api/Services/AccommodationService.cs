@@ -8,6 +8,19 @@ namespace TravelTracker.Accommodations.Api.Services;
 public sealed class AccommodationService(IAccommodationRepository repository, CallerContext caller) : IAccommodationService
 {
     /**
+     * Publishes an owned place or acknowledges a previously shared place.
+     * @param id Existing public identifier.
+     * @param cancellationToken Cancels storage work.
+     * @return Whether the place is now shared.
+     */
+    public Task<bool> ShareAsync(Guid id, CancellationToken cancellationToken)
+    {
+        RequireIdentity();
+        if (caller.IsBanned) throw new UnauthorizedAccessException();
+        return repository.ShareAsync(id, caller.Issuer, caller.Subject, cancellationToken);
+    }
+
+    /**
      * Loads only records the authenticated caller may read and applies a literal name filter.
      * @param nameFilter Optional case-insensitive substring.
      * @param cancellationToken Cancels database I/O.

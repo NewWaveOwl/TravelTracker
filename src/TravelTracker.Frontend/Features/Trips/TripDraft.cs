@@ -11,17 +11,20 @@ public sealed class TripDraft
 {
     const string LocalFormat = "yyyy-MM-dd'T'HH:mm";
 
+    /** Maximum trip name length accepted by the Trips API. */
+    public const int MaxNameLength = 200;
+
     /** Trip name. */
     public string Name { get; set; } = "";
 
     /** IANA time zone id every time below is read in. */
     public string TimeZone { get; set; } = "UTC";
 
-    /** Local trip start as a datetime-local value. */
-    public string Start { get; set; } = "";
+    /** Inclusive start date in the trip time zone. */
+    public DateOnly? Start { get; set; }
 
-    /** Local trip end as a datetime-local value. */
-    public string End { get; set; } = "";
+    /** Inclusive end date in the trip time zone. */
+    public DateOnly? End { get; set; }
 
     /** The traveller's round-trip intent; saving does not require a return leg. */
     public bool IsRoundTrip { get; set; }
@@ -30,7 +33,7 @@ public sealed class TripDraft
     public List<TripLegDraft> Legs { get; } = [];
 
     /** true once the traveller has entered anything worth warning about before leaving; the name, either date or any leg counts. */
-    public bool HasEntries => Name.Length > 0 || Start.Length > 0 || End.Length > 0 || Legs.Count > 0;
+    public bool HasEntries => Name.Length > 0 || Start is not null || End is not null || Legs.Count > 0;
 
     /**
      * Checks the name, time zone and trip dates.
@@ -40,10 +43,11 @@ public sealed class TripDraft
     {
         var errors = new Errors();
         if (string.IsNullOrWhiteSpace(Name)) errors.Add("name", "Enter a trip name.");
+        else if (Name.Trim().Length > MaxNameLength) errors.Add("name", $"Use {MaxNameLength} characters or fewer for the trip name.");
         var zone = FindZone();
         if (zone is null) errors.Add("timeZone", "Enter a time zone this app recognizes, such as Europe/Paris.");
-        var start = Read(Start, zone, "start", errors);
-        var end = Read(End, zone, "end", errors);
+        var start = ReadBoundary(Start, zone, false, errors);
+        var end = ReadBoundary(End, zone, true, errors);
         if (start is not null && end is not null && end < start) errors.Add("end", "The trip end must not be before the trip start.");
         return errors.ToDictionary();
     }
@@ -56,8 +60,8 @@ public sealed class TripDraft
     {
         var errors = new Errors();
         var zone = FindZone();
-        var start = Read(Start, zone, null, errors);
-        var end = Read(End, zone, null, errors);
+        var start = ReadBoundary(Start, zone, false, null);
+        var end = ReadBoundary(End, zone, true, null);
         DateTimeOffset? previousArrival = null;
         for (var index = 0; index < Legs.Count; index++)
         {
@@ -92,7 +96,9 @@ public sealed class TripDraft
     {
         var zone = FindZone() ?? throw new InvalidOperationException("The draft has no valid time zone.");
         DateTimeOffset At(string local) => TryResolveInstant(local, zone, out var instant, out _) ? instant : throw new InvalidOperationException("The draft has an unusable time.");
-        return new SaveTripRequest(Name.Trim(), TimeZone.Trim(), At(Start), At(End), IsRoundTrip,
+        var start = ReadBoundary(Start, zone, false, null)!.Value;
+        var end = ReadBoundary(End, zone, true, null)!.Value;
+        return new SaveTripRequest(Name.Trim(), TimeZone.Trim(), start, end, IsRoundTrip,
             Legs.Select((leg, index) => new SaveTripRequest.Leg(index + 1,
                 new(leg.From!.PlaceId, leg.From.Type), new(leg.To!.PlaceId, leg.To.Type),
                 leg.TransportModeId!.Value, At(leg.Departure), At(leg.Arrival))).ToArray());
@@ -103,6 +109,16 @@ public sealed class TripDraft
 
     TimeZoneInfo? FindZone() =>
         !string.IsNullOrWhiteSpace(TimeZone) && TimeZoneInfo.TryFindSystemTimeZoneById(TimeZone.Trim(), out var zone) ? zone : null;
+
+    static DateTimeOffset? ReadBoundary(DateOnly? day, TimeZoneInfo? zone, bool end, Errors? errors)
+    {
+        var value = day.HasValue && zone is not null ? TripDayBoundary.Resolve(day.Value, zone, end) : null;
+        if (value is null && (zone is not null || day is null))
+            errors?.Add(end ? "end" : "start", day is null
+                ? (end ? "Choose the ending day." : "Choose the beginning day.")
+                : "Choose dates that exist in the trip's time zone.");
+        return value;
+    }
 
     DateTimeOffset? Read(string local, TimeZoneInfo? zone, string? field, Errors errors)
     {

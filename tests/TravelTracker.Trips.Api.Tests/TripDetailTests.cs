@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using TravelTracker.Trips.Api.Tests.Support;
 
@@ -10,6 +11,40 @@ namespace TravelTracker.Trips.Api.Tests;
  */
 public sealed class TripDetailTests
 {
+    [Fact]
+    public async Task HistoryStatus_ValidatesOwnerAndStanding_PersistsAndResetsWithoutChangingItinerary()
+    {
+        using var factory = new TripsApiFactory();
+        TripTestData.SeedAccounts(factory.Upstream);
+        var trip = TripTestData.SeedTrip(factory, "alice");
+        var bannedTrip = TripTestData.SeedTrip(factory, "banned");
+        using var alice = factory.CreateClientFor("alice", "trips.write");
+        using var reader = factory.CreateClientFor("alice", "trips.read");
+        using var bob = factory.CreateClientFor("bob", "trips.write");
+        using var banned = factory.CreateClientFor("banned", "trips.write");
+        var path = $"/api/v1/trips/{trip.TripId:D}/status";
+        var state = new { status = "upcoming" };
+
+        using var privateTrip = await bob.PutAsJsonAsync(path, state);
+        using var denied = await banned.PutAsJsonAsync($"/api/v1/trips/{bannedTrip.TripId:D}/status", state);
+        using var readOnly = await reader.PutAsJsonAsync(path, state);
+        Assert.Equal(HttpStatusCode.NotFound, privateTrip.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, readOnly.StatusCode);
+        foreach (var status in new[] { "upcoming", "current", "completed", "automatic" })
+        {
+            using var changed = await alice.PutAsJsonAsync(path, new { status });
+            Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+            using var invalid = await alice.PutAsJsonAsync(path, new { status = "unknown" });
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+            using var history = await reader.GetFromJsonAsync<JsonDocument>("/api/v1/trips");
+            var summary = Assert.Single(history!.RootElement.EnumerateArray());
+            Assert.Equal(status == "automatic" ? null : status, summary.GetProperty("status").GetString());
+        }
+        using var detail = await reader.GetAsync($"/api/v1/trips/{trip.TripId:D}");
+        Assert.Equal($"\"{trip.Revision}\"", detail.Headers.ETag?.Tag);
+    }
+
     [Fact]
     public async Task History_ReturnsOnlyOwnedSummaries_AndRequiresReadAccess()
     {

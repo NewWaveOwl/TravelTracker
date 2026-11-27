@@ -62,8 +62,9 @@ Check mode validates configuration shape only; it does not test database access.
 
 1. Create the first administrator by following [First administrator setup](docs/first-administrator-setup.md), or just register as a traveller.
 2. When startup completes, open [TravelTracker](http://localhost:5100/), choose **Create an account** and register with a username (3 to 32 letters, numbers, periods, underscores or hyphens) and a password of at least 6 characters. Usernames cannot be changed later. There is no email, confirmation or password reset; ask an administrator for account recovery.
-3. Build a plan in [Map View](http://localhost:5100/map), then use the workspace **Save trip** button or **Ctrl+S** (**Cmd+S** on macOS). Save any new catalogue entries explicitly in review first. Save errors keep your draft available for correction or retry. Empty and single-stop plans are supported; any supported place category may start or end the trip.
-4. Copy the saved trip URL, stop the stack with **Ctrl+C**, restart and sign in again (a restart invalidates sessions), then reopen that URL or find the trip in **History**.
+3. Build a plan in [Map View](http://localhost:5100/map), then use the workspace **Save trip** button or **Ctrl+S** (**Cmd+S** on macOS). The same action saves any new catalogue locations first. Save errors keep your draft available for correction or retry. Empty and single-stop plans are supported; any supported place category may start or end the trip.
+4. In **History**, click a trip to expand its itinerary. Set its status manually or use **Automatic (from dates)**. Under **Share places**, review which locations will become visible to other travellers and choose **Share to global catalogue**. The trip remains private.
+5. Copy the saved trip URL, stop the stack with **Ctrl+C**, restart and sign in again (a restart invalidates sessions), then reopen that URL or find the trip in **History**.
 
 A service save still requires a name, time zone and valid start/end. A single stop needs no invented journey or transport; see the [minimal save contract](docs/trips-service.md#minimal-draft-and-save-fields-105). Saved-trip details offer **Tickets & bookings → Import tickets** for a private, editable PDF draft. Extraction never saves or changes the trip; see [supported formats and limits](docs/ticket-import.md).
 
@@ -103,8 +104,8 @@ In **Map tools → Transport**, routing options load automatically for a connect
 and its palette-selected transport is preselected even before a departure is set.
 Choose origin, destination, departure and a supported mode. Find and select a route, review its
 stops/times, then **Confirm selected route** to apply mode and exact times to an
-adjacent connection. Cancel preserves the draft. Save persists the chosen plan;
-provider geometry stays in the current session. See the [server update and full
+adjacent connection. Cancel preserves the draft. Save stores the confirmed route shape with the trip.
+Reopening a trip restores the path. Manual connections display an approximate line. See the [server update and full
 app commands](docs/milestone-4/server-routing-update.md).
 
 **Profile pictures:** Account → Edit profile → **Upload photo** uses the protected Users picture API and migration merged in [PR #137](https://github.com/NewWaveOwl/TravelTracker/pull/137), now included from `milestone_4`. Choose one static PNG or JPEG up to 1 MiB and 512 × 512 pixels. File selection saves the photo separately from profile text edits; a rejected upload keeps the previous photo. See [picture UI behavior and validation](docs/milestone-4/profile-picture-ui.md).

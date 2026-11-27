@@ -32,16 +32,18 @@ public sealed class TransportDbContext(DbContextOptions<TransportDbContext> opti
         modes.Property(row => row.Code).IsRequired();
         modes.Property(row => row.DisplayName).IsRequired();
         var points = model.Entity<RoutePointRow>();
-        points.ToTable("RoutePoints", table =>
+        points.ToTable("CatalogueRoutePoints", table =>
         {
             table.HasCheckConstraint("CK_Point_Type", "\"Type\" IN ('accommodation','attraction','transport_stop')");
+            table.HasCheckConstraint("CK_Point_Owner", "\"IsShared\" OR \"OwnerId\" IS NOT NULL");
             table.HasCheckConstraint("CK_Point_Name", "length(btrim(\"Name\")) > 0");
             table.HasCheckConstraint("CK_Point_Latitude", "\"Latitude\" BETWEEN -90 AND 90");
             table.HasCheckConstraint("CK_Point_Longitude", "\"Longitude\" BETWEEN -180 AND 180");
         });
-        points.HasKey(row => row.Id);
+        points.HasIndex(row => row.OwnerId).HasDatabaseName("IX_RoutePoints_OwnerId");
+        points.HasKey(row => row.Id).HasName("PK_RoutePoints");
         points.Property(row => row.Id).ValueGeneratedNever();
-        points.HasIndex(row => row.PublicId).IsUnique();
+        points.HasIndex(row => row.PublicId).IsUnique().HasDatabaseName("IX_RoutePoints_PublicId");
         points.Property(row => row.Type).IsRequired();
         points.Property(row => row.Name).IsRequired();
         points.Property(row => row.Address).IsRequired();

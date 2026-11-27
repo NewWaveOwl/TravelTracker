@@ -130,7 +130,7 @@ internal sealed class ApiFactory : WebApplicationFactory<TravelTracker.Transport
         if (!database.TransportModes.Any())
             foreach (var record in TransportSeedData.Transports()) new EfTransportModeRepository(database).AddAsync(record).GetAwaiter().GetResult();
         if (!database.RoutePoints.Any())
-            foreach (var record in TransportSeedData.Points()) new EfRoutePointRepository(database).AddAsync(record).GetAwaiter().GetResult();
+            foreach (var record in TransportSeedData.Points()) new EfRoutePointRepository(database).AddAsync(record, ownerId: null).GetAwaiter().GetResult();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken());
     }
 

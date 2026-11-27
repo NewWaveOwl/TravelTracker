@@ -12,11 +12,15 @@
 main { width: min(1104px, calc(100% - 64px)); }
 main:has(.trip-planner:not(.map-workspace)) { max-width: 1104px; padding: 32px 0 80px; }
 main:has(.map-workspace) { width: 100%; }
-.site-header { z-index: 10; }
+:root { --site-header-height: 72px; }
+.site-header { z-index: 10; height: var(--site-header-height); padding-block: 6px; }
+.site-header .brand { font-size: clamp(20px, 2.5vw, 30px); }
+.site-header .brand img { width: 54px; height: 54px; }
+.site-header .primary-navigation a { font-size: 24px; line-height: 32px; padding-block: 8px; }
 .site-header .brand { flex-shrink: 0; }
-.site-header .icon { width: 72px; flex: none; }
-.site-header a.icon img { width: 64px; height: 60px; }
-.site-header button.icon img { width: 69.3335px; height: 48px; }
+.site-header .icon { width: 48px; min-height: 48px; flex: none; }
+.site-header a.icon img { width: 40px; height: 38px; }
+.site-header button.icon img { width: 40px; height: 28px; }
 .site-header .menu { z-index: 20; }
 h1 { overflow-wrap: anywhere; }
 input, select, textarea { color: var(--text); border-radius: 5px; }
@@ -119,9 +123,9 @@ main:has(.attractions-page) { width: 100%; }
 
 .trip-page .trip-form, .trip-page .trip-review, .saved-trip-card { background: #fffdf7; border-radius: 12px; padding: 24px; }
 .trip-page .trip-legs > li { background: #f4f1e8; border-radius: 12px; padding: 20px 24px; }
-.trip-page .trip-alert { background: var(--warning-surface); color: var(--warning); border-color: var(--warning); }
-.trip-page .trip-alert.failure { background: var(--error-surface); color: var(--error); border-color: var(--error); }
-.trip-dialog { border-radius: 12px; background: #fffdf7; }
+.trip-alert { border-radius: 5px; background: var(--warning-surface); color: var(--warning); border-color: var(--warning); }
+.trip-alert.failure { background: var(--error-surface); color: var(--error); border-color: var(--error); }
+.trip-alert :is(h2, p, a) { color: inherit; }
 .recovery-card { display: grid; justify-items: start; gap: 16px; padding: 24px; background: #fffdf7; border-radius: 10px; }
 .recovery-card p { margin: 0; }
 .recovery-card.failure { background: var(--error-surface); }
@@ -150,4 +154,18 @@ main:has(.attractions-page) { width: 100%; }
     .attractions-page h1, .accommodation-heading h2 { font-size: 36px; line-height: 1.3; }
     .attraction-modal .attraction-form-name { grid-template-columns: 1fr; }
     .attraction-editor.attraction-modal, .accommodation-modal { padding: 24px 16px; }
+}
+
+/* Button focus stays visible on both light and dark surfaces. */
+:is(button, .button, [role="button"], input[type="submit"], input[type="button"]) {
+    border-color: transparent !important;
+    outline: none !important;
+}
+:is(button, .button, [role="button"], input[type="submit"], input[type="button"]):focus-visible {
+    box-shadow: inset 0 0 0 2px white, inset 0 0 0 5px #265873 !important;
+}
+@media (forced-colors: active) {
+    :is(button, .button, [role="button"], input[type="submit"], input[type="button"]):focus-visible {
+        outline: 2px solid Highlight !important;
+    }
 }

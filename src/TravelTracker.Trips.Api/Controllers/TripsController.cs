@@ -45,7 +45,7 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
 
         var (status, trips) = await readService.ListOwnedAsync(caller, HttpContext.RequestAborted);
         return status == TripReadStatus.Found
-            ? Ok(trips.Select(trip => new TripSummaryResponse(trip.TripId, trip.Name, trip.Start, trip.End)).ToArray())
+            ? Ok(trips.Select(trip => new TripSummaryResponse(trip.TripId, trip.Name, trip.Start, trip.End, trip.Status)).ToArray())
             : TripReadFailure(status);
     }
 
@@ -76,6 +76,38 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
             return Ok(TripWithEntityTag(outcome.Trip!));
 
         return TripReadFailure(outcome.Status);
+    }
+
+    /**
+     * Applies an owner-selected History status independently of itinerary saves.
+     * @param id Public trip identifier.
+     * @param request Desired status.
+     * @return The stored override, or the standing, ownership or validation error.
+     */
+    [HttpPut("{id}/status")]
+    [Authorize(Policy = ScopePolicies.TripsWrite)]
+    public async Task<IActionResult> SetStatus(Guid id, TripStatusRequest request)
+    {
+        var caller = CallerFromToken();
+        var token = BearerTokenFromHeader();
+        if (caller is null || string.IsNullOrWhiteSpace(token)) return Unauthorized();
+        var outcome = await saveService.SetStatusAsync(caller, token, id, request.Status, HttpContext.RequestAborted);
+        switch (outcome)
+        {
+            case TripReferenceStatus.Ready:
+                return Ok(new { status = request.Status == "automatic" ? null : request.Status });
+            case TripReferenceStatus.TripNotFound:
+                return TripNotFound();
+            case TripReferenceStatus.InvalidTrip:
+                ModelState.AddModelError("status", "Choose automatic, upcoming, current or completed.");
+                return ValidationProblem(ModelState);
+            case TripReferenceStatus.AccountRejected:
+                return Problem(statusCode: 403, title: "Account is not permitted to update trips.");
+            case TripReferenceStatus.Unauthorized:
+                return Unauthorized();
+            default:
+                return Problem(statusCode: 503, title: "Account access could not be verified.");
+        }
     }
 
     /**
@@ -242,7 +274,7 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
                 new(leg.To!.PlaceId!.Value, leg.To.Type!),
                 leg.TransportModeId!.Value,
                 leg.Departure!.Value,
-                leg.Arrival!.Value)).ToList(),
+                leg.Arrival!.Value, leg.EncodedPolyline)).ToList(),
             request.Stops?.Select(stop => new TripPlaceReference(stop.PlaceId!.Value, stop.Type!)).ToList());
     }
 
@@ -298,7 +330,7 @@ public sealed class TripsController(TripSaveService saveService, TripReadService
             ToPlace(leg.To),
             new(leg.Transport.TransportModeId, leg.Transport.Code, leg.Transport.Name),
             leg.Departure,
-            leg.Arrival)).ToList(), trip.Stops.Select(ToPlace).ToList());
+            leg.Arrival, leg.EncodedPolyline)).ToList(), trip.Stops.Select(ToPlace).ToList());
 
     /**
      * maps one place snapshot to its public shape.

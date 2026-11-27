@@ -161,7 +161,7 @@ public sealed class TripReferenceValidator(AccommodationReferenceClient accommod
             Collect(to, $"legs[{index}].to", errors);
             Collect(transport, $"legs[{index}].transport", errors);
             if (from.Status == ReferenceStatus.Found && to.Status == ReferenceStatus.Found && transport.Status == ReferenceStatus.Found)
-                legs.Add(new(leg.Sequence, from.Value!, to.Value!, transport.Value!, leg.Departure, leg.Arrival));
+                legs.Add(new(leg.Sequence, from.Value!, to.Value!, transport.Value!, leg.Departure, leg.Arrival, leg.EncodedPolyline));
         }
         if (errors.Count > 0)
         {

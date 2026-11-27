@@ -25,6 +25,7 @@ internal sealed class TripLegConfiguration : IEntityTypeConfiguration<TripLegRow
         builder.HasKey(row => new { row.TripId, row.Sequence });
         builder.Property(row => row.FromPlaceType).HasMaxLength(32);
         builder.Property(row => row.ToPlaceType).HasMaxLength(32);
+        builder.Property(row => row.EncodedPolyline).HasMaxLength(TravelTracker.Trips.Domain.Models.TripPath.MaxEncodedLength);
         builder.Property(row => row.TransportCode).HasMaxLength(32);
         builder.Property(row => row.FromLatitude).HasColumnType("numeric");
         builder.Property(row => row.FromLongitude).HasColumnType("numeric");

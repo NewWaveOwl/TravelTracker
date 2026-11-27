@@ -27,5 +27,6 @@ internal sealed class TripLegRow
     public TimeSpan DepartureOffset { get; set; }
     public DateTimeOffset ArrivalAt { get; set; }
     public TimeSpan ArrivalOffset { get; set; }
+    public string? EncodedPolyline { get; set; }
     public TripRow Trip { get; set; } = null!;
 }

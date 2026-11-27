@@ -2,7 +2,7 @@
 @using TravelTracker.Frontend.Features.Accommodations
 
 <div class="place-add" role="group" aria-label="Add an accommodation">
-    <p class="trip-hint">New places are private to you. Shared places are managed on the accommodation workspace.</p>
+    <p class="trip-hint">New places are private to you. You can share the places you used from trip history after saving your trip.</p>
     <AccommodationFormFields Draft="draft" Errors="errors" Prefix="@Id" PickingChanged="value => pickingLocation = value" />
     @if (failure is not null)
     {

@@ -41,11 +41,11 @@ public sealed class RoutePointTests
 
     [Theory]
     [InlineData("active", "administrator", false, HttpStatusCode.Created)]
-    [InlineData("active", "traveller", false, HttpStatusCode.Forbidden)]
+    [InlineData("active", "traveller", false, HttpStatusCode.Created)]
     [InlineData("banned", "administrator", false, HttpStatusCode.Forbidden)]
     [InlineData("deactivated", "administrator", false, HttpStatusCode.Forbidden)]
     [InlineData("active", "administrator", true, HttpStatusCode.Forbidden)]
-    public async Task CreatePointRequiresActiveAdministratorFromUsersNotToken(string status, string liveRole,
+    public async Task CreatePrivatePointRequiresActiveAccountFromUsersNotToken(string status, string liveRole,
         bool unknownIdentity, HttpStatusCode expectedStatus)
     {
         using var factory = new ApiFactory { SeedExamples = false };
@@ -78,6 +78,41 @@ public sealed class RoutePointTests
             var points = await client.GetFromJsonAsync<JsonElement[]>("/api/v1/route-points");
             Assert.Empty(points!);
         }
+    }
+
+    [Fact]
+    public async Task PrivatePointsAreHiddenFromOtherAccountsAndOnlyAdministratorsCanPublishSharedPoints()
+    {
+        using var factory = new ApiFactory { SeedExamples = false };
+        using var client = factory.CreateClient();
+        var owner = factory.Users.ResolvedUserId;
+        factory.Users.Role = "traveller";
+        var point = new { type = "transport_stop", name = "Private station", lat = 45m, lon = -73m };
+        using var created = await client.PostAsJsonAsync("/api/v1/route-points", point);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var location = created.Headers.Location!;
+        var shared = new { point.type, name = "Shared station", point.lat, point.lon, visibility = "shared" };
+        using var denied = await client.PostAsJsonAsync("/api/v1/route-points", shared);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        factory.Users.Role = "administrator";
+        factory.Users.ResolvedUserId = Guid.NewGuid();
+        using var hidden = await client.GetAsync(location);
+        Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+        Assert.Empty((await client.GetFromJsonAsync<JsonElement[]>("/api/v1/route-points?name=station"))!);
+        using var cannotShare = await client.PostAsync(location + "/share", null);
+        Assert.Equal(HttpStatusCode.NotFound, cannotShare.StatusCode);
+        using var published = await client.PostAsJsonAsync("/api/v1/route-points", shared);
+        Assert.Equal(HttpStatusCode.Created, published.StatusCode);
+        factory.Users.ResolvedUserId = owner;
+        factory.Users.Role = "traveller";
+        using var visible = await client.GetAsync(location);
+        Assert.Equal(HttpStatusCode.OK, visible.StatusCode);
+        using var sharedByOwner = await client.PostAsync(location + "/share", null);
+        Assert.Equal("shared", (await sharedByOwner.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("visibility").GetString());
+        factory.Users.ResolvedUserId = Guid.NewGuid();
+        using var repeat = await client.PostAsync(location + "/share", null);
+        Assert.Equal(HttpStatusCode.OK, repeat.StatusCode);
+        Assert.Equal(2, (await client.GetFromJsonAsync<JsonElement[]>("/api/v1/route-points?name=station"))!.Length);
     }
 
     [Theory]

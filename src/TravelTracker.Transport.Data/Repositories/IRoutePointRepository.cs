@@ -7,13 +7,15 @@ namespace TravelTracker.Transport.Data.Repositories;
  */
 public interface IRoutePointRepository
 {
+    Task<bool> ShareAsync(Guid id, Guid viewerId, CancellationToken cancellationToken);
+
     /**
      * Finds a location.
      * @param routePointId Identifier to find.
      * @param cancellationToken Cancels storage I/O.
      * @return A task containing the immutable point, or null when absent.
      */
-    Task<RoutePoint?> GetByIdAsync(Guid routePointId, CancellationToken cancellationToken = default);
+    Task<RoutePoint?> GetByIdAsync(Guid routePointId, Guid viewerId, CancellationToken cancellationToken = default);
 
     /**
      * Stores a new location.
@@ -21,7 +23,7 @@ public interface IRoutePointRepository
      * @param cancellationToken Cancels storage I/O.
      * @return Completion after storage.
      */
-    Task AddAsync(RoutePoint point, CancellationToken cancellationToken = default);
+    Task AddAsync(RoutePoint point, Guid? ownerId, CancellationToken cancellationToken = default);
 
     /**
      * Reads saved location candidates.
@@ -30,5 +32,5 @@ public interface IRoutePointRepository
      * @param name Optional ordinal case-insensitive name substring.
      * @return Saved reusable locations.
      */
-    Task<List<RoutePoint>> GetAllAsync(CancellationToken cancellationToken = default, string? type = null, string? name = null);
+    Task<List<RoutePoint>> GetAllAsync(Guid viewerId, CancellationToken cancellationToken = default, string? type = null, string? name = null);
 }

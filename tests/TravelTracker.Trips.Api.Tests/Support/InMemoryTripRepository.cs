@@ -77,6 +77,19 @@ internal sealed class InMemoryTripRepository : ITripRepository
         }
     }
 
+    private readonly Dictionary<Guid, string?> statuses = [];
+
+    public Task<bool> SetOwnedStatusAsync(Guid tripId, string ownerIssuer, string ownerSubject, string? status, CancellationToken cancellationToken)
+    {
+        lock (gate)
+        {
+            if (!trips.TryGetValue(tripId, out var entry) || entry.Issuer != ownerIssuer || entry.Subject != ownerSubject)
+                return Task.FromResult(false);
+            statuses[tripId] = status;
+            return Task.FromResult(true);
+        }
+    }
+
     /** {@inheritDoc} */
     public async Task<long?> GetOwnedRevisionAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default) =>
         (await GetOwnedByIdAsync(tripId, ownerIssuer, ownerSubject, cancellationToken))?.Revision;
@@ -109,7 +122,7 @@ internal sealed class InMemoryTripRepository : ITripRepository
                 .Where(entry => entry.Issuer == ownerIssuer && entry.Subject == ownerSubject)
                 .Select(entry => entry.Trip)
                 .OrderByDescending(trip => trip.Start).ThenBy(trip => trip.TripId)
-                .Select(trip => new TripHistoryEntry(trip.TripId, trip.Name, trip.Start, trip.End)).ToArray());
+                .Select(trip => new TripHistoryEntry(trip.TripId, trip.Name, trip.Start, trip.End, statuses.GetValueOrDefault(trip.TripId))).ToArray());
         }
     }
 

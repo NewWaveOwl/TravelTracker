@@ -43,6 +43,10 @@ public sealed class TripPlacesClient(AttractionsClient attractions, TransportCli
         {
             case "attraction":
                 return FromAttraction(await attractions.CreateAsync(Fields(place, ("estimatedVisitMinutes", DefaultVisitMinutes)), cancellationToken));
+            case "transport_stop":
+                var fields = Fields(place, ("type", place.Type));
+                fields["visibility"] = "private";
+                return FromRoutePoint(await transport.CreatePointAsync(fields, cancellationToken));
             case "accommodation":
                 return FromAccommodation(await accommodations.CreateAsync(new CreateAccommodationRequest(place.Name, place.Address, place.Lat, place.Lon, "private"), cancellationToken));
             default:

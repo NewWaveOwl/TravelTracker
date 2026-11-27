@@ -4,6 +4,8 @@ namespace TravelTracker.Transport.Data.Entities;
 public sealed class RoutePointRow
 {
     public long Id { get; set; }
+    public bool IsShared { get; set; }
+    public Guid? OwnerId { get; set; }
     public Guid PublicId { get; set; }
     public string Type { get; set; } = "";
     public string Name { get; set; } = "";

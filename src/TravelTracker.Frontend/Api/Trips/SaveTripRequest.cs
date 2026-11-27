@@ -6,7 +6,7 @@ public sealed record SaveTripRequest(string Name, string TimeZone, DateTimeOffse
 {
     /** A leg referencing public catalogue identifiers. */
     public sealed record Leg(int Sequence, Place From, Place To, Guid TransportModeId,
-        DateTimeOffset Departure, DateTimeOffset Arrival);
+        DateTimeOffset Departure, DateTimeOffset Arrival, string? EncodedPolyline = null);
 
     /** A place reference in the catalogue responsible for its type. */
     public sealed record Place(Guid PlaceId, string Type);

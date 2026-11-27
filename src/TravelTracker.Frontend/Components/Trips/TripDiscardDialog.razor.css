@@ -1,0 +1,5 @@
+.trip-confirm { color: var(--warning); background: var(--warning-surface); border: 1px solid currentColor; border-radius: 5px; margin: auto; width: min(28rem, calc(100% - 32px)); padding: 24px; }
+.trip-confirm::backdrop { background: rgb(25 32 24 / 45%); }
+.trip-confirm h2 { color: inherit; font-size: 1.3rem; line-height: 1.25; }
+.trip-confirm p { margin: 12px 0 20px; }
+.trip-confirm .actions { flex-wrap: wrap; }

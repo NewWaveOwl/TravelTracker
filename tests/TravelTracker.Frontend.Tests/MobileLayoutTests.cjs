@@ -85,3 +85,34 @@ for (const [width, height] of sizes) {
         }
     });
 }
+
+test('Map tool rail and stop editor fit at phone, tablet and desktop widths', async () => {
+    const browser = await chromium.launch({ channel: process.env.TRAVELTRACKER_BROWSER_CHANNEL || 'msedge' });
+    try {
+        for (const width of [320, 768, 1280]) {
+            const page = await browser.newPage({ viewport: { width, height: 840 } });
+            await page.goto(baseUrl + '/map');
+            const tools = page.locator('.tools-panel[data-panel-ready]');
+            const editor = page.locator('.editor-panel[data-panel-ready]');
+            const expand = async panel => {
+                const handle = panel.locator('.movable-panel-handle');
+                if (await handle.getAttribute('aria-expanded') === 'false') await handle.click();
+                await panel.locator('.movable-panel-body').waitFor({ state: 'visible' });
+            };
+            await expand(tools);
+            await tools.getByRole('button', { name: 'Markers', exact: true }).click();
+            const stop = tools.getByRole('button', { name: 'Stop', exact: true });
+            await stop.click();
+            assert.equal(await stop.locator('span').isVisible(), false);
+            const rail = await tools.boundingBox();
+            assert.ok(rail.x < 32 && rail.width <= 64, JSON.stringify(rail));
+            await expand(editor);
+            const body = editor.locator('.movable-panel-body');
+            const dimensions = await body.evaluate(e => [e.clientWidth, e.scrollWidth]);
+            assert.ok(dimensions[0] > 200 && dimensions[1] <= dimensions[0] + 1, JSON.stringify(dimensions));
+            await page.close();
+        }
+    } finally {
+        await browser.close();
+    }
+});

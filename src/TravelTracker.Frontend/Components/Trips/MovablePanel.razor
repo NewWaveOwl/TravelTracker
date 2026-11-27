@@ -10,7 +10,7 @@
             <button @ref="handle" type="button" class="movable-panel-handle" aria-label="@($"Move {Label} panel")"
                     title="Click to collapse or expand; drag to move; double-click to restore" aria-expanded="true" aria-controls="@bodyId" aria-describedby="@instructionsId"
                     aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home">
-                <img src="assets/icons/panel-box.svg" alt="" />
+                <img src="assets/icons/@(Icon).svg" alt="" />
             </button>
         </div>
         <span id="@instructionsId" class="movable-panel-instructions">Click to collapse or expand. Drag the header or icon, or use arrow keys to move. Shift moves farther. Double-click, double-tap or Home restores the position and expands the panel.</span>
@@ -20,6 +20,7 @@
 
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = "Workspace";
+    [Parameter] public string Icon { get; set; } = "panel-box";
     [Parameter] public string? Class { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 

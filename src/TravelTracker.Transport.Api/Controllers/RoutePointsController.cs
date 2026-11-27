@@ -1,3 +1,4 @@
+using TravelTracker.Transport.Api.Access;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +18,21 @@ namespace TravelTracker.Transport.Api.Controllers;
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
 public sealed class RoutePointsController(IRoutePointService service) : ControllerBase
 {
+    UserAccessRecord Caller => HttpContext.Features.Get<UserAccessRecord>() ?? throw new InvalidOperationException("Verified caller required.");
+
+    /**
+     * Publishes a visible location to the shared catalogue and acknowledges repeated shares.
+     * @param id The existing location identifier.
+     * @return Shared visibility, or 404 when the location is unavailable to the caller.
+     */
+    [HttpPost("{id:guid}/share")]
+    [Authorize(Policy = ScopePolicies.CatalogueWrite)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Share(Guid id) =>
+        await service.ShareAsync(id, Caller.UserId, HttpContext.RequestAborted)
+            ? Ok(new { visibility = "shared" }) : NotFound();
+
     /**
      * Lists saved records for selection, without journey scheduling.
      * @param type Optional exact lowercase category; empty or whitespace is treated as omitted.
@@ -34,7 +50,7 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
         if (Request.Query.Any(pair => (pair.Key.Equals("type", StringComparison.OrdinalIgnoreCase) ||
             pair.Key.Equals("name", StringComparison.OrdinalIgnoreCase)) && pair.Value.Count != 1))
             return ValidationProblem(new ValidationProblemDetails(new Dictionary<string, string[]> { ["query"] = ["Supply each filter once."] }));
-        var records = await service.GetAllAsync(string.IsNullOrWhiteSpace(type) ? null : type, name, cancellationToken);
+        var records = await service.GetAllAsync(Caller.UserId, string.IsNullOrWhiteSpace(type) ? null : type, name, cancellationToken);
         return Ok(records.Select(ToResponse).ToArray());
     }
 
@@ -50,7 +66,7 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<RoutePointRecord>> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var record = await service.GetByIdAsync(id, cancellationToken);
+        var record = await service.GetByIdAsync(id, Caller.UserId, cancellationToken);
         return record is null ? NotFound() : Ok(ToResponse(record));
     }
 
@@ -67,8 +83,10 @@ public sealed class RoutePointsController(IRoutePointService service) : Controll
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<RoutePointRecord>> Create(CreateRoutePointRequest request, CancellationToken cancellationToken)
     {
+        var shared = request.Visibility == "shared";
+        if (shared && Caller.Role != "administrator") return Forbid();
         var saved = await service.CreateAsync(new RoutePoint(default, request.Type!, request.Name!, request.Address!,
-            request.Lat!.Value, request.Lon!.Value, request.SourceId), cancellationToken);
+            request.Lat!.Value, request.Lon!.Value, request.SourceId), shared ? null : Caller.UserId, cancellationToken);
         var response = ToResponse(saved);
         return CreatedAtAction(nameof(GetById), new { id = saved.RoutePointId.PublicId }, response);
     }

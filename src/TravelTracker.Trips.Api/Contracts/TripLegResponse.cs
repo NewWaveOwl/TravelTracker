@@ -9,6 +9,7 @@ namespace TravelTracker.Trips.Api.Contracts;
  * @param Transport Transport mode snapshot.
  * @param Departure departure time with its offset.
  * @param Arrival arrival time with its offset.
+ * @param EncodedPolyline Optional five-decimal encoded path of the selected route.
  */
 public sealed record TripLegResponse(int Sequence, TripPlaceResponse From, TripPlaceResponse To, TripTransportResponse Transport,
-    DateTimeOffset Departure, DateTimeOffset Arrival);
+    DateTimeOffset Departure, DateTimeOffset Arrival, string? EncodedPolyline = null);

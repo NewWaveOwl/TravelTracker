@@ -15,7 +15,7 @@ public sealed class TripDraftTests
 
     static TripDraft Valid()
     {
-        var draft = new TripDraft { Name = "Paris", TimeZone = "Europe/Paris", Start = "2026-06-01T08:00", End = "2026-06-01T20:00" };
+        var draft = new TripDraft { Name = "Paris", TimeZone = "Europe/Paris", Start = new(2026, 6, 1), End = new(2026, 6, 1) };
         draft.Legs.Add(Leg(Hotel, Museum, "2026-06-01T09:00", "2026-06-01T10:00"));
         return draft;
     }
@@ -31,14 +31,29 @@ public sealed class TripDraftTests
     [Fact]
     public void RequiresNameKnownZoneAndOrderedDates()
     {
-        var draft = new TripDraft { Name = " ", TimeZone = "Mars/Olympus", Start = "", End = "" };
+        var draft = new TripDraft { Name = " ", TimeZone = "Mars/Olympus" };
         var errors = draft.ValidateBasics();
         Assert.Contains("name", errors.Keys);
         Assert.Contains("timeZone", errors.Keys);
-        var reversed = new TripDraft { Name = "x", TimeZone = "UTC", Start = "2026-06-02T08:00", End = "2026-06-01T08:00" };
+        var reversed = new TripDraft { Name = "x", TimeZone = "UTC", Start = new(2026, 6, 2), End = new(2026, 6, 1) };
         Assert.Contains("end", reversed.ValidateBasics().Keys);
         var missing = new TripDraft { Name = "x", TimeZone = "UTC" };
         Assert.Equal(["end", "start"], missing.ValidateBasics().Keys.Order());
+    }
+
+    [Fact]
+    public void NamedCalendarTripAcceptsTheLimitAndUsesLocalBoundsAcrossAClockChange()
+    {
+        var draft = new TripDraft { Name = new string('A', 200), TimeZone = "America/Toronto",
+            Start = new(2026, 11, 1), End = new(2026, 11, 1) };
+        Assert.Empty(draft.ValidateBasics());
+        var request = draft.ToRequest();
+        Assert.Equal(TimeSpan.FromHours(-4), request.Start.Offset);
+        Assert.Equal(TimeSpan.FromHours(-5), request.End.Offset);
+        Assert.Equal(TimeSpan.FromHours(25).Subtract(TimeSpan.FromTicks(1)), request.End - request.Start);
+
+        draft.Name += "B";
+        Assert.Contains("200", Assert.Single(draft.ValidateBasics()["name"]));
     }
 
     [Fact]
@@ -55,7 +70,7 @@ public sealed class TripDraftTests
     public void ReportsOverlappingAndOutOfRangeTimes()
     {
         var draft = Valid();
-        draft.Legs.Add(Leg(Museum, Hotel, "2026-06-01T09:30", "2026-06-01T21:00"));
+        draft.Legs.Add(Leg(Museum, Hotel, "2026-06-01T09:30", "2026-06-02T01:00"));
         var errors = draft.ValidateItinerary();
         Assert.Contains("legs[1].departure", errors.Keys);
         Assert.Contains("legs[1].arrival", errors.Keys);
@@ -86,7 +101,7 @@ public sealed class TripDraftTests
         roundTrip.Legs.Add(Leg(Museum, Hotel, "2026-06-01T11:00", "2026-06-01T12:00"));
         Assert.Empty(roundTrip.ValidateItinerary());
 
-        var noAttraction = new TripDraft { Name = "x", TimeZone = "UTC", Start = "2026-06-01T08:00", End = "2026-06-01T20:00", IsRoundTrip = true };
+        var noAttraction = new TripDraft { Name = "x", TimeZone = "UTC", Start = new(2026, 6, 1), End = new(2026, 6, 1), IsRoundTrip = true };
         noAttraction.Legs.Add(Leg(Hotel, Station, "2026-06-01T09:00", "2026-06-01T10:00"));
         noAttraction.Legs.Add(Leg(Station, Hotel, "2026-06-01T11:00", "2026-06-01T12:00"));
         Assert.Empty(noAttraction.ValidateItinerary());
@@ -95,7 +110,7 @@ public sealed class TripDraftTests
     [Fact]
     public void AllowsEmptyItineraryButRequiresEachSuppliedLegChoice()
     {
-        var empty = new TripDraft { Name = "x", TimeZone = "UTC", Start = "2026-06-01T08:00", End = "2026-06-01T20:00" };
+        var empty = new TripDraft { Name = "x", TimeZone = "UTC", Start = new(2026, 6, 1), End = new(2026, 6, 1) };
         Assert.Empty(empty.ValidateItinerary());
         empty.Legs.Add(new TripLegDraft());
         var errors = empty.ValidateItinerary();
@@ -133,7 +148,7 @@ public sealed class TripDraftTests
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(draft.ToRequest(), JsonSerializerOptions.Web));
         var root = json.RootElement;
         Assert.Equal("Paris", root.GetProperty("name").GetString());
-        Assert.Equal("2026-06-01T08:00:00+02:00", root.GetProperty("start").GetString());
+        Assert.Equal("2026-06-01T00:00:00+02:00", root.GetProperty("start").GetString());
         Assert.False(root.TryGetProperty("owner", out _));
         var leg = root.GetProperty("legs")[0];
         Assert.Equal(1, leg.GetProperty("sequence").GetInt32());

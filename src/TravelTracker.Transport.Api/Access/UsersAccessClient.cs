@@ -74,7 +74,7 @@ public sealed class UsersAccessClient(HttpClient http, IConfiguration configurat
             return access?.UserId == resolved.UserId &&
                 access.Status is "active" or "banned" or "deactivated" &&
                 access.Role is "traveller" or "administrator"
-                ? new UserAccessRecord(access.Status, access.Role)
+                ? new UserAccessRecord(access.Status, access.Role, resolved.UserId)
                 : null;
         }
         catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException or FormatException ||

@@ -56,6 +56,17 @@ public interface ITripRepository
     Task<Trip?> GetOwnedByIdAsync(Guid tripId, string ownerIssuer, string ownerSubject, CancellationToken cancellationToken = default);
 
     /**
+     * Sets a History override independently of the itinerary revision.
+     * @param tripId Trip to update.
+     * @param ownerIssuer Validated issuer.
+     * @param ownerSubject Validated subject.
+     * @param status Validated override or null for automatic status.
+     * @param cancellationToken Cancels the update.
+     * @return Whether a trip owned by the caller matched.
+     */
+    Task<bool> SetOwnedStatusAsync(Guid tripId, string ownerIssuer, string ownerSubject, string? status, CancellationToken cancellationToken);
+
+    /**
      * Lists saved trips for one owner in descending trip start order.
      * @param ownerIssuer The caller's validated issuer.
      * @param ownerSubject The caller's validated subject.

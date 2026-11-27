@@ -9,6 +9,23 @@ namespace TravelTracker.Accommodations.Api.Tests;
 public sealed class AccommodationHttpTests
 {
     [Fact]
+    public async Task OwnerPublishesPrivateAccommodationOnceAndOtherUsersCanThenFindIt()
+    {
+        using var factory = new ApiFactory();
+        using var alice = factory.CreateClientFor("alice", "catalogue.write catalogue.read");
+        using var bob = factory.CreateClientFor("bob", "catalogue.write catalogue.read");
+        using var created = await alice.PostAsJsonAsync("/api/v1/accommodations", new { name = "Inn", lat = 45m, lon = -73m });
+        var share = created.Headers.Location + "/share";
+        using var hidden = await bob.PostAsync(share, null);
+        Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+        using var published = await alice.PostAsync(share, null);
+        Assert.Equal("shared", (await published.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("visibility").GetString());
+        using var again = await bob.PostAsync(share, null);
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        Assert.Single((await bob.GetFromJsonAsync<JsonElement[]>("/api/v1/accommodations?name=Inn"))!);
+    }
+
+    [Fact]
     public async Task Health_IsAnonymousAndDoesNotCallUsers()
     {
         using var factory = new ApiFactory();

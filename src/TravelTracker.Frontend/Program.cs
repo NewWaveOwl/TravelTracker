@@ -35,6 +35,7 @@ builder.Services.AddScoped<ProtectedClient>();
 builder.Services.AddScoped<TripsClient>();
 builder.Services.AddScoped<TicketImportsClient>();
 builder.Services.AddScoped<TripPlacesClient>();
+builder.Services.AddScoped<TripPlaceSharingClient>();
 builder.Services.AddScoped<TransportClient>();
 builder.Services.AddScoped<AttractionsClient>();
 builder.Services.AddScoped<AccommodationsClient>();

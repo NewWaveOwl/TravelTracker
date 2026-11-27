@@ -182,7 +182,7 @@ public sealed class RoutePreviewTests : BunitContext
             .Add(component => component.Legs, [("bus", "Bus")]).Add(component => component.PreviewRoute, Candidate));
         Assert.Single(map.FindAll(".provider-route"));
         Assert.Contains("L", map.Find(".provider-route").GetAttribute("d"));
-        Assert.Contains("Other connections remain approximate", map.Markup);
+        Assert.Contains("Confirm it to include the path when you save", map.Markup);
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public sealed class RoutePreviewTests : BunitContext
         var generated = Candidate with { Legs = [Candidate.Legs[0] with { Geometry = "_p~iF~ps|U_ulLnnqC_mqNvxq\u0060@" }] };
 
         map.Render(parameters => parameters.Add(component => component.RoutedConnections,
-            new Dictionary<int, RouteItinerary> { [1] = generated }));
+            new Dictionary<int, string> { [1] = generated.Legs[0].Geometry }));
 
         Assert.Single(map.FindAll(".route-line.bus.confirmed-route"));
         Assert.DoesNotContain("Q", map.Find(".route-line.bus").GetAttribute("d"));
@@ -211,7 +211,7 @@ public sealed class RoutePreviewTests : BunitContext
         Assert.Equal(1, edited!.Value.Destination);
         Assert.Contains("Confirmed routes replace their straight connections", map.Markup);
 
-        map.Render(parameters => parameters.Add(component => component.RoutedConnections, new Dictionary<int, RouteItinerary>()));
+        map.Render(parameters => parameters.Add(component => component.RoutedConnections, new Dictionary<int, string>()));
         Assert.Empty(map.FindAll(".confirmed-route"));
         Assert.Contains("Q", map.Find(".route-line.bus").GetAttribute("d"));
     }
@@ -228,7 +228,7 @@ public sealed class RoutePreviewTests : BunitContext
         var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, [origin, destination, origin])
             .Add(component => component.Legs, [("bus", "Out"), ("bus", "Return")])
             .Add(component => component.ConnectionSelected, value => edited.Add(value.Item1))
-            .Add(component => component.RoutedConnections, new Dictionary<int, RouteItinerary> { [1] = Candidate, [2] = Candidate }));
+            .Add(component => component.RoutedConnections, new Dictionary<int, string> { [1] = Candidate.Legs[0].Geometry, [2] = Candidate.Legs[0].Geometry }));
 
         if (compact)
             for (var zoomStep = 0; zoomStep < 4; zoomStep++) map.Find("button[aria-label='Zoom out']").Click();
@@ -251,12 +251,12 @@ public sealed class RoutePreviewTests : BunitContext
         var destination = origin with { Name = "End", Lat = 45.6m, Lon = -73.7m };
         var map = Render<TripMapCanvas>(parameters => parameters.Add(component => component.Stops, [origin, destination, origin])
             .Add(component => component.Legs, [("bus", "Out"), ("bus", "Return")])
-            .Add(component => component.RoutedConnections, new Dictionary<int, RouteItinerary> { [1] = Candidate }));
+            .Add(component => component.RoutedConnections, new Dictionary<int, string> { [1] = Candidate.Legs[0].Geometry }));
         Assert.Single(map.FindAll(".confirmed-route"));
         Assert.Single(map.FindAll(".route-line.bus:not(.provider-route)"));
 
         map.Render(parameters => parameters.Add(component => component.RoutedConnections,
-            new Dictionary<int, RouteItinerary> { [1] = Candidate with { Legs = [Candidate.Legs[0] with { Geometry = "_" }] } }));
+            new Dictionary<int, string> { [1] = "_" }));
         Assert.Empty(map.FindAll(".confirmed-route"));
         Assert.Equal(2, map.FindAll(".route-line.bus:not(.provider-route)").Count);
     }

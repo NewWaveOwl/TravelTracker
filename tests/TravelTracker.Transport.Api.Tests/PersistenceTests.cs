@@ -13,6 +13,45 @@ namespace TravelTracker.Transport.Api.Tests;
 public sealed class PersistenceTests
 {
     [Fact]
+    public async Task LegacyReadersSeeOnlySharedPointsAndRollbackRefusesToExposePrivateOnes()
+    {
+        using var store = new PostgresTestDatabase();
+        await using var database = Context(store.ConnectionString);
+        await TransportDatabase.InitializeAsync(database, true);
+        var owner = Guid.NewGuid();
+        database.RoutePoints.Add(new RoutePointRow { Id = 170, OwnerId = owner, PublicId = Guid.NewGuid(), Type = "transport_stop", Name = "Private" });
+        await database.SaveChangesAsync();
+
+        var count = await database.Database.SqlQuery<int>($"""SELECT count(*)::integer AS "Value" FROM "RoutePoints" """).SingleAsync();
+        Assert.Equal(3, count);
+        var error = await Assert.ThrowsAsync<PostgresException>(() => database.Database.MigrateAsync("20261104184119_InitialTransport"));
+        Assert.Contains("private route points", error.MessageText);
+        Assert.Contains("20261126185741_PrivateRoutePoints", await database.Database.GetAppliedMigrationsAsync());
+        Assert.True(await database.RoutePoints.AnyAsync(point => point.OwnerId == owner && !point.IsShared));
+    }
+
+    [Fact]
+    public async Task OwnershipMigrationPreservesPreviouslySharedRoutePoints()
+    {
+        using var store = new PostgresTestDatabase();
+        await using var database = Context(store.ConnectionString);
+        await database.Database.MigrateAsync("20261104184119_InitialTransport");
+        var legacyId = Guid.NewGuid();
+        await database.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "RoutePoints" ("Id", "PublicId", "Type", "Name", "Address", "Latitude", "Longitude")
+            VALUES (17, {legacyId}, 'transport_stop', 'Legacy station', '', 45, -73)
+            """);
+        await database.Database.MigrateAsync();
+        var point = await database.RoutePoints.SingleAsync(row => row.PublicId == legacyId);
+        Assert.True(point.IsShared);
+        Assert.Null(point.OwnerId);
+
+        await database.Database.MigrateAsync("20261104184119_InitialTransport");
+        var restored = await database.Database.SqlQuery<Guid>($"""SELECT "PublicId" AS "Value" FROM "RoutePoints" """).SingleAsync();
+        Assert.Equal(legacyId, restored);
+    }
+
+    [Fact]
     public async Task Restart_RetainsBikeAndPointIdentitiesAndRebuildsAllocator()
     {
         using var store = new PostgresTestDatabase();
@@ -78,7 +117,7 @@ public sealed class PersistenceTests
         using var store = new PostgresTestDatabase();
         await using var database = Context(store.ConnectionString);
         await TransportDatabase.InitializeAsync(database, true);
-        database.RoutePoints.Add(new RoutePointRow { Id = 100, PublicId = Guid.NewGuid(), Type = "transport_stop", Name = "Invalid", Latitude = 91 });
+        database.RoutePoints.Add(new RoutePointRow { Id = 100, IsShared = true, PublicId = Guid.NewGuid(), Type = "transport_stop", Name = "Invalid", Latitude = 91 });
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => database.SaveChangesAsync());
         Assert.Equal(PostgresErrorCodes.CheckViolation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
         database.ChangeTracker.Clear();

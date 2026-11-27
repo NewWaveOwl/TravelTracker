@@ -34,7 +34,7 @@ public static class TransportDatabase
         if (!await database.RoutePoints.AnyAsync(cancellationToken))
             foreach (var record in TransportSeedData.Points())
             {
-                await pointRepository.AddAsync(record, cancellationToken);
+                await pointRepository.AddAsync(record, ownerId: null, cancellationToken);
                 inserted++;
             }
         await transaction.CommitAsync(cancellationToken);

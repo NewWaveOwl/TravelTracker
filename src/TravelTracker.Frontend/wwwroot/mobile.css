@@ -1,10 +1,10 @@
 /* Phone overrides follow component styles so touch and reflow rules stay consistent. */
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
-    :root { font-size: 20px; }
+    :root { --site-header-height: 60px; font-size: 20px; }
     html { scroll-padding-block: 16px; }
     body { padding-bottom: env(safe-area-inset-bottom, 0px); }
     body .site-header {
-        height: 100px;
+        height: var(--site-header-height);
         gap: 8px;
         padding-left: max(12px, env(safe-area-inset-left, 0px));
         padding-right: max(12px, env(safe-area-inset-right, 0px));

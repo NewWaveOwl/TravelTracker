@@ -6,7 +6,7 @@ public sealed record TripDto(Guid TripId, string Name, string TimeZone, DateTime
 {
     /** A saved leg in itinerary order. */
     public sealed record Leg(int Sequence, TripPlaceDto From, TripPlaceDto To, Mode Transport,
-        DateTimeOffset Departure, DateTimeOffset Arrival);
+        DateTimeOffset Departure, DateTimeOffset Arrival, string? EncodedPolyline = null);
 
     /** A saved transport snapshot. */
     public sealed record Mode(Guid TransportModeId, string Code, string Name);

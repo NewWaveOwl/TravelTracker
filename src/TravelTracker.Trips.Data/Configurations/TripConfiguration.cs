@@ -16,6 +16,7 @@ internal sealed class TripConfiguration : IEntityTypeConfiguration<TripRow>
     {
         builder.ToTable("Trips", table =>
         {
+            table.HasCheckConstraint("CK_Trips_Status", "\"Status\" IN ('upcoming', 'current', 'completed')");
             table.HasCheckConstraint("CK_Trips_Name", "length(btrim(\"Name\")) > 0");
             table.HasCheckConstraint("CK_Trips_Owner", "length(btrim(\"OwnerIssuer\")) > 0 AND length(btrim(\"OwnerSubject\")) > 0");
             table.HasCheckConstraint("CK_Trips_Revision", "\"Revision\" >= 1");

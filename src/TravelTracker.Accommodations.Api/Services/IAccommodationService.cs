@@ -6,6 +6,14 @@ namespace TravelTracker.Accommodations.Api.Services;
 public interface IAccommodationService
 {
     /**
+     * Publishes an owned place or acknowledges a previously shared place.
+     * @param id Existing public identifier.
+     * @param cancellationToken Cancels storage work.
+     * @return Whether the place is now shared.
+     */
+    Task<bool> ShareAsync(Guid id, CancellationToken cancellationToken);
+
+    /**
      * Lists visible accommodations, optionally filtered by a name substring.
      * @param nameFilter Optional literal case-insensitive name substring.
      * @param cancellationToken Cancels persistence I/O.

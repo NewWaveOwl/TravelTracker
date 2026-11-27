@@ -34,3 +34,18 @@
     .history-filters { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 16px; }
     .history-card { padding: 16px; }
 }
+
+.history-card { flex-wrap: wrap; }
+.history-summary { position: relative; flex: 1; min-width: 0; }
+.history-toggle { max-width: 100%; overflow-wrap: anywhere; }
+.history-toggle { font: inherit; background: transparent; padding: 0; color: inherit; min-height: 44px; text-align: left; }
+.history-toggle::before { content: ""; position: absolute; inset: 0; }
+.history-toggle::after { content: ""; width: 9px; height: 9px; margin-left: 14px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.history-toggle[aria-expanded=true]::after { transform: rotate(225deg); }
+.history-detail { flex: 1 0 100%; padding-top: 16px; border-top: 1px solid var(--border); }
+.history-detail ol { padding-inline-start: 1.5em; }
+.history-detail li { margin-block: 8px; }
+.history-detail select { max-width: 100%; }
+.history-detail ::deep details { margin-top: 14px; }
+
+.history-detail ::deep summary { cursor: pointer; }

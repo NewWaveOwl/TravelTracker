@@ -11,6 +11,16 @@ namespace TravelTracker.Transport.Data.Repositories;
  */
 public sealed class EfRoutePointRepository(TransportDbContext database) : IRoutePointRepository
 {
+    public async Task<bool> ShareAsync(Guid id, Guid viewerId, CancellationToken cancellationToken)
+    {
+        var row = await database.RoutePoints.SingleOrDefaultAsync(row => row.PublicId == id && (row.IsShared || row.OwnerId == viewerId), cancellationToken);
+        if (row is null) return false;
+        if (row.IsShared) return true;
+        row.IsShared = true;
+        await database.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     /**
      * Reads saved selection candidates.
      * @param cancellationToken Cancels I/O.
@@ -18,9 +28,9 @@ public sealed class EfRoutePointRepository(TransportDbContext database) : IRoute
      * @param name Optional ordinal case-insensitive name substring.
      * @return Detached saved records.
      */
-    public async Task<List<RoutePoint>> GetAllAsync(CancellationToken cancellationToken = default, string? type = null, string? name = null)
+    public async Task<List<RoutePoint>> GetAllAsync(Guid viewerId, CancellationToken cancellationToken = default, string? type = null, string? name = null)
     {
-        var query = database.RoutePoints.AsNoTracking();
+        var query = VisibleTo(viewerId);
         if (type is not null) query = query.Where(row => row.Type == type);
         var records = await query.ToListAsync(cancellationToken);
         var search = name?.Trim();
@@ -36,9 +46,9 @@ public sealed class EfRoutePointRepository(TransportDbContext database) : IRoute
      * @param cancellationToken Cancels I/O.
      * @return Saved record or null.
      */
-    public async Task<RoutePoint?> GetByIdAsync(Guid routePointId, CancellationToken cancellationToken = default)
+    public async Task<RoutePoint?> GetByIdAsync(Guid routePointId, Guid viewerId, CancellationToken cancellationToken = default)
     {
-        var row = await database.RoutePoints.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.PublicId == routePointId, cancellationToken);
+        var row = await VisibleTo(viewerId).SingleOrDefaultAsync(candidate => candidate.PublicId == routePointId, cancellationToken);
         return row is null ? null : ToDomain(row);
     }
 
@@ -48,11 +58,13 @@ public sealed class EfRoutePointRepository(TransportDbContext database) : IRoute
      * @param cancellationToken Cancels I/O.
      * @return Completion after durable storage.
      */
-    public async Task AddAsync(RoutePoint point, CancellationToken cancellationToken = default)
+    public async Task AddAsync(RoutePoint point, Guid? ownerId, CancellationToken cancellationToken = default)
     {
         database.RoutePoints.Add(new RoutePointRow
         {
             Id = (long)point.RoutePointId.Key,
+            OwnerId = ownerId,
+            IsShared = ownerId is null,
             PublicId = point.RoutePointId.PublicId,
             Type = point.Type,
             Name = point.Name,
@@ -63,6 +75,9 @@ public sealed class EfRoutePointRepository(TransportDbContext database) : IRoute
         });
         await database.SaveChangesAsync(cancellationToken);
     }
+
+    IQueryable<RoutePointRow> VisibleTo(Guid viewerId) => database.RoutePoints.AsNoTracking()
+        .Where(point => point.IsShared || point.OwnerId == viewerId);
 
     /**
      * Restores a detached domain identity and values.

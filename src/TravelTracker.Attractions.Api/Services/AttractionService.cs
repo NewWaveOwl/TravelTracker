@@ -16,6 +16,25 @@ namespace TravelTracker.Attractions.Api.Services;
 public sealed class AttractionService(IAttractionRepository repository, EntityIdGenerator identityGenerator, CallerContext caller) : IAttractionService
 {
     /**
+     * Publishes an owned place or acknowledges a previously shared place.
+     * @param id Existing public identifier.
+     * @param cancellationToken Cancels storage work.
+     * @return Whether the place is now shared.
+     */
+    public async Task<bool> ShareAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (caller.IsBanned) throw new UnauthorizedAccessException();
+        await using var transaction = await repository.BeginWriteAsync(id, cancellationToken);
+        var record = await repository.GetByIdAsync(id, cancellationToken);
+        if (record is null || !caller.CanRead(record)) return false;
+        if (record.IsShared) return true;
+        record.IsShared = true;
+        await repository.UpdateAsync(record, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
+    /**
      * Reads the entries visible to the caller, filtered and ordered by the database.
      * @param nameFilter Optional case-insensitive name substring.
      * @param cancellationToken Cancels database work.

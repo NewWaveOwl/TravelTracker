@@ -41,6 +41,12 @@ namespace TravelTracker.Transport.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsShared")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
 
@@ -51,18 +57,25 @@ namespace TravelTracker.Transport.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("PK_RoutePoints");
+
+                    b.HasIndex("OwnerId")
+                        .HasDatabaseName("IX_RoutePoints_OwnerId");
 
                     b.HasIndex("PublicId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_RoutePoints_PublicId");
 
-                    b.ToTable("RoutePoints", null, t =>
+                    b.ToTable("CatalogueRoutePoints", null, t =>
                         {
                             t.HasCheckConstraint("CK_Point_Latitude", "\"Latitude\" BETWEEN -90 AND 90");
 
                             t.HasCheckConstraint("CK_Point_Longitude", "\"Longitude\" BETWEEN -180 AND 180");
 
                             t.HasCheckConstraint("CK_Point_Name", "length(btrim(\"Name\")) > 0");
+
+                            t.HasCheckConstraint("CK_Point_Owner", "\"IsShared\" OR \"OwnerId\" IS NOT NULL");
 
                             t.HasCheckConstraint("CK_Point_Type", "\"Type\" IN ('accommodation','attraction','transport_stop')");
                         });

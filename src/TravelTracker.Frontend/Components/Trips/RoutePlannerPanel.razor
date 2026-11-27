@@ -36,10 +36,10 @@
         </label>
         <label for="route-mode">Transport
             <select id="route-mode" value="@mode" @onchange="ChangeModeAsync">
-                <option value="">Choose verified transport</option>
+                <option value="">Choose transport</option>
                 @foreach (var option in Modes)
                 {
-                    <option value="@option.Code" disabled="@(!ModeAvailable(option.Code))">@option.Label — @ModeStatus(option.Code)</option>
+                    <option value="@option.Code" disabled="@(!transports.Any(item => item.Code == option.Code))">@option.Label — @ModeStatus(option.Code)</option>
                 }
             </select>
         </label>
@@ -63,6 +63,11 @@
     <RoutePreviewPanel @key="previewVersion" Client="Client" Request="ActiveRequest" Selected="SelectPreviewAsync" CanSearch="@(!Disabled && !loadingOptions && !confirming)" Disabled="@(Disabled || confirming)" />
     <div class="route-confirm-actions">
         <button type="button" disabled="@(!CanConfirmSelection)" @onclick="ConfirmAsync">@(confirming ? "Applying route…" : "Confirm selected route")</button>
+        @if (CurrentTransport is { } manualMode && ManualConnection.HasDelegate)
+        {
+            <button type="button" class="secondary" disabled="@(Disabled || confirming || !CanConfirmContext || destination != origin + 1 || origin < 0 || destination >= Stops.Count || departure is not null && RouteLocalTime.Resolve(departure, TimeZone, chosenOffset) is null)"
+                    @onclick="() => ManualConnection.InvokeAsync((destination, manualMode, RouteLocalTime.Resolve(departure, TimeZone, chosenOffset)))">Use manual connection</button>
+        }
         <button type="button" class="secondary" disabled="@confirming" @onclick="CancelAsync">Cancel route preview</button>
     </div>
 </section>
@@ -80,9 +85,10 @@
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public bool CanConfirmContext { get; set; } = true;
     [Parameter] public EventCallback<RouteSelection?> PreviewChanged { get; set; }
+    [Parameter] public EventCallback<(int Destination, TransportDto Transport, DateTimeOffset? Departure)> ManualConnection { get; set; }
     [Parameter] public Func<RouteSelection, Task<bool>> Confirmed { get; set; } = _ => Task.FromResult(false);
 
-    static readonly (string Code, string Label)[] Modes = [("pedestrian", "Walk"), ("bike", "Bike"), ("car", "Car"), ("bus", "Bus"), ("train", "Train")];
+    static readonly (string Code, string Label)[] Modes = [("pedestrian", "Walk"), ("bike", "Bike"), ("car", "Car"), ("bus", "Bus"), ("train", "Train"), ("plane", "Plane")];
     RoutingCapabilities? capabilities;
     IReadOnlyList<TransportDto> transports = [];
     RouteSelection? selection;
@@ -116,7 +122,7 @@
         : departure is null ? "Enter a departure date and time."
         : Offsets.Length == 0 ? "This departure time does not exist in the trip time zone. Choose another time."
         : Offsets.Length > 1 && (chosenOffset is null || !Offsets.Contains(chosenOffset.Value)) ? "Choose the UTC offset for this repeated departure time."
-        : !ModeAvailable(mode) ? "Choose a mode supported by both the router and saved catalogue. Retry routing options if they are unavailable."
+        : !ModeAvailable(mode) ? "Choose a supported mode to preview a route, or use a manual connection with your own times."
         : RouteLocalTime.Resolve(departure, TimeZone, chosenOffset) is null ? "Choose a valid departure date and UTC offset." : null;
 
     /** Drops stale previews and loads router options automatically when a usable connection opens. */

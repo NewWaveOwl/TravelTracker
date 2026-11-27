@@ -82,14 +82,21 @@ public sealed class NewTripPageTests : BunitContext
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll($"p#{id}")));
     }
 
+    static void SelectJuneFirst(IRenderedComponent<TripFormPlanner> page)
+    {
+        page.Find(".range-trigger").Click();
+        for (var month = 11; month > 6; month--) page.Find("[aria-label='Previous month']").Click();
+        page.Find("[data-date='2026-06-01']").Click();
+        page.Find("[data-date='2026-06-01']").Click();
+    }
+
     IRenderedComponent<TripFormPlanner> FillBasics(IRenderedComponent<TripFormPlanner>? existing = null, bool addLeg = true)
     {
         var page = existing ?? Render<TripFormPlanner>();
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#trip-name")));
         page.Find("#trip-name").Input("Paris weekend");
         page.Find("#trip-timezone").Change("Europe/Paris");
-        page.Find("#trip-start").Change("2026-06-01T08:00");
-        page.Find("#trip-end").Change("2026-06-01T20:00");
+        SelectJuneFirst(page);
         page.Find("form[aria-label='Trip basics']").Submit();
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("form[aria-label=Itinerary]")));
         if (addLeg) page.FindAll("button").Single(button => button.TextContent == "Add leg").Click();
@@ -121,12 +128,11 @@ public sealed class NewTripPageTests : BunitContext
         var page = Render<TripFormPlanner>();
         page.Find("[data-trip-save]").Click();
         Assert.Contains("Check trip details", page.Find(".trip-form-save-controls [role=status]").TextContent);
-        Assert.Single(page.FindAll(".trip-form-save-controls a[href='#trip-errors-heading']"));
+        Assert.Single(page.FindAll(".trip-form-save-controls a[href$='#trip-errors-heading']"));
         Assert.Empty(backend.Stored);
         page.Find("#trip-name").Input("A plan without journeys");
         page.Find("#trip-timezone").Change("Europe/Paris");
-        page.Find("#trip-start").Change("2026-06-01T08:00");
-        page.Find("#trip-end").Change("2026-06-01T08:00");
+        SelectJuneFirst(page);
         var save = page.Find(".trip-form-save-controls [data-trip-save]");
         Assert.Equal("Control+S Meta+S", save.GetAttribute("aria-keyshortcuts"));
 
@@ -134,8 +140,28 @@ public sealed class NewTripPageTests : BunitContext
 
         page.WaitForAssertion(() => Assert.Single(backend.Stored));
         Assert.Empty(backend.Stored.Single().Legs);
+        Assert.Equal(TimeSpan.Zero, backend.Stored.Single().Start.TimeOfDay);
+        Assert.Equal(TimeOnly.MaxValue.ToTimeSpan(), backend.Stored.Single().End.TimeOfDay);
         Assert.Equal("A plan without journeys", backend.Stored.Single().Name);
         Assert.Contains("?saved=true", Services.GetRequiredService<NavigationManager>().Uri);
+    }
+
+    [Fact]
+    public async Task CorrectingFormErrorsKeepsTheDraftAndSaveEnabled()
+    {
+        Configure();
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("new-trip/form");
+        var page = Render<TripFormPlanner>();
+        Assert.Equal("200", page.Find("#trip-name").GetAttribute("maxlength"));
+        page.Find("#trip-name").Input("A weekend away");
+        page.Find("[data-trip-save]").Click();
+        var link = page.Find("a[href$='#trip-dates']");
+        await page.InvokeAsync(() => navigation.NavigateTo(link.GetAttribute("href")!));
+        Assert.Empty(page.FindAll("[role=alertdialog]"));
+        Assert.Equal("A weekend away", page.Find("#trip-name").GetAttribute("value"));
+        Assert.False(page.Find("[data-trip-save]").HasAttribute("disabled"));
+        Assert.Empty(backend.Stored);
     }
 
     [Fact]
@@ -175,7 +201,7 @@ public sealed class NewTripPageTests : BunitContext
 
         page.WaitForAssertion(() => Assert.Contains("Everything you entered is still here", page.Markup));
         Assert.Contains("Trip not saved. Your entries are still here.", page.Find(".trip-form-save-controls [role=status]").TextContent);
-        Assert.Single(page.FindAll(".trip-form-save-controls a[href='#trip-save-error-heading']"));
+        Assert.Single(page.FindAll(".trip-form-save-controls a[href$='#trip-save-error-heading']"));
         Assert.False(page.Find("[data-trip-save]").HasAttribute("disabled"));
         Assert.False(page.Find(fieldset).HasAttribute("disabled"));
         Assert.Equal(1, backend.CreateCount);
@@ -204,6 +230,25 @@ public sealed class NewTripPageTests : BunitContext
     }
 
     [Fact]
+    public void StartedTripCanMoveBetweenGuidedStepsWithoutSavingOrLosingFields()
+    {
+        Configure();
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("new-trip");
+        var page = Render<NewTrip>();
+        page.Find("input[placeholder='Name your trip']").Change("Weekend train");
+        var steps = "nav[aria-label='Trip planning steps'] button";
+        page.FindAll(steps).Single(button => button.TextContent == "Itinerary").Click();
+        Assert.Contains("Step 2 of 3", page.Find(".trip-progress").TextContent);
+        page.FindAll(steps).Single(button => button.TextContent == "Review").Click();
+        page.FindAll(steps).Single(button => button.TextContent == "Basics").Click();
+        Assert.Equal("Weekend train", page.Find("input[placeholder='Name your trip']").GetAttribute("value"));
+        Assert.Empty(backend.CreateBodies);
+        Assert.Empty(JSInterop.Invocations["confirmTripChanges"]);
+    }
+
+    [Fact]
     public void SavesACompleteTripOnlyAfterConfirmationAndReopensItAfterReload()
     {
         Configure();
@@ -212,7 +257,7 @@ public sealed class NewTripPageTests : BunitContext
         GoToReview(page);
         Assert.Contains("Hotel Lumiere to Louvre by City bus", page.Markup);
         Assert.Empty(backend.CreateBodies);
-        SaveButton(page).Click();
+        page.Find(".trip-review [data-trip-save]").Click();
         page.WaitForAssertion(() => Assert.Single(backend.Stored));
         var saved = backend.Stored.Single();
         Assert.Contains($"/trips/{saved.TripId:D}?saved=true", Services.GetRequiredService<NavigationManager>().Uri);
@@ -297,7 +342,7 @@ public sealed class NewTripPageTests : BunitContext
         page.Find("#leg-1-arrival").Change("2026-06-01T12:00");
         page.Find("form[aria-label=Itinerary]").Submit();
         page.WaitForAssertion(() => Assert.Contains("This leg must start where the previous leg ended.", page.Markup));
-        Assert.NotEmpty(page.FindAll("a[href='#leg-1-from']"));
+        Assert.NotEmpty(page.FindAll("a[href$='#leg-1-from']"));
         Assert.Empty(backend.CreateBodies);
     }
 
@@ -309,7 +354,7 @@ public sealed class NewTripPageTests : BunitContext
         FillLeg(page, departure: "2026-06-01T10:00", arrival: "2026-06-01T09:00");
         page.Find("form[aria-label=Itinerary]").Submit();
         page.WaitForAssertion(() => Assert.Contains("Arrival must be after departure.", page.Markup));
-        Assert.NotEmpty(page.FindAll("a[href='#leg-0-arrival']"));
+        Assert.NotEmpty(page.FindAll("a[href$='#leg-0-arrival']"));
         Assert.Equal("true", page.Find("#leg-0-arrival").GetAttribute("aria-invalid"));
         Assert.Empty(backend.CreateBodies);
     }
@@ -357,8 +402,8 @@ public sealed class NewTripPageTests : BunitContext
         GoToReview(page);
         SaveButton(page).Click();
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#trip-name")));
-        Assert.NotEmpty(page.FindAll("a[href='#trip-name']"));
-        Assert.Empty(page.FindAll("a[href='#leg-0-arrival']"));
+        Assert.NotEmpty(page.FindAll("a[href$='#trip-name']"));
+        Assert.Empty(page.FindAll("a[href$='#leg-0-arrival']"));
     }
 
     [Fact]
@@ -396,24 +441,25 @@ public sealed class NewTripPageTests : BunitContext
         Assert.Equal(1, backend.CreateCount);
     }
 
-    [Fact]
-    public async Task LeavingWithUnsavedEntriesAsksFirstAndKeepEditingStays()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StepFormAsksBeforeDiscardingUnsavedEntries(bool discard)
     {
         Configure();
+        JSInterop.Setup<bool>("confirmTripChanges", _ => true).SetResult(discard);
         var page = FillBasics();
         var navigation = Services.GetRequiredService<NavigationManager>();
         var start = navigation.Uri;
         await page.InvokeAsync(() => navigation.NavigateTo("/history"));
-        page.WaitForAssertion(() => Assert.Contains("Leave without saving?", page.Markup));
-        Assert.Equal(start, navigation.Uri);
-        page.FindAll("button").Single(button => button.TextContent == "Keep editing").Click();
-        Assert.DoesNotContain("Leave without saving?", page.Markup);
-        page.FindAll("button").Single(button => button.TextContent == "Back").Click();
-        Assert.Equal("Paris weekend", page.Find("#trip-name").GetAttribute("value"));
-        await page.InvokeAsync(() => navigation.NavigateTo("/history"));
-        page.WaitForAssertion(() => Assert.Contains("Leave without saving?", page.Markup));
-        page.FindAll("button").Single(button => button.TextContent == "Leave without saving").Click();
-        Assert.EndsWith("/history", navigation.Uri);
+        Assert.Single(JSInterop.Invocations["confirmTripChanges"]);
+        if (discard) Assert.EndsWith("/history", navigation.Uri);
+        else
+        {
+            Assert.Equal(start, navigation.Uri);
+            page.FindAll("button").Single(button => button.TextContent == "Back").Click();
+            Assert.Equal("Paris weekend", page.Find("#trip-name").GetAttribute("value"));
+        }
     }
 
     [Fact]
@@ -425,7 +471,7 @@ public sealed class NewTripPageTests : BunitContext
         var navigation = Services.GetRequiredService<NavigationManager>();
         await page.InvokeAsync(() => navigation.NavigateTo("/history"));
         Assert.EndsWith("/history", navigation.Uri);
-        Assert.Empty(JSInterop.Invocations["confirm"]);
+        Assert.Empty(JSInterop.Invocations["confirmTripChanges"]);
     }
 
     [Fact]
